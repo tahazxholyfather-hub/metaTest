@@ -1,0 +1,40 @@
+.aicell {
+  position: relative;
+  display: block;
+  aspect-ratio: 1 / 1;
+  contain: layout style;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.aicell svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.aicell-blur2 {
+  filter: blur(2px);
+}
+.aicell-blur4 {
+  filter: blur(4px);
+}
+.aicell-blur6 {
+  filter: blur(6px);
+}
+.aicell-blur8 {
+  filter: blur(8px);
+}
+.aicell-blur14 {
+  filter: blur(14px);
+}
+
+.aicell-glow-pink {
+  filter: drop-shadow(0 0 6px rgba(236, 72, 153, 0.55));
+}
+.aicell-glow-blue {
+  filter: drop-shadow(0 0 6px rgba(96, 130, 246, 0.6));
+}
+.aicell-glow-spark {
+  filter: drop-shadow(0 0 4px rgba(196, 181, 253, 0.9));
+}
