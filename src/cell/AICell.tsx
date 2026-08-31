@@ -246,10 +246,10 @@ export const AICell = forwardRef<AICellHandle, AICellProps>(function AICell(prop
             <stop offset="100%" stopColor="#0B0318" stopOpacity="0" />
           </radialGradient>
           <radialGradient id={id('membraneG')} cx="42%" cy="36%" r="72%">
-            <stop offset="0%" stopColor="#38176E" />
-            <stop offset="38%" stopColor="#301360" />
-            <stop offset="68%" stopColor="#3D1A78" />
-            <stop offset="86%" stopColor="#51219D" />
+            <stop offset="0%" stopColor="#401E7D" />
+            <stop offset="38%" stopColor="#361766" />
+            <stop offset="68%" stopColor="#411C80" />
+            <stop offset="86%" stopColor="#5524A6" />
             <stop offset="96%" stopColor="#6D28D9" />
             <stop offset="100%" stopColor="#7C3AED" />
           </radialGradient>
@@ -274,8 +274,8 @@ export const AICell = forwardRef<AICellHandle, AICellProps>(function AICell(prop
             <stop offset="100%" stopColor="#100522" />
           </radialGradient>
           <linearGradient id={id('mitoG')} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#F26D9C" />
-            <stop offset="100%" stopColor="#D8447C" />
+            <stop offset="0%" stopColor="#F16DB3" />
+            <stop offset="100%" stopColor="#D23387" />
           </linearGradient>
           <linearGradient id={id('vesG')} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#5B76F0" />

@@ -80,11 +80,11 @@ export function mouthPath(m: MouthShape): string {
   const round = clamp01(m.round);
   const open = Math.max(0, m.open);
   const curve = m.curve * (1 - 0.7 * round);
-  const w = Math.max(6, m.w * (1 - 0.42 * round));
+  const w = Math.max(6, m.w * (1 - 0.3 * round));
   const hw = w / 2;
   const cornerY = m.cy - curve * 5.5 * (1 - 0.5 * round);
-  const topCtrlY = m.cy + curve * 7.5 - open * 3.5 - round * open * 4;
-  const openH = open * (15 + 12 * round) + round * (3 + open * 4);
+  const topCtrlY = m.cy + curve * 7.5 - open * 3.5 - round * open * 5;
+  const openH = open * (15 + 6 * round) + round * (3 + open * 4);
   const botCtrlY = topCtrlY + openH * 2; // quadratic ctrl overshoots to reach depth
   const lx = m.cx - hw;
   const rx = m.cx + hw;
@@ -98,9 +98,9 @@ export function mouthPath(m: MouthShape): string {
 // Face layout (matched to the reference proportions on a 400×400 viewBox).
 export const EYE_L = { x: 167, y: 149 };
 export const EYE_R = { x: 233, y: 149 };
-export const EYE_RX = 20.5;
-export const EYE_RY = 25.5;
-export const PUPIL_R = 11.5;
+export const EYE_RX = 21.5;
+export const EYE_RY = 27;
+export const PUPIL_R = 12;
 export const PUPIL_TRAVEL_X = 6.5;
 export const PUPIL_TRAVEL_Y = 6;
 export const BROW_L = { x: 165, y: 113 };
