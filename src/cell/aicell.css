@@ -37,6 +37,17 @@
 .aicell-glow-blue {
   filter: drop-shadow(0 0 6px rgba(96, 130, 246, 0.6));
 }
-.aicell-glow-spark {
-  filter: drop-shadow(0 0 4px rgba(196, 181, 253, 0.9));
+.aicell-hit {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.aicell-hit:focus {
+  outline: none;
 }

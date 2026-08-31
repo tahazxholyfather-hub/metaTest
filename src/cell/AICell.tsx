@@ -149,6 +149,9 @@ export const AICell = forwardRef<AICellHandle, AICellProps>(function AICell(prop
     }
   }, []);
 
+  const interactiveRef = useRef(interactive);
+  interactiveRef.current = interactive;
+
   // Engine lifecycle ---------------------------------------------------------
   useEffect(() => {
     const engine = new CellEngine({ onFrame: applyFrame, initialState });
@@ -159,17 +162,67 @@ export const AICell = forwardRef<AICellHandle, AICellProps>(function AICell(prop
     document.addEventListener('visibilitychange', onVisibility);
 
     let observer: IntersectionObserver | null = null;
-    if (typeof IntersectionObserver !== 'undefined' && containerRef.current) {
+    const el = containerRef.current;
+    if (typeof IntersectionObserver !== 'undefined' && el) {
       observer = new IntersectionObserver((entries) => {
         const visible = entries[0]?.isIntersecting ?? true;
         engine.setPaused(document.hidden || !visible);
       });
-      observer.observe(containerRef.current);
+      observer.observe(el);
     }
+
+    const toView = (e: PointerEvent | MouseEvent) => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      if (r.width < 1 || r.height < 1) return null;
+      return {
+        x: ((e.clientX - r.left) / r.width) * 400,
+        y: ((e.clientY - r.top) / r.height) * 400,
+      };
+    };
+    const inBox = (e: PointerEvent | MouseEvent) => {
+      if (!el) return false;
+      const r = el.getBoundingClientRect();
+      return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+    };
+    const onMove = (e: PointerEvent) => {
+      if (!interactiveRef.current) return;
+      const v = toView(e);
+      if (v) engine.setPointer(v.x, v.y);
+    };
+    const onDown = (e: PointerEvent | MouseEvent) => {
+      if (!interactiveRef.current) return;
+      if ('button' in e && e.button !== 0) return;
+      const v = toView(e);
+      const onCell = !!(v && inBox(e));
+      if (!onCell && !engine.isPointerOver()) return;
+      if (onCell && v) engine.setPointer(v.x, v.y);
+      engine.poke();
+    };
+    const onOut = (e: PointerEvent) => {
+      if (!e.relatedTarget) engine.clearPointer();
+    };
+
+    window.addEventListener('pointermove', onMove, { passive: true });
+    window.addEventListener('pointerdown', onDown, true);
+    window.addEventListener('mousedown', onDown, true);
+    window.addEventListener('click', onDown, true);
+    window.addEventListener('pointerout', onOut);
+    el?.addEventListener('pointerdown', onDown);
+    el?.addEventListener('mousedown', onDown);
+    el?.addEventListener('click', onDown);
 
     return () => {
       document.removeEventListener('visibilitychange', onVisibility);
       observer?.disconnect();
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerdown', onDown, true);
+      window.removeEventListener('mousedown', onDown, true);
+      window.removeEventListener('click', onDown, true);
+      window.removeEventListener('pointerout', onOut);
+      el?.removeEventListener('pointerdown', onDown);
+      el?.removeEventListener('mousedown', onDown);
+      el?.removeEventListener('click', onDown);
       engine.stop();
       engineRef.current = null;
       cache.current = {};
@@ -193,49 +246,6 @@ export const AICell = forwardRef<AICellHandle, AICellProps>(function AICell(prop
     mq.addEventListener('change', onChange);
     return () => mq.removeEventListener('change', onChange);
   }, [reducedMotion]);
-
-  // Pointer awareness: window-level tracking, click/tap on the character.
-  useEffect(() => {
-    if (interactive === false) return;
-    const engine = engineRef.current;
-    const el = containerRef.current;
-    if (!engine || !el) return;
-
-    const toView = (e: PointerEvent) => {
-      const r = el.getBoundingClientRect();
-      if (r.width < 1 || r.height < 1) return null;
-      return {
-        x: ((e.clientX - r.left) / r.width) * 400,
-        y: ((e.clientY - r.top) / r.height) * 400,
-      };
-    };
-
-    const onMove = (e: PointerEvent) => {
-      const v = toView(e);
-      if (v) engine.setPointer(v.x, v.y);
-    };
-    const onDown = (e: PointerEvent) => {
-      if (e.button !== 0) return;
-      const v = toView(e);
-      if (!v) return;
-      engine.setPointer(v.x, v.y);
-      const dx = v.x - CELL_CX;
-      const dy = v.y - CELL_CY;
-      if (dx * dx + dy * dy <= (CELL_R * 1.18) * (CELL_R * 1.18)) engine.poke();
-    };
-    const onOut = (e: PointerEvent) => {
-      if (!e.relatedTarget) engine.clearPointer();
-    };
-
-    window.addEventListener('pointermove', onMove, { passive: true });
-    el.addEventListener('pointerdown', onDown);
-    window.addEventListener('pointerout', onOut);
-    return () => {
-      window.removeEventListener('pointermove', onMove);
-      el.removeEventListener('pointerdown', onDown);
-      window.removeEventListener('pointerout', onOut);
-    };
-  }, [interactive]);
 
   // Controlled props → engine ---------------------------------------------------
   useEffect(() => {
@@ -486,6 +496,21 @@ export const AICell = forwardRef<AICellHandle, AICellProps>(function AICell(prop
     [uid, atmosphere, ariaLabel],
   );
 
+  const pokeFromEvent = (e: { button?: number; clientX: number; clientY: number; currentTarget: EventTarget & HTMLElement }) => {
+    if (interactive === false) return;
+    if (e.button !== undefined && e.button !== 0) return;
+    const engine = engineRef.current;
+    if (!engine) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    if (r.width > 1 && r.height > 1) {
+      engine.setPointer(
+        ((e.clientX - r.left) / r.width) * 400,
+        ((e.clientY - r.top) / r.height) * 400,
+      );
+    }
+    engine.poke();
+  };
+
   return (
     <div
       ref={containerRef}
@@ -493,6 +518,15 @@ export const AICell = forwardRef<AICellHandle, AICellProps>(function AICell(prop
       style={{ width: sizeCss, height: sizeCss, ...style }}
     >
       {svg}
+      {interactive !== false && (
+        <button
+          type="button"
+          className="aicell-hit"
+          aria-label="Interact with character"
+          onPointerDown={pokeFromEvent}
+          onClick={pokeFromEvent}
+        />
+      )}
     </div>
   );
 });

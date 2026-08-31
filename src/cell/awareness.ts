@@ -56,13 +56,13 @@ function pokeHit(strength = 1): ImpulseSpec {
     fn: (k, imp) => {
       if (k < 0.16) {
         const a = k / 0.16;
-        imp.scale -= 0.045 * strength * a;
-        imp.y += 3.5 * strength * a;
+        imp.scale -= 0.06 * strength * a;
+        imp.y += 4.5 * strength * a;
       } else {
         const u = (k - 0.16) / 0.84;
         const e = envelope(u);
-        imp.scale += 0.055 * strength * e;
-        imp.y -= 7.5 * strength * e;
+        imp.scale += 0.07 * strength * e;
+        imp.y -= 11 * strength * e;
       }
     },
   };
@@ -81,13 +81,13 @@ function hop(dur: number, height: number, extraScale = 0.03): ImpulseSpec {
 const REACTIONS: Record<string, (side: number) => Reaction> = {
   smile: () => ({
     id: 'smile',
-    hold: 0.55,
+    hold: 0.95,
     params: { mouthCurve: 0.82, mouthW: 28, mouthOpen: 0.12, blush: 0.42, browLY: -2.5, browRY: -2.5 },
     impulses: [pokeHit(0.85)],
   }),
   laugh: () => ({
     id: 'laugh',
-    hold: 0.7,
+    hold: 1.05,
     params: {
       eyeCurve: 1, mouthCurve: 0.92, mouthW: 30, mouthOpen: 0.38,
       blush: 0.6, browLY: -3.5, browRY: -3.5, sparkle: 0.55,
@@ -110,7 +110,7 @@ const REACTIONS: Record<string, (side: number) => Reaction> = {
   }),
   surprise: () => ({
     id: 'surprise',
-    hold: 0.42,
+    hold: 0.85,
     params: {
       eyeOpen: 1.28, pupilScale: 0.84, mouthW: 22, mouthOpen: 0.42, mouthRound: 1,
       browLY: -9, browRY: -9, mouthCurve: 0,
@@ -323,7 +323,7 @@ const REACTIONS: Record<string, (side: number) => Reaction> = {
   }),
 };
 
-const PLAYFUL_IDS = ['smile', 'giggle', 'wink', 'curious', 'nuzzle', 'bounce', 'blink', 'surprise', 'laugh'];
+const PLAYFUL_IDS = ['laugh', 'surprise', 'wink', 'giggle', 'bounce', 'smile', 'curious', 'nuzzle'];
 const ANNOYED_IDS = ['annoyed', 'blink', 'huff', 'flinch', 'curious'];
 const ANGRY_IDS = ['huff', 'angry', 'annoyed', 'flinch'];
 const OVER_IDS = ['overwhelmed', 'flinch', 'angry'];

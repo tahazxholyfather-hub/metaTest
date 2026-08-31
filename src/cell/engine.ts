@@ -192,7 +192,7 @@ export class CellEngine {
   private ptrY = CELL_CY;
   private irritation = 0;
   private lastPokeAt = -10;
-  private lastPlayedAt = -10;
+  private lastPlayedWall = -10;
   private clickTimes: number[] = [];
   private recentReactions: string[] = [];
   private wasOver = false;
@@ -345,17 +345,25 @@ export class CellEngine {
     this.gazeY.target = 0;
   }
 
+  /** True when the last pointer sample is over/near the cell. */
+  isPointerOver(): boolean {
+    return this.ptrPresent && this.ptrDist < 1.5;
+  }
+
   /** Click/tap the character — plays a varied, context-aware reaction. */
   poke(): void {
     const t = this.tReal;
-    this.clickTimes.push(t);
-    this.clickTimes = this.clickTimes.filter((c) => t - c < 2.05);
-    const rapid = this.clickTimes.length >= 3 || (t - this.lastPokeAt >= 0 && t - this.lastPokeAt < 0.4);
-    if (rapid) this.irritation = clamp01(this.irritation + (this.clickTimes.length >= 5 ? 0.24 : 0.15));
-    else this.irritation = clamp01(this.irritation + 0.04);
+    const now = typeof performance !== 'undefined' ? performance.now() / 1000 : t;
+    this.clickTimes.push(now);
+    this.clickTimes = this.clickTimes.filter((c) => now - c < 1.85);
+    const n = this.clickTimes.length;
+    if (n >= 5) this.irritation = clamp01(this.irritation + 0.2);
+    else if (n >= 3) this.irritation = clamp01(this.irritation + 0.14);
+    else this.irritation = clamp01(this.irritation + 0.05);
     this.lastPokeAt = t;
-    if (t - this.lastPlayedAt < 0.08) return;
-    this.lastPlayedAt = t;
+
+    if (now - this.lastPlayedWall < 0.14) return;
+    this.lastPlayedWall = now;
     this.playReaction(pickClickReaction(this.pickCtx()));
   }
 
@@ -444,37 +452,14 @@ export class CellEngine {
     }
   }
 
-  /** Persistent click-mood + short-lived poke overlay, applied on top of state targets. */
+  /** Short-lived poke overlay, then persistent click-mood on top so spam still reads as annoyed. */
   private applyAwarenessTargets(): void {
-    const u = this.irritation;
-    if (u > 0.008) {
-      const a = smoothstep(0.06, 0.42, u);
-      const g = smoothstep(0.38, 0.72, u);
-      const o = smoothstep(0.68, 0.98, u);
-      const add = (name: ParamName, d: number) => {
-        this.springs.get(name)!.target += d;
-      };
-      add('browLRot', 8 * a + 9 * g - 24 * o);
-      add('browRRot', 8 * a + 9 * g - 24 * o);
-      add('browLY', 2.2 * a + 1.8 * g);
-      add('browRY', 2.2 * a + 1.8 * g);
-      add('mouthCurve', -0.32 * a - 0.28 * g - 0.12 * o);
-      add('mouthOpen', 0.05 * g + 0.06 * o);
-      add('eyeOpen', -0.14 * a - 0.16 * g + 0.18 * o);
-      add('pupilScale', -0.08 * a - 0.1 * g);
-      add('eyeCurve', -(a * 0.4 + g) * (this.springs.get('eyeCurve')!.target));
-      add('shiver', 0.22 * a + 0.4 * g + 0.3 * o);
-      add('colorShift', -0.18 * a - 0.38 * g - 0.28 * o);
-      add('wobbleAmp', 0.5 * g + 0.3 * o);
-      add('blush', -0.12 * g);
-    }
-
     const rw = clamp01(this.reactW.value);
     if (rw > 0.002 && this.reactParams) {
       const overlay = this.reactParams;
       const keys = new Set<ParamName>([
         ...FACE_PARAMS,
-        'bodyTilt', 'bodyScale', 'bodyY', 'shiver', 'colorShift', 'sparkle',
+        'bodyTilt', 'bodyScale', 'bodyY', 'shiver', 'sparkle',
       ]);
       for (const key of keys) {
         const v = overlay[key];
@@ -483,15 +468,27 @@ export class CellEngine {
         s.target = lerp(s.target, v, rw);
       }
     }
+
+    const u = this.irritation;
+    if (u > 0.008) {
+      const moodW = smoothstep(0.18, 0.62, u);
+      const o = smoothstep(0.68, 0.98, u);
+      const add = (name: ParamName, d: number) => {
+        this.springs.get(name)!.target += d;
+      };
+      add('shiver', 0.25 * moodW + 0.35 * o);
+      add('wobbleAmp', 0.55 * moodW);
+      add('blush', -0.14 * moodW);
+    }
   }
 
   private updateAwareness(dt: number): void {
     if (this.tReal > this.reactUntil) this.reactW.target = 0;
     if (this.reactW.value < 0.002 && this.reactW.target === 0) this.reactParams = null;
 
-    if (this.tReal - this.lastPokeAt > 2.5) {
-      this.irritation += (0 - this.irritation) * (1 - Math.exp(-dt * 0.58));
-    } else if (this.tReal - this.lastPokeAt > 1.15) {
+    if (this.tReal - this.lastPokeAt > 3.2) {
+      this.irritation += (0 - this.irritation) * (1 - Math.exp(-dt * 0.48));
+    } else if (this.tReal - this.lastPokeAt > 1.6) {
       this.irritation += (0 - this.irritation) * (1 - Math.exp(-dt * 0.16));
     }
 
@@ -793,7 +790,7 @@ export class CellEngine {
     f.shadowOpacity = clamp(0.34 * glow, 0.12, 0.5);
     f.shadowScale = 1 - (by + bob) * 0.006;
 
-    const shift = clamp(this.p('colorShift'), -1, 1);
+    const shift = clamp(this.p('colorShift') - this.irritation * 0.82, -1, 1);
     const tt = Math.abs(shift) * 0.85;
     const tint = shift < 0 ? ERR : OK;
     f.rimTop = rgbCss(mixRgb(RIM_TOP, tint.rimTop, tt));
@@ -832,11 +829,19 @@ export class CellEngine {
     f.pupilY = lookY * PUPIL_TRAVEL_Y;
     f.pupilScale = (this.p('pupilScale') + imp.pupilScale) * (1 + fnoise(t * 0.3, 227) * 0.02);
 
-    const browY = imp.browY;
+    const irr = this.irritation;
+    const angryW = smoothstep(0.14, 0.52, irr);
+    const overW = smoothstep(0.66, 0.98, irr);
+    const browRotAdd = 17 * angryW - 28 * overW;
+    const browYAdd = 3.2 * angryW;
+    const mouthAdd = -0.62 * angryW - 0.12 * overW;
+    const eyeAdd = -0.22 * angryW + 0.28 * overW;
+
+    const browY = imp.browY + browYAdd;
     f.browLTransform =
-      `translate(${BROW_L.x},${(BROW_L.y + this.p('browLY') + browY).toFixed(2)}) rotate(${(this.p('browLRot') + imp.browLRot).toFixed(2)})`;
+      `translate(${BROW_L.x},${(BROW_L.y + this.p('browLY') + browY).toFixed(2)}) rotate(${(this.p('browLRot') + imp.browLRot + browRotAdd).toFixed(2)})`;
     f.browRTransform =
-      `translate(${BROW_R.x},${(BROW_R.y + this.p('browRY') + browY).toFixed(2)}) scale(-1,1) rotate(${(this.p('browRRot') + imp.browRRot).toFixed(2)})`;
+      `translate(${BROW_R.x},${(BROW_R.y + this.p('browRY') + browY).toFixed(2)}) scale(-1,1) rotate(${(this.p('browRRot') + imp.browRRot + browRotAdd).toFixed(2)})`;
 
     const artA = fnoise(this.tReal * 9.3, 231);
     const artB = vnoise(this.tReal * 7.1, 233);
@@ -845,11 +850,14 @@ export class CellEngine {
     const round = clamp01(this.p('mouthRound') + sp * 0.3 * (0.5 + 0.5 * artB) + imp.mouthRound);
     f.mouthD = mouthPath({
       cx: MOUTH.x, cy: MOUTH.y, w: mw, open,
-      curve: clamp(this.p('mouthCurve') + imp.mouthCurve, -1, 1), round,
+      curve: clamp(this.p('mouthCurve') + imp.mouthCurve + mouthAdd, -1, 1), round,
     });
     f.mouthFillOpacity = smoothstep(0.05, 0.2, open + round * 0.35) * 0.92;
     f.mouthStrokeW = clamp(5 - open * 1.6, 3.4, 5);
     f.blushOpacity = clamp01(this.p('blush') + imp.blush) * 0.75;
+
+    f.eyeOpenL = clamp(f.eyeOpenL + eyeAdd, 0.03, 1.38);
+    f.eyeOpenR = clamp(f.eyeOpenR + eyeAdd, 0.03, 1.38);
 
     // 7. organelles ---------------------------------------------------------------
     const orgSpeed = this.p('orgSpeed');
