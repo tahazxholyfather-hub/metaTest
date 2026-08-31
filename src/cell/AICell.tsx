@@ -246,10 +246,10 @@ export const AICell = forwardRef<AICellHandle, AICellProps>(function AICell(prop
             <stop offset="100%" stopColor="#0B0318" stopOpacity="0" />
           </radialGradient>
           <radialGradient id={id('membraneG')} cx="42%" cy="36%" r="72%">
-            <stop offset="0%" stopColor="#2C1259" />
-            <stop offset="38%" stopColor="#26104F" />
-            <stop offset="68%" stopColor="#331566" />
-            <stop offset="86%" stopColor="#4C1D95" />
+            <stop offset="0%" stopColor="#38176E" />
+            <stop offset="38%" stopColor="#301360" />
+            <stop offset="68%" stopColor="#3D1A78" />
+            <stop offset="86%" stopColor="#51219D" />
             <stop offset="96%" stopColor="#6D28D9" />
             <stop offset="100%" stopColor="#7C3AED" />
           </radialGradient>
@@ -304,7 +304,9 @@ export const AICell = forwardRef<AICellHandle, AICellProps>(function AICell(prop
 
           {/* interior, clipped to the living outline */}
           <g clipPath={url('clip')}>
-            <ellipse cx="200" cy="322" rx="160" ry="86" fill="#0F0524" opacity="0.34" />
+            <ellipse cx="200" cy="322" rx="160" ry="86" fill="#0F0524" opacity="0.3" />
+            {/* soft light pocket behind the face, as in the reference */}
+            <ellipse cx="200" cy="180" rx="122" ry="104" fill={url('coreG')} opacity="0.2" />
             <ellipse ref={n('coreLight')} cx="214" cy="252" rx="92" ry="78" fill={url('coreG')} opacity="0.24" />
 
             {/* drifting cytoplasm dots */}
@@ -335,16 +337,16 @@ export const AICell = forwardRef<AICellHandle, AICellProps>(function AICell(prop
             </g>
 
             {/* blush */}
-            <ellipse ref={n('blushL')} cx={BLUSH_L.x} cy={BLUSH_L.y} rx="13" ry="6.5" fill="#E879C9" opacity="0" className="aicell-blur4" />
-            <ellipse ref={n('blushR')} cx={BLUSH_R.x} cy={BLUSH_R.y} rx="13" ry="6.5" fill="#E879C9" opacity="0" className="aicell-blur4" />
+            <ellipse ref={n('blushL')} cx={BLUSH_L.x} cy={BLUSH_L.y} rx="15" ry="7.5" fill="#F291DE" opacity="0" className="aicell-blur4" />
+            <ellipse ref={n('blushR')} cx={BLUSH_R.x} cy={BLUSH_R.y} rx="15" ry="7.5" fill="#F291DE" opacity="0" className="aicell-blur4" />
 
             {/* face */}
             <g>
               <g ref={n('browL')}>
-                <path d="M -14 2 Q -1 -7 14 0" fill="none" stroke="#221040" strokeWidth="6.4" strokeLinecap="round" />
+                <path d="M -14 2 Q -1 -7 14 0" fill="none" stroke="#160829" strokeWidth="7" strokeLinecap="round" />
               </g>
               <g ref={n('browR')}>
-                <path d="M -14 2 Q -1 -7 14 0" fill="none" stroke="#221040" strokeWidth="6.4" strokeLinecap="round" />
+                <path d="M -14 2 Q -1 -7 14 0" fill="none" stroke="#160829" strokeWidth="7" strokeLinecap="round" />
               </g>
 
               <g transform={`translate(${EYE_L.x},${EYE_L.y})`}>
@@ -380,10 +382,10 @@ export const AICell = forwardRef<AICellHandle, AICellProps>(function AICell(prop
               <path
                 ref={n('mouth')}
                 d=""
-                fill="#1E0B3C"
+                fill="#12061F"
                 fillOpacity="0"
-                stroke="#2B1252"
-                strokeWidth="4.5"
+                stroke="#160829"
+                strokeWidth="5"
                 strokeLinejoin="round"
                 strokeLinecap="round"
               />
@@ -419,7 +421,7 @@ export const AICell = forwardRef<AICellHandle, AICellProps>(function AICell(prop
         </g>
 
         {/* zzz */}
-        <g fill="#C4B5FD" fontFamily="Georgia, 'Times New Roman', serif" fontStyle="italic" fontWeight="700" fontSize="17">
+        <g fill="#DDD6FE" fontFamily="Georgia, 'Times New Roman', serif" fontStyle="italic" fontWeight="700" fontSize="21" className="aicell-glow-spark">
           {Array.from({ length: 3 }, (_, i) => (
             <text key={i} ref={n(`zzz${i}`)} opacity="0">
               z

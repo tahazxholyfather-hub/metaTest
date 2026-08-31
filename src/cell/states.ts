@@ -129,7 +129,7 @@ export const STATES: Record<CellState, StateDefinition> = {
     params: {
       browLY: -9.5, browRY: -9.5,
       eyeOpen: 1.3, pupilScale: 0.84,
-      mouthW: 17, mouthCurve: 0, mouthOpen: 0.5, mouthRound: 1,
+      mouthW: 19, mouthCurve: 0, mouthOpen: 0.6, mouthRound: 1,
       bodyScale: 1.02, bodyY: -4, wobbleAmp: 1.2, bobAmp: 1,
       glow: 1.3, rim: 1.35, nucScale: 1.04, nucGlow: 0.8,
     },

@@ -625,16 +625,16 @@ export class CellEngine {
 
     const artA = fnoise(this.tReal * 9.3, 231);
     const artB = vnoise(this.tReal * 7.1, 233);
-    const open = clamp(this.p('mouthOpen') + sp * (0.62 + 0.3 * Math.max(0, artA)), 0, 1.15);
+    const open = clamp(this.p('mouthOpen') + sp * (0.75 + 0.35 * Math.max(0, artA)), 0, 1.15);
     const mw = this.p('mouthW') * (1 + sp * (-0.1 + 0.18 * artB));
     const round = clamp01(this.p('mouthRound') + sp * 0.3 * (0.5 + 0.5 * artB));
     f.mouthD = mouthPath({
       cx: MOUTH.x, cy: MOUTH.y, w: mw, open,
       curve: clamp(this.p('mouthCurve') + imp.mouthCurve, -1, 1), round,
     });
-    f.mouthFillOpacity = smoothstep(0.05, 0.2, open + round * 0.35);
-    f.mouthStrokeW = clamp(4.6 - open * 1.4, 3, 4.6);
-    f.blushOpacity = clamp01(this.p('blush')) * 0.5;
+    f.mouthFillOpacity = smoothstep(0.05, 0.2, open + round * 0.35) * 0.92;
+    f.mouthStrokeW = clamp(5 - open * 1.6, 3.4, 5);
+    f.blushOpacity = clamp01(this.p('blush')) * 0.75;
 
     // 7. organelles ---------------------------------------------------------------
     const orgSpeed = this.p('orgSpeed');
@@ -663,7 +663,7 @@ export class CellEngine {
       const drift = 6 + (i % 3) * 2;
       d.x = CELL_CX + Math.cos(s.angle) * s.dist * 130 + fnoise(t * 0.14 * orgSpeed + s.phase, 401 + i) * drift * od;
       d.y = CELL_CY + Math.sin(s.angle) * s.dist * 130 + fnoise(t * 0.11 * orgSpeed + s.phase, 431 + i) * drift * od;
-      d.o = 0.1 + 0.22 * (0.5 + 0.5 * Math.sin(t * 0.7 + s.phase * 4)) + sp * 0.08;
+      d.o = 0.16 + 0.3 * (0.5 + 0.5 * Math.sin(t * 0.7 + s.phase * 4)) + sp * 0.08;
     }
 
     // 8. extras ------------------------------------------------------------------
@@ -691,10 +691,10 @@ export class CellEngine {
     for (let i = 0; i < 3; i++) {
       const zp = ((t * 0.14 + (2 - i) * 0.34) % 1 + 1) % 1;
       const z = f.zzz[i];
-      z.x = 302 + i * 3 + Math.sin(zp * 6.2 + i) * 5;
-      z.y = 96 - zp * 46;
-      z.o = zzz * smoothstep(0, 0.18, zp) * (1 - smoothstep(0.62, 0.98, zp));
-      z.s = 0.65 + zp * 0.55 + i * 0.12;
+      z.x = 296 + zp * 26 + Math.sin(zp * 6.2 + i) * 4;
+      z.y = 104 - zp * 58;
+      z.o = zzz * smoothstep(0, 0.15, zp) * (1 - smoothstep(0.6, 0.96, zp));
+      z.s = 0.6 + zp * 0.75;
     }
 
     this.onFrame(f);
