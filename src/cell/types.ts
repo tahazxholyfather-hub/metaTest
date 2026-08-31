@@ -125,6 +125,8 @@ export interface AICellHandle {
   setEnergy(value: number): void;
   /** 0..1 — real-time speech/audio amplitude while speaking. */
   setSpeechIntensity(value: number): void;
+  /** Trigger a context-aware click reaction (also fired by clicking the character). */
+  poke(): void;
 }
 
 export interface AICellProps {
@@ -142,6 +144,8 @@ export interface AICellProps {
   reducedMotion?: boolean;
   /** Render the soft atmospheric halo behind the cell. Default true. */
   atmosphere?: boolean;
+  /** Eye-tracking, proximity and click personality. Default true. */
+  interactive?: boolean;
   className?: string;
   style?: CSSProperties;
   ariaLabel?: string;

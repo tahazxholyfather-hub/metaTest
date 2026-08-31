@@ -19,7 +19,7 @@ export const AICell = forwardRef<AICellHandle, AICellProps>(function AICell(prop
     size = '100%',
     initialState = 'idle',
     state, speaking, listening, mood, energy, speechIntensity,
-    reducedMotion, atmosphere = true,
+    reducedMotion, atmosphere = true, interactive = true,
     className, style, ariaLabel = 'AI assistant character',
   } = props;
 
@@ -80,15 +80,20 @@ export const AICell = forwardRef<AICellHandle, AICellProps>(function AICell(prop
     }
 
     // eyes -------------------------------------------------------------
-    const wide = Math.max(0, f.eyeOpenL - 1);
-    const ry = (EYE_RY * f.eyeOpenL).toFixed(2);
-    const rx = (EYE_RX * (1 + wide * 0.22)).toFixed(2);
-    setA('whiteL', 'ry', ry);
-    setA('whiteR', 'ry', ry);
-    setA('whiteL', 'rx', rx);
-    setA('whiteR', 'rx', rx);
-    setA('eyeClip', 'ry', ry);
-    setA('eyeClip', 'rx', rx);
+    const wideL = Math.max(0, f.eyeOpenL - 1);
+    const wideR = Math.max(0, f.eyeOpenR - 1);
+    const ryL = (EYE_RY * f.eyeOpenL).toFixed(2);
+    const ryR = (EYE_RY * f.eyeOpenR).toFixed(2);
+    const rxL = (EYE_RX * (1 + wideL * 0.22)).toFixed(2);
+    const rxR = (EYE_RX * (1 + wideR * 0.22)).toFixed(2);
+    setA('whiteL', 'ry', ryL);
+    setA('whiteR', 'ry', ryR);
+    setA('whiteL', 'rx', rxL);
+    setA('whiteR', 'rx', rxR);
+    setA('eyeClip', 'ry', ryL);
+    setA('eyeClip', 'rx', rxL);
+    setA('eyeClipR', 'ry', ryR);
+    setA('eyeClipR', 'rx', rxR);
     const normOpacity = (1 - f.eyeCurve).toFixed(3);
     setA('eyeLNorm', 'opacity', normOpacity);
     setA('eyeRNorm', 'opacity', normOpacity);
@@ -189,6 +194,49 @@ export const AICell = forwardRef<AICellHandle, AICellProps>(function AICell(prop
     return () => mq.removeEventListener('change', onChange);
   }, [reducedMotion]);
 
+  // Pointer awareness: window-level tracking, click/tap on the character.
+  useEffect(() => {
+    if (interactive === false) return;
+    const engine = engineRef.current;
+    const el = containerRef.current;
+    if (!engine || !el) return;
+
+    const toView = (e: PointerEvent) => {
+      const r = el.getBoundingClientRect();
+      if (r.width < 1 || r.height < 1) return null;
+      return {
+        x: ((e.clientX - r.left) / r.width) * 400,
+        y: ((e.clientY - r.top) / r.height) * 400,
+      };
+    };
+
+    const onMove = (e: PointerEvent) => {
+      const v = toView(e);
+      if (v) engine.setPointer(v.x, v.y);
+    };
+    const onDown = (e: PointerEvent) => {
+      if (e.button !== 0) return;
+      const v = toView(e);
+      if (!v) return;
+      engine.setPointer(v.x, v.y);
+      const dx = v.x - CELL_CX;
+      const dy = v.y - CELL_CY;
+      if (dx * dx + dy * dy <= (CELL_R * 1.18) * (CELL_R * 1.18)) engine.poke();
+    };
+    const onOut = (e: PointerEvent) => {
+      if (!e.relatedTarget) engine.clearPointer();
+    };
+
+    window.addEventListener('pointermove', onMove, { passive: true });
+    el.addEventListener('pointerdown', onDown);
+    window.addEventListener('pointerout', onOut);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      el.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('pointerout', onOut);
+    };
+  }, [interactive]);
+
   // Controlled props → engine ---------------------------------------------------
   useEffect(() => {
     if (state !== undefined) engineRef.current?.setState(state);
@@ -220,6 +268,7 @@ export const AICell = forwardRef<AICellHandle, AICellProps>(function AICell(prop
       setMood: (m) => engineRef.current?.setMood(m),
       setEnergy: (v) => engineRef.current?.setEnergy(v),
       setSpeechIntensity: (v) => engineRef.current?.setSpeechIntensity(v),
+      poke: () => engineRef.current?.poke(),
     }),
     [],
   );
@@ -286,6 +335,9 @@ export const AICell = forwardRef<AICellHandle, AICellProps>(function AICell(prop
           </clipPath>
           <clipPath id={id('eyeclip')}>
             <ellipse ref={n('eyeClip')} cx="0" cy="0" rx={EYE_RX} ry={EYE_RY} />
+          </clipPath>
+          <clipPath id={id('eyeclipR')}>
+            <ellipse ref={n('eyeClipR')} cx="0" cy="0" rx={EYE_RX} ry={EYE_RY} />
           </clipPath>
         </defs>
 
@@ -367,7 +419,7 @@ export const AICell = forwardRef<AICellHandle, AICellProps>(function AICell(prop
               <g transform={`translate(${EYE_R.x},${EYE_R.y})`}>
                 <g ref={n('eyeRNorm')}>
                   <ellipse ref={n('whiteR')} rx={EYE_RX} ry={EYE_RY} fill="#F7F4FF" />
-                  <g clipPath={url('eyeclip')}>
+                  <g clipPath={url('eyeclipR')}>
                     <g ref={n('pupilR')}>
                       <circle r={PUPIL_R} fill={url('pupilG')} />
                       <circle cx="-3.9" cy="-4.6" r="4.1" fill="#FFFFFF" />
