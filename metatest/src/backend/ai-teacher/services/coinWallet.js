@@ -297,29 +297,6 @@ async function refundReservation(conn, userId, reserved, referenceId, reason = '
     return { refunded: amount, balance: after };
 }
 
-/**
- * Integer energy the student pays. Built from real USD list prices.
- * `modelMultiplier` is ignored — the model id already sets the USD rate.
- * lowCoinMode does not discount money (that would lose API cost); shorter replies do.
- */
-function calculateCoinCost({
-    inputTokens = 0,
-    outputTokens = 0,
-    cachedTokens = 0,
-    model,
-    modelMultiplier,
-    teacherMultiplier = 1,
-} = {}) {
-    const quote = pricing.quoteUsage({
-        inputTokens,
-        outputTokens,
-        cachedTokens,
-        model,
-        teacherMultiplier: teacherMultiplier || modelMultiplier || 1,
-    });
-    return quote.energy;
-}
-
 function quoteMessageCost(opts) {
     return pricing.quoteUsage(opts);
 }
@@ -331,7 +308,6 @@ module.exports = {
     reserveCoins,
     finalizeCharge,
     refundReservation,
-    calculateCoinCost,
     quoteMessageCost,
     nextDailyBalance,
 };

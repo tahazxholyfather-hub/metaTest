@@ -1,21 +1,20 @@
 // src/views/AiTeacherView.tsx
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { IntroScreen } from './ai-teacher-ui/IntroScreen';
-import { ProfileSetup } from './ai-teacher-ui/ProfileSetup';
-import { TeacherSelector } from './ai-teacher-ui/TeacherSelector';
 import { ChatScreen } from './ai-teacher-ui/ChatScreen';
-import { DesktopAiSidePanel, MenuSheet } from './ai-teacher-ui/TeacherSidebar';
-import { AiPageShell, FlatPrimaryButton, GraySpinner, HiddenScroll } from './ai-teacher-ui/ui';
+import { DesktopAiSidePanel, MobileHistorySheet } from './ai-teacher-ui/ChatSidePanel';
+import { AiPageShell, GraySpinner, useIsMobile } from './ai-teacher-ui/ui';
 import { aiTeacherApi } from './ai-teacher-ui/api';
+import { SUBJECT_FALLBACKS, SUBJECT_ORDER } from './ai-teacher-ui/subjectIcons';
 import type {
-    AiBootstrap,
+    AiConversationSummary,
     AiMessage,
-    AiSettings,
-    AiTeacherPublic,
+    AiSubject,
     AiWallet,
     ChatStatus,
     OnboardingStep,
+    SubjectKey,
 } from './ai-teacher-ui/types';
 
 type Props = {
@@ -23,31 +22,33 @@ type Props = {
     onNavigateHome?: () => void;
 };
 
-const DEFAULT_SETTINGS: AiSettings = {
-    lowCoinMode: false,
-    alwaysExamples: true,
-    conciseResponses: false,
-    stepByStep: true,
-    parentReportsEnabled: false,
-};
+const FALLBACK_SUBJECTS: AiSubject[] = SUBJECT_ORDER.map((key) => ({
+    key,
+    nameFa: SUBJECT_FALLBACKS[key].nameFa,
+    nameEn: key,
+    icon: SUBJECT_FALLBACKS[key].icon,
+    color: SUBJECT_FALLBACKS[key].color,
+}));
 
 export function AiTeacherView({ onStateChange, onNavigateHome }: Props) {
+    const isMobile = useIsMobile();
     const [bootLoading, setBootLoading] = useState(true);
     const [step, setStep] = useState<OnboardingStep>('intro');
-    const [bootstrap, setBootstrap] = useState<AiBootstrap | null>(null);
-    const [teacher, setTeacher] = useState<AiTeacherPublic | null>(null);
+    const [subjects, setSubjects] = useState<AiSubject[]>(FALLBACK_SUBJECTS);
+    const [activeSubjectKey, setActiveSubjectKey] = useState<SubjectKey>('math');
     const [conversationId, setConversationId] = useState<number | null>(null);
+    const [conversationTitle, setConversationTitle] = useState('گفتگوی جدید');
     const [messages, setMessages] = useState<AiMessage[]>([]);
     const [wallet, setWallet] = useState<AiWallet>({ balance: 0 });
-    const [settings, setSettings] = useState<AiSettings>(DEFAULT_SETTINGS);
     const [chatStatus, setChatStatus] = useState<ChatStatus>('ready');
-    const [menuOpen, setMenuOpen] = useState(false);
-    const [desktopMenuOpen, setDesktopMenuOpen] = useState(true); // open by default on desktop
+    const [conversations, setConversations] = useState<AiConversationSummary[]>([]);
+    const [conversationsLoading, setConversationsLoading] = useState(false);
+    const [historySheetOpen, setHistorySheetOpen] = useState(false);
     const [busy, setBusy] = useState(false);
-    const [changingTeacher, setChangingTeacher] = useState(false);
+    const [firstName, setFirstName] = useState<string | undefined>();
 
     useEffect(() => {
-        onStateChange?.({ title: 'معلم هوشمند', showBackButton: false });
+        onStateChange?.({ title: 'Met', showBackButton: false });
     }, [onStateChange]);
 
     const goHome = useCallback(() => {
@@ -56,90 +57,76 @@ export function AiTeacherView({ onStateChange, onNavigateHome }: Props) {
         else window.location.assign('/dashboard');
     }, [onNavigateHome]);
 
+    const refreshConversations = useCallback(async () => {
+        setConversationsLoading(true);
+        try {
+            const res = await aiTeacherApi.listConversations({ limit: 40 });
+            setConversations(res.data || []);
+        } catch {
+            setConversations([]);
+        } finally {
+            setConversationsLoading(false);
+        }
+    }, []);
+
     const loadBootstrap = useCallback(async () => {
         setBootLoading(true);
         try {
             const res = await aiTeacherApi.bootstrap();
             const data = res.data;
-            setBootstrap(data);
-            setSettings(data.settings || DEFAULT_SETTINGS);
+            setFirstName(data.user?.firstName);
             setWallet(data.wallet || { balance: 0 });
-            setTeacher(data.teacher);
+            if (data.subjects?.length) setSubjects(data.subjects);
+            if (data.lastSubject) setActiveSubjectKey(data.lastSubject);
 
-            if (!data.onboardingCompleted) {
+            if (!data.introSeen) {
                 setStep('intro');
+                setBootLoading(false);
                 return;
             }
 
             const session = await aiTeacherApi.openSession();
-            setTeacher(session.data.teacher);
-            setConversationId(session.data.conversation.id);
-            setMessages(session.data.messages || []);
             setWallet(session.data.wallet || data.wallet);
+            if (session.data.conversation) {
+                setConversationId(session.data.conversation.id);
+                setConversationTitle(session.data.conversation.title);
+                setActiveSubjectKey(session.data.conversation.subjectKey);
+                setMessages(session.data.messages || []);
+            }
             setStep('chat');
+            refreshConversations();
         } catch (err: any) {
-            toast.error(err?.message || 'خطا در بارگذاری معلم هوشمند');
+            toast.error(err?.message || 'خطا در بارگذاری Met');
             setStep('intro');
         } finally {
             setBootLoading(false);
         }
-    }, []);
+    }, [refreshConversations]);
 
     useEffect(() => {
         loadBootstrap();
     }, [loadBootstrap]);
 
-    const handleProfileSubmit = async (profile: any) => {
+    const handleStart = async () => {
         setBusy(true);
         try {
-            await aiTeacherApi.saveProfile(profile);
-            setStep('teacher');
-        } catch (err: any) {
-            toast.error(err?.message || 'ذخیره پروفایل ناموفق بود');
-        } finally {
-            setBusy(false);
-        }
-    };
-
-    const handleSelectTeacher = async (selected: AiTeacherPublic) => {
-        setBusy(true);
-        try {
-            const res = await aiTeacherApi.selectTeacher(selected.id);
-            setTeacher(res.data.teacher);
-            setConversationId(res.data.conversation.id);
-            setWallet(res.data.wallet || wallet);
-            const msgs: AiMessage[] = [];
-            if (res.data.starterMessage) msgs.push(res.data.starterMessage);
-            try {
-                const session = await aiTeacherApi.openSession();
-                setMessages(session.data.messages || msgs);
-                setConversationId(session.data.conversation.id);
-                setWallet(session.data.wallet || res.data.wallet);
-            } catch {
-                setMessages(msgs);
-            }
-            setChangingTeacher(false);
-            setMenuOpen(false);
-            setDesktopMenuOpen(true);
-            setStep('chat');
-            toast.success(`${res.data.teacher.displayName} انتخاب شد`);
-        } catch (err: any) {
-            toast.error(err?.message || 'انتخاب معلم ناموفق بود');
-        } finally {
-            setBusy(false);
-        }
+            await aiTeacherApi.markIntroSeen();
+        } catch { /* non-fatal */ }
+        setBusy(false);
+        setStep('chat');
+        refreshConversations();
     };
 
     const handleSelectConversation = async (id: number) => {
+        if (id === conversationId) { setHistorySheetOpen(false); return; }
         setBusy(true);
         try {
             const res = await aiTeacherApi.getConversation(id);
             setConversationId(res.data.conversation.id);
-            setTeacher(res.data.teacher);
+            setConversationTitle(res.data.conversation.title);
+            setActiveSubjectKey(res.data.conversation.subjectKey);
             setMessages(res.data.messages || []);
-            setMenuOpen(false);
-            setChangingTeacher(false);
-            setStep('chat');
+            setHistorySheetOpen(false);
         } catch (err: any) {
             toast.error(err?.message || 'باز کردن گفتگو ناموفق بود');
         } finally {
@@ -147,35 +134,57 @@ export function AiTeacherView({ onStateChange, onNavigateHome }: Props) {
         }
     };
 
-    const handleNewChat = async () => {
-        setBusy(true);
+    const handleNewChat = () => {
+        setConversationId(null);
+        setConversationTitle('گفتگوی جدید');
+        setMessages([]);
+        setHistorySheetOpen(false);
+    };
+
+    const handleConversationId = (id: number, subjectKey: SubjectKey) => {
+        const isNew = id !== conversationId;
+        setConversationId(id);
+        setActiveSubjectKey(subjectKey);
+        if (isNew) refreshConversations();
+    };
+
+    const handleTitleChange = (title: string) => {
+        setConversationTitle(title);
+        setConversations((prev) => prev.map((c) => (c.id === conversationId ? { ...c, title, titleGenerated: true } : c)));
+    };
+
+    const handleRenameConversation = async (id: number, title: string) => {
+        setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, title } : c)));
+        if (id === conversationId) setConversationTitle(title);
         try {
-            const res = await aiTeacherApi.createConversation();
-            setConversationId(res.data.conversation.id);
-            setTeacher(res.data.teacher);
-            setMessages(res.data.starterMessage ? [res.data.starterMessage] : []);
-            setMenuOpen(false);
-            setChangingTeacher(false);
-            setStep('chat');
-            toast.success('گفتگوی جدید شروع شد');
+            await aiTeacherApi.renameConversation(id, title);
         } catch (err: any) {
-            toast.error(err?.message || 'ایجاد گفتگوی جدید ناموفق بود');
-        } finally {
-            setBusy(false);
+            toast.error(err?.message || 'تغییر عنوان ناموفق بود');
+            refreshConversations();
         }
     };
 
-    const panelProps = {
-        teacher,
-        settings,
-        onSettingsChange: setSettings,
-        onChangeTeacher: () => {
-            setMenuOpen(false);
-            setDesktopMenuOpen(false);
-            setChangingTeacher(true);
-        },
+    const handleDeleteConversation = async (id: number) => {
+        setConversations((prev) => prev.filter((c) => c.id !== id));
+        try {
+            await aiTeacherApi.deleteConversation(id);
+            if (id === conversationId) handleNewChat();
+        } catch (err: any) {
+            toast.error(err?.message || 'حذف گفتگو ناموفق بود');
+            refreshConversations();
+        }
+    };
+
+    const sidePanelProps = {
+        conversations,
+        loadingConversations: conversationsLoading,
+        activeConversationId: conversationId,
         onSelectConversation: handleSelectConversation,
         onNewChat: handleNewChat,
+        onRenameConversation: handleRenameConversation,
+        onDeleteConversation: handleDeleteConversation,
+        chatStatus,
+        subjects,
     };
 
     if (bootLoading) {
@@ -190,100 +199,45 @@ export function AiTeacherView({ onStateChange, onNavigateHome }: Props) {
         );
     }
 
-    if (changingTeacher || step === 'teacher') {
-        return (
-            <div className="flex-1 flex flex-col min-h-0 h-full overflow-hidden">
-                <TeacherSelector
-                    selectedId={teacher?.id}
-                    onSelect={handleSelectTeacher}
-                    onBack={
-                        changingTeacher
-                            ? () => {
-                                setChangingTeacher(false);
-                                setDesktopMenuOpen(true);
-                            }
-                            : step === 'teacher' && !bootstrap?.onboardingCompleted
-                                ? () => setStep('profile')
-                                : goHome
-                    }
-                    loading={busy}
-                    title={changingTeacher ? 'تغییر معلم' : 'انتخاب معلم'}
-                />
-            </div>
-        );
-    }
-
     if (step === 'intro') {
         return (
             <div className="flex-1 flex flex-col min-h-0 h-full overflow-hidden">
-                <IntroScreen loading={busy} onStart={() => setStep('profile')} />
-            </div>
-        );
-    }
-
-    if (step === 'profile') {
-        return (
-            <div className="flex-1 flex flex-col min-h-0 h-full overflow-hidden">
-                <ProfileSetup
-                    firstName={bootstrap?.user?.firstName}
-                    lastName={bootstrap?.user?.lastName}
-                    initial={bootstrap?.profile}
-                    onSubmit={handleProfileSubmit}
-                    onBack={() => setStep('intro')}
-                    loading={busy}
-                />
-            </div>
-        );
-    }
-
-    if (step === 'chat' && teacher) {
-        return (
-            <div className="flex-1 flex flex-row min-h-0 h-full overflow-hidden bg-[var(--bg-app)]">
-                <div className="flex-1 flex flex-col min-w-0 min-h-0">
-                    <ChatScreen
-                        teacher={teacher}
-                        conversationId={conversationId}
-                        initialMessages={messages}
-                        wallet={wallet}
-                        onWalletChange={setWallet}
-                        onConversationId={setConversationId}
-                        onStatusChange={setChatStatus}
-                        onOpenMenu={() => setMenuOpen(true)}
-                        onToggleDesktopMenu={() => setDesktopMenuOpen((v) => !v)}
-                        desktopMenuOpen={desktopMenuOpen}
-                        onBack={goHome}
-                        studentFirstName={bootstrap?.user?.firstName}
-                    />
-                </div>
-
-                <DesktopAiSidePanel
-                    open={desktopMenuOpen}
-                    onClose={() => setDesktopMenuOpen(false)}
-                    chatStatus={chatStatus}
-                    walletBalance={wallet.balance || 0}
-                    {...panelProps}
-                />
-
-                <MenuSheet
-                    open={menuOpen}
-                    onClose={() => setMenuOpen(false)}
-                    {...panelProps}
-                    onChangeTeacher={() => {
-                        setMenuOpen(false);
-                        setChangingTeacher(true);
-                    }}
-                />
+                <IntroScreen loading={busy} onStart={handleStart} />
             </div>
         );
     }
 
     return (
-        <div className="flex-1 flex flex-col min-h-0 h-full overflow-hidden">
-            <AiPageShell>
-                <HiddenScroll className="flex-1 flex items-center justify-center p-6">
-                    <FlatPrimaryButton onClick={loadBootstrap}>تلاش دوباره</FlatPrimaryButton>
-                </HiddenScroll>
-            </AiPageShell>
+        <div className="flex-1 flex flex-row min-h-0 h-full overflow-hidden bg-[var(--bg-app)]">
+            <div className="flex-1 flex flex-col min-w-0 min-h-0">
+                <ChatScreen
+                    subjects={subjects}
+                    activeSubjectKey={activeSubjectKey}
+                    onSubjectChange={setActiveSubjectKey}
+                    conversationId={conversationId}
+                    conversationTitle={conversationTitle}
+                    initialMessages={messages}
+                    wallet={wallet}
+                    onWalletChange={(w) => setWallet((prev) => ({ ...prev, ...w }))}
+                    onConversationId={handleConversationId}
+                    onTitleChange={handleTitleChange}
+                    onStatusChange={setChatStatus}
+                    onOpenHistory={() => setHistorySheetOpen(true)}
+                    onNewChat={handleNewChat}
+                    onLeave={goHome}
+                    studentFirstName={firstName}
+                />
+            </div>
+
+            {!isMobile && <DesktopAiSidePanel {...sidePanelProps} />}
+
+            {isMobile && (
+                <MobileHistorySheet
+                    open={historySheetOpen}
+                    onClose={() => setHistorySheetOpen(false)}
+                    {...sidePanelProps}
+                />
+            )}
         </div>
     );
 }

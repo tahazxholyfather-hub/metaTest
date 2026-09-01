@@ -1,11 +1,11 @@
 import type {
+    AiAttachment,
     AiBootstrap,
     AiConversationSummary,
     AiMessage,
-    AiSettings,
-    AiStudentProfile,
-    AiTeacherPublic,
+    AiSubject,
     AiWallet,
+    SubjectKey,
 } from './types';
 
 const API_BASE = (import.meta as any)?.env?.VITE_API_BASE_URL || '/api';
@@ -44,39 +44,23 @@ export const aiTeacherApi = {
     bootstrap: () =>
         request<{ success: boolean; data: AiBootstrap }>('/ai-teacher/bootstrap', { method: 'GET' }),
 
-    listTeachers: () =>
-        request<{ success: boolean; data: AiTeacherPublic[] }>('/ai-teacher/teachers', { method: 'GET' }),
+    markIntroSeen: () =>
+        request<{ success: boolean }>('/ai-teacher/intro-seen', { method: 'POST' }),
 
-    saveProfile: (profile: AiStudentProfile) =>
-        request('/ai-teacher/profile', {
-            method: 'POST',
-            body: JSON.stringify(profile),
-        }),
-
-    selectTeacher: (teacherId: number) =>
-        request<{
-            success: boolean;
-            data: {
-                teacher: AiTeacherPublic;
-                conversation: { id: number; title: string; teacherId: number };
-                starterMessage?: AiMessage;
-                wallet: AiWallet;
-            };
-        }>('/ai-teacher/select-teacher', {
-            method: 'POST',
-            body: JSON.stringify({ teacherId }),
-        }),
+    listSubjects: () =>
+        request<{ success: boolean; data: AiSubject[] }>('/ai-teacher/subjects', { method: 'GET' }),
 
     openSession: () =>
         request<{
             success: boolean;
-            data: {
-                teacher: AiTeacherPublic;
-                conversation: { id: number; title: string; teacherId: number };
-                messages: AiMessage[];
-                wallet: AiWallet;
-            };
+            data: { conversation: AiConversationSummary | null; messages: AiMessage[]; wallet: AiWallet };
         }>('/ai-teacher/session', { method: 'GET' }),
+
+    createConversation: (subjectKey: SubjectKey) =>
+        request<{ success: boolean; data: { conversation: AiConversationSummary } }>('/ai-teacher/conversations', {
+            method: 'POST',
+            body: JSON.stringify({ subjectKey }),
+        }),
 
     listConversations: (params?: { limit?: number; offset?: number }) => {
         const qs = new URLSearchParams();
@@ -92,40 +76,41 @@ export const aiTeacherApi = {
     getConversation: (id: number) =>
         request<{
             success: boolean;
-            data: {
-                conversation: { id: number; title: string; teacherId: number };
-                teacher: AiTeacherPublic;
-                messages: AiMessage[];
-            };
+            data: { conversation: AiConversationSummary; messages: AiMessage[] };
         }>(`/ai-teacher/conversations/${id}`, { method: 'GET' }),
 
-    createConversation: () =>
-        request<{
-            success: boolean;
-            data: {
-                conversation: { id: number };
-                starterMessage: AiMessage;
-                teacher: AiTeacherPublic;
-            };
-        }>('/ai-teacher/conversations', { method: 'POST', body: '{}' }),
-
-    updateSettings: (settings: Partial<AiSettings>) =>
-        request<{ success: boolean; data: AiSettings }>('/ai-teacher/settings', {
-            method: 'POST',
-            body: JSON.stringify(settings),
+    renameConversation: (id: number, title: string) =>
+        request<{ success: boolean; data: { title: string } }>(`/ai-teacher/conversations/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ title }),
         }),
+
+    deleteConversation: (id: number) =>
+        request<{ success: boolean }>(`/ai-teacher/conversations/${id}`, { method: 'DELETE' }),
 
     getWallet: () =>
         request<{ success: boolean; data: AiWallet }>('/ai-teacher/wallet', { method: 'GET' }),
 
-    listBooks: () =>
-        request<{ success: boolean; data: import('./types').AiBook[] }>('/ai-teacher/books', { method: 'GET' }),
+    uploadImage: async (file: File): Promise<{ url: string; mimeType: string }> => {
+        const token = getAuthToken();
+        const form = new FormData();
+        form.append('image', file);
+        const res = await fetch(`${API_BASE}/ai-teacher/upload-image`, {
+            method: 'POST',
+            headers: token ? { 'x-app-token': token } : undefined,
+            body: form,
+            credentials: 'include',
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data?.success) throw new Error(data?.message || 'آپلود تصویر ناموفق بود');
+        return data.data;
+    },
 
     /**
      * Stream a chat message via SSE over fetch ReadableStream.
      */
     streamChat: async (
-        payload: { conversationId?: number | null; message: string },
+        payload: { conversationId?: number | null; subjectKey?: SubjectKey; message: string; attachments?: AiAttachment[] },
         handlers: {
             onEvent: (event: string, data: any) => void;
             onError?: (err: Error) => void;

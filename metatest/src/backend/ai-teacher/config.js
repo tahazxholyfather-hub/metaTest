@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * AI Teacher server configuration.
+ * Met — AI tutor server configuration.
  * Default provider: GapGPT (OpenAI-compatible) https://api.gapgpt.app/v1
  *
  * Energy is billed from real USD API cost → IRR → integer energy.
@@ -10,7 +10,6 @@
 
 const DAILY_REFILL_BY_PLAN = Object.freeze({
     // Integer energy. 1 energy = IRR_PER_ENERGY rials of API cost (default 100 IRR).
-    // Luna ~10 energy/msg; terra ~120 energy/msg. Free users cannot stack days.
     free: 80,
     bronze: 300,
     silver: 500,
@@ -50,17 +49,23 @@ const COIN_PRICING = Object.freeze({
 });
 
 const CONTEXT_LIMITS = Object.freeze({
-    recentMessages: 12,
+    recentMessages: 14,
     maxMemoryItems: 8,
     summarizeAfterMessages: 24,
     maxUserMessageChars: 4000,
     titleMaxChars: 60,
+    ragTopK: 4,
+    ragMaxChars: 2600,
 });
 
 const MODELS = Object.freeze({
     default: process.env.AI_TEACHER_MODEL || process.env.GAPGPT_MODEL || 'gpt-5.6-luna',
     lowCost: process.env.AI_TEACHER_MODEL_LOW || process.env.GAPGPT_MODEL_LOW || 'gpt-5.6-luna',
     memory: process.env.AI_TEACHER_MODEL_MEMORY || process.env.GAPGPT_MODEL_MEMORY || 'gpt-5.6-luna',
+    vision: process.env.AI_TEACHER_MODEL_VISION || process.env.GAPGPT_MODEL_VISION || 'gpt-5.6-terra',
+    tools: process.env.AI_TEACHER_MODEL_TOOLS || process.env.GAPGPT_MODEL_TOOLS || 'gpt-5.6-terra',
+    embedding: process.env.AI_TEACHER_EMBEDDING_MODEL || process.env.GAPGPT_EMBEDDING_MODEL || 'text-embedding-3-small',
+    image: process.env.AI_TEACHER_IMAGE_MODEL || process.env.GAPGPT_IMAGE_MODEL || 'dall-e-3',
 });
 
 const PROVIDER = Object.freeze({
@@ -76,20 +81,20 @@ const PROVIDER = Object.freeze({
     includeStreamUsage: String(process.env.AI_PROVIDER_STREAM_USAGE || 'true').toLowerCase() !== 'false',
 });
 
+/** Feature toggles — fail soft to plain streaming if the gateway rejects a param. */
+const FEATURES = Object.freeze({
+    tools: String(process.env.AI_TEACHER_ENABLE_TOOLS || 'true').toLowerCase() !== 'false',
+    imageGeneration: String(process.env.AI_TEACHER_ENABLE_IMAGE_GEN || 'true').toLowerCase() !== 'false',
+    vision: String(process.env.AI_TEACHER_ENABLE_VISION || 'true').toLowerCase() !== 'false',
+    rag: String(process.env.AI_TEACHER_ENABLE_RAG || 'true').toLowerCase() !== 'false',
+});
+
+/** Flat energy surcharge for a Met-generated image (on top of token cost). */
+const IMAGE_ENERGY_COST = Math.max(0, Number(process.env.AI_TEACHER_IMAGE_ENERGY_COST || 40));
+
 function dailyRefillForPlan(planKey) {
     const key = String(planKey || 'free').toLowerCase();
     return DAILY_REFILL_BY_PLAN[key] ?? DAILY_REFILL_BY_PLAN.free;
-}
-
-function isPaidPlan(planKey) {
-    const key = String(planKey || 'free').toLowerCase();
-    return key !== 'free' && key !== 'none' && key !== '';
-}
-
-function planAllowsTeacher(planKey, teacher) {
-    if (!teacher) return false;
-    if (teacher.is_free || teacher.isFree) return true;
-    return isPaidPlan(planKey);
 }
 
 /**
@@ -128,9 +133,9 @@ module.exports = {
     CONTEXT_LIMITS,
     MODELS,
     PROVIDER,
+    FEATURES,
+    IMAGE_ENERGY_COST,
     dailyRefillForPlan,
-    isPaidPlan,
-    planAllowsTeacher,
     localDateString,
     modelPrices,
 };

@@ -328,8 +328,8 @@ function MainApp() {
             reports: "گزارش ها",
             History: " سوابق آزمون ها",
             reviewbox: "جعبه مرور",
-            ai_teacher: "معلم هوشمند",
-            chat: "معلم هوشمند",
+            ai_teacher: "Met",
+            chat: "Met",
         };
 
         document.title = `${titles[activeView] ?? "متاتست"} | Metatest`;
@@ -389,7 +389,7 @@ function MainApp() {
         if (view === "reviewbox") setHeaderState({ title: "جعبه مرور", showBackButton: true });
         if (view === "documents") setHeaderState({ title: "نمونه سوالات", showBackButton: true });
         if (view === "History") setHeaderState({ title: "سابقه آزمون ها", showBackButton: true });
-        if (view === "ai_teacher" || view === "chat") setHeaderState({ title: "معلم هوشمند", showBackButton: false });
+        if (view === "ai_teacher" || view === "chat") setHeaderState({ title: "Met", showBackButton: false });
 
         if (pushToHistory) {
             if (pushToHistory) {

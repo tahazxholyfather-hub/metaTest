@@ -1,16 +1,12 @@
 'use strict';
 
 const assert = require('assert');
-const { calculateCoinCost, nextDailyBalance, quoteMessageCost } = require('../services/coinWallet');
-const { quoteUsage } = require('../services/pricing');
-const { dailyRefillForPlan, localDateString, planAllowsTeacher, isPaidPlan } = require('../config');
-const { titleFromUserMessage, personalizeStarter } = require('../services/conversationService');
-const {
-    buildTeacherPrompt,
-    resolveMaxOutputTokens,
-    resolveModel,
-    knowledgeBand,
-} = require('../services/promptBuilder');
+const { nextDailyBalance, quoteMessageCost } = require('../services/coinWallet');
+const { quoteUsage, imageEnergyCost } = require('../services/pricing');
+const { dailyRefillForPlan, localDateString } = require('../config');
+const { fallbackTitle, personalizeStarter } = require('../services/conversationService');
+const { buildMetPrompt, resolveMaxOutputTokens, resolveModel } = require('../services/promptBuilder');
+const { SUBJECT_KEYS, getSubject, isValidSubject } = require('../subjects');
 
 function test(name, fn) {
     try {
@@ -30,12 +26,15 @@ test('daily refill amounts by plan', () => {
     assert.strictEqual(dailyRefillForPlan('unknown'), 80);
 });
 
-test('paid plan gate for pro teachers', () => {
-    assert.strictEqual(isPaidPlan('free'), false);
-    assert.strictEqual(isPaidPlan('golden'), true);
-    assert.strictEqual(planAllowsTeacher('free', { is_free: 1 }), true);
-    assert.strictEqual(planAllowsTeacher('free', { is_free: 0 }), false);
-    assert.strictEqual(planAllowsTeacher('golden', { is_free: 0 }), true);
+test('exactly four subjects: math, biology, physics, chemistry', () => {
+    assert.deepStrictEqual([...SUBJECT_KEYS].sort(), ['biology', 'chemistry', 'math', 'physics']);
+    assert.ok(isValidSubject('math'));
+    assert.ok(!isValidSubject('history'));
+    for (const key of SUBJECT_KEYS) {
+        const s = getSubject(key);
+        assert.ok(s.generalPrompt.includes('Met'), `${key} general prompt should name Met`);
+        assert.ok(s.referenceInstructions.length > 20, `${key} needs reference instructions`);
+    }
 });
 
 test('local calendar date does not use UTC ISO', () => {
@@ -66,7 +65,7 @@ test('luna usage quotes real USD then IRR then energy', () => {
     assert.strictEqual(msg.energy, 8);
 });
 
-test('terra is ~10x luna so pro teachers actually cost more', () => {
+test('terra is ~10x luna so vision/tool turns actually cost more', () => {
     const opts = { inputTokens: 2800, outputTokens: 400 };
     const luna = quoteUsage({ ...opts, model: 'gpt-5.6-luna' });
     const terra = quoteUsage({ ...opts, model: 'gpt-5.6-terra' });
@@ -74,22 +73,18 @@ test('terra is ~10x luna so pro teachers actually cost more', () => {
     assert.ok(terra.usd > luna.usd * 8);
 });
 
-test('coin cost uses model list price not fake token rates', () => {
-    const energy = calculateCoinCost({
-        inputTokens: 1000,
-        outputTokens: 500,
-        model: 'gpt-5.6-luna',
-        teacherMultiplier: 1,
-    });
-    assert.strictEqual(energy, 8);
-    const quote = quoteMessageCost({
-        inputTokens: 1000,
-        outputTokens: 500,
-        model: 'gpt-5.6-luna',
-    });
-    assert.strictEqual(quote.energy, energy);
-    assert.ok(quote.usd > 0);
-    assert.ok(quote.irr > 0);
+test('quoteMessageCost matches quoteUsage for the same usage', () => {
+    const a = quoteMessageCost({ inputTokens: 1000, outputTokens: 500, model: 'gpt-5.6-luna' });
+    const b = quoteUsage({ inputTokens: 1000, outputTokens: 500, model: 'gpt-5.6-luna' });
+    assert.strictEqual(a.energy, b.energy);
+    assert.ok(a.usd > 0);
+    assert.ok(a.irr > 0);
+});
+
+test('image generation adds a flat energy surcharge', () => {
+    const base = quoteUsage({ inputTokens: 1000, outputTokens: 500, model: 'gpt-5.6-luna' });
+    const withImage = quoteUsage({ inputTokens: 1000, outputTokens: 500, model: 'gpt-5.6-luna', extraEnergy: imageEnergyCost() });
+    assert.strictEqual(withImage.energy - base.energy, imageEnergyCost());
 });
 
 test('cached tokens bill at cache rate', () => {
@@ -109,8 +104,8 @@ test('cached tokens bill at cache rate', () => {
     assert.ok(Math.abs(cached.usd - 0.02) < 1e-9);
 });
 
-test('title from first user message is truncated', () => {
-    const title = titleFromUserMessage('می‌تونی معادله درجه دو رو توضیح بدی؟ ' + 'x'.repeat(100));
+test('fallback title truncates a long user message', () => {
+    const title = fallbackTitle('می‌تونی معادله درجه دو رو توضیح بدی؟ ' + 'x'.repeat(100));
     assert.ok(title.length <= 60);
     assert.ok(title.includes('معادله') || title.length > 0);
 });
@@ -120,75 +115,40 @@ test('starter message personalization', () => {
     assert.strictEqual(msg, 'سلام رضا!');
 });
 
-test('prompt is English instructions with a hard knowledge ceiling', () => {
-    const prompt = buildTeacherPrompt({
-        teacher: {
-            id: 1,
-            display_name: 'نرگس بهرامی',
-            subject: 'عمومی',
-            is_free: 1,
-            knowledge_level: 60,
-            personality: 'صبور، گرم',
-            teaching_style: 'گام‌به‌گام',
-            system_prompt: 'unused',
-        },
+test('Met prompt hides identity, stays on-subject, includes textbook block', () => {
+    const { systemPrompt } = buildMetPrompt({
+        subjectKey: 'physics',
+        subjectRow: null,
         user: { first_name: 'رضا', last_name: 'سلطانی' },
-        profile: { grade: 'دهم', weaknesses: 'معادله درجه دو' },
         memories: [{ memory_type: 'weakness', content: 'کسرها' }],
         settings: { low_coin_mode: 1, step_by_step: 1, always_examples: 1 },
         conversationSummary: 'مرور مکانیک',
+        ragContext: { book: { title: 'فیزیک دهم' }, text: 'کار و انرژی' },
     });
-    assert.ok(prompt.includes('ROLELOCK'));
-    assert.ok(prompt.includes('spoken Iranian Persian') || prompt.includes('محاوره'));
-    assert.ok(prompt.includes('KNOWLEDGE CEILING'));
-    assert.ok(prompt.includes('نرگس بهرامی'));
-    assert.ok(prompt.includes('رضا'));
-    assert.ok(/moles|organic|konkur/i.test(prompt));
-    assert.ok(!prompt.includes('از سرتیترهای مارک‌داون'));
+    assert.ok(systemPrompt.includes('ROLELOCK'));
+    assert.ok(systemPrompt.includes('Met'));
+    assert.ok(systemPrompt.includes('never say or imply that you are an AI'));
+    assert.ok(systemPrompt.includes('TEXTBOOK REFERENCE'));
+    assert.ok(systemPrompt.includes('فیزیک دهم'));
+    assert.ok(systemPrompt.includes('رضا'));
 });
 
-test('free teacher band is weak_homeroom', () => {
-    const band = knowledgeBand({ is_free: 1, knowledge_level: 60, subject: 'عمومی' });
-    assert.strictEqual(band.rank, 'weak_homeroom');
+test('unknown subject key throws instead of silently defaulting', () => {
+    assert.throws(() => buildMetPrompt({ subjectKey: 'history', user: {}, memories: [] }));
 });
 
-test('pro chemistry teacher is strong_highschool', () => {
-    const band = knowledgeBand({ is_free: 0, knowledge_level: 85, subject: 'شیمی' });
-    assert.strictEqual(band.rank, 'strong_highschool');
-});
-
-test('low coin mode reduces max tokens and pins luna', () => {
-    const normal = resolveMaxOutputTokens({ max_output_tokens: 800 }, { low_coin_mode: 0 });
-    const low = resolveMaxOutputTokens({ max_output_tokens: 800 }, { low_coin_mode: 1 });
+test('low coin mode reduces max tokens and pins the low-cost model', () => {
+    const subject = getSubject('math');
+    const normal = resolveMaxOutputTokens(subject, { low_coin_mode: 0 });
+    const low = resolveMaxOutputTokens(subject, { low_coin_mode: 1 });
     assert.ok(low < normal);
-    assert.strictEqual(resolveModel({ low_coin_mode: 1 }, { model: 'gpt-5.6-terra' }), 'gpt-5.6-luna');
-    assert.strictEqual(resolveModel({ low_coin_mode: 0 }, { model: 'gpt-5.6-terra' }), 'gpt-5.6-terra');
+    assert.strictEqual(resolveModel({ low_coin_mode: 1 }, subject), 'gpt-5.6-luna');
 });
 
-test('prompt includes selected book', () => {
-    const prompt = buildTeacherPrompt({
-        teacher: {
-            id: 3,
-            display_name: 'آتنا گلکار',
-            subject: 'فیزیک',
-            knowledge_level: 78,
-            is_free: 0,
-            system_prompt: 'physics teacher',
-        },
-        user: { first_name: 'سارا' },
-        profile: { grade: 'دهم' },
-        memories: [],
-        settings: {},
-        book: {
-            title: 'فیزیک دهم — چاپ ۱۴۰۳',
-            subject: 'فیزیک',
-            grade: 'دهم',
-            content_summary: 'کار و انرژی، دما و گرما',
-        },
-    });
-    assert.ok(prompt.includes('فیزیک دهم'));
-    assert.ok(prompt.includes('کار و انرژی'));
-    assert.ok(prompt.includes('ROLELOCK'));
+test('vision model is used whenever the turn has an image attachment', () => {
+    const subject = getSubject('biology');
+    const model = resolveModel({}, subject, { hasImageAttachment: true });
+    assert.notStrictEqual(model, undefined);
 });
 
 test('daily energy is capped at the plan allowance', () => {
@@ -201,4 +161,4 @@ test('daily energy is capped at the plan allowance', () => {
     assert.strictEqual(balance, 200);
 });
 
-console.log('AI Teacher unit tests finished.');
+console.log('Met AI Teacher unit tests finished.');

@@ -1,17 +1,17 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    MoreVertical, Send, ArrowRight, BookOpen, Lightbulb,
-    Target, GraduationCap,
+    Send, ImagePlus, X, LogOut, History as HistoryIcon, Plus, ChevronDown,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
-import type { AiMessage, AiTeacherPublic, AiWallet, ChatStatus } from './types';
+import type { AiAttachment, AiMessage, AiSubject, AiWallet, ChatStatus, SubjectKey } from './types';
 import { MessageBubble } from './MessageBubble';
 import { aiTeacherApi } from './api';
-import { SHORT_WORKING_LABELS } from './TeacherSidebar';
+import { Met, chatStatusToMetState, type MetHandle } from '../../components/met';
+import { SubjectIcon } from './subjectIcons';
+import { SUBJECT_SUGGESTIONS, type Suggestion } from './suggestions';
 import {
     AiPageShell,
     ChatScroll,
-    ChatStatusLine,
     EnergyMeter,
     TypingIndicator,
     easeOut,
@@ -19,64 +19,121 @@ import {
 } from './ui';
 
 type Props = {
-    teacher: AiTeacherPublic;
+    subjects: AiSubject[];
+    activeSubjectKey: SubjectKey;
+    onSubjectChange: (key: SubjectKey) => void;
     conversationId: number | null;
+    conversationTitle: string;
     initialMessages: AiMessage[];
     wallet: AiWallet;
     onWalletChange: (w: Partial<AiWallet>) => void;
-    onConversationId: (id: number) => void;
+    onConversationId: (id: number, subjectKey: SubjectKey) => void;
+    onTitleChange: (title: string) => void;
     onStatusChange?: (status: ChatStatus) => void;
-    onOpenMenu: () => void;
-    onBack: () => void;
+    onOpenHistory: () => void;
+    onNewChat: () => void;
+    onLeave: () => void;
     studentFirstName?: string;
 };
 
-const SUGGESTIONS = [
-    {
-        icon: Lightbulb,
-        title: 'بسنج سطح من',
-        hint: 'یک سؤال مفهومی',
-        text: 'یک سؤال مفهومی بپرس تا سطح من را بسنجی.',
-    },
-    {
-        icon: BookOpen,
-        title: 'درس بده',
-        hint: 'قدم‌به‌قدم و با مثال',
-        text: 'یک مبحث مهم را از صفر، قدم‌به‌قدم و با مثال برایم درس بده.',
-    },
-    {
-        icon: Target,
-        title: 'تمرین کنیم',
-        hint: 'از آسان تا سخت',
-        text: 'چند تمرین از آسان تا سخت برایم بنویس و منتظر جوابم بمان.',
-    },
-    {
-        icon: GraduationCap,
-        title: 'آزمونک',
-        hint: 'شبیه امتحان کوتاه',
-        text: 'مثل یک امتحان کوتاه ازم آزمون بگیر و بعد نمره‌ام را بده.',
-    },
-];
+function SubjectSelector({
+    subjects,
+    activeKey,
+    onChange,
+    disabled,
+}: {
+    subjects: AiSubject[];
+    activeKey: SubjectKey;
+    onChange: (key: SubjectKey) => void;
+    disabled?: boolean;
+}) {
+    const [open, setOpen] = useState(false);
+    const active = subjects.find((s) => s.key === activeKey) || subjects[0];
+
+    return (
+        <div className="relative">
+            <button
+                type="button"
+                onClick={() => setOpen((v) => !v)}
+                disabled={disabled}
+                className="inline-flex items-center gap-1.5 h-9 px-2.5 rounded-full border border-[var(--border)]/80 bg-[color-mix(in_srgb,var(--text-primary)_3%,transparent)] text-[12px] font-bold text-[var(--text-primary)] hover:border-[color-mix(in_srgb,var(--color-primary-500)_30%,var(--border))] transition-colors disabled:opacity-50"
+                aria-label="انتخاب موضوع"
+            >
+                <span
+                    className="w-5 h-5 rounded-full inline-flex items-center justify-center shrink-0"
+                    style={{ background: `color-mix(in srgb, ${active?.color || '#8B5CF6'} 18%, transparent)`, color: active?.color }}
+                >
+                    <SubjectIcon icon={active?.icon} size={12} />
+                </span>
+                <span className="hidden sm:inline">{active?.nameFa}</span>
+                <ChevronDown size={12} className="text-[var(--text-muted)]" />
+            </button>
+
+            <AnimatePresence>
+                {open && (
+                    <>
+                        <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+                        <motion.div
+                            initial={{ opacity: 0, y: 6, scale: 0.97 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 4, scale: 0.98 }}
+                            transition={{ duration: 0.16, ease: easeOut }}
+                            className="absolute bottom-full mb-2 right-0 z-40 w-44 p-1.5 rounded-[14px] border border-[var(--border)] bg-[var(--bg-card)] shadow-lg"
+                        >
+                            {subjects.map((s) => (
+                                <button
+                                    key={s.key}
+                                    type="button"
+                                    onClick={() => { onChange(s.key); setOpen(false); }}
+                                    className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-[10px] text-[12.5px] font-bold text-right transition-colors ${
+                                        s.key === activeKey ? 'bg-[color-mix(in_srgb,var(--color-primary-500)_10%,transparent)] text-[var(--color-primary-300)]' : 'text-[var(--text-primary)] hover:bg-[var(--text-primary)]/5'
+                                    }`}
+                                >
+                                    <span
+                                        className="w-6 h-6 rounded-full inline-flex items-center justify-center shrink-0"
+                                        style={{ background: `color-mix(in srgb, ${s.color} 18%, transparent)`, color: s.color }}
+                                    >
+                                        <SubjectIcon icon={s.icon} size={13} />
+                                    </span>
+                                    {s.nameFa}
+                                </button>
+                            ))}
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+}
 
 export function ChatScreen({
-    teacher,
+    subjects,
+    activeSubjectKey,
+    onSubjectChange,
     conversationId,
+    conversationTitle,
     initialMessages,
     wallet,
     onWalletChange,
     onConversationId,
+    onTitleChange,
     onStatusChange,
-    onOpenMenu,
-    onBack,
+    onOpenHistory,
+    onNewChat,
+    onLeave,
     studentFirstName,
 }: Props) {
     const isMobile = useIsMobile();
     const [messages, setMessages] = useState<AiMessage[]>(initialMessages);
     const [input, setInput] = useState('');
     const [status, setStatus] = useState<ChatStatus>('ready');
+    const [pendingImage, setPendingImage] = useState<AiAttachment | null>(null);
+    const [uploading, setUploading] = useState(false);
     const bottomRef = useRef<HTMLDivElement>(null);
     const abortRef = useRef<AbortController | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const metRef = useRef<MetHandle>(null);
     const statusRef = useRef<ChatStatus>('ready');
     const lowWarnedRef = useRef(false);
 
@@ -106,50 +163,53 @@ export function ChatScreen({
         (status === 'thinking' || status === 'generating') &&
         messages.some((m) => m.streaming && !m.content);
 
-    const teacherName = teacher.displayName || 'معلم';
-
     const energyEmptyNote = () => {
         let refill = 'نیمه‌شب';
         if (wallet.nextRefillAt) {
             try {
-                refill = new Date(wallet.nextRefillAt).toLocaleTimeString('fa-IR', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                });
+                refill = new Date(wallet.nextRefillAt).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
             } catch { /* keep fallback */ }
         }
-        return `${teacherName} هستم. انرژی امروزت تمام شده، پس فعلاً درس نمی‌دم. تا ${refill} صبر کن تا سهمیه‌ات برگردد — بعد با هم ادامه می‌دهیم.`;
+        return `انرژی امروزت تمام شده — تا ${refill} صبر کن تا سهمیه‌ات برگردد، بعد ادامه می‌دهیم.`;
     };
 
-    const pushLocalTeacherNote = (content: string) => {
+    const pushLocalNote = (content: string) => {
         setMessages((prev) => [
             ...prev,
-            {
-                id: `local-note-${Date.now()}`,
-                role: 'assistant',
-                content,
-                createdAt: new Date().toISOString(),
-            },
+            { id: `local-note-${Date.now()}`, role: 'assistant', content, createdAt: new Date().toISOString() },
         ]);
+    };
+
+    const handlePickImage = () => fileInputRef.current?.click();
+
+    const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file) return;
+        setUploading(true);
+        try {
+            const { url, mimeType } = await aiTeacherApi.uploadImage(file);
+            setPendingImage({ type: 'image', url, mimeType });
+        } catch (err: any) {
+            pushLocalNote(err?.message || 'آپلود تصویر ناموفق بود.');
+        } finally {
+            setUploading(false);
+        }
     };
 
     const send = async (preset?: string) => {
         const text = (preset ?? input).trim();
-        if (!text || busy) return;
+        const attachments = pendingImage ? [pendingImage] : [];
+        if (!text && !attachments.length) return;
+        if (busy) return;
         if ((wallet.balance || 0) < 1) {
             if (!preset) setInput('');
-            pushLocalTeacherNote(energyEmptyNote());
-            return;
-        }
-        const typical = Number(teacher.typicalEnergy || teacher.pricePerMessage || 0);
-        if (typical > 0 && (wallet.balance || 0) < typical) {
-            pushLocalTeacherNote(
-                `${teacherName} هستم. برای این کلاس حدود ${typical.toLocaleString('fa-IR')} انرژی لازم است و سهمیه امروزت به آن نمی‌رسد. معلم دیگری را امتحان کن یا تا شارژ بعدی صبر کن.`
-            );
+            pushLocalNote(energyEmptyNote());
             return;
         }
 
         if (!preset) setInput('');
+        setPendingImage(null);
         updateStatus('sending');
 
         const tempUserId = `local-user-${Date.now()}`;
@@ -158,7 +218,7 @@ export function ChatScreen({
 
         setMessages((prev) => [
             ...prev,
-            { id: tempUserId, role: 'user', content: text, createdAt: now },
+            { id: tempUserId, role: 'user', content: text, attachments, createdAt: now },
             { id: tempAssistantId, role: 'assistant', content: '', streaming: true, createdAt: now },
         ]);
 
@@ -168,20 +228,19 @@ export function ChatScreen({
 
         try {
             await aiTeacherApi.streamChat(
-                { conversationId, message: text },
+                { conversationId, subjectKey: activeSubjectKey, message: text, attachments },
                 {
                     signal: controller.signal,
                     onEvent: (event, data) => {
                         if (event === 'status') {
                             if (data.status === 'thinking') updateStatus('thinking');
                             if (data.status === 'generating') updateStatus('generating');
-                            if (data.status === 'ready') {
-                                finishedOk = true;
-                                updateStatus('ready');
-                            }
+                            if (data.status === 'ready') { finishedOk = true; updateStatus('ready'); }
                             if (typeof data.balance === 'number') onWalletChange({ balance: data.balance });
                         }
-                        if (event === 'meta' && data.conversationId) onConversationId(data.conversationId);
+                        if (event === 'meta' && data.conversationId) {
+                            onConversationId(data.conversationId, data.subjectKey || activeSubjectKey);
+                        }
                         if (event === 'user_message' && data.id) {
                             setMessages((prev) => prev.map((m) => (m.id === tempUserId ? { ...m, id: data.id } : m)));
                         }
@@ -189,9 +248,7 @@ export function ChatScreen({
                             updateStatus('generating');
                             setMessages((prev) =>
                                 prev.map((m) =>
-                                    m.id === tempAssistantId
-                                        ? { ...m, content: (m.content || '') + data.text, streaming: true }
-                                        : m
+                                    m.id === tempAssistantId ? { ...m, content: (m.content || '') + data.text, streaming: true } : m
                                 )
                             );
                         }
@@ -199,22 +256,17 @@ export function ChatScreen({
                             finishedOk = true;
                             setMessages((prev) =>
                                 prev.map((m) =>
-                                    m.id === tempAssistantId
-                                        ? { ...data.message, streaming: false, createdAt: data.message.createdAt || now }
-                                        : m
+                                    m.id === tempAssistantId ? { ...data.message, streaming: false, createdAt: data.message.createdAt || now } : m
                                 )
                             );
                             if (data.wallet) onWalletChange({ balance: data.wallet.balance });
+                            if (data.title) onTitleChange(data.title);
                             const nextBal = data.wallet?.balance;
                             const allowance = wallet.dailyAllowance || 80;
                             const lowMark = Math.max(15, Math.round(allowance * 0.12));
                             if (typeof nextBal === 'number' && nextBal > 0 && nextBal <= lowMark && !lowWarnedRef.current) {
                                 lowWarnedRef.current = true;
-                                setTimeout(() => {
-                                    pushLocalTeacherNote(
-                                        `${teacherName} هستم. انرژی‌ات کم شده — امروز سؤال‌هایت را گزیده بپرس تا سهمیه تمام نشود.`
-                                    );
-                                }, 400);
+                                setTimeout(() => pushLocalNote('انرژی‌ات کم شده — امروز سؤال‌هایت را گزیده بپرس تا سهمیه تمام نشود.'), 400);
                             }
                             updateStatus('ready');
                         }
@@ -224,22 +276,13 @@ export function ChatScreen({
                             const note =
                                 data.code === 'INSUFFICIENT_COINS'
                                     ? energyEmptyNote()
-                                    : data.code === 'TEACHER_REQUIRES_PRO'
-                                      ? `${teacherName} هستم. این کلاس برای کاربران ویژه است. معلم رایگان را انتخاب کن یا اشتراکت را ارتقا بده.`
                                     : refunded > 0
-                                      ? `${teacherName} هستم. این بار نتوانستم جواب بدهم. انرژی این پیام (${refunded.toLocaleString('fa-IR')}) به حسابت برگشت. لطفاً دوباره بپرس.`
-                                      : `${teacherName} هستم. این بار نتوانستم جواب بدهم. لطفاً دوباره بپرس.`;
+                                        ? `این بار نتوانستم جواب بدهم. انرژی این پیام (${refunded.toLocaleString('fa-IR')}) به حسابت برگشت. دوباره بپرس.`
+                                        : 'این بار نتوانستم جواب بدهم. دوباره بپرس.';
                             setMessages((prev) => {
                                 let next = prev.filter((m) => m.id !== tempAssistantId);
-                                if (data.code === 'INSUFFICIENT_COINS') {
-                                    next = next.filter((m) => m.id !== tempUserId);
-                                }
-                                next.push({
-                                    id: `local-note-${Date.now()}`,
-                                    role: 'assistant',
-                                    content: note,
-                                    createdAt: new Date().toISOString(),
-                                });
+                                if (data.code === 'INSUFFICIENT_COINS') next = next.filter((m) => m.id !== tempUserId);
+                                next.push({ id: `local-note-${Date.now()}`, role: 'assistant', content: note, createdAt: new Date().toISOString() });
                                 return next;
                             });
                             if (data.code === 'INSUFFICIENT_COINS' && !preset) setInput(text);
@@ -248,105 +291,67 @@ export function ChatScreen({
                     },
                 }
             );
-            if (!finishedOk && statusRef.current !== 'error') {
-                updateStatus('ready');
-            }
+            if (!finishedOk && statusRef.current !== 'error') updateStatus('ready');
         } catch {
             updateStatus('error');
             setMessages((prev) => {
                 const next = prev.filter((m) => m.id !== tempAssistantId && m.id !== tempUserId);
-                next.push({
-                    id: `local-note-${Date.now()}`,
-                    role: 'assistant',
-                    content: `${teacherName} هستم. پیام نرسید. اگر انرژی کم شده باشد به حسابت برمی‌گردد — دوباره بفرست.`,
-                    createdAt: new Date().toISOString(),
-                });
+                next.push({ id: `local-note-${Date.now()}`, role: 'assistant', content: 'پیام نرسید. اگر انرژی کم شده باشد به حسابت برمی‌گردد — دوباره بفرست.', createdAt: new Date().toISOString() });
                 return next;
             });
             if (!preset) setInput(text);
         } finally {
             abortRef.current = null;
             setMessages((prev) => prev.map((m) => (m.streaming ? { ...m, streaming: false } : m)));
-            if (statusRef.current === 'sending' || statusRef.current === 'thinking' || statusRef.current === 'generating') {
-                updateStatus('ready');
-            }
+            if (['sending', 'thinking', 'generating'].includes(statusRef.current)) updateStatus('ready');
         }
     };
 
     const visibleMessages = messages.filter((m) => !(m.streaming && !m.content));
-    const isFreshChat = messages.length === 0 || (messages.length === 1 && !!messages[0]?.isStarter);
+    const isFreshChat = visibleMessages.length === 0;
+    const suggestions = SUBJECT_SUGGESTIONS[activeSubjectKey] || [];
 
     const energy = (
-        <EnergyMeter
-            balance={wallet.balance || 0}
-            dailyAllowance={wallet.dailyAllowance || 80}
-            nextRefillAt={wallet.nextRefillAt}
-            size={isMobile ? 28 : 32}
-        />
+        <EnergyMeter balance={wallet.balance || 0} dailyAllowance={wallet.dailyAllowance || 80} nextRefillAt={wallet.nextRefillAt} size={isMobile ? 26 : 30} />
     );
 
     return (
         <AiPageShell>
-            {/* Mobile header — fade lives on the chat viewport via ChatScroll */}
-            {isMobile && (
-                <header
-                    className="absolute top-0 inset-x-0 z-20 pointer-events-none"
-                    style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
-                    dir="ltr"
-                >
+            <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={handleFileSelected} />
+
+            {/* Mobile header — hero when fresh, compact status bar once a conversation exists */}
+            {isMobile && !isFreshChat && (
+                <header className="absolute top-0 inset-x-0 z-20 pointer-events-none" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }} dir="ltr">
                     <div className="h-[4.25rem] px-3 flex items-center justify-between gap-2 pointer-events-auto">
                         <div className="flex items-center gap-2 min-w-0">
-                            <button
-                                type="button"
-                                onClick={onBack}
-                                aria-label="بازگشت"
-                                className="p-2 text-[var(--text-primary)] hover:opacity-70 transition-opacity"
-                            >
-                                <ArrowRight size={18} className="rotate-180" />
-                            </button>
-                            <img
-                                src={teacher.avatarUrl || '/avatars/user_default.png'}
-                                alt=""
-                                className="w-9 h-9 rounded-full object-cover shrink-0"
-                            />
-                            <div className="min-w-0 text-left" dir="rtl">
-                                <div className="text-[13px] font-extrabold text-[var(--text-primary)] truncate leading-tight">
-                                    {teacher.displayName}
-                                </div>
-                                <ChatStatusLine status={status} workingLabels={SHORT_WORKING_LABELS} />
+                            <div className="w-9 h-9 rounded-full overflow-hidden shrink-0">
+                                <Met ref={metRef} size="100%" state={chatStatusToMetState(status)} interactive={false} atmosphere={false} />
                             </div>
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
                             {energy}
-                            <button
-                                type="button"
-                                onClick={onOpenMenu}
-                                aria-label="منو"
-                                className="p-2 text-[var(--text-primary)] hover:opacity-70"
-                            >
-                                <MoreVertical size={18} />
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0" dir="rtl">
+                            <button type="button" onClick={onNewChat} aria-label="گفتگوی جدید" className="p-2 text-[var(--text-primary)] hover:opacity-70">
+                                <Plus size={18} />
+                            </button>
+                            <button type="button" onClick={onOpenHistory} aria-label="تاریخچه" className="p-2 text-[var(--text-primary)] hover:opacity-70">
+                                <HistoryIcon size={18} />
+                            </button>
+                            <button type="button" onClick={onLeave} aria-label="خروج" className="p-2 text-[var(--text-primary)] hover:opacity-70">
+                                <LogOut size={18} />
                             </button>
                         </div>
                     </div>
                 </header>
             )}
 
-            {/* Desktop chrome sits above the ChatScroll fade layer */}
+            {/* Desktop chrome */}
             {!isMobile && (
                 <header className="pointer-events-none absolute inset-x-0 top-0 z-20">
                     <div className="pointer-events-auto flex h-[4.5rem] items-center justify-between px-6">
-                        <div className="flex min-w-0 items-center gap-3">
-                            <img
-                                src={teacher.avatarUrl || '/avatars/user_default.png'}
-                                alt=""
-                                className="w-11 h-11 rounded-full object-cover ring-1 ring-[var(--border)] shrink-0"
-                            />
-                            <div className="min-w-0 text-right" dir="rtl">
-                                <p className="truncate text-sm font-black text-[var(--text-primary)]">
-                                    {teacher.displayName}
-                                </p>
-                                <ChatStatusLine status={status} workingLabels={SHORT_WORKING_LABELS} />
-                            </div>
+                        <div className="min-w-0 text-right" dir="rtl">
+                            <p className="truncate text-sm font-black text-[var(--text-primary)]">
+                                {conversationTitle || 'گفتگوی جدید'}
+                            </p>
                         </div>
                         <div>{energy}</div>
                     </div>
@@ -354,17 +359,20 @@ export function ChatScreen({
             )}
 
             <ChatScroll
-                topFade
+                topFade={!isFreshChat}
                 contentClassName={`px-3 sm:px-6 lg:px-10 py-3 w-full mx-auto ${
-                    isMobile ? 'max-w-[760px] pt-[6.25rem]' : 'max-w-[1100px] pt-[5.5rem]'
+                    isMobile ? `max-w-[760px] ${isFreshChat ? 'pt-4' : 'pt-[6.25rem]'}` : 'max-w-[1100px] pt-[5.5rem]'
                 }`}
             >
-                {visibleMessages.length === 0 && !showTyping ? (
+                {isFreshChat && !showTyping ? (
                     <EmptyIntro
-                        teacher={teacher}
+                        subjects={subjects}
+                        activeSubjectKey={activeSubjectKey}
+                        onSubjectChange={onSubjectChange}
                         firstName={studentFirstName}
                         onSuggest={(t) => send(t)}
                         disabled={busy}
+                        suggestions={suggestions}
                     />
                 ) : (
                     <>
@@ -375,8 +383,6 @@ export function ChatScreen({
                                 <MessageBubble
                                     key={String(m.id)}
                                     message={m}
-                                    teacherAvatar={teacher.avatarUrl}
-                                    teacherName={teacher.displayName}
                                     isGroupStart={!prev || prev.role !== m.role}
                                     isGroupEnd={!next || next.role !== m.role}
                                 />
@@ -385,180 +391,89 @@ export function ChatScreen({
 
                         <AnimatePresence>
                             {showTyping && (
-                                <motion.div
-                                    className="flex justify-end gap-2.5 mt-4"
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    exit={{ opacity: 0 }}
-                                >
+                                <motion.div className="flex justify-end gap-2.5 mt-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                                     <TypingIndicator />
-                                    <img
-                                        src={teacher.avatarUrl || '/avatars/user_default.png'}
-                                        alt=""
-                                        className="w-8 h-8 rounded-full object-cover ring-1 ring-[var(--border)] self-end"
-                                    />
+                                    <div className="w-8 h-8 rounded-full overflow-hidden ring-1 ring-[var(--border)] self-end">
+                                        <Met size="100%" initialState="idle" interactive={false} atmosphere={false} reducedMotion />
+                                    </div>
                                 </motion.div>
                             )}
                         </AnimatePresence>
-
-                        {isFreshChat && visibleMessages.length > 0 && !busy && (
-                            <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-lg mx-auto px-1">
-                                {SUGGESTIONS.map((s) => {
-                                    const Icon = s.icon;
-                                    return (
-                                        <button
-                                            key={s.title}
-                                            type="button"
-                                            onClick={() => send(s.text)}
-                                            className="flex items-center gap-2.5 text-right px-3.5 py-3 rounded-[14px] border border-[var(--border)]/80 bg-[color-mix(in_srgb,var(--text-primary)_2.5%,var(--bg-card))] hover:border-[color-mix(in_srgb,var(--color-primary-500)_30%,var(--border))] hover:bg-[color-mix(in_srgb,var(--color-primary-500)_6%,var(--bg-card))] transition-colors"
-                                        >
-                                            <span className="w-8 h-8 rounded-[10px] bg-[color-mix(in_srgb,var(--color-primary-500)_12%,transparent)] text-[var(--color-primary-400)] inline-flex items-center justify-center shrink-0">
-                                                <Icon size={15} />
-                                            </span>
-                                            <span className="min-w-0">
-                                                <span className="block text-[12.5px] font-bold text-[var(--text-primary)]">{s.title}</span>
-                                                <span className="block text-[10.5px] text-[var(--text-muted)] mt-0.5">{s.hint}</span>
-                                            </span>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        )}
                     </>
                 )}
                 <div ref={bottomRef} className="h-3" />
             </ChatScroll>
+
             {/* Composer */}
-            <div
-                className="shrink-0 px-3 sm:px-5 pt-2.5"
-                style={{
-                    paddingBottom: 'max(0.65rem, env(safe-area-inset-bottom))',
-                }}
-            >
-                <div
-                    className="
-            group
-            relative
-            flex
-            items-end
-            w-full
-            max-w-[900px]
-            mx-auto
-            min-h-[52px]
-            px-2
-            py-1.5
-            rounded-[26px]
-            bg-[var(--bg-card)]
-            border
-            border-[var(--border)]
-            transition-all
-            duration-200
-            focus-within:border-[var(--color-primary-500)]/30
-            focus-within:shadow-[0_0_0_3px_rgba(124,58,237,0.045)]
-        "
-                >
-        <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(e) => {
-                setInput(e.target.value);
+            <div className="shrink-0 px-3 sm:px-5 pt-2" style={{ paddingBottom: 'max(0.65rem, env(safe-area-inset-bottom))' }}>
+                {pendingImage && (
+                    <div className="max-w-[900px] mx-auto mb-2 flex items-center gap-2 px-1">
+                        <div className="relative w-14 h-14 rounded-[10px] overflow-hidden border border-[var(--border)]">
+                            <img src={pendingImage.url} alt="" className="w-full h-full object-cover" />
+                            <button
+                                type="button"
+                                onClick={() => setPendingImage(null)}
+                                className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-black/60 text-white inline-flex items-center justify-center"
+                                aria-label="حذف تصویر"
+                            >
+                                <X size={11} />
+                            </button>
+                        </div>
+                        <span className="text-[11px] text-[var(--text-muted)]">تصویر آماده ارسال</span>
+                    </div>
+                )}
 
-                const textarea = e.currentTarget;
+                <div className="flex items-center gap-2 max-w-[900px] mx-auto mb-1.5 px-1">
+                    <SubjectSelector subjects={subjects} activeKey={activeSubjectKey} onChange={onSubjectChange} disabled={busy} />
+                    <button
+                        type="button"
+                        onClick={handlePickImage}
+                        disabled={busy || uploading}
+                        className="inline-flex items-center gap-1.5 h-9 px-2.5 rounded-full border border-[var(--border)]/80 bg-[color-mix(in_srgb,var(--text-primary)_3%,transparent)] text-[12px] font-bold text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-50"
+                        aria-label="افزودن تصویر"
+                    >
+                        <ImagePlus size={14} />
+                        {uploading && <span className="text-[10px]">در حال آپلود…</span>}
+                    </button>
+                </div>
 
-                textarea.style.height = 'auto';
-                textarea.style.height = `${Math.min(
-                    textarea.scrollHeight,
-                    140
-                )}px`;
-            }}
-            onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-
-                    if (!busy && input.trim()) {
-                        send();
-                    }
-                }
-            }}
-            rows={1}
-            disabled={busy}
-            placeholder="پیام خود را بنویسید..."
-            className="
-                flex-1
-                min-h-[40px]
-                max-h-[140px]
-                resize-none
-                overflow-y-auto
-                bg-transparent
-                border-0
-                outline-none
-                ring-0
-                focus:outline-none
-                focus:ring-0
-                px-3
-                py-2.5
-                text-[14px]
-                leading-6
-                text-[var(--text-primary)]
-                placeholder:text-[var(--text-muted)]/55
-                scrollbar-none
-            "
-        />
+                <div className="group relative flex items-end w-full max-w-[900px] mx-auto min-h-[52px] px-2 py-1.5 rounded-[26px] bg-[var(--bg-card)] border border-[var(--border)] transition-all duration-200 focus-within:border-[var(--color-primary-500)]/30 focus-within:shadow-[0_0_0_3px_rgba(124,58,237,0.045)]">
+                    <textarea
+                        ref={textareaRef}
+                        value={input}
+                        onChange={(e) => {
+                            setInput(e.target.value);
+                            const textarea = e.currentTarget;
+                            textarea.style.height = 'auto';
+                            textarea.style.height = `${Math.min(textarea.scrollHeight, 140)}px`;
+                        }}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                if (!busy && (input.trim() || pendingImage)) send();
+                            }
+                        }}
+                        rows={1}
+                        disabled={busy}
+                        placeholder="پیام خود را بنویسید..."
+                        className="flex-1 min-h-[40px] max-h-[140px] resize-none overflow-y-auto bg-transparent border-0 outline-none ring-0 focus:outline-none focus:ring-0 px-3 py-2.5 text-[14px] leading-6 text-[var(--text-primary)] placeholder:text-[var(--text-muted)]/55 scrollbar-none"
+                    />
 
                     <motion.button
                         type="button"
-                        onClick={send}
-                        disabled={busy || !input.trim()}
-                        whileTap={
-                            input.trim() && !busy
-                                ? { scale: 0.88 }
-                                : undefined
-                        }
-                        animate={{
-                            scale: input.trim() && !busy ? 1 : 0.92,
-                            opacity: input.trim() && !busy ? 1 : 0.4,
-                        }}
-                        transition={{
-                            type: 'spring',
-                            stiffness: 500,
-                            damping: 30,
-                        }}
+                        onClick={() => send()}
+                        disabled={busy || (!input.trim() && !pendingImage)}
+                        whileTap={(input.trim() || pendingImage) && !busy ? { scale: 0.88 } : undefined}
+                        animate={{ scale: (input.trim() || pendingImage) && !busy ? 1 : 0.92, opacity: (input.trim() || pendingImage) && !busy ? 1 : 0.4 }}
+                        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
                         aria-label="ارسال پیام"
-                        className={`
-                shrink-0
-                p-0
-                w-9
-                h-9
-                mb-0.5
-                rounded-full
-                flex
-                items-center
-                justify-center
-                transition-all
-                duration-200
-
-                ${
-                            input.trim() && !busy
-                                ? `
-                            bg-[var(--color-primary-500)]
-                            text-white
-                            shadow-[0_2px_10px_rgba(124,58,237,0.18)]
-                            hover:bg-[var(--color-primary-600)]
-                        `
-                                : `
-                            bg-[var(--text-primary)]/[0.045]
-                            text-[var(--text-muted)]/50
-                        `
-                        }
-
-                disabled:cursor-not-allowed
-            `}
+                        className={`shrink-0 p-0 w-9 h-9 mb-0.5 rounded-full flex items-center justify-center transition-all duration-200 ${
+                            (input.trim() || pendingImage) && !busy
+                                ? 'bg-[var(--color-primary-500)] text-white shadow-[0_2px_10px_rgba(124,58,237,0.18)] hover:bg-[var(--color-primary-600)]'
+                                : 'bg-[var(--text-primary)]/[0.045] text-[var(--text-muted)]/50'
+                        } disabled:cursor-not-allowed`}
                     >
-                        <Send
-                            size={17}
-                            strokeWidth={2.2}
-                            className="-translate-x-[1px]"
-                        />
+                        <Send size={17} strokeWidth={2.2} className="-translate-x-[1px]" />
                     </motion.button>
                 </div>
             </div>
@@ -567,15 +482,21 @@ export function ChatScreen({
 }
 
 function EmptyIntro({
-    teacher,
+    subjects,
+    activeSubjectKey,
+    onSubjectChange,
     firstName,
     onSuggest,
     disabled,
+    suggestions,
 }: {
-    teacher: AiTeacherPublic;
+    subjects: AiSubject[];
+    activeSubjectKey: SubjectKey;
+    onSubjectChange: (key: SubjectKey) => void;
     firstName?: string;
     onSuggest: (text: string) => void;
     disabled?: boolean;
+    suggestions: Suggestion[];
 }) {
     const name = firstName || 'دوست من';
     return (
@@ -585,20 +506,39 @@ function EmptyIntro({
             transition={{ duration: 0.4, ease: easeOut }}
             className="min-h-[55vh] flex flex-col items-center justify-center text-center px-4"
         >
-            <img
-                src={teacher.avatarUrl || '/avatars/user_default.png'}
-                alt=""
-                className="w-16 h-16 rounded-full object-cover ring-2 ring-[var(--border)] mb-4"
-            />
-            <h2 className="text-lg font-black text-[var(--text-primary)] tracking-tight">
-                سلام {name}
-            </h2>
+            <div className="w-16 h-16 rounded-full overflow-hidden ring-2 ring-[var(--border)] mb-4">
+                <Met size="100%" initialState="idle" mood="happy" interactive energy={0.6} />
+            </div>
+            <h2 className="text-lg font-black text-[var(--text-primary)] tracking-tight">سلام {name}</h2>
             <p className="text-[13px] text-[var(--text-secondary)] mt-2 leading-7 max-w-sm">
-                من {teacher.displayName} هستم. آماده‌ام کمکت کنم درس‌ها را بفهمی، تمرین کنی یا برای امتحان آماده شوی.
+                من Met ام. یک موضوع رو انتخاب کن تا دقیق همون‌جوری که بلدی باهات همراه شوم.
             </p>
 
+            <div className="mt-4 flex items-center justify-center gap-2 flex-wrap max-w-md">
+                {subjects.map((s) => {
+                    const active = s.key === activeSubjectKey;
+                    return (
+                        <button
+                            key={s.key}
+                            type="button"
+                            onClick={() => onSubjectChange(s.key)}
+                            className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-full border text-[12.5px] font-bold transition-colors ${
+                                active
+                                    ? 'border-[color-mix(in_srgb,var(--color-primary-500)_45%,var(--border))] bg-[color-mix(in_srgb,var(--color-primary-500)_10%,transparent)] text-[var(--color-primary-300)]'
+                                    : 'border-[var(--border)]/80 text-[var(--text-secondary)] hover:border-[color-mix(in_srgb,var(--color-primary-500)_25%,var(--border))]'
+                            }`}
+                        >
+                            <span className="w-5 h-5 rounded-full inline-flex items-center justify-center" style={{ background: `color-mix(in srgb, ${s.color} 18%, transparent)`, color: s.color }}>
+                                <SubjectIcon icon={s.icon} size={12} />
+                            </span>
+                            {s.nameFa}
+                        </button>
+                    );
+                })}
+            </div>
+
             <div className="mt-7 grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-md">
-                {SUGGESTIONS.map((s, i) => {
+                {suggestions.map((s, i) => {
                     const Icon = s.icon;
                     return (
                         <motion.button

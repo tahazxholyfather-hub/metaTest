@@ -25,7 +25,7 @@ function assertConfigured() {
     }
 }
 
-function buildBody({ messages, model, maxTokens, temperature, stream }) {
+function buildBody({ messages, model, maxTokens, temperature, stream, tools, toolChoice }) {
     const body = {
         model,
         messages,
@@ -37,6 +37,11 @@ function buildBody({ messages, model, maxTokens, temperature, stream }) {
     // Only send when explicitly enabled — GapGPT may reject unknown fields
     if (stream && PROVIDER.includeStreamUsage) {
         body.stream_options = { include_usage: true };
+    }
+
+    if (Array.isArray(tools) && tools.length) {
+        body.tools = tools;
+        body.tool_choice = toolChoice || 'auto';
     }
 
     return body;
@@ -81,7 +86,7 @@ function estimateTokensFromText(text) {
 
 function estimateUsage(messages, fullText) {
     const inText = Array.isArray(messages)
-        ? messages.map((m) => (m && m.content) || '').join('\n')
+        ? messages.map((m) => textOf(m && m.content)).join('\n')
         : JSON.stringify(messages || '');
     const inputTokens = Math.max(1, estimateTokensFromText(inText));
     const outputTokens = Math.max(1, estimateTokensFromText(fullText));
@@ -94,30 +99,32 @@ function estimateUsage(messages, fullText) {
     };
 }
 
-async function generate({ messages, model, maxTokens, temperature = 0.6 }) {
+/** Chat `content` can be a plain string or an array of {type, text|image_url} parts. */
+function textOf(content) {
+    if (typeof content === 'string') return content;
+    if (Array.isArray(content)) {
+        return content
+            .map((part) => (part && part.type === 'text' ? part.text : ''))
+            .filter(Boolean)
+            .join('\n');
+    }
+    return '';
+}
+
+async function fetchJson(path, { method = 'POST', body, timeoutMs = PROVIDER.timeoutMs } = {}) {
     assertConfigured();
-    const usedModel = model || MODELS.default;
-
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), PROVIDER.timeoutMs);
-
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-        const res = await fetch(`${PROVIDER.baseUrl}/chat/completions`, {
-            method: 'POST',
+        const res = await fetch(`${PROVIDER.baseUrl}${path}`, {
+            method,
             headers: {
                 Authorization: `Bearer ${PROVIDER.apiKey}`,
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify(buildBody({
-                messages,
-                model: usedModel,
-                maxTokens,
-                temperature,
-                stream: false,
-            })),
+            body: body ? JSON.stringify(body) : undefined,
             signal: controller.signal,
         });
-
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
             throw new AiProviderError(
@@ -126,14 +133,7 @@ async function generate({ messages, model, maxTokens, temperature = 0.6 }) {
                 res.status
             );
         }
-
-        const content = data?.choices?.[0]?.message?.content || '';
-        const usage = extractUsage(data) || estimateUsage(messages, content);
-        return {
-            content,
-            model: data?.model || usedModel,
-            usage,
-        };
+        return data;
     } catch (err) {
         if (err.name === 'AbortError') {
             throw new AiProviderError('زمان پاسخ‌گویی به پایان رسید.', 'AI_TIMEOUT', 504);
@@ -143,6 +143,24 @@ async function generate({ messages, model, maxTokens, temperature = 0.6 }) {
     } finally {
         clearTimeout(timer);
     }
+}
+
+async function generate({ messages, model, maxTokens, temperature = 0.6, tools, toolChoice }) {
+    const usedModel = model || MODELS.default;
+    const data = await fetchJson('/chat/completions', {
+        body: buildBody({ messages, model: usedModel, maxTokens, temperature, stream: false, tools, toolChoice }),
+    });
+
+    const choice = data?.choices?.[0];
+    const content = choice?.message?.content || '';
+    const toolCalls = choice?.message?.tool_calls || null;
+    const usage = extractUsage(data) || estimateUsage(messages, content);
+    return {
+        content,
+        toolCalls,
+        model: data?.model || usedModel,
+        usage,
+    };
 }
 
 /**
@@ -246,10 +264,45 @@ async function* stream({ messages, model, maxTokens, temperature = 0.6 }) {
     };
 }
 
+/**
+ * Embeddings — used by ragService for chunk + query vectors.
+ * Returns an array of float arrays, one per input string.
+ */
+async function embed({ input, model } = {}) {
+    const inputs = Array.isArray(input) ? input : [input];
+    if (!inputs.length) return [];
+    const data = await fetchJson('/embeddings', {
+        body: { model: model || MODELS.embedding, input: inputs },
+    });
+    const vectors = (data?.data || []).map((row) => row.embedding);
+    return vectors;
+}
+
+/**
+ * Image generation (OpenAI-compatible /images/generations).
+ * Returns { url } or { b64 } depending on gateway response shape.
+ */
+async function generateImage({ prompt, model, size = '1024x1024' } = {}) {
+    const data = await fetchJson('/images/generations', {
+        body: { model: model || MODELS.image, prompt, size, n: 1 },
+        timeoutMs: Math.max(PROVIDER.timeoutMs, 120000),
+    });
+    const item = data?.data?.[0];
+    if (!item) throw new AiProviderError('تصویری ساخته نشد.', 'IMAGE_EMPTY', 502);
+    return {
+        url: item.url || null,
+        b64: item.b64_json || null,
+        revisedPrompt: item.revised_prompt || prompt,
+    };
+}
+
 module.exports = {
     generate,
     stream,
+    embed,
+    generateImage,
     AiProviderError,
     estimateUsage,
     extractUsage,
+    textOf,
 };

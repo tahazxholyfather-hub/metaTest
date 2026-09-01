@@ -13,7 +13,7 @@ export const BottomNav = ({ activeView, onNavigate }: BottomNavProps) => {
         { id: 'dashboard', label: 'خانه', icon: Home, className: 'nav-home' },
         { id: 'practice', label: 'تمرین', icon: BookOpen, className: 'nav-practice' },
         { id: 'tests', label: 'آزمون', icon: ClipboardCheck, className: 'nav-tests' },
-        { id: 'ai_teacher', label: 'معلم ', icon: GraduationCap, className: 'nav-ai-teacher' },
+        { id: 'ai_teacher', label: 'Met', icon: GraduationCap, className: 'nav-ai-teacher' },
         { id: 'profile', label: 'پروفایل', icon: User, className: 'nav-profile' },
     ];
 

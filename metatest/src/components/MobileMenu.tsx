@@ -22,7 +22,7 @@ const menuItems = [
     { id: 'dashboard', label: 'داشبورد', icon: Home },
     { id: 'practice', label: 'تمرین', icon: BookOpen },
     { id: 'tests', label: 'آزمون‌ها', icon: FileText },
-    { id: 'ai_teacher', label: 'معلم هوشمند', icon: GraduationCap },
+    { id: 'ai_teacher', label: 'Met', icon: GraduationCap },
     { id: 'documents', label: 'نمونه سوالات آماده', icon: Files },
     { id: 'profile', label: 'پروفایل', icon: User },
 ];

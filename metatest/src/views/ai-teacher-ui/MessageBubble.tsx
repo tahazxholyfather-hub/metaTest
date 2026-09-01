@@ -1,15 +1,14 @@
 import React, { useMemo } from 'react';
-import { Copy, Check, Flag } from 'lucide-react';
+import { Copy, Check, Flag, ImageOff } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { MathRenderer } from '../../components/ui/MathRenderer';
+import { Met } from '../../components/met';
 import type { AiMessage } from './types';
 import { easeOut } from './ui';
 
 type Props = {
     message: AiMessage;
-    teacherAvatar?: string;
-    teacherName?: string;
     isGroupEnd?: boolean;
     isGroupStart?: boolean;
     onReport?: (message: AiMessage) => void;
@@ -34,7 +33,7 @@ export function normalizeAssistantMarkdown(text: string) {
     );
 }
 
-function parseTeacherMarkdown(raw: string): React.ReactNode[] {
+function parseMetMarkdown(raw: string): React.ReactNode[] {
     const text = normalizeAssistantMarkdown(raw);
     const MATH_RE = /\$\$[\s\S]+?\$\$|\$[^$\n]+\$/g;
     const nodes: React.ReactNode[] = [];
@@ -76,8 +75,8 @@ function parseTeacherMarkdown(raw: string): React.ReactNode[] {
     return nodes.length ? nodes : [text];
 }
 
-function TeacherRichText({ text }: { text: string }) {
-    const nodes = useMemo(() => parseTeacherMarkdown(text), [text]);
+function MetRichText({ text }: { text: string }) {
+    const nodes = useMemo(() => parseMetMarkdown(text), [text]);
     return (
         <div className="whitespace-pre-wrap break-words leading-[1.6] text-[14.5px] m-0" dir="auto">
             {nodes}
@@ -85,10 +84,36 @@ function TeacherRichText({ text }: { text: string }) {
     );
 }
 
+function AttachmentImages({ attachments }: { attachments?: AiMessage['attachments'] }) {
+    const images = (attachments || []).filter((a) => a.type === 'image' && a.url);
+    if (!images.length) return null;
+    return (
+        <div className={`mt-2 grid gap-1.5 ${images.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+            {images.map((img, i) => (
+                <a
+                    key={i}
+                    href={img.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block rounded-[12px] overflow-hidden border border-[var(--border)]/60 bg-[var(--bg-app)]"
+                >
+                    <img
+                        src={img.url}
+                        alt={img.promptUsed || ''}
+                        loading="lazy"
+                        className="w-full max-h-64 object-cover"
+                        onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).style.display = 'none';
+                        }}
+                    />
+                </a>
+            ))}
+        </div>
+    );
+}
+
 export function MessageBubble({
     message,
-    teacherAvatar,
-    teacherName,
     isGroupEnd = true,
     isGroupStart = true,
     onReport,
@@ -115,7 +140,7 @@ export function MessageBubble({
         toast.message('گزارش ثبت شد', { description: 'از بازخورد شما متشکریم.' });
     };
 
-    /* User — compact, distinct, no cartoon tail */
+    /* User — compact, distinct */
     if (isUser) {
         return (
             <motion.div
@@ -131,14 +156,12 @@ export function MessageBubble({
                         dir="auto"
                     >
                         <p className="whitespace-pre-wrap m-0">{message.content}</p>
+                        <AttachmentImages attachments={message.attachments} />
                     </div>
                     <div className="flex items-center gap-2.5 mt-1 px-0.5 opacity-50 group-hover:opacity-100 transition-opacity">
                         <span className="text-[10px] text-[var(--text-muted)] tabular-nums">{time}</span>
                         <button type="button" onClick={handleCopy} className="p-0.5 text-[var(--text-muted)]" aria-label="کپی">
                             {copied ? <Check size={12} /> : <Copy size={12} />}
-                        </button>
-                        <button type="button" onClick={handleReport} className="p-0.5 text-[var(--text-muted)]" aria-label="گزارش">
-                            <Flag size={12} />
                         </button>
                     </div>
                 </div>
@@ -146,7 +169,7 @@ export function MessageBubble({
         );
     }
 
-    /* Assistant — editorial block with identity */
+    /* Met — editorial block; tiny idle-only avatar (states live only in the side panel). */
     return (
         <motion.div
             initial={{ opacity: 0, y: 8 }}
@@ -157,9 +180,7 @@ export function MessageBubble({
             <div className="max-w-[85%] sm:max-w-[72%] min-w-0 group">
                 {isGroupStart && (
                     <div className="flex items-center gap-2 mb-1.5 justify-end" dir="rtl">
-                        <span className="text-[11px] font-bold text-[var(--text-secondary)] truncate">
-                            {teacherName || 'معلم'}
-                        </span>
+                        <span className="text-[11px] font-bold text-[var(--text-secondary)] truncate">Met</span>
                     </div>
                 )}
 
@@ -173,7 +194,15 @@ export function MessageBubble({
                             <span className="inline-block w-[2px] h-[1em] align-[-0.15em] mr-0.5 bg-[var(--color-primary-400)] animate-pulse" />
                         </p>
                     ) : (
-                        <TeacherRichText text={message.content || ''} />
+                        <>
+                            <MetRichText text={message.content || ''} />
+                            <AttachmentImages attachments={message.attachments} />
+                            {!message.content && !message.attachments?.length && (
+                                <p className="flex items-center gap-1.5 text-[12px] text-[var(--text-muted)] m-0">
+                                    <ImageOff size={13} /> پاسخی دریافت نشد.
+                                </p>
+                            )}
+                        </>
                     )}
                 </div>
 
@@ -197,12 +226,9 @@ export function MessageBubble({
 
             <div className="w-8 shrink-0 self-end mb-5">
                 {isGroupEnd ? (
-                    <img
-                        src={teacherAvatar || '/avatars/user_default.png'}
-                        alt={teacherName || ''}
-                        className="w-8 h-8 rounded-full object-cover ring-1 ring-[var(--border)]"
-                        onError={(e) => { (e.target as HTMLImageElement).src = '/avatars/user_default.png'; }}
-                    />
+                    <div className="w-8 h-8 rounded-full overflow-hidden ring-1 ring-[var(--border)]">
+                        <Met size="100%" initialState="idle" interactive={false} atmosphere={false} reducedMotion />
+                    </div>
                 ) : null}
             </div>
         </motion.div>

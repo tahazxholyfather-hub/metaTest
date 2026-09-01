@@ -1,29 +1,18 @@
-export type AiTeacherPublic = {
-    id: number;
-    firstName: string;
-    lastName: string;
-    displayName: string;
-    age: number | null;
-    avatarUrl: string;
-    subject: string;
-    specialty: string | null;
-    description: string | null;
-    personality: string | null;
-    teachingStyle: string | null;
-    knowledgeLevel: number;
-    expertise: string | null;
-    experience: string | null;
-    isFree: boolean;
-    isActive: boolean;
-    locked?: boolean;
-    pricePerMessage: number;
-    typicalEnergy?: number;
-    stats?: {
-        students: number;
-        questionsAnswered: number;
-        conversations: number;
-        averageRating: number | null;
-    };
+export type SubjectKey = 'math' | 'biology' | 'physics' | 'chemistry';
+
+export type AiSubject = {
+    key: SubjectKey;
+    nameFa: string;
+    nameEn: string;
+    icon: string;
+    color: string;
+};
+
+export type AiAttachment = {
+    type: 'image';
+    url: string;
+    promptUsed?: string;
+    mimeType?: string;
 };
 
 export type AiMessage = {
@@ -31,9 +20,8 @@ export type AiMessage = {
     role: 'user' | 'assistant' | 'system';
     content: string;
     coinCost?: number;
-    costUsd?: number;
-    costIrr?: number;
     isStarter?: boolean;
+    attachments?: AiAttachment[];
     createdAt?: string;
     streaming?: boolean;
 };
@@ -41,63 +29,30 @@ export type AiMessage = {
 export type AiConversationSummary = {
     id: number;
     title: string;
-    teacherId: number;
-    teacherName?: string;
-    teacherAvatar?: string;
-    teacherSubject?: string;
+    subjectKey: SubjectKey;
     lastMessageAt?: string;
     createdAt?: string;
     messageCount?: number;
-};
-
-export type AiSettings = {
-    lowCoinMode: boolean;
-    alwaysExamples: boolean;
-    conciseResponses: boolean;
-    stepByStep: boolean;
-    parentReportsEnabled: boolean;
-    selectedBookId?: number | null;
-};
-
-export type AiBook = {
-    id: number;
-    title: string;
-    subject?: string | null;
-    grade?: string | null;
-    publisher?: string | null;
-};
-
-export type AiStudentProfile = {
-    schoolName?: string | null;
-    grade?: string | null;
-    field?: string | null;
-    weaknesses?: string | null;
-    strengths?: string | null;
-    learningGoals?: string | null;
-    learningPreferences?: string | null;
-    additionalNotes?: string | null;
+    titleGenerated?: boolean;
 };
 
 export type AiWallet = {
     balance: number;
     refilled?: boolean;
     refillAmount?: number;
-    /** Daily energy allowance for the user's plan */
     dailyAllowance?: number;
-    /** ISO timestamp of the next daily recharge */
     nextRefillAt?: string;
 };
 
 export type AiBootstrap = {
-    onboardingCompleted: boolean;
+    introSeen: boolean;
     user: { id: number; firstName?: string; lastName?: string; currentPlan?: string };
-    teacher: AiTeacherPublic | null;
-    profile: AiStudentProfile | null;
-    settings: AiSettings;
+    subjects: AiSubject[];
+    lastSubject: SubjectKey | null;
     wallet: AiWallet;
-    latestConversation: { id: number; title: string; teacherId: number } | null;
+    latestConversation: AiConversationSummary | null;
 };
 
 export type ChatStatus = 'ready' | 'sending' | 'thinking' | 'generating' | 'error';
 
-export type OnboardingStep = 'intro' | 'profile' | 'teacher' | 'chat';
+export type OnboardingStep = 'intro' | 'chat';

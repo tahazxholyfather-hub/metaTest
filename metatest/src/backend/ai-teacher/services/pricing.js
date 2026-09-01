@@ -1,6 +1,6 @@
 'use strict';
 
-const { COIN_PRICING, MODELS, modelPrices } = require('../config');
+const { COIN_PRICING, MODELS, modelPrices, IMAGE_ENERGY_COST } = require('../config');
 
 function roundUsd(n) {
     return Math.round((Number(n) || 0) * 1e10) / 1e10;
@@ -15,7 +15,7 @@ function quoteUsage({
     outputTokens = 0,
     cachedTokens = 0,
     model = MODELS.default,
-    teacherMultiplier = 1,
+    extraEnergy = 0,
 } = {}) {
     const rates = modelPrices(model);
     const inTok = Math.max(0, Number(inputTokens) || 0);
@@ -29,11 +29,10 @@ function quoteUsage({
         + (outTok / 1e6) * rates.output
     );
 
-    const multiplier = Math.max(0.01, Number(teacherMultiplier) || 1);
-    const billedUsd = roundUsd(usd * multiplier);
     const exchangeRateIrr = COIN_PRICING.usdToIrr;
-    const irr = Math.max(0, Math.round(billedUsd * exchangeRateIrr));
-    const energy = Math.max(COIN_PRICING.minCharge, Math.ceil(irr / COIN_PRICING.irrPerEnergy) || COIN_PRICING.minCharge);
+    const irr = Math.max(0, Math.round(usd * exchangeRateIrr));
+    const baseEnergy = Math.max(COIN_PRICING.minCharge, Math.ceil(irr / COIN_PRICING.irrPerEnergy) || COIN_PRICING.minCharge);
+    const energy = baseEnergy + Math.max(0, Number(extraEnergy) || 0);
 
     return {
         model: String(model || MODELS.default),
@@ -41,38 +40,36 @@ function quoteUsage({
         inputTokens: inTok,
         outputTokens: outTok,
         cachedTokens: cacheTok,
-        usd: billedUsd,
-        apiUsd: usd,
+        usd,
         irr,
         energy,
         exchangeRateIrr,
         irrPerEnergy: COIN_PRICING.irrPerEnergy,
-        teacherMultiplier: multiplier,
     };
 }
 
-function estimateTypicalEnergy({ model, maxOutputTokens = 500, teacherMultiplier = 1 } = {}) {
-    const typicalIn = 2800;
+function estimateTypicalEnergy({ model, maxOutputTokens = 500 } = {}) {
+    const typicalIn = 3200; // includes RAG excerpt + memory + recent turns
     const typicalOut = Math.max(80, Math.min(Number(maxOutputTokens) || 500, 420));
+    return quoteUsage({ inputTokens: typicalIn, outputTokens: typicalOut, model });
+}
+
+function estimateMaxEnergy({ model, maxOutputTokens = 800 } = {}) {
     return quoteUsage({
-        inputTokens: typicalIn,
-        outputTokens: typicalOut,
+        inputTokens: 4800,
+        outputTokens: Math.max(120, Number(maxOutputTokens) || 800),
         model,
-        teacherMultiplier,
+        extraEnergy: IMAGE_ENERGY_COST, // reserve enough headroom in case Met generates an image
     });
 }
 
-function estimateMaxEnergy({ model, maxOutputTokens = 800, teacherMultiplier = 1 } = {}) {
-    return quoteUsage({
-        inputTokens: 4200,
-        outputTokens: Math.max(120, Number(maxOutputTokens) || 800),
-        model,
-        teacherMultiplier,
-    });
+function imageEnergyCost() {
+    return IMAGE_ENERGY_COST;
 }
 
 module.exports = {
     quoteUsage,
     estimateTypicalEnergy,
     estimateMaxEnergy,
+    imageEnergyCost,
 };

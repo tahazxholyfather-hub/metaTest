@@ -79,7 +79,7 @@ export const SideNav = ({ activeView, onNavigate, theme, onToggleTheme, isCollap
         { id: 'dashboard', label: 'داشبورد', icon: Home, selectorClass: 'sidenav-tour-dashboard' },
         { id: 'practice', label: 'تمرین', icon: BookOpen, selectorClass: 'sidenav-tour-practice' },
         { id: 'tests', label: 'دنیای آزمون', icon: ClipboardCheck, selectorClass: 'sidenav-tour-tests' },
-        { id: 'ai_teacher', label: 'معلم هوشمند', icon: GraduationCap, selectorClass: 'sidenav-tour-ai-teacher' },
+        { id: 'ai_teacher', label: 'Met', icon: GraduationCap, selectorClass: 'sidenav-tour-ai-teacher' },
         { id: 'documents', label: 'نمونه سوالات آماده', icon: Files, selectorClass: 'sidenav-tour-documents' },
         { id: 'History', label: 'سوابق آزمون‌ها', icon: History, selectorClass: 'sidenav-tour-history' },
         { id: 'profile', label: 'پروفایل کاربری', icon: User, selectorClass: 'sidenav-tour-profile' }
