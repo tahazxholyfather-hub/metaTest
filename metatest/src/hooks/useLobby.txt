@@ -1,0 +1,95 @@
+import { useState, useEffect, useCallback } from 'react';
+import { Socket } from 'socket.io-client';
+import { lobbySocketService } from '../lib/lobbySocket'; // Adjust the import path if needed
+
+// Define and export the user interface
+export interface LobbyUser {
+    id: string | number;
+    name: string;
+    avatar?: string;
+    isHost?: boolean;
+}
+
+export const useLobby = (lobbyId: string | null, currentUser: LobbyUser | null, isHost: boolean) => {
+    const [socket, setSocket] = useState<Socket | null>(null);
+    const [lobbyUsers, setLobbyUsers] = useState<LobbyUser[]>([]);
+    const [isQuizStarted, setIsQuizStarted] = useState(false);
+    const [isKicked, setIsKicked] = useState(false);
+
+    useEffect(() => {
+        if (!lobbyId || !currentUser) return;
+
+        // Get socket instance directly from the exported service instance
+        const socketInstance = lobbySocketService.getSocket();
+        setSocket(socketInstance);
+
+        // Initial event emission
+        if (socketInstance.connected) {
+            if (isHost) {
+                socketInstance.emit('create_lobby', { lobbyId, hostUser: currentUser });
+            } else {
+                socketInstance.emit('join_lobby', { lobbyId, user: currentUser });
+            }
+        } else {
+            socketInstance.on('connect', () => {
+                if (isHost) {
+                    socketInstance.emit('create_lobby', { lobbyId, hostUser: currentUser });
+                } else {
+                    socketInstance.emit('join_lobby', { lobbyId, user: currentUser });
+                }
+            });
+        }
+
+        // Listener for lobby updates
+        const handleLobbyUpdate = (users: LobbyUser[]) => {
+            setLobbyUsers(users);
+        };
+        socketInstance.on('lobby_updated', handleLobbyUpdate);
+
+        // Listener for quiz start
+        const handleQuizStarted = () => {
+            setIsQuizStarted(true);
+        };
+        socketInstance.on('quiz_started', handleQuizStarted);
+
+        // Listener for getting kicked
+        const handleKicked = () => {
+            setIsKicked(true);
+            lobbySocketService.disconnect();
+        };
+        socketInstance.on('kicked_from_lobby', handleKicked);
+
+        // Listener for host disconnection
+        const handleHostDisconnected = () => {
+            alert('The host has disconnected. The lobby is now closed.');
+            lobbySocketService.disconnect();
+        };
+        socketInstance.on('host_disconnected', handleHostDisconnected);
+
+        // Cleanup listeners on component unmount
+        return () => {
+            socketInstance.off('lobby_updated', handleLobbyUpdate);
+            socketInstance.off('quiz_started', handleQuizStarted);
+            socketInstance.off('kicked_from_lobby', handleKicked);
+            socketInstance.off('host_disconnected', handleHostDisconnected);
+        };
+    }, [lobbyId, currentUser, isHost]);
+
+    const startQuiz = useCallback(() => {
+        if (socket && lobbyId && isHost) {
+            socket.emit('start_quiz', { lobbyId });
+        }
+    }, [socket, lobbyId, isHost]);
+
+    const leaveLobby = useCallback(() => {
+        lobbySocketService.disconnect();
+    }, []);
+
+    const kickUser = useCallback((userIdToKick: string | number) => {
+        if (socket && lobbyId && isHost) {
+            socket.emit('kick_user', { lobbyId, userIdToKick });
+        }
+    }, [socket, lobbyId, isHost]);
+
+    return { lobbyUsers, isQuizStarted, isKicked, startQuiz, leaveLobby, kickUser };
+};
