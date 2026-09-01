@@ -1,0 +1,3 @@
+-- Superseded by 004_iranian_teachers.sql
+-- Persona prompts now live on each teacher row (system_prompt / behavior_rules).
+-- Do not run the old Einstein / «معلم عمومی» updates — they overwrite the Iranian roster.
