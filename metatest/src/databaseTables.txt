@@ -1,0 +1,521 @@
+﻿chapters_tam24	CREATE TABLE `chapters_tam24` (
+ `id` int(11) NOT NULL AUTO_INCREMENT,
+ `topic_id` int(11) NOT NULL,
+ `title` varchar(255) NOT NULL,
+ PRIMARY KEY (`id`),
+ KEY `idx_topic` (`topic_id`),
+ CONSTRAINT `fk_chapters_topic` FOREIGN KEY (`topic_id`) REFERENCES `topics_tam24` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=268 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_persian_ci
+descriptive_answers_tam24	CREATE TABLE `descriptive_answers_tam24` (
+ `id` int(11) NOT NULL AUTO_INCREMENT,
+ `question_id` int(11) NOT NULL,
+ `answer_text` text NOT NULL,
+ `created_at` datetime DEFAULT current_timestamp(),
+ PRIMARY KEY (`id`),
+ KEY `fk_desc_question` (`question_id`),
+ CONSTRAINT `fk_desc_question` FOREIGN KEY (`question_id`) REFERENCES `questions_tam24` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=5918 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+discount_codes	CREATE TABLE `discount_codes` (
+ `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+ `code` varchar(100) NOT NULL,
+ `percent` decimal(5,2) NOT NULL,
+ `active` tinyint(1) NOT NULL DEFAULT 1,
+ `expires_at` datetime DEFAULT NULL,
+ `max_uses` int(11) DEFAULT NULL,
+ `used_count` int(11) NOT NULL DEFAULT 0,
+ `allowed_plan_ids` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`allowed_plan_ids`)),
+ `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+ `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+ PRIMARY KEY (`id`),
+ UNIQUE KEY `code` (`code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+favorites_tam24	CREATE TABLE `favorites_tam24` (
+ `id` int(11) NOT NULL AUTO_INCREMENT,
+ `user_id` int(11) NOT NULL,
+ `question_id` int(11) NOT NULL,
+ `date` bigint(20) NOT NULL,
+ PRIMARY KEY (`id`),
+ UNIQUE KEY `unique_user_question` (`user_id`,`question_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+grades_tam24	CREATE TABLE `grades_tam24` (
+ `id` int(11) NOT NULL AUTO_INCREMENT,
+ `title` varchar(50) NOT NULL,
+ PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+majors_tam24	CREATE TABLE `majors_tam24` (
+ `id` int(11) NOT NULL AUTO_INCREMENT,
+ `title` varchar(50) NOT NULL,
+ PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+notes_tam24	CREATE TABLE `notes_tam24` (
+ `id` int(11) NOT NULL AUTO_INCREMENT,
+ `user_id` int(11) NOT NULL,
+ `question_id` int(11) NOT NULL,
+ `note_text` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+ `timestamp` bigint(20) NOT NULL,
+ PRIMARY KEY (`id`),
+ KEY `user_id` (`user_id`),
+ KEY `question_id` (`question_id`),
+ CONSTRAINT `notes_tam24_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `tam24_users` (`id`) ON DELETE CASCADE,
+ CONSTRAINT `notes_tam24_ibfk_2` FOREIGN KEY (`question_id`) REFERENCES `questions_tam24` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+options_tam24	CREATE TABLE `options_tam24` (
+ `id` int(11) NOT NULL AUTO_INCREMENT,
+ `question_id` int(11) NOT NULL,
+ `option_text` text NOT NULL,
+ `is_correct` tinyint(1) DEFAULT 0,
+ PRIMARY KEY (`id`),
+ KEY `fk_options_question` (`question_id`),
+ CONSTRAINT `fk_options_question` FOREIGN KEY (`question_id`) REFERENCES `questions_tam24` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=23747 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+payments	CREATE TABLE `payments` (
+ `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+ `user_id` int(11) NOT NULL,
+ `plan_id` varchar(50) NOT NULL,
+ `discount_code_id` bigint(20) unsigned DEFAULT NULL,
+ `base_price` bigint(20) NOT NULL,
+ `plan_discount_percent` decimal(5,2) NOT NULL DEFAULT 0.00,
+ `plan_discount_amount` bigint(20) NOT NULL DEFAULT 0,
+ `price_after_plan_discount` bigint(20) NOT NULL DEFAULT 0,
+ `coupon_percent` decimal(5,2) NOT NULL DEFAULT 0.00,
+ `coupon_discount_amount` bigint(20) NOT NULL DEFAULT 0,
+ `final_price` bigint(20) NOT NULL,
+ `currency` varchar(10) NOT NULL DEFAULT 'IRR',
+ `status` enum('pending','paid','failed','cancelled','expired') NOT NULL DEFAULT 'pending',
+ `gateway` varchar(50) NOT NULL DEFAULT 'zarinpal',
+ `authority` varchar(100) DEFAULT NULL,
+ `ref_id` varchar(100) DEFAULT NULL,
+ `description` varchar(255) DEFAULT NULL,
+ `requested_at` timestamp NOT NULL DEFAULT current_timestamp(),
+ `paid_at` timestamp NULL DEFAULT NULL,
+ `verified_at` timestamp NULL DEFAULT NULL,
+ `request_payload` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`request_payload`)),
+ `callback_payload` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`callback_payload`)),
+ `verify_response` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`verify_response`)),
+ `gateway_response` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`gateway_response`)),
+ `client_ip` varchar(45) DEFAULT NULL,
+ `user_agent` varchar(255) DEFAULT NULL,
+ `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+ `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+ PRIMARY KEY (`id`),
+ UNIQUE KEY `uniq_authority` (`authority`),
+ KEY `idx_user_id` (`user_id`),
+ KEY `idx_plan_id` (`plan_id`),
+ KEY `idx_status` (`status`)
+) ENGINE=InnoDB AUTO_INCREMENT=27 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+pdf_library	CREATE TABLE `pdf_library` (
+ `id` int(11) NOT NULL AUTO_INCREMENT,
+ `title` varchar(255) NOT NULL,
+ `description` text DEFAULT NULL,
+ `category` enum('pamphlet','exam','guide') NOT NULL,
+ `category_label` varchar(50) NOT NULL DEFAULT 'جزوه',
+ `subject` varchar(100) NOT NULL,
+ `grade` varchar(100) NOT NULL,
+ `file_size` varchar(50) NOT NULL,
+ `pages` int(11) NOT NULL DEFAULT 0,
+ `download_url` varchar(500) NOT NULL,
+ `uploaded_at` timestamp NOT NULL DEFAULT current_timestamp(),
+ `is_active` tinyint(1) DEFAULT 1,
+ `download_count` int(11) DEFAULT 0,
+ PRIMARY KEY (`id`),
+ KEY `idx_category` (`category`),
+ KEY `idx_subject` (`subject`),
+ KEY `idx_grade` (`grade`),
+ KEY `idx_uploaded_at` (`uploaded_at`),
+ KEY `idx_active` (`is_active`),
+ FULLTEXT KEY `idx_fulltext` (`title`,`description`,`subject`,`grade`)
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+questions_tam24	CREATE TABLE `questions_tam24` (
+ `id` int(11) NOT NULL AUTO_INCREMENT,
+ `question_text` text NOT NULL,
+ `grade_id` int(11) DEFAULT NULL,
+ `subject_id` int(11) DEFAULT NULL,
+ `topic_id` int(11) DEFAULT NULL,
+ `chapter_id` int(11) DEFAULT NULL,
+ `major_id` int(11) DEFAULT NULL,
+ `academic_year` varchar(9) DEFAULT NULL,
+ `chapter` varchar(100) DEFAULT NULL,
+ `difficulty_level` enum('آسان','متوسط','سخت') DEFAULT 'متوسط',
+ `source` varchar(255) DEFAULT NULL,
+ `book` varchar(255) DEFAULT NULL,
+ `status` enum('فعال','غیرفعال') DEFAULT 'فعال',
+ `insert_type` enum('دستی','اتوماتیک') DEFAULT 'دستی',
+ `created_at` datetime DEFAULT current_timestamp(),
+ `admin_id` int(11) NOT NULL,
+ `last_edit_date` datetime DEFAULT NULL,
+ `last_edit_by` int(11) DEFAULT NULL,
+ `edit_status` enum('free','pending','done') DEFAULT 'free',
+ PRIMARY KEY (`id`),
+ KEY `fk_q_grade` (`grade_id`),
+ KEY `fk_q_subject` (`subject_id`),
+ KEY `fk_q_topic` (`topic_id`),
+ KEY `fk_q_major` (`major_id`),
+ KEY `fk_questions_chapter` (`chapter_id`),
+ KEY `idx_q_status_subject` (`status`,`subject_id`),
+ KEY `idx_q_status_subject_grade` (`status`,`subject_id`,`grade_id`),
+ KEY `idx_q_status_subject_grade_topic` (`status`,`subject_id`,`grade_id`,`topic_id`),
+ KEY `idx_q_status_topic` (`status`,`topic_id`),
+ KEY `idx_q_status_topic_chapter` (`status`,`topic_id`,`chapter_id`),
+ CONSTRAINT `fk_q_grade` FOREIGN KEY (`grade_id`) REFERENCES `grades_tam24` (`id`),
+ CONSTRAINT `fk_q_major` FOREIGN KEY (`major_id`) REFERENCES `majors_tam24` (`id`),
+ CONSTRAINT `fk_q_subject` FOREIGN KEY (`subject_id`) REFERENCES `subjects_tam24` (`id`),
+ CONSTRAINT `fk_q_topic` FOREIGN KEY (`topic_id`) REFERENCES `topics_tam24` (`id`),
+ CONSTRAINT `fk_questions_chapter` FOREIGN KEY (`chapter_id`) REFERENCES `chapters_tam24` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=5124 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+question_images_tam24	CREATE TABLE `question_images_tam24` (
+ `id` int(11) NOT NULL AUTO_INCREMENT,
+ `question_id` int(11) NOT NULL,
+ `image_name` varchar(255) NOT NULL,
+ `uploaded_at` datetime DEFAULT current_timestamp(),
+ PRIMARY KEY (`id`),
+ KEY `question_id` (`question_id`),
+ CONSTRAINT `question_images_tam24_ibfk_1` FOREIGN KEY (`question_id`) REFERENCES `questions_tam24` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=606 DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci
+question_option_stats_tam24	CREATE TABLE `question_option_stats_tam24` (
+ `id` int(11) NOT NULL AUTO_INCREMENT,
+ `question_id` int(11) NOT NULL,
+ `option_id` int(11) NOT NULL,
+ `select_count` int(11) NOT NULL DEFAULT 0,
+ PRIMARY KEY (`id`),
+ UNIQUE KEY `uq_question_option` (`question_id`,`option_id`),
+ UNIQUE KEY `uq_q_opt` (`question_id`,`option_id`),
+ KEY `fk_stats_option` (`option_id`),
+ CONSTRAINT `fk_stats_option` FOREIGN KEY (`option_id`) REFERENCES `options_tam24` (`id`) ON DELETE CASCADE,
+ CONSTRAINT `fk_stats_question` FOREIGN KEY (`question_id`) REFERENCES `questions_tam24` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=307 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+quizzes	CREATE TABLE `quizzes` (
+ `id` int(11) NOT NULL AUTO_INCREMENT,
+ `share_code` varchar(10) NOT NULL,
+ `creator_id` int(11) NOT NULL,
+ `title` varchar(255) DEFAULT 'آزمون سفارشی',
+ `quiz_type` varchar(50) DEFAULT NULL,
+ `difficulty` int(11) DEFAULT 2,
+ `time_limit` int(11) DEFAULT 30,
+ `visibility` enum('public','private') DEFAULT 'private',
+ `member_limit` int(11) DEFAULT 50,
+ `status` enum('waiting','in_progress','completed') DEFAULT 'waiting',
+ `question_ids` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL CHECK (json_valid(`question_ids`)),
+ `settings` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`settings`)),
+ `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+ `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+ PRIMARY KEY (`id`),
+ UNIQUE KEY `share_code` (`share_code`)
+) ENGINE=InnoDB AUTO_INCREMENT=274 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+quizzes_tam24	CREATE TABLE `quizzes_tam24` (
+ `id` int(11) NOT NULL AUTO_INCREMENT,
+ `share_code` varchar(10) NOT NULL,
+ `creator_id` int(11) NOT NULL,
+ `title` varchar(255) DEFAULT 'آزمون سفارشی',
+ `quiz_type` varchar(50) DEFAULT NULL,
+ `difficulty` int(11) DEFAULT 2,
+ `time_limit` int(11) DEFAULT 30,
+ `visibility` enum('public','private') DEFAULT 'private',
+ `member_limit` int(11) DEFAULT 50,
+ `status` enum('waiting','in_progress','completed') DEFAULT 'waiting',
+ `question_ids` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL CHECK (json_valid(`question_ids`)),
+ `settings` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`settings`)),
+ `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+ `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+ PRIMARY KEY (`id`),
+ UNIQUE KEY `share_code` (`share_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+quiz_members	CREATE TABLE `quiz_members` (
+ `id` int(11) NOT NULL AUTO_INCREMENT,
+ `quiz_id` int(11) NOT NULL,
+ `user_id` int(11) NOT NULL,
+ `role` enum('member','creator') NOT NULL,
+ `joined_at` timestamp NOT NULL DEFAULT current_timestamp(),
+ PRIMARY KEY (`id`),
+ UNIQUE KEY `unique_user_quiz` (`quiz_id`,`user_id`),
+ CONSTRAINT `quiz_members_ibfk_1` FOREIGN KEY (`quiz_id`) REFERENCES `quizzes` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=401 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+quiz_results	CREATE TABLE `quiz_results` (
+ `id` int(11) NOT NULL AUTO_INCREMENT,
+ `quiz_id` int(11) NOT NULL,
+ `user_id` int(11) NOT NULL,
+ `accuracy_rate` decimal(5,2) DEFAULT 0.00,
+ `correct_count` int(11) DEFAULT 0,
+ `incorrect_count` int(11) DEFAULT 0,
+ `unanswered_count` int(11) DEFAULT 0,
+ `total_score` int(11) DEFAULT 0,
+ `total_time_spent` int(11) NOT NULL,
+ `summary_json` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`summary_json`)),
+ `result_data_json` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`result_data_json`)),
+ `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+ PRIMARY KEY (`id`),
+ UNIQUE KEY `unique_quiz_user` (`quiz_id`,`user_id`),
+ KEY `quiz_id` (`quiz_id`),
+ KEY `user_id` (`user_id`),
+ CONSTRAINT `quiz_results_ibfk_1` FOREIGN KEY (`quiz_id`) REFERENCES `quizzes` (`id`) ON DELETE CASCADE,
+ CONSTRAINT `quiz_results_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `tam24_users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=107 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+quiz_sessions_tam24	CREATE TABLE `quiz_sessions_tam24` (
+ `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+ `status` enum('active','completed','expired') NOT NULL DEFAULT 'active',
+ `started_at` datetime NOT NULL DEFAULT current_timestamp(),
+ `ended_at` datetime DEFAULT NULL,
+ PRIMARY KEY (`id`),
+ KEY `idx_status` (`status`)
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+quiz_session_questions_tam24	CREATE TABLE `quiz_session_questions_tam24` (
+ `session_id` bigint(20) unsigned NOT NULL,
+ `question_id` bigint(20) unsigned NOT NULL,
+ `asked_at` timestamp NOT NULL DEFAULT current_timestamp(),
+ PRIMARY KEY (`session_id`,`question_id`),
+ KEY `idx_session` (`session_id`),
+ KEY `idx_question` (`question_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci
+reports_tam24	CREATE TABLE `reports_tam24` (
+ `id` int(11) NOT NULL AUTO_INCREMENT,
+ `question_id` int(11) NOT NULL,
+ `issue` varchar(100) NOT NULL COMMENT 'Types: technical, appearance, wrong_info, other',
+ `report_text` text NOT NULL,
+ `reporter` enum('admin','user') NOT NULL COMMENT 'Specifies if reporter is admin or user',
+ `reporter_id` int(11) NOT NULL,
+ `status` enum('pending','investigating','resolved','rejected') NOT NULL DEFAULT 'pending',
+ `date` bigint(20) NOT NULL COMMENT 'Timestamp in milliseconds',
+ `note` text DEFAULT NULL COMMENT 'Admins can add notes later',
+ PRIMARY KEY (`id`),
+ KEY `idx_question_id` (`question_id`),
+ KEY `idx_status` (`status`),
+ CONSTRAINT `fk_report_question` FOREIGN KEY (`question_id`) REFERENCES `questions_tam24` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+review_later_tam24	CREATE TABLE `review_later_tam24` (
+ `id` int(11) NOT NULL AUTO_INCREMENT,
+ `user_id` int(11) NOT NULL,
+ `question_id` int(11) NOT NULL,
+ `added_at` timestamp NOT NULL DEFAULT current_timestamp(),
+ PRIMARY KEY (`id`),
+ UNIQUE KEY `unique_user_question_review_later` (`user_id`,`question_id`),
+ KEY `question_id` (`question_id`),
+ CONSTRAINT `review_later_tam24_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `tam24_users` (`id`) ON DELETE CASCADE,
+ CONSTRAINT `review_later_tam24_ibfk_2` FOREIGN KEY (`question_id`) REFERENCES `questions_tam24` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=219 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+subjects_tam24	CREATE TABLE `subjects_tam24` (
+ `id` int(11) NOT NULL AUTO_INCREMENT,
+ `title` varchar(100) NOT NULL,
+ `icon` varchar(255) DEFAULT NULL,
+ PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+subscription_plans	CREATE TABLE `subscription_plans` (
+ `id` varchar(50) NOT NULL,
+ `name` varchar(255) NOT NULL,
+ `days` int(11) NOT NULL,
+ `price` bigint(20) NOT NULL,
+ `plan_discount_percent` decimal(5,2) NOT NULL DEFAULT 0.00,
+ `icon_primary` varchar(30) NOT NULL,
+ `icon_secondary` varchar(30) NOT NULL,
+ `shimmer_class` varchar(50) NOT NULL,
+ `active_shadow` varchar(255) NOT NULL,
+ `active_border` varchar(255) NOT NULL,
+ `popular` tinyint(1) NOT NULL DEFAULT 0,
+ `is_active` tinyint(1) NOT NULL DEFAULT 1,
+ `sort_order` int(11) NOT NULL DEFAULT 0,
+ `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+ `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+ PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+tam24_admins	CREATE TABLE `tam24_admins` (
+ `id` int(11) NOT NULL AUTO_INCREMENT,
+ `username` varchar(50) NOT NULL,
+ `password` varchar(255) NOT NULL,
+ `full_name` varchar(100) NOT NULL,
+ `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+ `role` varchar(50) NOT NULL,
+ PRIMARY KEY (`id`),
+ UNIQUE KEY `username` (`username`)
+) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_persian_ci
+tam24_invites	CREATE TABLE `tam24_invites` (
+ `id` int(11) NOT NULL AUTO_INCREMENT,
+ `inviter_id` int(11) NOT NULL,
+ `invited_name` varchar(255) DEFAULT NULL,
+ `invited_phone` varchar(20) DEFAULT NULL,
+ `status` enum('pending','active') DEFAULT 'pending',
+ `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+ `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+ PRIMARY KEY (`id`),
+ KEY `idx_inviter_id` (`inviter_id`),
+ KEY `idx_status` (`status`),
+ CONSTRAINT `tam24_invites_ibfk_1` FOREIGN KEY (`inviter_id`) REFERENCES `tam24_users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+tam24_in_app_messages	CREATE TABLE `tam24_in_app_messages` (
+ `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+ `user_id` int(11) NOT NULL,
+ `title` varchar(255) NOT NULL,
+ `body` text NOT NULL,
+ `is_read` tinyint(1) NOT NULL DEFAULT 0,
+ `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+ PRIMARY KEY (`id`),
+ KEY `idx_user_id` (`user_id`),
+ CONSTRAINT `fk_iam_user` FOREIGN KEY (`user_id`) REFERENCES `tam24_users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+tam24_otps	CREATE TABLE `tam24_otps` (
+ `id` int(11) NOT NULL AUTO_INCREMENT,
+ `phone` varchar(20) NOT NULL,
+ `code` varchar(10) NOT NULL,
+ `expires_at` datetime NOT NULL,
+ `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+ `ip` varchar(45) DEFAULT NULL,
+ PRIMARY KEY (`id`),
+ UNIQUE KEY `phone` (`phone`)
+) ENGINE=InnoDB AUTO_INCREMENT=127 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+tam24_tasks	CREATE TABLE `tam24_tasks` (
+ `id` int(11) NOT NULL AUTO_INCREMENT,
+ `task_type` enum('permanent','temporary') DEFAULT 'permanent',
+ `target_value` int(11) DEFAULT 10,
+ `reward_xp` int(11) DEFAULT 50,
+ `reward_trophy` int(11) NOT NULL DEFAULT 0,
+ `reward_badge` varchar(100) DEFAULT NULL,
+ `icon_name` varchar(50) DEFAULT 'Star',
+ `expires_at` datetime DEFAULT NULL,
+ `title` varchar(255) DEFAULT NULL,
+ `description` text DEFAULT NULL,
+ `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+ PRIMARY KEY (`id`),
+ UNIQUE KEY `unique_task_title` (`title`)
+) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+tam24_users	CREATE TABLE `tam24_users` (
+ `id` int(11) NOT NULL AUTO_INCREMENT,
+ `username` varchar(50) NOT NULL,
+ `email` varchar(100) DEFAULT NULL,
+ `phone` varchar(20) DEFAULT NULL,
+ `password_hash` varchar(255) DEFAULT NULL,
+ `first_name` varchar(50) DEFAULT NULL,
+ `last_name` varchar(50) DEFAULT NULL,
+ `avatar_url` varchar(255) DEFAULT '/avatars/user_default.png',
+ `bio` text DEFAULT NULL,
+ `social_links` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`social_links`)),
+ `xp_level` int(11) DEFAULT 1,
+ `xp_points` int(11) DEFAULT 0,
+ `trophies` int(11) DEFAULT 0,
+ `current_plan` varchar(50) DEFAULT 'free',
+ `plan_expires_at` timestamp NULL DEFAULT NULL,
+ `role` enum('user','guest','admin','developer') DEFAULT 'user',
+ `status` enum('active','inactive','banned') DEFAULT 'active',
+ `last_login` timestamp NULL DEFAULT NULL,
+ `last_login_ip` varchar(45) DEFAULT NULL,
+ `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+ `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+ `referrer_code_submitted` varchar(255) DEFAULT NULL COMMENT 'Username or ID of the referrer (one-time only)',
+ PRIMARY KEY (`id`),
+ UNIQUE KEY `username` (`username`),
+ UNIQUE KEY `email` (`email`),
+ UNIQUE KEY `phone` (`phone`),
+ KEY `idx_referrer_submitted` (`referrer_code_submitted`)
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+tam24_user_activities	CREATE TABLE `tam24_user_activities` (
+ `id` int(11) NOT NULL AUTO_INCREMENT,
+ `user_id` int(11) NOT NULL,
+ `activity_date` date NOT NULL,
+ `time_spent_seconds` int(11) DEFAULT 0,
+ `questions_answered` int(11) DEFAULT 0,
+ `correct_answers` int(11) DEFAULT 0,
+ `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+ `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+ PRIMARY KEY (`id`),
+ UNIQUE KEY `unique_user_date` (`user_id`,`activity_date`),
+ KEY `idx_user_date` (`user_id`,`activity_date`),
+ KEY `idx_activity_date` (`activity_date`),
+ CONSTRAINT `tam24_user_activities_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `tam24_users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=195 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+tam24_user_answers	CREATE TABLE `tam24_user_answers` (
+ `id` int(11) NOT NULL AUTO_INCREMENT,
+ `user_id` int(11) NOT NULL,
+ `question_id` int(11) NOT NULL,
+ `option_id` int(11) DEFAULT NULL,
+ `status` enum('correct','wrong','unanswered') NOT NULL,
+ `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+ `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+ PRIMARY KEY (`id`),
+ UNIQUE KEY `uniq_user_question` (`user_id`,`question_id`),
+ KEY `idx_user_id` (`user_id`),
+ KEY `idx_question_id` (`question_id`),
+ KEY `idx_option_id` (`option_id`),
+ KEY `idx_user_status` (`user_id`,`status`),
+ CONSTRAINT `fk_tam24_user_answers_option` FOREIGN KEY (`option_id`) REFERENCES `options_tam24` (`id`) ON DELETE SET NULL,
+ CONSTRAINT `fk_tam24_user_answers_question` FOREIGN KEY (`question_id`) REFERENCES `questions_tam24` (`id`) ON DELETE CASCADE,
+ CONSTRAINT `fk_tam24_user_answers_user` FOREIGN KEY (`user_id`) REFERENCES `tam24_users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=551 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+tam24_user_discount_codes	CREATE TABLE `tam24_user_discount_codes` (
+ `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+ `user_id` int(11) NOT NULL,
+ `task_id` int(11) NOT NULL,
+ `discount_code_id` bigint(20) unsigned NOT NULL,
+ `issued_at` datetime NOT NULL DEFAULT current_timestamp(),
+ PRIMARY KEY (`id`),
+ UNIQUE KEY `uq_user_task_code` (`user_id`,`task_id`,`discount_code_id`),
+ KEY `idx_user_id` (`user_id`),
+ KEY `idx_discount_code_id` (`discount_code_id`),
+ KEY `tudc_fk_task` (`task_id`),
+ CONSTRAINT `tudc_fk_discount` FOREIGN KEY (`discount_code_id`) REFERENCES `discount_codes` (`id`) ON DELETE CASCADE,
+ CONSTRAINT `tudc_fk_task` FOREIGN KEY (`task_id`) REFERENCES `tam24_tasks` (`id`) ON DELETE CASCADE,
+ CONSTRAINT `tudc_fk_user` FOREIGN KEY (`user_id`) REFERENCES `tam24_users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+tam24_user_ranks	CREATE TABLE `tam24_user_ranks` (
+ `id` int(11) NOT NULL AUTO_INCREMENT,
+ `user_id` int(11) NOT NULL,
+ `current_rank` varchar(50) DEFAULT 'unranked',
+ `highest_rank` varchar(50) DEFAULT 'unranked',
+ `season_points` int(11) DEFAULT 0,
+ `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+ PRIMARY KEY (`id`),
+ KEY `user_id` (`user_id`),
+ CONSTRAINT `tam24_user_ranks_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `tam24_users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+tam24_user_reward_history	CREATE TABLE `tam24_user_reward_history` (
+ `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+ `user_id` int(11) NOT NULL,
+ `task_id` int(11) NOT NULL,
+ `reward_xp` int(11) NOT NULL DEFAULT 0,
+ `reward_trophy` int(11) NOT NULL DEFAULT 0,
+ `reward_code` varchar(64) DEFAULT NULL,
+ `rewarded_at` datetime NOT NULL DEFAULT current_timestamp(),
+ PRIMARY KEY (`id`),
+ KEY `user_id` (`user_id`),
+ KEY `task_id` (`task_id`),
+ CONSTRAINT `tam24_user_reward_history_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `tam24_users` (`id`),
+ CONSTRAINT `tam24_user_reward_history_ibfk_2` FOREIGN KEY (`task_id`) REFERENCES `tam24_tasks` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+tam24_user_tasks	CREATE TABLE `tam24_user_tasks` (
+ `id` int(11) NOT NULL AUTO_INCREMENT,
+ `user_id` int(11) NOT NULL,
+ `task_id` int(11) NOT NULL,
+ `current_progress` int(11) DEFAULT 0,
+ `completed` tinyint(1) DEFAULT 0,
+ `reward_claimed` tinyint(1) DEFAULT 0,
+ `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+ `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+ PRIMARY KEY (`id`),
+ UNIQUE KEY `unique_user_task` (`user_id`,`task_id`),
+ KEY `idx_user_id` (`user_id`),
+ KEY `idx_task_id` (`task_id`),
+ KEY `idx_completed` (`completed`),
+ KEY `idx_reward_claimed` (`reward_claimed`),
+ CONSTRAINT `tam24_user_tasks_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `tam24_users` (`id`) ON DELETE CASCADE,
+ CONSTRAINT `tam24_user_tasks_ibfk_2` FOREIGN KEY (`task_id`) REFERENCES `tam24_tasks` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+tam24_visitor_counts	CREATE TABLE `tam24_visitor_counts` (
+ `id` int(11) NOT NULL AUTO_INCREMENT,
+ `page_view` varchar(255) NOT NULL,
+ `ip_address` varchar(45) DEFAULT NULL,
+ `user_agent` text DEFAULT NULL,
+ `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+ PRIMARY KEY (`id`),
+ KEY `created_at` (`created_at`)
+) ENGINE=InnoDB AUTO_INCREMENT=3433 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+topics_tam24	CREATE TABLE `topics_tam24` (
+ `id` int(11) NOT NULL AUTO_INCREMENT,
+ `subject_id` int(11) NOT NULL,
+ `title` varchar(150) NOT NULL,
+ PRIMARY KEY (`id`),
+ KEY `fk_topics_subject` (`subject_id`),
+ CONSTRAINT `fk_topics_subject` FOREIGN KEY (`subject_id`) REFERENCES `subjects_tam24` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=65 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+user_tours	CREATE TABLE `user_tours` (
+ `id` int(11) NOT NULL AUTO_INCREMENT,
+ `user_id` int(11) NOT NULL,
+ `tour_key` varchar(100) NOT NULL,
+ `completed_at` timestamp NOT NULL DEFAULT current_timestamp(),
+ PRIMARY KEY (`id`),
+ UNIQUE KEY `idx_user_tour` (`user_id`,`tour_key`)
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
