@@ -1,0 +1,77 @@
+import React, { useState } from 'react';
+import { ArrowRight, Lock, Mail } from 'lucide-react';
+
+interface AuthViewProps {
+    onLogin: () => void;
+}
+
+const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        // Simulate authentication
+        if (email && password) {
+            onLogin();
+        }
+    };
+
+    return (
+        <div className="min-h-screen flex items-center justify-center bg-[#f9fafb] dark:bg-[#1c1c1e] p-6">
+            <div className="w-full max-w-md p-8 bg-[#f5f5f7] dark:bg-[#202123] rounded-3xl border border-[#e5e7eb]/60 dark:border-[#2d3748]/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.1)]">
+                <div className="mb-10 text-center">
+                    <div className="w-12 h-12 bg-[#1c1c1e] dark:bg-[#f5f5f7] rounded-full mx-auto flex items-center justify-center mb-4">
+                        <Lock className="text-[#f5f5f7] dark:text-[#1c1c1e]" size={20} />
+                    </div>
+                    <h1 className="text-2xl font-semibold text-[#1c1c1e] dark:text-[#f5f5f7] tracking-tight">
+                        Welcome Back
+                    </h1>
+                    <p className="text-sm text-[#86868b] mt-2">Sign in to your admin workspace</p>
+                </div>
+
+                <form onSubmit={handleSubmit} className="space-y-5">
+                    <div className="space-y-1.5">
+                        <label className="text-sm font-medium text-[#1c1c1e] dark:text-[#f5f5f7] ml-1">Email</label>
+                        <div className="relative">
+                            <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#86868b]" size={18} />
+                            <input
+                                type="email"
+                                required
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                className="w-full bg-transparent border border-[#e5e7eb] dark:border-[#3f3f46] rounded-xl pl-10 pr-4 py-3 text-sm text-[#1c1c1e] dark:text-[#f5f5f7] focus:outline-none focus:ring-1 focus:ring-[#86868b] transition-all"
+                                placeholder="admin@example.com"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                        <label className="text-sm font-medium text-[#1c1c1e] dark:text-[#f5f5f7] ml-1">Password</label>
+                        <div className="relative">
+                            <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#86868b]" size={18} />
+                            <input
+                                type="password"
+                                required
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                className="w-full bg-transparent border border-[#e5e7eb] dark:border-[#3f3f46] rounded-xl pl-10 pr-4 py-3 text-sm text-[#1c1c1e] dark:text-[#f5f5f7] focus:outline-none focus:ring-1 focus:ring-[#86868b] transition-all"
+                                placeholder="••••••••"
+                            />
+                        </div>
+                    </div>
+
+                    <button
+                        type="submit"
+                        className="w-full mt-8 bg-[#1c1c1e] hover:bg-[#2d3748] dark:bg-[#f5f5f7] dark:hover:bg-[#e5e7eb] text-[#f5f5f7] dark:text-[#1c1c1e] font-medium py-3 rounded-xl flex items-center justify-center gap-2 transition-colors group"
+                    >
+                        Sign In
+                        <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+                    </button>
+                </form>
+            </div>
+        </div>
+    );
+};
+
+export default AuthView;
