@@ -1,0 +1,319 @@
+﻿{
+    "id": "BXQEVjpJPA5r",
+    "quizId": "rgZXA0kVPl3K",
+    "userId": 1,
+    "correctCount": 1,
+    "incorrectCount": 6,
+    "unansweredCount": 0,
+    "accuracyRate": "14.29",
+    "score": 0,
+    "total_time_spent": 49573,
+    "summary": {
+        "total_questions": 7,
+        "correct_count": 1,
+        "incorrect_count": 6,
+        "unanswered_count": 0,
+        "accuracy_rate": 14.29,
+        "score": 0,
+        "mabhas_stats": {
+            "هندسه تحليلي يازدهم": {
+                "correct": 1,
+                "incorrect": 3,
+                "unanswered": 0,
+                "total": 4
+            },
+            "حد و پيوستگي يازدهم": {
+                "correct": 0,
+                "incorrect": 3,
+                "unanswered": 0,
+                "total": 3
+            }
+        }
+    },
+    "resultData": {
+        "evaluation": {
+            "3705": {
+                "correct_option_id": 17709,
+                "descriptive_answer": {
+                    "text": "نکته: برای محاسبه حد توابع کسری در حالتی که حد صورت و مخرج برابر صفر است، ابتدا عامل صفرکننده را از صورت و مخرج حذف می‌کنیم، سپس حاصل حد را بدست می‌آوریم.\r\n\r\nبا استفاده از نکته بالا داریم:\r\n\r\n\r\n\r\n$lim_{x \\to-3}\\frac{x^2+x-6}{x^3-9x}=\\frac{0}{0}$→ رفع ابهام\r\n\r\n\r\n\r\n$lim_{x \\to-3}\\frac{(x+3)(x-2)}{x(x+3)(x-3)}=lim_{x \\to-3}\\frac{x-2}{x(x-3)}=-\\frac{5}{18}$"
+                },
+                "status": "wrong",
+                "level": "آسان",
+                "mabhas": "حد و پيوستگي يازدهم",
+                "selected_option_id": 17710,
+                "is_answered": true,
+                "question_text": "حاصل حد تابع $f(x)=\\frac{x^2 + x - 6}{x^3 - 9x}$ در نقطه $x = -3$ کدام است؟",
+                "options": [
+                    {
+                        "id": 17708,
+                        "text": "$\\frac{5}{18}$"
+                    },
+                    {
+                        "id": 17709,
+                        "text": "-$\\frac{5}{18}$"
+                    },
+                    {
+                        "id": 17710,
+                        "text": "$\\frac{5}{6}$"
+                    },
+                    {
+                        "id": 17711,
+                        "text": "-$\\frac{5}{6}$"
+                    }
+                ],
+                "time_spent_ms": 696
+            },
+            "3706": {
+                "correct_option_id": 17707,
+                "descriptive_answer": {
+                    "text": "نکته: در تابع گویا $f(x)=\\frac{P(x)}{Q(x)}$ اگر $lim_{x \\to a} f(x)=lim_{x \\to a} Q(x)=0$ ، برای محاسبه $lim_{x \\to a} f(x)$ چون $P(x)$ و $Q(x)$ هر دو بر $x-a$ بخش‌پذیرند، با تجزیه آن‌ها عامل $x-a$ را از صورت و مخرج حذف می‌کنیم. در این صورت اگر حاصل حد f در نقطه a برابر عدد L باشد، نقطه‌ای با مختصات $(a,L)$ در نمودار f نقطه توخالی است.\r\n\r\n\r\n\r\nدر تابع $f(x)$ چون $x=-2$ ریشه مخرج است و نمودار تابع f در این نقطه توخالی است، پس $x=-2$ ریشه صورت نیز هست و b حاصل حد $f$ در $x=-2$ است.\r\n\r\n\r\n\r\n$f(x)=\\frac{x^2+mx+6}{x+2}$ : $x^2+mx+6=0$ → $x=-2$\r\n\r\n\r\n\r\n⇒ $4-2m+6=0$ ⇒ $m=5$\r\n\r\n\r\n\r\n$lim_{x \\to-2}f(x)=lim_{x \\to-2}\\frac{x^2+5x+6}{x+2}$\r\n\r\n\r\n\r\n$=lim_{x \\to-2}\\frac{(x+2)(x+3)}{x+2}=lim_{x \\to-2}(x+3)=1$ ⇒ $b=1$\r\n\r\n\r\n\r\nبنابراین:\r\n\r\n\r\n\r\n$m-b=5-1=4$"
+                },
+                "status": "wrong",
+                "level": "متوسط",
+                "mabhas": "حد و پيوستگي يازدهم",
+                "selected_option_id": 17705,
+                "is_answered": true,
+                "question_text": "نمودار تابع $f(x)=\\frac{x^2 + mx + 6}{x+2}$ به‌صورت روبه‌رو است. مقدار $m-b$ کدام است؟",
+                "options": [
+                    {
+                        "id": 17704,
+                        "text": "صفر"
+                    },
+                    {
+                        "id": 17705,
+                        "text": "۲"
+                    },
+                    {
+                        "id": 17706,
+                        "text": "۳"
+                    },
+                    {
+                        "id": 17707,
+                        "text": "۴"
+                    }
+                ],
+                "time_spent_ms": 2015
+            },
+            "3707": {
+                "correct_option_id": 17703,
+                "descriptive_answer": {
+                    "text": "نکته: اگر $lim_{x \\to a} f(x)=L$ و $lim_{x \\to a} g(x)=m$ ، آنگاه:\r\n\r\n\r\n\r\n$lim_{x \\to a} (f(x)±g(x))=lim_{x \\to a} f(x)±lim_{x \\to a} g(x)=L±m$\r\n\r\n\r\n\r\nنکته: اگر $lim_{x \\to a} f(x)=L$ و $lim_{x \\to a} g(x)=m$ ، آنگاه:\r\n\r\n\r\n\r\n$lim_{x \\to a} (f(x)×g(x))=lim_{x \\to a} f(x)×lim_{x \\to a} g(x)=L×m$\r\n\r\n\r\n\r\nنکته: اگر c یک عدد ثابت و $lim_{x \\to a} f(x)=L$ ، آنگاه:\r\n\r\n\r\n\r\n$lim_{x \\to a} (cf(x))=c lim_{x \\to a} f(x)=cL$\r\n\r\n\r\n\r\nنکته: اگر $lim_{x \\to a} f(x)=L$ و $lim_{x \\to a} g(x)=m$ که $m≠0$ ، آنگاه:\r\n\r\n\r\n\r\n$lim_{x \\to a} \\frac{f(x)}{g(x)}=\\frac{lim_{x \\to a} f(x)}{lim_{x \\to a} g(x)}=\\frac{L}{m}$\r\n\r\n\r\n\r\nنکته: در حالت کلی اگر $lim_{x \\to a} f(x)=L$ و $n∈N$ ، آنگاه:\r\n\r\n\r\n\r\n$lim_{x \\to a} (f(x))^n=(lim_{x \\to a} f(x))^n=L^n$\r\n\r\n\r\n\r\nمطابق قضایای حد داریم:\r\n\r\n\r\n\r\n$lim_{x \\to5}\\frac{(f(x))^2-2f(x)-x}{f(x)+x+3}=2$ ⇒ $\\frac{L^2-2L-5}{L+5+3}=2$ ⇒ $L^2-2L-5=2L+16$\r\n\r\n\r\n\r\n⇒ $L^2-4L-21=0$ ⇒ $(L-7)(L+3)=0$ ⇒ $L=7$ یا $L=-3$\r\n\r\n\r\n\r\nبا توجه به مثبت بودن L (طبق فرض سؤال)، مقدار $L=7$ قابل قبول است."
+                },
+                "status": "wrong",
+                "level": "متوسط",
+                "mabhas": "حد و پيوستگي يازدهم",
+                "selected_option_id": 17701,
+                "is_answered": true,
+                "question_text": "اگر حد تابع $f$ در نقطه‌ای به طول ۵، برابر عدد حقیقی مثبت $L$ باشد و داشته باشیم $2=\\lim_{x \\to 5} \\frac{(f(x))^2 - 2 f(x) - x}{f(x)+x+3}$ مقدار $L$ کدام است؟",
+                "options": [
+                    {
+                        "id": 17700,
+                        "text": "8"
+                    },
+                    {
+                        "id": 17701,
+                        "text": "۵"
+                    },
+                    {
+                        "id": 17702,
+                        "text": "۳"
+                    },
+                    {
+                        "id": 17703,
+                        "text": "۷"
+                    }
+                ],
+                "time_spent_ms": 0
+            },
+            "3937": {
+                "correct_option_id": 18936,
+                "descriptive_answer": {
+                    "text": "$AC = √(5-2)^2 + (1-4)^2 = 3√2 , BC = √(5-1)^2 + (1-1)^2 = 4$\r\n\r\n$m_BC = 1-1 / 5-1 = 0$\r\n\r\n$⇒ C^ = 45°$\r\n\r\n$m_AC = 4-1 / 5-2 = 1$\r\n\r\n\r\n\r\n$S_ΔABC = 1/2 AC.BC.sin α = 1/2 × 4 × 3√2 × sin 45° = 6√2 × √2/2 = 6$"
+                },
+                "status": "wrong",
+                "level": "متوسط",
+                "mabhas": "هندسه تحليلي يازدهم",
+                "selected_option_id": 18937,
+                "is_answered": true,
+                "question_text": "نقاط $A(2,4)$ و $B(1,1)$ و $C(5,1)$ سه رأس مثلث $ABC$ هستند. مساحت این مثلث کدام است؟",
+                "options": [
+                    {
+                        "id": 18936,
+                        "text": "6"
+                    },
+                    {
+                        "id": 18937,
+                        "text": "8"
+                    },
+                    {
+                        "id": 18938,
+                        "text": "6"
+                    },
+                    {
+                        "id": 18939,
+                        "text": "4"
+                    }
+                ],
+                "time_spent_ms": 12010
+            },
+            "3938": {
+                "correct_option_id": 18786,
+                "descriptive_answer": {
+                    "text": "دو خط معادله خط را به ۳ قسمت مساوی تقسیم می‌کند.\r\n\r\nبراساس نتیجه تمرین 8 صفحه 9 کتاب ریاضی داریم:\r\n\r\n$d=\\frac{|C-C'|}{\\sqrt{a^2+b^2}}=\\frac{|47-8|}{\\sqrt{5^2+(-12)^2}}=3 \\Rightarrow S_D=d^2=9$\r\n\r\n$AB=2R=\\sqrt{(6-(-1))^2+(4-(-2))^2}=\\sqrt{8^2+6^2}=10$\r\n\r\n$R=5 \\Rightarrow S_0=\\pi R^2=3(5)^2=75 $\r\n\r\n$S=75-9=66$"
+                },
+                "status": "correct",
+                "level": "متوسط",
+                "mabhas": "هندسه تحليلي يازدهم",
+                "selected_option_id": 18786,
+                "is_answered": true,
+                "question_text": "مساحت مربعی که اضلاع آن بر دو خط‌ $$5x-12y+8=0 و $$-10x-24y=94  منطبق است، چقدر با مساحت دایره ای که دو انتهای یکی از قطر هایش $A(-2,-2)$ و $B(6,4)$ است، تفاوت دارد (PI=3)؟",
+                "options": [
+                    {
+                        "id": 18784,
+                        "text": "$56$"
+                    },
+                    {
+                        "id": 18785,
+                        "text": "$76$"
+                    },
+                    {
+                        "id": 18786,
+                        "text": "$66$"
+                    },
+                    {
+                        "id": 18787,
+                        "text": "$46$"
+                    }
+                ],
+                "time_spent_ms": 8604
+            },
+            "3943": {
+                "correct_option_id": 18765,
+                "descriptive_answer": {
+                    "text": "با فرض انکه طول ضلع مربع به اندازه $a$ باشد آنگاه $A(x,3x)$ ، $B(x+a,3x)$ ، $C(x+a,0)$ ، $D(x,0)$\r\n\r\n$OA=\\sqrt{x^2+(3x)^2}=x\\sqrt{10}$\r\n\r\n$OB=10\\Rightarrow \\sqrt{(x+a)^2+(3x)^2}=10 \\Rightarrow x^2+a^2+2ax+9x^2=100 \\ \\ (1)$\r\n\r\n$OAD$ رابطه فیثاغورث داریم:\r\n\r\n$x^2+a^2=(x\\sqrt{10})^2 \\Rightarrow a^2=9x^2 \\Rightarrow a=3x \\ \\ (2)$\r\n\r\nاز 1 $,2 $:\r\n\r\n$a^2/9+a^2+2a(\\frac{a}{3})+a^2=100 \\Rightarrow \\frac{25}{9}a^2=100$\r\n\r\n$a^2=36 \\Rightarrow S_\\square=a^2=36$ مساحت مربع"
+                },
+                "status": "wrong",
+                "level": "متوسط",
+                "mabhas": "هندسه تحليلي يازدهم",
+                "selected_option_id": 18764,
+                "is_answered": true,
+                "question_text": "در شکل زیر فاصله‌ی رأس $B$ در مربع $ABCD$ تا مبدأ مختصات $10$ است. مساحت مربع کدام است؟",
+                "options": [
+                    {
+                        "id": 18764,
+                        "text": "$42$"
+                    },
+                    {
+                        "id": 18765,
+                        "text": "$36$"
+                    },
+                    {
+                        "id": 18766,
+                        "text": "$21$"
+                    },
+                    {
+                        "id": 18767,
+                        "text": "$72$"
+                    }
+                ],
+                "time_spent_ms": 8007
+            },
+            "3947": {
+                "correct_option_id": 18747,
+                "descriptive_answer": {
+                    "text": "با توجه به شکل زیر خط با شیب مثبت $y=3\\sqrt{x}+a$ است که با توجه به اینکه از مبدا مختصات می‌گذرد $a=0$ است.\r\n\r\nخط با شیب منفی نیز $y=-3\\sqrt{x}+b$ است.\r\n\r\n\r\n\r\n<desc>\r\n\r\nچون شیب این دو خط قرینه یکدیگر است، زاویه این دو خط با جهت مثبت محور x ها مکمل هم هستند. به عبارتی در مثلث OAB زاویه های ˆO و ˆB برابر اند و این مثلث، متساوی الساقین است. (OA = AB) . می دانیم که در هر مثلث متساوی الساقین، مجموع فواصل هر نقطه روی قاعده از دو ساق، برابر با ارتفاع نظیر ساق است، پس در اینجا ارتفاع نظیر ساق برابر با  2+3 = 5 .\r\n\r\nحالا اگر این نقطه O(0,0) را روی خط $y+\\sqrt{3}x-b=0$ قرار دهیم:\r\n\r\n$\\frac{|0+0-b|}{\\sqrt{1+3}}=5 \\Rightarrow |b|=10 \\Rightarrow b=\\pm10$\r\n\r\nبا توجه به شکل، عرض از مبدا این خط مثبت است پس $b=10$ قابل قبول است.\r\n\r\n$a+b=0+10=10$"
+                },
+                "status": "wrong",
+                "level": "سخت",
+                "mabhas": "هندسه تحليلي يازدهم",
+                "selected_option_id": 18745,
+                "is_answered": true,
+                "question_text": "دو خط به معادلات‌ $y=\\sqrt{3}x+a$ و $y+\\sqrt{3}x=b$ مطابق شکل زیر متقاطعند. اگر فاصله‌ی نقطه $M$ به طول یک واقع بر محور Xها، از این دو خط به ترتیب برابربا $2$ واحد و $3$ واحد باشد، $a+b$ کدام است؟",
+                "options": [
+                    {
+                        "id": 18744,
+                        "text": "$5$"
+                    },
+                    {
+                        "id": 18745,
+                        "text": "$-5$"
+                    },
+                    {
+                        "id": 18746,
+                        "text": "$-10$"
+                    },
+                    {
+                        "id": 18747,
+                        "text": "$10$"
+                    }
+                ],
+                "time_spent_ms": 2005
+            }
+        },
+        "submission": {
+            "submittedAnswers": {
+                "3705": 17710,
+                "3706": 17705,
+                "3707": 17701,
+                "3937": 18937,
+                "3938": 18786,
+                "3943": 18764,
+                "3947": 18745
+            },
+            "totalTimeSpent": 49573,
+            "questionTimes": {
+                "3705": 696,
+                "3706": 2015,
+                "3937": 12010,
+                "3938": 8604,
+                "3943": 8007,
+                "3947": 2005
+            },
+            "selectionLog": [
+                {
+                    "questionId": 3947,
+                    "optionId": 18745,
+                    "timeSpentMs": 2005,
+                    "timestamp": 1780419591448
+                },
+                {
+                    "questionId": 3937,
+                    "optionId": 18937,
+                    "timeSpentMs": 12010,
+                    "timestamp": 1780419605496
+                },
+                {
+                    "questionId": 3707,
+                    "optionId": 17701,
+                    "timeSpentMs": 0,
+                    "timestamp": 1780419607656
+                },
+                {
+                    "questionId": 3943,
+                    "optionId": 18764,
+                    "timeSpentMs": 8007,
+                    "timestamp": 1780419616757
+                },
+                {
+                    "questionId": 3706,
+                    "optionId": 17705,
+                    "timeSpentMs": 2015,
+                    "timestamp": 1780419619551
+                },
+                {
+                    "questionId": 3705,
+                    "optionId": 17710,
+                    "timeSpentMs": 696,
+                    "timestamp": 1780419622466
+                },
+                {
+                    "questionId": 3938,
+                    "optionId": 18786,
+                    "timeSpentMs": 6012,
+                    "timestamp": 1780419629537
+                }
+            ],
+            "lobbyCode": "zxlLezraPZ"
+        }
+    }
+}
