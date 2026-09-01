@@ -1,0 +1,162 @@
+import { motion } from 'framer-motion';
+import { Home, BookOpen, User, Moon, Sun, LogOut, ClipboardCheck, ChevronRight, ChevronLeft } from 'lucide-react';
+import type { View } from '../types';
+
+type SideNavProps = {
+    activeView: View;
+    onNavigate: (view: View) => void;
+    theme: 'dark' | 'light';
+    onToggleTheme: () => void;
+    isCollapsed: boolean;
+    onToggleCollapse: () => void;
+};
+
+export const SideNav = ({ activeView, onNavigate, theme, onToggleTheme, isCollapsed, onToggleCollapse }: SideNavProps) => {
+    const navItems: { id: View; label: string; icon: React.ElementType }[] = [
+        { id: 'dashboard', label: 'داشبورد', icon: Home },
+        { id: 'practice', label: 'تمرین', icon: BookOpen },
+        { id: 'tests', label: 'دنیای آزمون', icon: ClipboardCheck },
+        { id: 'profile', label: 'پروفایل کاربری', icon: User },
+    ];
+
+    const darkLogoFilter = theme === 'dark' ? 'invert(1) hue-rotate(180deg) brightness(1.2)' : 'none';
+
+    return (
+        <aside
+            className={`hidden md:flex flex-col h-[100dvh] fixed right-0 top-0 bg-[var(--bg-card)] border-l border-[var(--border)] z-40 transition-all duration-300 ease-in-out ${
+                isCollapsed ? 'w-20' : 'w-64'
+            }`}
+        >
+            {/* Header: Logo (Right) & Button (Left) */}
+            <div className={`h-20 flex items-center border-b border-[var(--border)] shrink-0 transition-all duration-300 ${
+                isCollapsed ? 'justify-center px-0' : 'justify-between px-4'
+            }`}>
+
+                {/* Logo Area */}
+                {!isCollapsed && (
+                    <img
+                        src="https://tam24.ir/public/images/new_logo.png"
+                        alt="Logo"
+                        className="h-10 w-auto object-contain transition-all duration-300"
+                        style={{ filter: darkLogoFilter }}
+                    />
+                )}
+
+                {/* Toggle Button */}
+                <button
+                    onClick={onToggleCollapse}
+                    className={`flex items-center justify-center rounded-xl bg-[var(--hover-overlay)] hover:bg-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors shrink-0 ${
+                        isCollapsed ? 'w-12 h-12' : 'w-8 h-8'
+                    }`}
+                    title={isCollapsed ? 'باز کردن منو' : 'بستن منو'}
+                >
+                    {/* در چیدمان راست‌چین (RTL)، فلش راست برای بستن و فلش چپ برای باز کردن استفاده می‌شود */}
+                    {isCollapsed ? <ChevronLeft className="w-7 h-7" /> : <ChevronRight className="w-7 h-7" />}
+                </button>
+            </div>
+
+            {/* Navigation Links */}
+            <nav className="flex-1 py-8 px-3 flex flex-col gap-2 overflow-y-auto overflow-x-hidden custom-scrollbar">
+                {navItems.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = activeView === item.id;
+
+                    return (
+                        <button
+                            key={item.id}
+                            onClick={() => onNavigate(item.id)}
+                            title={isCollapsed ? item.label : undefined}
+                            className={`flex items-center rounded-xl font-medium transition-all duration-200 group relative overflow-hidden ${
+                                isCollapsed ? 'justify-center p-3.5' : 'px-4 py-3.5 gap-3'
+                            } ${
+                                isActive
+                                    ? 'text-[var(--text-primary)]'
+                                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--hover-overlay)]'
+                            }`}
+                        >
+                            {isActive && (
+                                <motion.div
+                                    layoutId="sidenav-active-bg"
+                                    className="absolute inset-0 bg-gradient-to-r from-[var(--color-primary-500)]/10 to-transparent border-r-4 border-[var(--color-primary-500)] z-0"
+                                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                                />
+                            )}
+                            <Icon className={`w-5 h-5 shrink-0 z-10 transition-colors ${isActive ? 'text-[var(--color-primary-500)]' : ''}`} />
+
+                            <span className={`z-10 whitespace-nowrap text-right overflow-hidden transition-all duration-300 ease-in-out ${
+                                isCollapsed ? 'max-w-0 opacity-0' : 'max-w-[200px] opacity-100'
+                            }`}>
+                                {item.label}
+                            </span>
+                        </button>
+                    );
+                })}
+            </nav>
+
+            {/* Bottom Actions */}
+            <div className={`p-4 border-t border-[var(--border)] flex flex-col gap-3 shrink-0 ${isCollapsed ? 'items-center px-2' : ''}`}>
+
+                {isCollapsed ? (
+                    <button
+                        onClick={onToggleTheme}
+                        className="p-2 rounded-xl text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--hover-overlay)] transition-colors"
+                        title={theme === 'dark' ? 'تغییر به تم روشن' : 'تغییر به تم تاریک'}
+                    >
+                        {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+                    </button>
+                ) : (
+                    <div className="flex items-center justify-between px-2 py-1">
+                        <span className="text-sm font-medium text-[var(--text-muted)]">تم سیستم</span>
+                        <button
+                            onClick={onToggleTheme}
+                            dir="ltr"
+                            className="relative flex items-center justify-between w-14 h-7 bg-[var(--hover-overlay)] hover:bg-[var(--border)] rounded-full p-1 cursor-pointer transition-colors"
+                        >
+                            <div className={`absolute left-1 top-1/2 -translate-y-1/2 w-5 h-5 bg-[var(--text-primary)] rounded-full transition-transform duration-300 shadow-md ${
+                                theme === 'dark' ? 'translate-x-0' : 'translate-x-7'
+                            }`}></div>
+                            <Moon className={`relative z-10 w-3.5 h-3.5 transition-colors duration-300 ${theme === 'dark' ? 'text-[var(--bg-primary)]' : 'text-[var(--text-muted)]'}`} />
+                            <Sun className={`relative z-10 w-3.5 h-3.5 transition-colors duration-300 ${theme === 'dark' ? 'text-[var(--text-muted)]' : 'text-[var(--bg-primary)]'}`} />
+                        </button>
+                    </div>
+                )}
+
+                {isCollapsed ? (
+                    <div className="flex flex-col items-center gap-3 mt-1">
+                        <div className="relative shrink-0">
+                            <img
+                                src="https://i.pravatar.cc/150?u=react_dev"
+                                alt="User Avatar"
+                                className="w-10 h-10 rounded-full object-cover border border-[var(--border)]"
+                            />
+                            <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-[var(--bg-primary)] rounded-full"></span>
+                        </div>
+                        <button className="p-2 rounded-xl text-[var(--text-muted)] hover:text-red-500 hover:bg-red-500/10 transition-colors" title="خروج از حساب">
+                            <LogOut className="w-5 h-5" />
+                        </button>
+                    </div>
+                ) : (
+                    <div className="flex items-center justify-between p-2 rounded-2xl hover:bg-[var(--hover-overlay)] transition-colors group cursor-pointer">
+                        <div className="flex items-center gap-3 overflow-hidden">
+                            <div className="relative shrink-0">
+                                <img
+                                    src="https://i.pravatar.cc/150?u=react_dev"
+                                    alt="User Avatar"
+                                    className="w-10 h-10 rounded-full object-cover border border-[var(--border)]"
+                                />
+                                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-[var(--bg-primary)] group-hover:border-[var(--hover-overlay)] transition-colors rounded-full"></span>
+                            </div>
+                            <div className="flex flex-col truncate">
+                                <span className="text-sm font-semibold text-[var(--text-primary)] truncate">نام شما</span>
+                                <span className="text-xs text-[var(--text-muted)] truncate">user@domain.com</span>
+                            </div>
+                        </div>
+                        <button className="p-2 shrink-0 rounded-xl text-[var(--text-muted)] hover:text-red-500 hover:bg-red-500/10 transition-colors" title="خروج از حساب">
+                            <LogOut className="w-5 h-5" />
+                        </button>
+                    </div>
+                )}
+            </div>
+        </aside>
+    );
+};
