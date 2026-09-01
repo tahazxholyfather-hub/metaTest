@@ -1,0 +1,873 @@
+﻿// src/views/DashboardView.tsx
+
+import React, { useState, useEffect } from 'react';
+import {
+    Award, Target, BarChart3, UserPlus, Zap, Shield, Clock,
+    Users, Check, ArrowUpRight, Activity, BookOpen, Star,
+    Layers, PieChart, Send, Inbox, LineChart, HelpCircle, Construction,
+    Flame, X, ChevronRight, ChevronLeft, Trophy, TrendingUp, ClipboardCheck,
+    User, Info, Lock, KeyRound, History, Copy
+} from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+    AreaChart, Area, XAxis, Tooltip, ResponsiveContainer,
+    Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
+} from 'recharts';
+import { useUser } from '../context/UserContext';
+import { ResponsiveModal } from '../components/ResponsiveModal';
+import { flowApi } from '../lib/authApi';
+import { useTour, type TourStep } from '../context/TourContext';
+
+// ─── Module-level cache ───────────────────────────────────────────────────────
+let isDashboardLoaded = false;
+let cachedDashboardData: any = null;
+
+const IconMap: Record<string, any> = { UserPlus, Users, Shield, Zap, Award, Star };
+const smoothTween = { duration: 0.4, ease: [0.25, 0.1, 0.25, 1] };
+const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: { opacity: 1, transition: { staggerChildren: 0.08, delayChildren: 0.05 } }
+};
+const itemVariants = {
+    hidden: { opacity: 0, y: 15 },
+    visible: { opacity: 1, y: 0, transition: smoothTween }
+};
+
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
+const Shimmer = ({ className }: { className: string }) => (
+    <div className={`relative overflow-hidden bg-[var(--bg-card)] border border-[var(--border)] before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_1.5s_infinite] before:bg-gradient-to-r before:from-transparent before:via-[var(--text-muted)]/10 before:to-transparent ${className}`} />
+);
+const DashboardSkeleton = () => (
+    <div className="flex-1 flex flex-col h-full overflow-hidden bg-[var(--bg-app)]">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-5 space-y-4 md:space-y-5 pb-20 md:pb-8 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+                {[1,2,3,4].map(i => <Shimmer key={`stat-skel-${i}`} className="h-16 sm:h-[68px] rounded-xl" />)}
+            </div>
+            <div className="grid grid-cols-5 gap-1.5 sm:gap-3 py-1">
+                {[1,2,3,4,5].map(i => <Shimmer key={`short-skel-${i}`} className="h-16 sm:h-[72px] rounded-[14px] sm:rounded-xl" />)}
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-4">
+                <Shimmer className="lg:col-span-2 h-[220px] rounded-xl" />
+                <Shimmer className="h-[220px] rounded-xl" />
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-4">
+                <Shimmer className="lg:col-span-2 h-[260px] rounded-xl" />
+                <Shimmer className="h-[260px] rounded-xl" />
+            </div>
+        </div>
+    </div>
+);
+
+// ─── Empty State ──────────────────────────────────────────────────────────────
+const EmptyState = ({ icon: Icon, title, description }: { icon: any, title: string, description?: string }) => (
+    <div className="flex flex-col items-center justify-center w-full h-full min-h-[160px] bg-[var(--bg-element)]/50 rounded-xl border border-dashed border-[var(--border)] p-4 text-center">
+        <div className="w-12 h-12 mb-3 rounded-full bg-[var(--bg-card)] shadow-sm flex items-center justify-center text-[var(--text-muted)]">
+            <Icon size={24} strokeWidth={1.5} />
+        </div>
+        <h4 className="text-xs font-bold text-[var(--text-primary)] mb-1">{title}</h4>
+        {description && <p className="text-[10px] text-[var(--text-muted)] max-w-[200px]">{description}</p>}
+    </div>
+);
+
+// ─── Stat Card ────────────────────────────────────────────────────────────────
+const ColorfulStatCard = ({ icon: Icon, label, value, colorClass, bgClass, wrapperClass = "" }: any) => (
+    <div className={`${wrapperClass} bg-[var(--bg-card)] p-3 rounded-xl border border-[var(--border)] flex items-center gap-3 transition-colors hover:border-[var(--text-muted)] duration-500 cursor-pointer`}>
+        <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${bgClass} ${colorClass}`}>
+            <Icon size={20} strokeWidth={2} />
+        </div>
+        <div>
+            <p className="text-[10px] sm:text-xs font-medium text-[var(--text-muted)] mb-0.5">{label}</p>
+            <h3 className="text-base sm:text-lg font-bold text-[var(--text-primary)]">{value}</h3>
+        </div>
+    </div>
+);
+
+// ─── Shortcut Button ──────────────────────────────────────────────────────────
+const ShortcutBtn = ({ icon: Icon, label, onClick }: any) => (
+    <motion.button
+        whileTap={{ scale: 0.95 }}
+        onClick={onClick}
+        className="group relative flex flex-col sm:flex-row items-center sm:justify-start gap-1.5 sm:gap-4 h-full p-1 sm:p-3 sm:pl-4 sm:pr-5 rounded-2xl sm:bg-[var(--bg-card)] sm:border border-transparent sm:border-[var(--border)] sm:hover:border-[var(--accent)]/50 sm:hover:bg-[var(--bg-elevated)] transition-all duration-300 outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] overflow-hidden"
+    >
+        <div className="absolute top-1/2 right-0 -translate-y-1/2 w-1 h-0 group-hover:h-3/4 bg-[var(--accent)] transition-all duration-300 hidden sm:block rounded-l-full opacity-0 group-hover:opacity-100" />
+        <div className="relative flex items-center justify-center shrink-0 w-11 h-11 sm:w-10 sm:h-10 rounded-[16px] sm:rounded-xl bg-[var(--bg-card)] sm:bg-[var(--bg-app)] shadow-[var(--shadow-1)] sm:shadow-none border border-[var(--border)] sm:border-transparent group-hover:bg-[var(--accent)] group-hover:border-[var(--accent)] transition-all duration-300 z-10">
+            <Icon className="w-5 h-5 sm:w-[22px] sm:h-[22px] text-[var(--icon-color)] sm:text-[var(--text-secondary)] group-hover:text-[var(--text-inverse)] transition-colors duration-300" strokeWidth={1.5} />
+        </div>
+        <span className="text-[8.5px] sm:text-[13px] whitespace-nowrap font-bold text-[var(--text-muted)] sm:text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors duration-300 text-center sm:text-right z-10">{label}</span>
+    </motion.button>
+);
+
+// ─── Task Ring ────────────────────────────────────────────────────────────────
+const TaskRing = ({ progress, isDone, icon: Icon }: { progress: number, isDone: boolean, icon: any }) => {
+    const radius = 16;
+    const circumference = 2 * Math.PI * radius;
+    const strokeDashoffset = circumference - (progress / 100) * circumference;
+    return (
+        <div className="relative w-10 h-10 flex items-center justify-center shrink-0">
+            <svg className="absolute inset-0 w-full h-full transform -rotate-90">
+                <circle cx="20" cy="20" r={radius} stroke="var(--bg-element)" strokeWidth="3" fill="none" />
+                <motion.circle cx="20" cy="20" r={radius} stroke="var(--color-primary-500)" strokeWidth="3" fill="none" strokeDasharray={circumference} initial={{ strokeDashoffset: circumference }} animate={{ strokeDashoffset: isDone ? 0 : strokeDashoffset }} transition={{ duration: 0.8, ease: "easeOut", delay: 0.2 }} strokeLinecap="round" />
+            </svg>
+            <div className={`relative z-10 transition-colors duration-500 ${isDone ? 'text-[var(--color-primary-500)]' : 'text-[var(--text-secondary)]'}`}>
+                {isDone ? <Check size={16} strokeWidth={3} /> : <Icon size={16} strokeWidth={2} />}
+            </div>
+        </div>
+    );
+};
+
+// ─── Task Item ────────────────────────────────────────────────────────────────
+const TaskItem = ({ task, isTemp, onClaimReward }: { task: any, isTemp: boolean, onClaimReward: (task: any) => void }) => {
+    const progress = Math.min(100, (task.current / task.target) * 100);
+    const isDone = task.current >= task.target;
+    const canClaim = isDone && !task.isCompleted && !task.rewardClaimed;
+    const TaskIcon = IconMap[task.icon] || Star;
+    return (
+        <div
+            onClick={() => { if (canClaim) onClaimReward(task); }}
+            className={`relative overflow-hidden rounded-xl border p-3 transition-all duration-300 group hover:scale-[1.01] ${canClaim ? 'cursor-pointer' : ''} ${isDone ? 'bg-[var(--color-primary-500)]/5 border-[var(--color-primary-500)]/30' : 'bg-[var(--bg-card)] border-[var(--border)] hover:border-[var(--text-muted)]/50'}`}
+        >
+            <div className="flex items-center gap-3">
+                <TaskRing progress={progress} isDone={isDone} icon={TaskIcon} />
+                <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-center mb-1">
+                        <h4 className="text-xs font-semibold text-[var(--text-primary)] truncate pr-2">{task.title}</h4>
+                        <span className="text-[10px] font-bold text-[var(--color-primary-500)] shrink-0 bg-[var(--color-primary-500)]/10 px-1.5 py-0.5 rounded-md">+{task.rewardXp} XP</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-medium text-[var(--text-muted)] shrink-0">{task.current} از {task.target}</span>
+                    </div>
+                    {isTemp && !isDone && task.expiresIn && (
+                        <div className="flex items-center gap-1 text-[9px] text-[var(--text-muted)] mt-1.5">
+                            <Clock size={9} /><span>انقضا: {task.expiresIn}</span>
+                        </div>
+                    )}
+                </div>
+            </div>
+            {canClaim && (
+                <div className="absolute inset-0 bg-[var(--bg-card)]/90 backdrop-blur-sm flex flex-col items-center justify-center transition-all duration-300 z-10 text-center">
+                    <span className="text-xs font-bold text-[var(--color-primary-600)] flex items-center gap-1 animate-pulse">
+                        دریافت پاداش <ArrowUpRight size={14} />
+                    </span>
+                    <span className="text-[9px] text-[var(--text-muted)] mt-0.5">کلیک کنید برای اضافه کردن {task.rewardXp} XP</span>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// ─── Daily Streak Card ────────────────────────────────────────────────────────
+const DailyStreakCard = ({ currentStreak, longestStreak }: { currentStreak: number; longestStreak: number }) => (
+    <motion.div variants={itemVariants} className="dashboard-tour-streak card relative overflow-hidden rounded-2xl p-4 sm:p-5">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,color-mix(in_srgb,var(--accent)_12%,transparent)_0%,transparent_40%)]" />
+        <div className="relative z-10 flex items-start justify-between">
+            <div>
+                <h3 className="mb-1 text-xs font-bold text-[color:var(--text-secondary)]">روز متوالی</h3>
+                <div className="flex items-end gap-2">
+                    <span className="text-4xl font-black leading-none text-[color:var(--text-primary)]">{currentStreak}</span>
+                    <span className="text-sm font-semibold text-[color:var(--text-muted)]">روز</span>
+                </div>
+            </div>
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[color:var(--border)] bg-[color:color-mix(in_srgb,var(--accent)_10%,var(--bg-elevated))] text-[color:var(--accent)]">
+                <Flame size={26} strokeWidth={1.8} />
+            </div>
+        </div>
+        <div className="relative z-10 mt-4 border-t border-[color:var(--border)] pt-3">
+            <div className="flex items-center justify-between text-xs">
+                <span className="text-[color:var(--text-muted)]">بهترین رکورد</span>
+                <span className="inline-flex items-center gap-1 font-bold text-[color:var(--text-primary)]">
+                    <Star size={12} className="text-[color:var(--accent)]" fill="currentColor" />{longestStreak}
+                </span>
+            </div>
+        </div>
+    </motion.div>
+);
+
+// ─── Invited User Row ─────────────────────────────────────────────────────────
+const InvitedUserRow = ({ invite }: { invite: any }) => {
+    const isActive = invite.status === 'active';
+    return (
+        <div className="flex items-center justify-between p-2 rounded-lg border border-[var(--border)] transition-all duration-300 group cursor-pointer hover:bg-[var(--bg-element)] hover:scale-[1.02]">
+            <div className="flex items-center gap-2 min-w-0">
+                <div className="w-7 h-7 rounded-full bg-[var(--bg-element)] flex items-center justify-center shrink-0">
+                    <span className="text-[10px] font-bold text-[var(--text-secondary)]">{invite.name?.charAt(0) || 'U'}</span>
+                </div>
+                <div className="flex flex-col min-w-0">
+                    <span className="text-[11px] font-semibold text-[var(--text-primary)] truncate">{invite.name}</span>
+                    <span className="text-[9px] text-[var(--text-muted)] truncate" dir="ltr">{invite.invited_phone}</span>
+                </div>
+            </div>
+            <div className={`flex items-center gap-1 shrink-0 ${isActive ? 'text-[var(--color-primary-600)]' : 'text-[var(--text-muted)]'}`}>
+                <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-md ${isActive ? 'bg-[var(--color-primary-500)]/10' : 'bg-[var(--bg-element)]'}`}>
+                    {isActive ? 'ثبت شده' : 'در انتظار'}
+                </span>
+                {isActive && (
+                    <span className="w-5 h-5 rounded-full bg-[var(--color-primary-500)]/15 text-[var(--color-primary-500)] flex items-center justify-center">
+                        <Check size={11} strokeWidth={3} />
+                    </span>
+                )}
+            </div>
+        </div>
+    );
+};
+
+// ─── Invites Card ─────────────────────────────────────────────────────────────
+interface InvitesCardProps {
+    invites: { list: any[]; totalInvited: number; activeInvites: number };
+    inviteLink: string;
+    myInviteCode: string;
+    referrerCode: string;
+    referrerName?: string;
+    referrerInput: string;
+    referrerError: string;
+    copied: boolean;
+    onCopy: () => void;
+    onOpenInviteModal: () => void;
+    onReferrerInputChange: (value: string) => void;
+    onSubmitReferrer: () => void;
+    submittingReferrer: boolean;
+}
+
+const InvitesCard = ({
+                         invites,
+                         inviteLink,
+                         myInviteCode,
+                         referrerCode,
+                         referrerName,
+                         referrerInput,
+                         referrerError,
+                         copied,
+                         onCopy,
+                         onOpenInviteModal,
+                         onReferrerInputChange,
+                         onSubmitReferrer,
+                         submittingReferrer,
+                     }: InvitesCardProps) => {
+    const [activeTab, setActiveTab] = useState<'invited' | 'submit'> ('invited');
+    const chessInvite = invites.list && invites.list.length > 0;
+    const hasReferrer = Boolean(referrerCode);
+
+    return (
+        <motion.div variants={itemVariants} className="dashboard-tour-invites bg-[var(--bg-card)] p-4 rounded-xl border border-[var(--border)] min-h-[200px] flex flex-col">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
+                    <Users className="text-[var(--color-primary-500)]" size={16} />دعوت‌ها
+                </h2>
+                <div className="flex gap-4 border-b border-[var(--border)] pb-0 relative">
+                    <button onClick={() => setActiveTab('invited')} className={`relative text-[11px] font-bold pb-2 transition-colors duration-300 flex items-center gap-1.5 ${activeTab === 'invited' ? 'text-[var(--color-primary-500)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}>
+                        دعوت‌شده‌ها
+                        {invites.list?.length > 0 && (
+                            <span className="text-[9px] font-bold bg-[var(--color-primary-500)]/10 text-[var(--color-primary-500)] px-1.5 py-0.5 rounded-md">
+                                {invites.list.length}
+                            </span>
+                        )}
+                        {activeTab === 'invited' && <motion.div layoutId="activeInviteTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--color-primary-500)] rounded-t-full" transition={smoothTween} />}
+                    </button>
+                    <button onClick={() => setActiveTab('submit')} className={`relative text-[11px] font-bold pb-2 transition-colors duration-300 ${activeTab === 'submit' ? 'text-[var(--color-primary-500)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}>
+                        ثبت کد دعوت
+                        {activeTab === 'submit' && <motion.div layoutId="activeInviteTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--color-primary-500)] rounded-t-full" transition={smoothTween} />}
+                    </button>
+                </div>
+            </div>
+
+            <div className="flex-1 flex flex-col relative w-full">
+                <AnimatePresence mode="wait">
+                    {activeTab === 'invited' ? (
+                        <motion.div key="invited" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }} className="flex-1 flex flex-col gap-2.5">
+                            {chessInvite ? (
+                                invites.list.map((invite: any, index: number) => (
+                                    <InvitedUserRow key={invite.id || `invite-${index}`} invite={invite} />
+                                ))
+                            ) : (
+                                <div className="flex-1">
+                                    <EmptyState icon={UserPlus} title="هنوز کسی را دعوت نکرده‌اید" description="دوستان خود را دعوت کنید و امتیاز اضافی بگیرید." />
+                                </div>
+                            )}
+                            <button onClick={onOpenInviteModal} className="mt-1 w-full flex items-center justify-center gap-1.5 py-2.5 rounded-lg border-2 border-dashed border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--color-primary-500)]/5 hover:text-[var(--color-primary-500)] hover:border-[var(--color-primary-500)]/50 transition-all duration-300 font-bold text-[11px] active:scale-95">
+                                <UserPlus size={14} /> ارسال لینک دعوت جدید
+                            </button>
+                        </motion.div>
+                    ) : (
+                        <motion.div key="submit" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }} className="flex-1 flex flex-col gap-3">
+
+                            {/* Your invite code */}
+                            <div>
+                                <div className="flex items-center gap-1.5 mb-1.5">
+                                    <span className="text-[10px] font-bold text-[var(--text-muted)]">کد دعوت شما</span>
+                                    <div className="group relative">
+                                        <Info size={11} className="text-[var(--text-muted)] cursor-help" />
+                                        <div className="pointer-events-none absolute bottom-full right-1/2 translate-x-1/2 mb-1.5 w-44 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border)] p-2 text-[9px] text-[var(--text-muted)] opacity-0 group-hover:opacity-100 transition-opacity duration-200 shadow-lg z-20 text-center">
+                                            این کد مخصوص شماست. آن را با دوستان خود به اشتراک بگذارید تا با ثبت‌نامشان امتیاز بگیرید.
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="flex items-center justify-between gap-2 bg-[var(--bg-element)] border border-[var(--border)] rounded-xl px-3 py-2">
+                                    <span className="text-xs font-black tracking-wider text-[var(--color-primary-600)]" dir="ltr">{myInviteCode || '—'}</span>
+                                    <KeyRound size={14} className="text-[var(--color-primary-500)] shrink-0" />
+                                </div>
+                            </div>
+
+                            {/* Share link */}
+                            <div>
+                                <span className="text-[10px] font-bold text-[var(--text-muted)] mb-1.5 block">لینک دعوت</span>
+                                <div className="flex items-center gap-2 bg-[var(--bg-element)] p-1.5 rounded-xl border border-[var(--border)]">
+                                    <div className="flex-1 truncate px-2 text-[10.5px] text-[var(--text-primary)] text-left" dir="ltr">{inviteLink}</div>
+                                    <button onClick={onCopy} className={`p-1.5 rounded-lg transition-all duration-300 flex items-center gap-1.5 text-[10px] font-bold active:scale-95 shrink-0 ${copied ? 'bg-[#22c55e]/15 text-[#22c55e]' : 'bg-[var(--color-primary-500)] text-white hover:bg-[var(--color-primary-600)]'}`}>
+                                        <AnimatePresence mode="wait">
+                                            <motion.span key={copied ? 'copied' : 'copy'} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="flex items-center gap-1.5">
+                                                {copied ? <Check size={13} /> : <Copy size={13} />} {copied ? 'کپی شد' : 'کپی'}
+                                            </motion.span>
+                                        </AnimatePresence>
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Submit referrer code */}
+                            <div className="flex-1 flex flex-col">
+                                <span className="text-[10px] font-bold text-[var(--text-muted)] mb-1.5 block">کد دعوت‌کننده (شماره همراه)</span>
+                                {hasReferrer ? (
+                                    <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-[var(--color-primary-500)]/10 border border-[var(--color-primary-500)]/30">
+                                        <div className="w-8 h-8 rounded-full bg-[var(--bg-card)] flex items-center justify-center shrink-0 text-[var(--color-primary-500)]">
+                                            <User size={13} />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-[11px] font-bold text-[var(--color-primary-600)] truncate">{referrerName || 'معرف شما'}</div>
+                                            <div className="text-[9.5px] font-medium text-[var(--text-muted)] tracking-wide" dir="ltr">{referrerCode}</div>
+                                        </div>
+                                        <Check size={14} className="text-[var(--color-primary-500)] shrink-0" />
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="flex items-stretch gap-2">
+                                            <input
+                                                type="text"
+                                                placeholder="شماره همراه معرف خود را وارد کنید..."
+                                                value={referrerInput}
+                                                onChange={(e) => onReferrerInputChange(e.target.value)}
+                                                disabled={submittingReferrer}
+                                                className="flex-1 px-3 py-2 bg-[var(--bg-element)] border border-[var(--border)] rounded-lg text-[11px] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--color-primary-500)] transition-colors disabled:opacity-60"
+                                            />
+                                            <button
+                                                onClick={onSubmitReferrer}
+                                                disabled={submittingReferrer}
+                                                className="px-3.5 py-2 rounded-lg bg-[var(--color-primary-500)] text-white font-bold text-[11px] hover:bg-[var(--color-primary-600)] transition-colors active:scale-95 disabled:opacity-60 shrink-0"
+                                            >
+                                                {submittingReferrer ? '...' : 'ثبت'}
+                                            </button>
+                                        </div>
+                                        {referrerError && <p className="text-[10px] text-red-500 font-medium mt-1.5">{referrerError}</p>}
+                                    </>
+                                )}
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
+        </motion.div>
+    );
+};
+
+// ════════════════════════════════════════════════════════════════════════════════
+// ██████████████████████   DASHBOARD VIEW   ██████████████████████████████████████
+// ════════════════════════════════════════════════════════════════════════════════
+
+interface DashboardProps {
+    onNavigateToQuizHistory: () => void;
+    onNavigateToNotes?: () => void;
+    onNavigateToFavorites?: () => void;
+    onNavigateToReview?: () => void;
+    onNavigateToReports?: () => void;
+}
+
+export function DashboardView({
+                                  onNavigateToQuizHistory,
+                                  onNavigateToNotes,
+                                  onNavigateToFavorites,
+                                  onNavigateToReview,
+                                  onNavigateToReports,
+                              }: DashboardProps) {
+    const { user } = useUser();
+    const { startTour } = useTour();
+
+    const [stats, setStats] = useState(cachedDashboardData?.stats || { xp: 0, accuracy: "۰٪", rank: "-", practiceTime: "۰ ساعت", trophies: 0 });
+    const [tasks, setTasks] = useState(cachedDashboardData?.tasks || { permanent: [], temporary: [] });
+    const [invites, setInvites] = useState(cachedDashboardData?.invites || { list: [], totalInvited: 0, activeInvites: 0 });
+    const [topicMastery, setTopicMastery] = useState(cachedDashboardData?.topicMastery || []);
+    const [activityData, setActivityData] = useState<any>(cachedDashboardData?.activity || { '7d': [], '1m': [], '1y': [] });
+    const [streak, setStreak] = useState(cachedDashboardData?.streak || { current: 0, longest: 0 });
+
+    const [isLoading, setIsLoading] = useState(!isDashboardLoaded);
+    const [taskTab, setTaskTab] = useState<'permanent' | 'temporary'>('permanent');
+    const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+    const [referrerCode, setReferrerCode] = useState('');
+    const [referrerName, setReferrerName] = useState('');
+    const [referrerInput, setReferrerInput] = useState('');
+    const [referrerError, setReferrerError] = useState('');
+    const [submittingReferrer, setSubmittingReferrer] = useState(false);
+    const [copied, setCopied] = useState(false);
+    const [timeFilter, setTimeFilter] = useState<'7d' | '1m' | '1y'>('7d');
+    const [renderCharts, setRenderCharts] = useState(false);
+    const [claimingReward, setClaimingReward] = useState<number | null>(null);
+    const [rewardModalData, setRewardModalData] = useState<{ isOpen: boolean; xpGained: number; taskTitle: string } | null>(null);
+
+    useEffect(() => {
+        const fetchDashboardData = async () => {
+            try {
+                const res = await flowApi.getDashboardData();
+                if (res.success && res.data) {
+                    cachedDashboardData = res.data;
+                    isDashboardLoaded = true;
+                    setStats(res.data.stats || stats);
+                    setTasks(res.data.tasks || tasks);
+                    setInvites(res.data.invites || invites);
+                    setTopicMastery(res.data.topicMastery || topicMastery);
+                    setActivityData(res.data.activity || activityData);
+                    setStreak(res.data.streak || streak);
+                    setReferrerCode(res.data.referrerCode || '');
+                    setReferrerName(res.data.referrerName || '');
+
+                    if (res.data.shouldShowTour) {
+                        const isMobileViewport = window.innerWidth < 768;
+
+                        // --- 1. Custom Desktop Tour Configuration ---
+                        const desktopSteps: TourStep[] = [
+                            {
+                                selector: '.dashboard-tour-stats',
+                                title: 'خلاصه آمار عملکرد',
+                                description: 'در این بخش می‌توانید رتبه لیگ، امتیاز کل، درصد دقت و ساعت یادگیری خود را مشاهده کنید.'
+                            },
+                            {
+                                selector: '.sidenav-tour-dashboard',
+                                title: 'داشبورد کاربری',
+                                description: 'از این بخش می‌توانید به خانه برگشته و خلاصه‌ای از پیشرفت کاربری خود را رصد کنید.'
+                            },
+                            {
+                                selector: '.sidenav-tour-practice',
+                                title: 'تمرین روزانه',
+                                description: 'با ورود به این بخش می‌توانید تمرینات موضوعی را آغاز کرده و اطلاعات خود را محک بزنید.'
+                            },
+                            {
+                                selector: '.sidenav-tour-tests',
+                                title: 'دنیای آزمون',
+                                description: 'دسترسی سریع به آزمون‌های شبیه‌سازی‌شده و استاندارد برای آمادگی حداکثری.'
+                            },
+                            {
+                                selector: '.sidenav-tour-documents',
+                                title: 'نمونه سوالات آماده',
+                                description: 'بانک جامع سوالات امتحانی به همراه پاسخ تشریحی جهت مطالعه متمرکز.'
+                            },
+                            {
+                                selector: '.sidenav-tour-profile',
+                                title: 'پروفایل کاربری',
+                                description: 'مشاهده اطلاعات کاربری، ارتقای اشتراک، تنظیمات آواتار و گزارش‌های اختصاصی.'
+                            },
+                            {
+                                selector: '.header-tour-badges',
+                                title: 'امتیازات و دارایی‌ها',
+                                description: 'میزان سکه‌ها، دستاوردها و سطح تجربی (XP) شما همواره در بالای صفحه قابل مشاهده است.'
+                            },
+                            {
+                                selector: '.header-tour-bell',
+                                title: 'اعلان‌ها و منو',
+                                description: 'آخرین پیام‌ها و اخبار سیستم را از این بخش دنبال کنید.'
+                            },
+                            {
+                                selector: '.dashboard-tour-shortcuts',
+                                title: 'دسترس سریع',
+                                description: 'با این دکمه‌ها مستقیماً به یادداشت‌ها، علاقه‌مندی‌ها، جعبه لایتنر و تحلیل‌ها بروید.'
+                            },
+                            {
+                                selector: '.dashboard-tour-activity',
+                                title: 'نمودار گزارش فعالیت',
+                                description: 'میزان پیشرفت و استمرار زمانی مطالعه روزانه خود را ارزیابی و مقایسه کنید.'
+                            },
+                            {
+                                selector: '.dashboard-tour-streak',
+                                title: 'روزهای متوالی',
+                                description: 'رکورد روزهای متوالی فعالیت شما در اپلیکیشن. استمرار داشته باشید تا پاداش‌های بهتری بگیرید!'
+                            },
+                            {
+                                selector: '.dashboard-tour-mastery',
+                                title: 'نمودار تحلیل تسلط',
+                                description: 'نقاط قوت و ضعف علمی خود را به صورت راداری در مباحث مختلف بسنجید.'
+                            },
+                            {
+                                selector: '.dashboard-tour-tasks',
+                                title: 'ماموریت‌های یادگیری',
+                                description: 'چالش‌های مختلف را تکمیل کنید تا با دکمه دریافت پاداش، XP فوق‌العاده دریافت نمایید.'
+                            },
+                            {
+                                selector: '.dashboard-tour-invites',
+                                title: 'سیستم دعوت',
+                                description: 'با اشتراک‌گذاری لینک یا کد دعوت خود با دوستانتان، به شکل دوطرفه امتیاز بگیرید.'
+                            }
+                        ];
+
+                        // --- 2. Custom Mobile Tour Configuration ---
+                        const mobileSteps: TourStep[] = [
+                            {
+                                selector: '.dashboard-tour-stats',
+                                title: 'خلاصه آمار عملکرد',
+                                description: 'در این بخش می‌توانید امتیاز کل، رتبه لیگ و ساعت یادگیری خود را روی دستگاه همراهتان مشاهده کنید.'
+                            },
+                            {
+                                selector: '.header-tour-coins-mobile',
+                                title: 'صندوق سکه‌ها',
+                                description: 'سکه‌های ذخیره‌شده شما در طول اجرای فعالیت‌ها و ماموریت‌ها همواره در بالای صفحه نمایش داده می‌شود.'
+                            },
+                            {
+                                selector: '.header-tour-menu-btn',
+                                title: 'منوی دسترسی و تغییر تم',
+                                description: 'از این آیکون برای فعال‌سازی حالت شب، ارتقای اشتراک و مدیریت حساب کاربری خود استفاده کنید.'
+                            },
+                            {
+                                selector: '.nav-home',
+                                title: 'خانه (داشبورد)',
+                                description: 'بازگشت سریع به نمای کلی فعالیت‌ها و ماموریت‌های روزانه.'
+                            },
+                            {
+                                selector: '.nav-practice',
+                                title: 'بخش تمرین',
+                                description: 'آزمون‌های کوتاه و تمرین‌های موضوعی متمایز را از این زبانه کلید بزنید.'
+                            },
+                            {
+                                selector: '.nav-tests',
+                                title: 'دنیای آزمون و رقابت',
+                                description: 'شبیه‌ساز جامع امتحانی و رقابتی برای به چالش کشیدن اندوخته‌های علمی.'
+                            },
+                            {
+                                selector: '.nav-profile',
+                                title: 'تنظیمات پروفایل',
+                                description: 'مدیریت آواتار شخصی، بررسی دقیق پیشرفت تحصیلی و تراکنش‌ها.'
+                            },
+                            {
+                                selector: '.dashboard-tour-shortcuts',
+                                title: 'میانبرهای دسترسی سریع',
+                                description: 'یادداشت‌ها، نشان شده‌ها و جعبه مرور لایتنر تنها با یک کلیک در دسترس شماست.'
+                            },
+                            {
+                                selector: '.dashboard-tour-streak',
+                                title: 'استمرار روزانه',
+                                description: 'حفظ شعله استمرار روزانه با حل چالش‌های روزانه برای کسب ضرایب امتیازی بالاتر.'
+                            },
+                            {
+                                selector: '.dashboard-tour-mastery',
+                                title: 'نمودار تسلط راداری',
+                                description: 'ارزیابی نقاط قوت و بخش‌های نیازمند بهبود با تحلیل خودکار پاسخ‌های قبلی.'
+                            },
+                            {
+                                selector: '.dashboard-tour-tasks',
+                                title: 'ماموریت‌های جاری',
+                                description: 'انجام چالش‌های امتیازی موقت و دائم برای بالا بردن سریع‌تر سطح کاربری.'
+                            },
+                            {
+                                selector: '.dashboard-tour-invites',
+                                title: 'اشتراک‌گذاری با دوستان',
+                                description: 'کد دعوت را کپی و به دوستان خود بفرستید تا هر دو از جوایز ویژه بهره‌مند شوید.'
+                            }
+                        ];
+
+                        setTimeout(() => {
+                            startTour('dashboard', isMobileViewport ? mobileSteps : desktopSteps);
+                        }, 800);
+                    }
+                }
+            } catch (error) {
+                console.error("Failed to load dashboard data", error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchDashboardData();
+    }, [startTour]);
+
+    useEffect(() => {
+        if (!isLoading) {
+            const timer = setTimeout(() => setRenderCharts(true), 350);
+            return () => clearTimeout(timer);
+        }
+    }, [isLoading]);
+
+    const canSeeTempTasks = (user?.xp_level ?? 1) > 1 || (user?.xp_points ?? 0) >= 200;
+    const myPhoneOrUsername = user?.phone || user?.username || '';
+    const inviteLink = `https://metatest.com/invite/${myPhoneOrUsername}`;
+
+    const handleCopy = () => {
+        navigator.clipboard.writeText(inviteLink);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
+    const handleReferrerInputChange = (value: string) => {
+        setReferrerInput(value);
+        if (referrerError) setReferrerError('');
+    };
+
+    const handleSubmitReferrer = async () => {
+        if (!referrerInput.trim()) { setReferrerError('شماره همراه معرف را وارد کنید'); return; }
+        setSubmittingReferrer(true);
+        try {
+            const res = await flowApi.submitReferrerCode(referrerInput.trim());
+            if (res.success) {
+                setReferrerCode(referrerInput.trim());
+                setReferrerName(res.data?.referrerName || '');
+                setReferrerInput('');
+                setReferrerError('');
+            } else {
+                setReferrerError(res.message || 'خطایی رخ داد');
+            }
+        } catch {
+            setReferrerError('خطایی در ارسال کد');
+        } finally {
+            setSubmittingReferrer(false);
+        }
+    };
+
+    const handleClaimReward = async (task: any) => {
+        setClaimingReward(task.id);
+        try {
+            const res = await flowApi.claimTaskReward(task.id);
+            if (res.success) {
+                setTasks({
+                    ...tasks,
+                    permanent: tasks.permanent.map((t: any) => t.id === task.id ? { ...t, rewardClaimed: true, isCompleted: true } : t),
+                    temporary: tasks.temporary.map((t: any) => t.id === task.id ? { ...t, rewardClaimed: true, isCompleted: true } : t)
+                });
+                setStats({ ...stats, xp: stats.xp + res.data.xpGained });
+                setRewardModalData({
+                    isOpen: true,
+                    xpGained: res.data.xpGained,
+                    taskTitle: task.title
+                });
+            }
+        } catch (error) {
+            console.error("Failed to claim reward", error);
+        } finally {
+            setClaimingReward(null);
+        }
+    };
+
+    const transformActivityData = (data: { date: string; time: number }[]) => data.map(item => {
+        const hours = Math.floor(item.time / 3600);
+        const minutes = Math.floor((item.time % 3600) / 60);
+        const seconds = item.time % 60;
+        let timeStr = '';
+        if (hours > 0) timeStr += `${hours} ساعت `;
+        if (minutes > 0) timeStr += `${minutes} دقیقه `;
+        if (seconds > 0 && hours === 0) timeStr += `${seconds} ثانیه`;
+        timeStr = timeStr.trim() || '0 ثانیه';
+        const dateObj = new Date(item.date);
+        return {
+            label: `${dateObj.toLocaleDateString('fa-IR', { day: 'numeric', month: 'long' })} (${dateObj.toLocaleDateString('fa-IR', { weekday: 'short' })})`,
+            value: item.time,
+            displayValue: timeStr
+        };
+    });
+
+    const radarData = topicMastery.slice(0, 4).map((item: any) => ({ subject: item.subject, score: item.score, fullMark: 100 }));
+    if (radarData.length > 0) radarData.push({ subject: 'دقت کلی', score: parseInt(stats.accuracy) || 0, fullMark: 100 });
+
+    if (isLoading) return <DashboardSkeleton />;
+    const currentTasks = taskTab === 'permanent' ? tasks.permanent : tasks.temporary;
+
+    return (
+        <div className="flex-1 flex flex-col h-full overflow-hidden bg-[var(--bg-app)]">
+            <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-5 space-y-4 md:space-y-5 pb-20 md:pb-8 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-4 md:space-y-5">
+
+                    {/* Quick Stats */}
+                    <motion.div variants={itemVariants} className="dashboard-tour-stats grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+                        <ColorfulStatCard icon={Award}    value={stats.trophies.toLocaleString('fa-IR')} label="امتیاز کل"       colorClass="text-[#eab308]" bgClass="bg-[#eab308]/15" />
+                        <ColorfulStatCard icon={Target}   value={stats.accuracy}                         label="دقت پاسخ‌گویی"   colorClass="text-[#22c55e]" bgClass="bg-[#22c55e]/15" />
+                        <ColorfulStatCard icon={BarChart3} value={stats.rank}                            label="رتبه در لیگ"     colorClass="text-[#3b82f6]" bgClass="bg-[#3b82f6]/15" />
+                        <ColorfulStatCard icon={Clock}    value={stats.practiceTime}                     label="زمان تمرین"      colorClass="text-[#a855f7]" bgClass="bg-[#a855f7]/15" />
+                    </motion.div>
+
+                    {/* Shortcuts */}
+                    <motion.div variants={itemVariants} className="dashboard-tour-shortcuts grid grid-cols-5 gap-1.5 sm:gap-3 py-1">
+                        <ShortcutBtn icon={BookOpen} label="یادداشت‌ها"  onClick={onNavigateToNotes} />
+                        <ShortcutBtn icon={Star}     label="علاقه‌مندی"  onClick={onNavigateToFavorites} />
+                        <ShortcutBtn icon={Layers}   label="جعبه مرور"   onClick={onNavigateToReview} />
+                        <ShortcutBtn icon={PieChart} label="گزارش‌ها"    onClick={onNavigateToReports} />
+                        <ShortcutBtn icon={History}     label="آزمون ها"        onClick={onNavigateToQuizHistory} />
+                    </motion.div>
+
+                    {/* Charts row */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-4">
+                        <motion.div variants={itemVariants} className="dashboard-tour-activity lg:col-span-2 bg-[var(--bg-card)] p-4 rounded-xl border border-[var(--border)] flex flex-col">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                                <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
+                                    <Activity className="text-[var(--color-primary-500)]" size={18} />گزارش فعالیت
+                                </h2>
+                                <div className="flex bg-[var(--bg-element)] p-1 rounded-lg w-fit relative">
+                                    {(['7d','1m','1y'] as const).map((filter, index) => (
+                                        <button key={`time-filter-${filter}-${index}`} onClick={() => setTimeFilter(filter)} className={`relative px-3 py-1.5 text-[10px] font-bold rounded-md transition-colors duration-300 z-10 ${timeFilter === filter ? 'text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}>
+                                            {timeFilter === filter && <motion.div layoutId="activeTimeFilter" className="absolute inset-0 bg-[var(--color-primary-500)] rounded-md shadow-sm -z-10" transition={smoothTween} />}
+                                            <span className="relative z-10">{filter === '7d' ? 'هفته' : filter === '1m' ? 'ماه' : 'سال'}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="relative flex-1 min-h-[160px] md:min-h-[180px] w-full mt-2" dir="rtl">
+                                {renderCharts && activityData[timeFilter]?.length > 0 ? (
+                                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6 }} className="absolute inset-0">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <AreaChart data={transformActivityData(activityData[timeFilter])} margin={{ top: 5, right: 0, left: 0, bottom: 0 }}>
+                                                <defs>
+                                                    <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                                                        <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} />
+                                                        <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                                                    </linearGradient>
+                                                </defs>
+                                                <XAxis dataKey="label" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
+                                                <Tooltip content={({ active, payload }) => {
+                                                    if (active && payload && payload.length) return (
+                                                        <div className="rounded-lg border bg-[var(--bg-card)] border-[var(--border)] p-2 shadow-sm">
+                                                            <div className="text-sm font-medium text-[var(--text-primary)]">{payload[0].payload.label}</div>
+                                                            <div className="text-sm text-[var(--text-muted)]">{payload[0].payload.displayValue}</div>
+                                                        </div>
+                                                    );
+                                                    return null;
+                                                }} />
+                                                <Area type="monotone" dataKey="value" stroke="#8b5cf6" fillOpacity={1} fill="url(#colorValue)" />
+                                            </AreaChart>
+                                        </ResponsiveContainer>
+                                    </motion.div>
+                                ) : (
+                                    <EmptyState icon={LineChart} title="داده‌ای برای نمایش وجود ندارد" description="با انجام تمرینات، نمودار پیشرفت شما در اینجا رسم می‌شود." />
+                                )}
+                            </div>
+                        </motion.div>
+
+                        <div className="flex flex-col gap-3 md:gap-4">
+                            <DailyStreakCard currentStreak={streak.current} longestStreak={streak.longest} />
+
+                            <motion.div variants={itemVariants} className="dashboard-tour-mastery bg-[var(--bg-card)] p-4 rounded-xl border border-[var(--border)] flex flex-col">
+                                <h2 className="text-sm font-bold text-[var(--text-primary)] mb-3 flex items-center gap-2">
+                                    <Target className="text-[var(--color-primary-500)]" size={16} />تشکیل مهارت‌ها
+                                </h2>
+                                <div className="flex-1 w-full relative min-h-[200px]" dir="ltr">
+                                    {renderCharts && radarData.length > 0 ? (
+                                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6 }} className="absolute inset-0">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
+                                                    <PolarGrid stroke="var(--border)" polarRadius={[0, 30, 60, 90]} gridType="polygon" />
+                                                    <PolarAngleAxis dataKey="subject" tick={{ fill: 'var(--text-muted)', fontSize: 10, fontWeight: 'bold' }} />
+                                                    <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fill: 'var(--text-muted)', fontSize: 9 }} tickFormatter={(v) => `${v}`} />
+                                                    <Radar name="مهارت" dataKey="score" stroke="var(--color-primary-500)" strokeWidth={2.5} fill="var(--color-primary-500)" fillOpacity={0.25} isAnimationActive />
+                                                </RadarChart>
+                                            </ResponsiveContainer>
+                                        </motion.div>
+                                    ) : (
+                                        <EmptyState icon={HelpCircle} title="وضعیت تسلط نامشخص" description="به سوالات بیشتری پاسخ دهید تا نقاط قوت و ضعف شما ارزیابی شود." />
+                                    )}
+                                </div>
+                            </motion.div>
+                        </div>
+                    </div>
+
+                    {/* Tasks & Invites */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-4">
+                        <motion.div variants={itemVariants} className="dashboard-tour-tasks lg:col-span-2 bg-[var(--bg-card)] p-4 rounded-xl border border-[var(--border)] min-h-[200px] flex flex-col">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                                <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
+                                    <Shield className="text-[var(--color-primary-500)]" size={16} />ماموریت‌ها
+                                </h2>
+                                <div className="flex gap-4 border-b border-[var(--border)] pb-0 relative">
+                                    <button onClick={() => setTaskTab('permanent')} className={`relative text-[11px] font-bold pb-2 transition-colors duration-300 ${taskTab === 'permanent' ? 'text-[var(--color-primary-500)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}>
+                                        دائمی
+                                        {taskTab === 'permanent' && <motion.div layoutId="activeTaskTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--color-primary-500)] rounded-t-full" transition={smoothTween} />}
+                                    </button>
+                                    {canSeeTempTasks && (
+                                        <button onClick={() => setTaskTab('temporary')} className={`relative text-[11px] font-bold pb-2 transition-colors duration-300 flex items-center gap-1 ${taskTab === 'temporary' ? 'text-[var(--color-primary-500)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}>
+                                            ویژه
+                                            {taskTab === 'temporary' && <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-primary-500)] animate-pulse" />}
+                                            {taskTab === 'temporary' && <motion.div layoutId="activeTaskTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--color-primary-500)] rounded-t-full" transition={smoothTween} />}
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="flex-1 flex flex-col relative w-full">
+                                <AnimatePresence mode="wait">
+                                    {currentTasks && currentTasks.length > 0 ? (
+                                        <motion.div key={taskTab} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }} className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full">
+                                            {currentTasks.map((task: any, index: number) => (
+                                                <TaskItem key={task.id || `task-${index}`} task={task} isTemp={taskTab === 'temporary'} onClaimReward={handleClaimReward} />
+                                            ))}
+                                        </motion.div>
+                                    ) : (
+                                        <motion.div key={`empty-${taskTab}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="w-full h-full flex-1">
+                                            <EmptyState icon={Inbox} title="ماموریتی یافت نشد" description="شما تمام ماموریت‌های این بخش را انجام داده‌اید. منتظر چالش‌های جدید باشید!" />
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
+                        </motion.div>
+
+                        <InvitesCard
+                            invites={invites}
+                            inviteLink={inviteLink}
+                            myInviteCode={myPhoneOrUsername}
+                            referrerCode={referrerCode}
+                            referrerName={referrerName}
+                            referrerInput={referrerInput}
+                            referrerError={referrerError}
+                            copied={copied}
+                            onCopy={handleCopy}
+                            onOpenInviteModal={() => setIsInviteModalOpen(true)}
+                            onReferrerInputChange={handleReferrerInputChange}
+                            onSubmitReferrer={handleSubmitReferrer}
+                            submittingReferrer={submittingReferrer}
+                        />
+                    </div>
+                </motion.div>
+            </main>
+
+            {/* Invite Modal */}
+            <ResponsiveModal isOpen={isInviteModalOpen} onClose={() => setIsInviteModalOpen(false)} title="ارسال لینک دعوت">
+                <div className="space-y-6">
+                    <p className="text-sm text-[var(--text-muted)] text-center">لینک زیر را با دوستان خود به اشتراک بگذارید و با ثبت نام هر نفر امتیاز بگیرید!</p>
+                    <div className="flex items-center gap-2 bg-[var(--bg-element)] p-2 rounded-xl border border-[var(--border)]">
+                        <div className="flex-1 truncate px-2 text-sm text-[var(--text-primary)] text-left" dir="ltr">{inviteLink}</div>
+                        <button onClick={handleCopy} className={`p-2 rounded-lg transition-all duration-300 flex items-center gap-2 text-xs font-bold active:scale-95 ${copied ? 'bg-[#22c55e]/15 text-[#22c55e]' : 'bg-[var(--color-primary-500)] text-white hover:bg-[var(--color-primary-600)]'}`}>
+                            <AnimatePresence mode="wait">
+                                <motion.span key={copied ? 'copied' : 'copy'} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="flex items-center gap-2">
+                                    {copied ? <Check size={16} /> : <Copy size={16} />} {copied ? 'کپی شد' : 'کپی'}
+                                </motion.span>
+                            </AnimatePresence>
+                        </button>
+                    </div>
+                </div>
+            </ResponsiveModal>
+
+            {/* Reward Claimed Modal */}
+            <ResponsiveModal
+                isOpen={rewardModalData?.isOpen || false}
+                onClose={() => setRewardModalData(prev => prev ? { ...prev, isOpen: false } : null)}
+                title="تبریک! دریافت پاداش ماموریت"
+            >
+                <div className="flex flex-col items-center text-center space-y-4 p-2">
+                    <div className="w-16 h-16 rounded-full bg-yellow-500/10 flex items-center justify-center text-yellow-500 animate-bounce">
+                        <Trophy size={36} strokeWidth={2} />
+                    </div>
+                    <div className="space-y-1">
+                        <h3 className="text-base font-bold text-[var(--text-primary)]">
+                            ماموریت با موفقیت انجام شد!
+                        </h3>
+                        <p className="text-xs text-[var(--text-muted)] max-w-sm">
+                            شما چالش <span className="font-semibold text-[var(--text-primary)]">«{rewardModalData?.taskTitle}»</span> را به پایان رساندید و پاداش ارزشمند آن را دریافت نمودید.
+                        </p>
+                    </div>
+                    <div className="px-4 py-2 bg-[var(--color-primary-500)]/10 border border-[var(--color-primary-500)]/20 rounded-xl text-[var(--color-primary-600)] font-bold text-sm">
+                        +{rewardModalData?.xpGained} XP به مجموع امتیازات شما اضافه شد
+                    </div>
+                    <button
+                        onClick={() => setRewardModalData(prev => prev ? { ...prev, isOpen: false } : null)}
+                        className="w-full py-2.5 bg-[var(--color-primary-500)] hover:bg-[var(--color-primary-600)] text-white font-bold text-xs rounded-xl transition-all active:scale-98"
+                    >
+                        فهمیدم، ادامه بده
+                    </button>
+                </div>
+            </ResponsiveModal>
+        </div>
+    );
+}
