@@ -1,0 +1,8 @@
+{
+  "type": "commonjs",
+  "dependencies": {
+    "@types/uuid": "^10.0.0",
+    "uuid": "^14.0.1",
+    "zarinpal-node-sdk": "^2.2.0"
+  }
+}
