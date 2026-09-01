@@ -1,0 +1,210 @@
+// src/views/TestWorldView.tsx
+import React, { useState, useEffect, useCallback } from 'react';
+import { AnimatePresence } from 'framer-motion';
+import MainTestSelector from './testworld/MainTestSelector';
+import { NeedsView } from './testworld/NeedsView';
+import { NotFoundView } from './testworld/NotFoundView';
+import EnhancedQuizView from './testworld/QuizPage';
+import { QuizCountdown } from '../components/QuizCountdown';
+import { LobbyView } from './LobbyView';
+import { nanoid } from 'nanoid';
+
+// Import our new hooks and context
+import { useLobby } from '../hooks/useLobby';
+import { useUser } from '../context/UserContext';
+
+export interface TestWorldProps {
+    onStateChange?: (state: any) => void;
+    isCollapsed?: boolean;
+    onToggleHeader?: (hidden: boolean) => void;
+}
+
+const VALID_VIEWS = ['main', 'needs', 'lobby', 'countdown', 'quiz'];
+
+export const TestWorldView = ({ isCollapsed, onStateChange, onToggleHeader }: TestWorldProps) => {
+    const [activeView, setActiveView] = useState<string>('main');
+    const [quizData, setQuizData] = useState<any>(null);
+    const [shareCode, setShareCode] = useState<string>("");
+
+    const [hasProcessedJoinUrl, setHasProcessedJoinUrl] = useState(false);
+
+    const { user } = useUser();
+    const {
+        lobbyUsers,
+        isQuizStarted,
+        lobbyError,
+        joinOrCreateLobby,
+        startQuiz,
+        leaveLobby,
+        kickUser
+    } = useLobby();
+
+    const navigateTo = useCallback((viewId: string, pushState = true) => {
+        setActiveView(viewId);
+        if (pushState) {
+            // Keep the current URL path if we are in a lobby, else reset
+            const currentPath = window.location.pathname;
+            window.history.pushState({ testWorldView: viewId }, "", currentPath);
+        }
+        if (onStateChange) {
+            onStateChange({ view: viewId });
+        }
+    }, [onStateChange]);
+
+    const handleBack = useCallback(() => {
+        window.history.back();
+    }, []);
+
+    // --- SECURE CODE GENERATION ---
+    const handleStartNeeds = () => {
+        // Generate a secure 8-character code using nanoid
+        const newCode = nanoid(8);
+        setShareCode(newCode);
+        navigateTo('needs');
+    };
+
+    // Listen for browser back button
+    useEffect(() => {
+        const handlePopState = (event: PopStateEvent) => {
+            if (event.state && event.state.testWorldView) {
+                setActiveView(event.state.testWorldView);
+            } else {
+                setActiveView('main');
+            }
+        };
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, []);
+
+
+    // --- DIRECT LINK JOIN LOGIC ---
+    useEffect(() => {
+        if (!user || hasProcessedJoinUrl) return;
+
+        const path = window.location.pathname;
+        const match = path.match(/\/join\/([a-zA-Z0-9_-]+)/);
+
+        if (match && match[1]) {
+            const code = match[1];
+            setShareCode(code);
+            setHasProcessedJoinUrl(true);
+
+            // Connect to Socket as GUEST (false)
+            joinOrCreateLobby(code, user, false);
+
+            // Bypass NeedsView and go straight to Lobby
+            navigateTo('lobby', false);
+        }
+    }, [user, hasProcessedJoinUrl, joinOrCreateLobby, navigateTo]);
+
+
+    // Handle header hiding
+    useEffect(() => {
+        if (onToggleHeader) {
+            onToggleHeader(activeView === "quiz" || activeView === "countdown");
+        }
+        return () => {
+            if (onToggleHeader) onToggleHeader(false);
+        };
+    }, [activeView, onToggleHeader]);
+
+    // MAGIC LISTENER: Automatically jump to countdown when host starts the quiz!
+    useEffect(() => {
+        if (isQuizStarted && activeView === 'lobby') {
+            navigateTo('countdown', false);
+        }
+    }, [isQuizStarted, activeView, navigateTo]);
+
+    return (
+        <div className="min-h-screen bg-[var(--bg-app)] text-[var(--text-primary)] font-sans" dir="rtl">
+            <AnimatePresence mode="wait">
+                {activeView === 'main' && (
+                    <MainTestSelector
+                        key="main"
+                        onStart={(id) => {
+                            if (id === 'needs') {
+                                handleStartNeeds();
+                            } else {
+                                navigateTo(id);
+                            }
+                        }}
+                    />
+                )}
+
+                {activeView === 'needs' && (
+                    <NeedsView
+                        key="needs"
+                        onBack={handleBack}
+                        isCollapsed={isCollapsed}
+                        shareCode={shareCode}
+                        onQuizStart={(data) => {
+                            setQuizData(data);
+                            const finalShareCode = data.shareCode || shareCode;
+                            setShareCode(finalShareCode); // ensure parent has the exact code
+
+                            if (data.settings?.visibility === 'public') {
+                                // 1. Connect Socket as HOST
+                                if (user) {
+                                    joinOrCreateLobby(finalShareCode, user, true);
+                                }
+                                // 2. Navigate to Lobby
+                                navigateTo('lobby');
+                            } else {
+                                // Private quiz, skip lobby
+                                navigateTo('countdown');
+                            }
+                        }}
+                    />
+                )}
+
+                {activeView === 'countdown' && (
+                    <div key="countdown" className="relative w-full h-screen">
+                        <QuizCountdown
+                            onComplete={() => navigateTo('quiz', false)}
+                        />
+                    </div>
+                )}
+
+                {activeView === 'lobby' && (
+                    <LobbyView
+                        key="lobby"
+                        quizData={quizData}
+                        shareCode={shareCode}
+                        lobbyUsers={lobbyUsers}
+                        lobbyError={lobbyError}
+                        onStartQuiz={() => {
+                            // Tell server to start quiz. We don't navigate immediately.
+                            // We wait for the 'quiz_started' socket event so ALL players navigate at the exact same time.
+                            if (user) startQuiz(shareCode, user.id);
+                        }}
+                        onKickUser={(userIdToKick) => {
+                            if (user) kickUser(shareCode, userIdToKick, user.id);
+                        }}
+                        onLeave={() => {
+                            leaveLobby();
+                            navigateTo('main');
+                        }}
+                    />
+                )}
+
+                {activeView === 'quiz' && (
+                    <EnhancedQuizView
+                        key="quiz"
+                        quizData={quizData}
+                        onExit={() => {
+                            leaveLobby(); // Clean up socket on exit
+                            handleBack();
+                        }}
+                    />
+                )}
+
+                {!VALID_VIEWS.includes(activeView) && (
+                    <NotFoundView
+                        key="not-found"
+                        onBack={handleBack}
+                    />
+                )}
+            </AnimatePresence>
+        </div>
+    );
+};
