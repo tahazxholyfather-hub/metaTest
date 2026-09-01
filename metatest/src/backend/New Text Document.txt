@@ -1,0 +1,530 @@
+﻿// src/views/DashboardView.tsx
+
+import React, { useState, useMemo } from 'react';
+import {
+    Award, Target, BarChart3,
+    UserPlus, Zap, Shield, Clock,
+    Users, Check, ArrowUpRight, Activity,
+    BookOpen, Star, Layers, PieChart, Play,
+    Copy, Share2, Send
+} from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useUser } from '../context/UserContext';
+// Import the custom modal component
+import { ResponsiveModal } from '../components/ResponsiveModal';
+
+// --- Mock Data ---
+
+const MOCK_TOPIC_DATA = [
+    { name: 'ریاضیات', score: 85 },
+    { name: 'ادبیات', score: 92 },
+    { name: 'علوم', score: 78 },
+    { name: 'زبان انگلیسی', score: 88 },
+];
+
+const MOCK_INVITES = [
+    { id: 1, name: 'علی رضایی', status: 'active' },
+    { id: 2, name: 'سارا احمدی', status: 'active' },
+    { id: 3, name: 'محمد کریمی', status: 'pending' },
+];
+
+const MOCK_TASKS = {
+    permanent: [
+        { id: 'p1', title: 'تکمیل پروفایل کاربری', target: 1, current: 1, rewardXp: 50, icon: UserPlus, completed: true },
+        { id: 'p2', title: 'دعوت ۲ دوست', target: 2, current: 1, rewardXp: 200, icon: Users, completed: false },
+        { id: 'p3', title: 'اولین آزمون بی نقص', target: 1, current: 0, rewardXp: 500, icon: Shield, completed: false },
+    ],
+    temporary: [
+        { id: 't1', title: 'چالش سرعت: حل ۵ تمرین', target: 5, current: 3, rewardXp: 150, icon: Zap, expiresIn: '۱۲ ساعت', completed: false },
+        { id: 't2', title: 'پادشاه هفته', target: 1000, current: 850, rewardXp: 300, icon: Award, expiresIn: '۲ روز', completed: false },
+    ]
+};
+
+// Activity Chart Data based on time filters
+const ACTIVITY_DATA = {
+    '7d': [
+        { label: 'ش', value: 120 }, { label: 'ی', value: 250 }, { label: 'د', value: 180 },
+        { label: 'س', value: 390 }, { label: 'چ', value: 280 }, { label: 'پ', value: 420 }, { label: 'ج', value: 550 }
+    ],
+    '1m': [
+        { label: '۱م', value: 400 }, { label: '۶م', value: 300 }, { label: '۱۲م', value: 650 },
+        { label: '۱۸م', value: 450 }, { label: '۲۴م', value: 700 }, { label: '۳۰م', value: 850 }
+    ],
+    '1y': [
+        { label: 'فرو', value: 1200 }, { label: 'خرد', value: 2500 }, { label: 'مرد', value: 1800 },
+        { label: 'مهر', value: 3900 }, { label: 'آذر', value: 2800 }, { label: 'بهم', value: 4200 }
+    ]
+};
+
+// --- Animations ---
+const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+        opacity: 1,
+        transition: { staggerChildren: 0.05 }
+    }
+};
+
+const itemVariants = {
+    hidden: { opacity: 0, y: 15 },
+    visible: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 120, damping: 20 } }
+};
+
+// --- Sub-components ---
+
+const ColorfulStatCard = ({ icon: Icon, label, value, colorClass, bgClass }: any) => (
+    <div className="bg-[var(--bg-card)] p-4 rounded-2xl border border-[var(--border)] flex items-center gap-4 transition-transform hover:scale-105 duration-300">
+        <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${bgClass} ${colorClass}`}>
+            <Icon size={24} strokeWidth={2} />
+        </div>
+        <div>
+            <p className="text-xs font-medium text-[var(--text-muted)] mb-1">{label}</p>
+            <h3 className="text-lg md:text-xl font-bold text-[var(--text-primary)]">{value}</h3>
+        </div>
+    </div>
+);
+
+const ShortcutBtn = ({ icon: Icon, label, onClick }: any) => (
+    <motion.button
+        whileHover={{ y: -3 }}
+        whileTap={{ scale: 0.95 }}
+        onClick={onClick}
+        className="min-w-[85px] sm:min-w-[100px] p-3 md:p-4 rounded-2xl border flex flex-col items-center justify-center gap-3 transition-all duration-300 group bg-[var(--bg-card)] border-[var(--border)] hover:border-[var(--color-primary-500)]/50 hover:bg-[var(--bg-element)] hover:shadow-md hover:shadow-[var(--color-primary-500)]/10 shrink-0 snap-center"
+    >
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 bg-[var(--bg-element)] text-[var(--color-primary-500)] group-hover:bg-[var(--color-primary-500)] group-hover:text-white">
+            <Icon size={20} strokeWidth={2.5} />
+        </div>
+        <span className="text-xs font-extrabold text-[var(--text-primary)] group-hover:text-[var(--color-primary-600)] transition-colors">
+            {label}
+        </span>
+    </motion.button>
+);
+
+const TaskItem = ({ task, isTemp }: { task: any, isTemp: boolean }) => {
+    const Icon = task.icon;
+    const progress = Math.min(100, (task.current / task.target) * 100);
+    const isDone = task.current >= task.target;
+
+    return (
+        <motion.div
+            layout
+            className={`relative overflow-hidden rounded-2xl border p-4 transition-all duration-300 group ${
+                isDone
+                    ? 'bg-[var(--color-primary-500)]/5 border-[var(--color-primary-500)]/30'
+                    : 'bg-[var(--bg-card)] border-[var(--border)] hover:border-[var(--text-muted)]/50'
+            }`}
+        >
+            <div className="flex items-center gap-4">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                    isDone
+                        ? 'bg-[var(--color-primary-500)] text-white'
+                        : 'bg-[var(--bg-element)] text-[var(--text-secondary)] group-hover:text-[var(--color-primary-500)]'
+                }`}>
+                    {isDone ? <Check size={20} strokeWidth={2.5} /> : <Icon size={20} strokeWidth={2} />}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-center mb-1.5">
+                        <h4 className="text-sm font-semibold text-[var(--text-primary)] truncate pr-2">
+                            {task.title}
+                        </h4>
+                        <span className="text-xs font-bold text-[var(--color-primary-500)] shrink-0 bg-[var(--color-primary-500)]/10 px-2 py-0.5 rounded-md">
+                            +{task.rewardXp} XP
+                        </span>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        <div className="flex-1 h-1.5 bg-[var(--bg-element)] rounded-full overflow-hidden">
+                            <motion.div
+                                initial={{ width: 0 }}
+                                animate={{ width: `${progress}%` }}
+                                transition={{ duration: 1, delay: 0.2, type: "spring" }}
+                                className={`h-full rounded-full ${isDone ? 'bg-[var(--color-primary-500)]' : 'bg-[var(--text-secondary)]'}`}
+                            />
+                        </div>
+                        <span className="text-[10px] font-medium text-[var(--text-muted)] shrink-0 w-6 text-left">
+                            {task.current}/{task.target}
+                        </span>
+                    </div>
+
+                    {isTemp && !isDone && (
+                        <div className="flex items-center gap-1 text-[10px] text-[var(--text-muted)] mt-2">
+                            <Clock size={10} />
+                            <span>انقضا: {task.expiresIn}</span>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {isDone && task.completed === false && (
+                <div className="absolute inset-0 bg-[var(--bg-card)]/80 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10 cursor-pointer">
+                    <span className="text-sm font-bold text-[var(--color-primary-600)] flex items-center gap-1">
+                        دریافت پاداش <ArrowUpRight size={16} />
+                    </span>
+                </div>
+            )}
+        </motion.div>
+    );
+};
+
+export function DashboardView({ onNavigateToPractice }: { onNavigateToPractice: () => void }) {
+    const { user } = useUser();
+    const [taskTab, setTaskTab] = useState<'permanent' | 'temporary'>('permanent');
+    const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+    const [copied, setCopied] = useState(false);
+    const [timeFilter, setTimeFilter] = useState<'7d' | '1m' | '1y'>('7d');
+
+    const canSeeTempTasks = (user?.xp_level ?? 1) > 1 || (user?.xp_points ?? 0) >= 200;
+    const inviteLink = "https://myapp.com/invite/user123";
+
+    const handleCopy = () => {
+        navigator.clipboard.writeText(inviteLink);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
+    // Calculate SVG paths and points based on the selected time filter
+    // We map $x$ values from $0$ to $100$ and scale $y$ values from $10$ to $90$
+    // to ensure the wave stays inside the SVG bounding box.
+    const { dLine, dArea, points } = useMemo(() => {
+        const data = ACTIVITY_DATA[timeFilter];
+        const max = Math.max(...data.map(d => d.value), 10);
+        const min = 0; // Using $0$ as base for area charting
+
+        const pts = data.map((d, i) => ({
+            x: (i / (data.length - 1)) * 100,
+            y: 90 - ((d.value - min) / (max - min)) * 80, // Inverse $y$ for SVG space
+            value: d.value,
+            label: d.label
+        }));
+
+        // Build a smooth bezier curve for the heartbeat look
+        let line = `M ${pts[0].x},${pts[0].y} `;
+        for (let i = 0; i < pts.length - 1; i++) {
+            const curr = pts[i];
+            const next = pts[i + 1];
+            // Midpoint control values calculate the smooth peak/valley transitions
+            const midX = (curr.x + next.x) / 2;
+            line += `C ${midX},${curr.y} ${midX},${next.y} ${next.x},${next.y} `;
+        }
+
+        // Close path for area gradient fill
+        const area = `${line} L 100,100 L 0,100 Z`;
+
+        return { dLine: line, dArea: area, points: pts };
+    }, [timeFilter]);
+
+    return (
+        <div className="flex-1 flex flex-col h-full overflow-hidden bg-[var(--bg-app)]">
+
+            <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-8 pb-28 md:pb-12 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+
+                <motion.div
+                    variants={containerVariants}
+                    initial="hidden"
+                    animate="visible"
+                    className="space-y-6 md:space-y-8"
+                >
+                    {/* --- 1. Quick Stats Grid --- */}
+                    <motion.div variants={itemVariants} className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        <ColorfulStatCard icon={Zap} value={user?.xp_points?.toString() || "۱۲,۵۰۰"} label="امتیاز کل (XP)" colorClass="text-[#eab308]" bgClass="bg-[#eab308]/15" />
+                        <ColorfulStatCard icon={Target} value="۷۶٪" label="دقت پاسخ‌گویی" colorClass="text-[#22c55e]" bgClass="bg-[#22c55e]/15" />
+                        <ColorfulStatCard icon={BarChart3} value="#۳۴" label="رتبه در لیگ" colorClass="text-[#3b82f6]" bgClass="bg-[#3b82f6]/15" />
+                        <ColorfulStatCard icon={Clock} value="۴۵ ساعت" label="زمان تمرین" colorClass="text-[#a855f7]" bgClass="bg-[#a855f7]/15" />
+                    </motion.div>
+
+                    {/* --- 2. Shortcut Actions Row --- */}
+                    <motion.div variants={itemVariants} className="flex overflow-x-auto sm:grid sm:grid-cols-5 gap-3 md:gap-4 pb-2 snap-x [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                        <ShortcutBtn icon={BookOpen} label="یادداشت‌ها" onClick={() => console.log('Notes')} />
+                        <ShortcutBtn icon={Star} label="علاقه‌مندی‌ها" onClick={() => console.log('Favorites')} />
+                        <ShortcutBtn icon={Layers} label="جعبه مرور" onClick={() => console.log('Review Box')} />
+                        <ShortcutBtn icon={PieChart} label="گزارش‌ها" onClick={() => console.log('Reports')} />
+                        <ShortcutBtn icon={Play} label="تمرین" onClick={onNavigateToPractice} />
+                    </motion.div>
+
+                    {/* --- 3. Charts Section --- */}
+                    <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+
+                        {/* Heartbeat Wave Area Chart */}
+                        <div className="lg:col-span-2 bg-[var(--bg-card)] p-5 md:p-6 rounded-2xl border border-[var(--border)] flex flex-col">
+
+                            {/* Header & Filter Toggles */}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+                                <h2 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
+                                    <Activity className="text-[var(--color-primary-500)]" size={20}/>
+                                    گزارش فعالیت
+                                </h2>
+
+                                <div className="flex bg-[var(--bg-element)] p-1 rounded-xl w-fit">
+                                    {(['7d', '1m', '1y'] as const).map((filter) => (
+                                        <button
+                                            key={filter}
+                                            onClick={() => setTimeFilter(filter)}
+                                            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                                                timeFilter === filter
+                                                    ? 'bg-[var(--color-primary-500)] text-white shadow-md shadow-[var(--color-primary-500)]/20'
+                                                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                                            }`}
+                                        >
+                                            {filter === '7d' ? 'هفته اخیر' : filter === '1m' ? 'ماه اخیر' : 'سال اخیر'}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Chart Container */}
+                            <div className="relative flex-1 min-h-[200px] w-full flex flex-col justify-end pt-4 md:pt-8">
+
+                                {/* Background grid lines */}
+                                <div className="absolute inset-0 flex flex-col justify-between pb-8 pt-4 pointer-events-none z-0">
+                                    {[1, 2, 3, 4].map((i) => (
+                                        <div key={i} className="w-full border-t border-dashed border-[var(--border)] opacity-60"></div>
+                                    ))}
+                                </div>
+
+                                {/* Main SVG Wave rendering mapping strictly $x: 0 \to 100$ (Left to Right) */}
+                                <div className="absolute inset-0 z-10 pb-8" dir="ltr">
+                                    <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full overflow-visible">
+                                        <defs>
+                                            <linearGradient id="wave-gradient" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="0%" stopColor="var(--color-primary-500)" stopOpacity="0.35" />
+                                                <stop offset="100%" stopColor="var(--color-primary-500)" stopOpacity="0.0" />
+                                            </linearGradient>
+                                            <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                                                <feGaussianBlur stdDeviation="1.5" result="blur" />
+                                                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                                            </filter>
+                                        </defs>
+
+                                        {/* Smooth Faded Area */}
+                                        <motion.path
+                                            animate={{ d: dArea }}
+                                            transition={{ duration: 0.7, type: "spring", bounce: 0 }}
+                                            fill="url(#wave-gradient)"
+                                        />
+
+                                        {/* Heartbeat Line */}
+                                        <motion.path
+                                            animate={{ d: dLine }}
+                                            transition={{ duration: 0.7, type: "spring", bounce: 0 }}
+                                            fill="none"
+                                            stroke="var(--color-primary-500)"
+                                            strokeWidth="2.5"
+                                            vectorEffect="non-scaling-stroke"
+                                            filter="url(#glow)"
+                                            strokeLinecap="round"
+                                        />
+
+                                        {/* Data Points on the Curve */}
+                                        {points.map((p, i) => (
+                                            <motion.circle
+                                                key={`point-${i}-${timeFilter}`} // Ensure fresh mount if needed, or omit for pure transition
+                                                initial={{ cx: p.x, cy: p.y, r: 0 }}
+                                                animate={{ cx: p.x, cy: p.y, r: 3 }}
+                                                transition={{ duration: 0.7, delay: i * 0.05, type: "spring", bounce: 0 }}
+                                                fill="var(--bg-card)"
+                                                stroke="var(--color-primary-500)"
+                                                strokeWidth="2"
+                                                vectorEffect="non-scaling-stroke"
+                                                className="cursor-pointer hover:stroke-[3px] transition-all"
+                                            />
+                                        ))}
+                                    </svg>
+                                </div>
+
+                                {/* Dynamic X-Axis Labels aligned with path points */}
+                                <div className="relative z-20 w-full h-6 mt-2" dir="ltr">
+                                    {points.map((p, i) => (
+                                        <div
+                                            key={`label-${i}`}
+                                            className="absolute top-0 flex justify-center text-[10px] md:text-xs font-bold text-[var(--text-muted)] w-12 -ml-6"
+                                            style={{ left: `${p.x}%` }}
+                                            dir="rtl" // Inner text follows RTL rules
+                                        >
+                                            {p.label}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Minimal Topic Performance */}
+                        <div className="bg-[var(--bg-card)] p-5 md:p-6 rounded-2xl border border-[var(--border)] flex flex-col">
+                            <h2 className="text-base font-bold text-[var(--text-primary)] mb-6 flex items-center gap-2">
+                                <Target className="text-[var(--text-secondary)]" size={18}/>
+                                تسلط بر مباحث
+                            </h2>
+
+                            <div className="flex-1 flex flex-col justify-center gap-5">
+                                {MOCK_TOPIC_DATA.map((topic, index) => (
+                                    <div key={index} className="w-full">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <span className="text-xs font-semibold text-[var(--text-secondary)]">
+                                                {topic.name}
+                                            </span>
+                                            <span className="text-xs font-bold text-[var(--text-primary)]">
+                                                ٪{topic.score}
+                                            </span>
+                                        </div>
+                                        <div className="w-full h-1.5 bg-[var(--bg-element)] rounded-full overflow-hidden">
+                                            <motion.div
+                                                initial={{ width: 0 }}
+                                                animate={{ width: `${topic.score}%` }}
+                                                transition={{ duration: 1.2, delay: index * 0.1, type: "spring" }}
+                                                className="h-full bg-[var(--color-primary-500)] rounded-full"
+                                            />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </motion.div>
+
+                    {/* --- 4. Bottom Grid: Tasks & Referrals --- */}
+                    <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+
+                        <div className="lg:col-span-2 bg-[var(--bg-card)] p-5 md:p-6 rounded-2xl border border-[var(--border)]">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                                <h2 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
+                                    <Shield className="text-[var(--text-secondary)]" size={18}/>
+                                    ماموریت‌ها
+                                </h2>
+
+                                <div className="flex gap-4 border-b border-[var(--border)] pb-1">
+                                    <button
+                                        onClick={() => setTaskTab('permanent')}
+                                        className={`text-xs font-bold pb-2 border-b-2 transition-all ${
+                                            taskTab === 'permanent'
+                                                ? 'text-[var(--color-primary-500)] border-[var(--color-primary-500)]'
+                                                : 'text-[var(--text-muted)] border-transparent hover:text-[var(--text-primary)]'
+                                        }`}
+                                    >
+                                        دائمی
+                                    </button>
+                                    {canSeeTempTasks && (
+                                        <button
+                                            onClick={() => setTaskTab('temporary')}
+                                            className={`text-xs font-bold pb-2 border-b-2 transition-all flex items-center gap-1 ${
+                                                taskTab === 'temporary'
+                                                    ? 'text-[var(--text-primary)] border-[var(--text-primary)]'
+                                                    : 'text-[var(--text-muted)] border-transparent hover:text-[var(--text-primary)]'
+                                            }`}
+                                        >
+                                            ویژه
+                                            {taskTab === 'temporary' && <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-primary-500)] animate-pulse" />}
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+
+                            <AnimatePresence mode="wait">
+                                <motion.div
+                                    key={taskTab}
+                                    initial={{ opacity: 0, y: 5 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -5 }}
+                                    transition={{ duration: 0.15 }}
+                                    className="grid grid-cols-1 md:grid-cols-2 gap-4"
+                                >
+                                    {(taskTab === 'permanent' ? MOCK_TASKS.permanent : MOCK_TASKS.temporary).map((task) => (
+                                        <TaskItem key={task.id} task={task} isTemp={taskTab === 'temporary'} />
+                                    ))}
+                                </motion.div>
+                            </AnimatePresence>
+                        </div>
+
+                        {/* Invites History Container */}
+                        <div className="bg-[var(--bg-card)] p-5 md:p-6 rounded-2xl border border-[var(--border)] flex flex-col">
+                            <div className="flex items-center justify-between mb-6">
+                                <h2 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
+                                    <Users className="text-[var(--text-secondary)]" size={18}/>
+                                    تاریخچه دعوت‌ها
+                                </h2>
+                                <span className="text-xs font-bold bg-[var(--color-primary-500)]/10 text-[var(--color-primary-500)] px-2 py-1 rounded-md">
+                                    {MOCK_INVITES.length} دعوت
+                                </span>
+                            </div>
+
+                            <div className="flex-1 flex flex-col gap-3">
+                                {MOCK_INVITES.map((invite) => (
+                                    <div key={invite.id} className="flex items-center justify-between p-2.5 rounded-xl border border-[var(--border)] hover:bg-[var(--bg-element)] transition-colors group cursor-pointer">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 rounded-full bg-[var(--bg-element)] flex items-center justify-center shrink-0">
+                                                <span className="text-xs font-bold text-[var(--text-secondary)]">
+                                                    {invite.name.charAt(0)}
+                                                </span>
+                                            </div>
+                                            <span className="text-xs font-semibold text-[var(--text-primary)]">{invite.name}</span>
+                                        </div>
+                                        <span className={`text-[10px] font-medium px-2 py-1 rounded-md ${
+                                            invite.status === 'active'
+                                                ? 'bg-[var(--color-primary-500)]/10 text-[var(--color-primary-600)]'
+                                                : 'text-[var(--text-muted)] bg-[var(--bg-element)]'
+                                        }`}>
+                                            {invite.status === 'active' ? 'ثبت شده' : 'در انتظار'}
+                                        </span>
+                                    </div>
+                                ))}
+
+                                <button
+                                    onClick={() => setIsInviteModalOpen(true)}
+                                    className="mt-4 w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--color-primary-500)]/5 hover:text-[var(--color-primary-500)] hover:border-[var(--color-primary-500)]/50 transition-all font-bold text-xs group"
+                                >
+                                    <UserPlus size={16} className="group-hover:scale-110 transition-transform"/>
+                                    ارسال لینک دعوت جدید
+                                </button>
+                            </div>
+                        </div>
+                    </motion.div>
+
+                </motion.div>
+            </main>
+
+            {/* Invite Modal */}
+            <ResponsiveModal
+                isOpen={isInviteModalOpen}
+                onClose={() => setIsInviteModalOpen(false)}
+                title="ارسال لینک دعوت"
+            >
+                <div className="space-y-6">
+                    <p className="text-sm text-[var(--text-muted)] text-center">
+                        لینک زیر را با دوستان خود به اشتراک بگذارید و با ثبت نام هر نفر امتیاز بگیرید!
+                    </p>
+
+                    <div className="flex items-center gap-2 bg-[var(--bg-element)] p-2 rounded-xl border border-[var(--border)]">
+                        <div className="flex-1 truncate px-2 text-sm text-[var(--text-primary)] text-left" dir="ltr">
+                            {inviteLink}
+                        </div>
+                        <button
+                            onClick={handleCopy}
+                            className={`p-2 rounded-lg transition-colors flex items-center gap-2 text-xs font-bold ${
+                                copied
+                                    ? 'bg-[#22c55e]/15 text-[#22c55e]'
+                                    : 'bg-[var(--color-primary-500)] text-white hover:bg-[var(--color-primary-600)]'
+                            }`}
+                        >
+                            {copied ? <Check size={16} /> : <Copy size={16} />}
+                            {copied ? 'کپی شد' : 'کپی'}
+                        </button>
+                    </div>
+
+                    <div className="pt-4 border-t border-[var(--border)]">
+                        <h4 className="text-xs font-bold text-[var(--text-secondary)] mb-4 text-center">اشتراک گذاری سریع</h4>
+                        <div className="flex justify-center gap-4">
+                            <button className="p-3 rounded-full bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366]/20 transition-colors">
+                                <Send size={20} />
+                            </button>
+                            <button className="p-3 rounded-full bg-[#1DA1F2]/10 text-[#1DA1F2] hover:bg-[#1DA1F2]/20 transition-colors">
+                                <Share2 size={20} />
+                            </button>
+                            <button className="p-3 rounded-full bg-[var(--bg-element)] text-[var(--text-primary)] hover:bg-[var(--border)] transition-colors">
+                                <Share2 size={20} />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </ResponsiveModal>
+
+        </div>
+    );
+}
