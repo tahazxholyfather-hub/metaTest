@@ -1,0 +1,363 @@
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { X, Tag, Loader2, Check } from 'lucide-react';
+
+const MOCK_PLANS = [
+    {
+        id: 'plan_bronze',
+        name: 'برنزی',
+        days: 30,
+        price: 50000,
+        lottieUrl: 'https://cdn.lordicon.com/lomfljuq.json',
+        color: 'from-orange-400 to-amber-500',
+        features: ['دسترسی پایه', 'پشتیبانی ایمیل'],
+    },
+    {
+        id: 'plan_silver',
+        name: 'نقره‌ای',
+        days: 90,
+        price: 130000,
+        lottieUrl: 'https://cdn.lordicon.com/yqzmiobz.json',
+        color: 'from-slate-300 to-slate-500',
+        popular: true,
+        features: ['تمام امکانات برنزی', 'پشتیبانی اولویت‌دار'],
+    },
+    {
+        id: 'plan_golden',
+        name: 'طلایی',
+        days: 180,
+        price: 250000,
+        lottieUrl: 'https://cdn.lordicon.com/hrjifpbq.json',
+        color: 'from-yellow-400 to-amber-600',
+        features: ['تمام امکانات نقره‌ای', 'دسترسی VIP'],
+    },
+    {
+        id: 'plan_diamond',
+        name: 'الماسی',
+        days: 365,
+        price: 450000,
+        lottieUrl: 'https://cdn.lordicon.com/fbdblmlz.json',
+        color: 'from-cyan-400 to-blue-600',
+        features: ['تمام امکانات', 'پشتیبانی ۲۴/۷', 'API نامحدود'],
+    },
+];
+
+interface PlanSelectionModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+}
+
+const LordIcon = ({ src, size = 48 }: { src: string; size?: number }) => {
+    useEffect(() => {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.lordicon.com/lordicon.js';
+        script.async = true;
+        document.body.appendChild(script);
+        return () => {
+            document.body.removeChild(script);
+        };
+    }, []);
+
+    return (
+        <lord-icon
+            src={src}
+            trigger="loop"
+            delay="2000"
+            style={{ width: `${size}px`, height: `${size}px` }}
+        />
+    );
+};
+
+export default function PlanSelectionModal({ isOpen, onClose }: PlanSelectionModalProps) {
+    const [selectedPlanId, setSelectedPlanId] = useState<string | null>(
+        MOCK_PLANS.find(p => p.popular)?.id || null
+    );
+    const [discountCode, setDiscountCode] = useState('');
+    const [isApplyingDiscount, setIsApplyingDiscount] = useState(false);
+    const [discountData, setDiscountData] = useState<{ percent: number } | null>(null);
+    const [isPaying, setIsPaying] = useState(false);
+
+    const selectedPlan = MOCK_PLANS.find(p => p.id === selectedPlanId);
+
+    const handleApplyDiscount = () => {
+        if (!discountCode) return;
+        setIsApplyingDiscount(true);
+        setTimeout(() => {
+            setDiscountData({ percent: 20 });
+            setIsApplyingDiscount(false);
+        }, 800);
+    };
+
+    const handlePay = () => {
+        if (!selectedPlan) return;
+        setIsPaying(true);
+        setTimeout(() => {
+            setIsPaying(false);
+            alert('پرداخت موفق!');
+            handleClose();
+        }, 1500);
+    };
+
+    const handleClose = () => {
+        setSelectedPlanId(MOCK_PLANS.find(p => p.popular)?.id || null);
+        setDiscountCode('');
+        setDiscountData(null);
+        onClose();
+    };
+
+    const finalPrice = selectedPlan
+        ? discountData
+            ? selectedPlan.price * (1 - discountData.percent / 100)
+            : selectedPlan.price
+        : 0;
+
+    return (
+        <AnimatePresence>
+            {isOpen && (
+                <div dir="rtl" className="fixed inset-0 z-[9999] flex items-center justify-center p-0 sm:p-4">
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        onClick={handleClose}
+                        className="absolute inset-0 bg-black/60 backdrop-blur-md"
+                    />
+
+                    <motion.div
+                        initial={{ opacity: 0, y: '100%', scale: 1 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: '100%', scale: 1 }}
+                        transition={{
+                            type: 'spring',
+                            damping: 30,
+                            stiffness: 300,
+                            mass: 0.8,
+                        }}
+                        className="relative w-full sm:w-[95vw] sm:max-w-[1100px] bg-[var(--bg-card)]
+                                   sm:rounded-2xl rounded-t-3xl shadow-2xl overflow-hidden
+                                   max-h-[95vh] sm:max-h-[85vh] flex flex-col"
+                        style={{
+                            scrollbarWidth: 'none',
+                            msOverflowStyle: 'none',
+                        }}
+                    >
+                        <style>{`
+                            .hide-scrollbar::-webkit-scrollbar {
+                                display: none;
+                            }
+                        `}</style>
+
+                        {/* Header */}
+                        <div className="relative px-5 py-4 sm:px-6 sm:py-5 border-b border-[var(--border)]">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h2 className="text-xl sm:text-2xl font-black text-[var(--text-primary)]">
+                                        انتخاب پلن اشتراک
+                                    </h2>
+                                    <p className="text-xs sm:text-sm text-[var(--text-muted)] mt-0.5">
+                                        بهترین پلن را برای خود انتخاب کنید
+                                    </p>
+                                </div>
+                                <button onClick={handleClose} className="action-icon w-9 h-9">
+                                    <X size={20} />
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-1 overflow-y-auto hide-scrollbar">
+                            <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
+                                {/* Plans Grid */}
+                                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                                    {MOCK_PLANS.map((plan) => {
+                                        const isSelected = selectedPlanId === plan.id;
+                                        return (
+                                            <motion.button
+                                                key={plan.id}
+                                                onClick={() => setSelectedPlanId(plan.id)}
+                                                whileHover={{ scale: 1.02 }}
+                                                whileTap={{ scale: 0.98 }}
+                                                className={`relative p-3 sm:p-4 rounded-xl border-2 transition-all text-right
+                                                    ${
+                                                    isSelected
+                                                        ? 'border-[var(--accent)] bg-[var(--accent)]/5 shadow-lg shadow-[var(--accent)]/10'
+                                                        : 'border-[var(--border)] bg-[var(--bg-elevated)] hover:border-[var(--border-strong)]'
+                                                }`}
+                                            >
+                                                {plan.popular && (
+                                                    <div className="absolute -top-2 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full
+                                                                  bg-gradient-to-r from-[var(--accent)] to-purple-600
+                                                                  text-white text-[10px] font-bold shadow-md whitespace-nowrap">
+                                                        محبوب
+                                                    </div>
+                                                )}
+
+                                                <AnimatePresence>
+                                                    {isSelected && (
+                                                        <motion.div
+                                                            initial={{ scale: 0, rotate: -180 }}
+                                                            animate={{ scale: 1, rotate: 0 }}
+                                                            exit={{ scale: 0, rotate: 180 }}
+                                                            className="absolute top-3 left-3 w-5 h-5 rounded-full bg-[var(--accent)]
+                                                                     flex items-center justify-center shadow-sm"
+                                                        >
+                                                            <Check size={12} className="text-white" strokeWidth={3} />
+                                                        </motion.div>
+                                                    )}
+                                                </AnimatePresence>
+
+                                                <div className="flex flex-col items-center text-center gap-2">
+                                                    <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-xl 
+                                                                   bg-gradient-to-br ${plan.color} 
+                                                                   flex items-center justify-center shadow-md`}>
+                                                        <LordIcon src={plan.lottieUrl} size={32} />
+                                                    </div>
+
+                                                    <div>
+                                                        <h3 className="text-base sm:text-lg font-black text-[var(--text-primary)]">
+                                                            {plan.name}
+                                                        </h3>
+                                                        <p className="text-[10px] sm:text-xs text-[var(--text-muted)]">
+                                                            {plan.days} روز
+                                                        </p>
+                                                    </div>
+
+                                                    <div className="flex items-baseline gap-1">
+                                                        <span className="text-lg sm:text-xl font-black text-[var(--text-primary)]">
+                                                            {(plan.price / 1000).toFixed(0)}
+                                                        </span>
+                                                        <span className="text-[10px] text-[var(--text-muted)]">هزار تومان</span>
+                                                    </div>
+
+                                                    <div className="hidden sm:block w-full pt-2 mt-2 border-t border-[var(--border)] space-y-1">
+                                                        {plan.features.map((feature, idx) => (
+                                                            <div key={idx} className="flex items-center gap-1.5 text-[10px] text-[var(--text-secondary)]">
+                                                                <div className="w-1 h-1 rounded-full bg-[var(--accent)] flex-shrink-0" />
+                                                                <span className="line-clamp-1">{feature}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </motion.button>
+                                        );
+                                    })}
+                                </div>
+
+                                {/* Discount Section */}
+                                <div className="bg-[var(--bg-elevated)] rounded-xl p-4 border border-[var(--border)]">
+                                    <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+                                        <div className="flex-1">
+                                            <label className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-2 mb-2">
+                                                <Tag size={14} className="text-[var(--accent)]" />
+                                                کد تخفیف
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={discountCode}
+                                                onChange={(e) => setDiscountCode(e.target.value)}
+                                                placeholder="کد خود را وارد کنید"
+                                                disabled={!!discountData}
+                                                className="w-full text-sm"
+                                            />
+                                            <AnimatePresence>
+                                                {discountData && (
+                                                    <motion.p
+                                                        initial={{ opacity: 0, height: 0 }}
+                                                        animate={{ opacity: 1, height: 'auto' }}
+                                                        exit={{ opacity: 0, height: 0 }}
+                                                        className="text-xs text-green-600 dark:text-green-400 font-bold flex items-center gap-1.5 mt-2"
+                                                    >
+                                                        <Check size={12} />
+                                                        تخفیف {discountData.percent}٪ اعمال شد
+                                                    </motion.p>
+                                                )}
+                                            </AnimatePresence>
+                                        </div>
+                                        <button
+                                            onClick={handleApplyDiscount}
+                                            disabled={!discountCode || !!discountData || isApplyingDiscount}
+                                            className="btn btn-secondary px-6 py-2.5 text-sm font-bold"
+                                        >
+                                            {isApplyingDiscount ? (
+                                                <Loader2 size={16} className="animate-spin mx-auto" />
+                                            ) : (
+                                                'اعمال'
+                                            )}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Price Summary */}
+                                {selectedPlan && (
+                                    <motion.div
+                                        layout
+                                        className="bg-gradient-to-br from-[var(--accent)]/10 to-purple-500/10
+                                                 rounded-xl p-4 border border-[var(--accent)]/20"
+                                    >
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-xs text-[var(--text-secondary)]">پلن {selectedPlan.name}</span>
+                                            <span
+                                                className={`font-bold ${
+                                                    discountData
+                                                        ? 'line-through text-[var(--text-muted)] text-xs'
+                                                        : 'text-[var(--text-primary)] text-sm'
+                                                }`}
+                                            >
+                                                {selectedPlan.price.toLocaleString('fa-IR')}
+                                            </span>
+                                        </div>
+                                        <AnimatePresence>
+                                            {discountData && (
+                                                <motion.div
+                                                    initial={{ opacity: 0, height: 0 }}
+                                                    animate={{ opacity: 1, height: 'auto' }}
+                                                    exit={{ opacity: 0, height: 0 }}
+                                                    className="flex items-center justify-between mb-2"
+                                                >
+                                                    <span className="text-xs text-green-600 dark:text-green-400 font-bold">
+                                                        تخفیف {discountData.percent}٪
+                                                    </span>
+                                                    <span className="font-bold text-green-600 dark:text-green-400 text-sm">
+                                                        - {((selectedPlan.price * discountData.percent) / 100).toLocaleString('fa-IR')}
+                                                    </span>
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
+                                        <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]">
+                                            <span className="text-sm font-black text-[var(--text-primary)]">مبلغ نهایی</span>
+                                            <motion.span
+                                                key={finalPrice}
+                                                initial={{ scale: 1.1 }}
+                                                animate={{ scale: 1 }}
+                                                className="text-xl sm:text-2xl font-black text-[var(--text-primary)]"
+                                            >
+                                                {finalPrice.toLocaleString('fa-IR')}
+                                            </motion.span>
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="px-4 py-3 sm:px-6 sm:py-4 border-t border-[var(--border)] bg-[var(--bg-elevated)]">
+                            <button
+                                onClick={handlePay}
+                                disabled={!selectedPlanId || isPaying}
+                                className="btn btn-primary w-full py-3 text-sm sm:text-base font-black rounded-xl
+                                         shadow-lg hover:shadow-xl transition-all"
+                            >
+                                {isPaying ? (
+                                    <Loader2 size={20} className="animate-spin mx-auto" />
+                                ) : (
+                                    <>پرداخت • {finalPrice.toLocaleString('fa-IR')} تومان</>
+                                )}
+                            </button>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+        </AnimatePresence>
+    );
+}
