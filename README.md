@@ -42,7 +42,9 @@ function Assistant() {
 | `setExpression(state \| null)` | Face-only overlay on top of the current state (e.g. `happy` face while `processing`). |
 | `setMood(mood)` | Long-lived bias: `neutral · happy · sad · tired · calm · energetic`. |
 | `setEnergy(0..1)` | Global liveliness multiplier (speed, amplitude, glow). |
-| `setSpeechIntensity(0..1)` | Real-time speech/audio amplitude. Mouth, membrane, nucleus, glow and body react together through one shared envelope. |
+| `setSpeechIntensity(0..1)` | Real-time speech/audio amplitude. Lips articulate with a fast envelope (jaw drop, pseudo-visemes, tongue), while membrane, nucleus, glow and body react through a shared envelope with syllable emphasis. |
+| `poke()` | Trigger a click reaction manually. |
+| `setColor(color)` | Swap the body color: `violet` (default) · `blue` · `green` · `pink`. Also available as the `color` prop. |
 
 All of these are also available as optional controlled props (`state`, `speaking`, `listening`, `mood`, `energy`, `speechIntensity`).
 
@@ -50,7 +52,7 @@ All of these are also available as optional controlled props (`state`, `speaking
 
 `idle · listening · thinking · processing · speaking · happy · excited · surprised · confused · curious · focused · sad · worried · angry · sleepy · sleeping · error · success · loading · attention`
 
-Each state changes eye direction, pupil scale, blinking cadence, eyebrow pose, mouth shape, membrane deformation, organelle motion, nucleus pulse, glow intensity and body movement together. Micro-behaviors (randomized blinking, gaze saccades, breathing, organelle drift, occasional micro-expressions) keep the character alive without robotic loops.
+Each state changes eye direction, pupil scale, blinking cadence, eyebrow pose, mouth shape, membrane deformation, organelle motion, nucleus pulse, glow intensity and body movement together. Micro-behaviors (randomized blinking, gaze saccades, breathing, organelle drift, occasional micro-expressions) keep the character alive without robotic loops — plus rare bigger idle beats: yawns, stretches, sneezes, little wiggle-dances, peeking around, and chasing a floating dot with its eyes. Met tracks your cursor, greets you when it returns after a while, dents where you poke it, and gets annoyed → angry → overwhelmed if you spam-click (then calms down).
 
 ### Props
 

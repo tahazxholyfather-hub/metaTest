@@ -4,13 +4,17 @@ import {
 } from './math';
 import {
   BROW_L, BROW_R, CELL_CX, CELL_CY, CELL_R, EYE_L, MITO, MOUTH, NUCLEUS,
-  PUPIL_TRAVEL_X, PUPIL_TRAVEL_Y, VESICLE, membranePath, mouthPath,
+  PUPIL_TRAVEL_X, PUPIL_TRAVEL_Y, VESICLE, membranePath, mouthGeom,
+  type MembraneDent,
 } from './geometry';
 import { BASE_BEHAVIOR, BASE_PARAMS, FACE_PARAMS, MOOD_BIAS, STATES } from './states';
+import { DEFAULT_COLOR, THEMES, type CellTheme } from './themes';
 import type { CellBehavior, CellExpression, CellMood, CellParams, CellState, ParamName } from './types';
 import {
   ZERO_IMPULSE,
+  pickBigIdleReaction,
   pickClickReaction,
+  pickGreetReaction,
   pickHoverReaction,
   pickMicroReaction,
   pickStartleReaction,
@@ -73,6 +77,8 @@ export interface CellFrame {
   mouthD: string;
   mouthFillOpacity: number;
   mouthStrokeW: number;
+  tongueTransform: string;
+  tongueOpacity: number;
   blushOpacity: number;
   // organelles
   nucleusTransform: string;
@@ -90,10 +96,7 @@ const DOT_COUNT = 9;
 const SPARKLE_COUNT = 6;
 
 // Base palette (from the reference sheet) and tint targets.
-const RIM_TOP: RGB = hexToRgb('#D8CCFF');
-const RIM_BOT: RGB = hexToRgb('#8B5CF6');
-const BLOOM: RGB = hexToRgb('#7C3AED');
-const NUC_GLOW: RGB = hexToRgb('#A855F7');
+// Theme colors are instance-level so Met can wear different body colors.
 const ERR = {
   rimTop: hexToRgb('#FFC2CE'), rimBot: hexToRgb('#F43F5E'),
   bloom: hexToRgb('#E11D48'), nuc: hexToRgb('#FB7185'),
@@ -175,6 +178,12 @@ export class CellEngine {
   private sparkleSeeds: OrganelleSeed[];
   private rng: () => number = () => 0.5;
 
+  // Theme (body color) — engine keeps the RGB bases used for per-frame tinting.
+  private thRimTop: RGB = hexToRgb(THEMES[DEFAULT_COLOR].rimTop);
+  private thRimBot: RGB = hexToRgb(THEMES[DEFAULT_COLOR].rimBot);
+  private thBloom: RGB = hexToRgb(THEMES[DEFAULT_COLOR].bloom);
+  private thNucGlow: RGB = hexToRgb(THEMES[DEFAULT_COLOR].nucGlow);
+
   // Awareness / interaction (additive; idle is unchanged until a pointer is seen)
   private gazeX = new Spring(0, 95, 14);
   private gazeY = new Spring(0, 95, 14);
@@ -199,6 +208,14 @@ export class CellEngine {
   private lastHoverAt = -10;
   private lastStartleAt = -10;
   private nextPlayful = 6.5;
+  private nextBigIdle = 14;
+  private lastPtrActiveAt = -100;
+  private lastGreetAt = -100;
+  private dents: { angle: number; amount: number; width: number; t0: number; dur: number }[] = [];
+  private dentScratch: MembraneDent[] = [];
+  // Speech envelopes: sSmooth = body/glow, mouthEnv = fast articulation, sSlow = emphasis baseline.
+  private mouthEnv = 0;
+  private sSlow = 0;
 
   constructor(opts: CellEngineOptions) {
     this.onFrame = opts.onFrame;
@@ -229,13 +246,14 @@ export class CellEngine {
       atmosphereOpacity: 0.5, atmosphereScale: 1,
       shadowOpacity: 0.3, shadowScale: 1,
       bloomOpacity: 0.4, rimOpacity: 0.9, innerGlowOpacity: 0.22, coreLightOpacity: 0.25,
-      rimTop: rgbCss(RIM_TOP), rimBot: rgbCss(RIM_BOT), bloomColor: rgbCss(BLOOM),
-      atmoColor: rgbCss(BLOOM), nucGlowColor: rgbCss(NUC_GLOW), rimShadow: '',
+      rimTop: rgbCss(this.thRimTop), rimBot: rgbCss(this.thRimBot), bloomColor: rgbCss(this.thBloom),
+      atmoColor: rgbCss(this.thBloom), nucGlowColor: rgbCss(this.thNucGlow), rimShadow: '',
       eyeOpenL: 1, eyeOpenR: 1, eyeCurve: 0, lidOpacity: 0,
       pupilX: 0, pupilY: 0, pupilScale: 1,
       browLTransform: '', browRTransform: '',
       mouthD: '', mouthFillOpacity: 0, mouthStrokeW: 4.5, blushOpacity: 0,
       nucleusTransform: '', nucleusGlow: 0.55, mitoTransform: '', vesicleTransform: '',
+      tongueTransform: '', tongueOpacity: 0,
       dots: Array.from({ length: DOT_COUNT }, () => ({ x: 0, y: 0, o: 0 })),
       sparkles: Array.from({ length: SPARKLE_COUNT }, () => ({ x: 0, y: 0, o: 0, s: 1 })),
       ringOpacity: 0, ringRotation: 0,
@@ -317,6 +335,14 @@ export class CellEngine {
     this.extIntensityAt = this.tReal;
   }
 
+  /** Swap Met's body color. Gradient fills are handled by the component. */
+  setTheme(theme: CellTheme): void {
+    this.thRimTop = hexToRgb(theme.rimTop);
+    this.thRimBot = hexToRgb(theme.rimBot);
+    this.thBloom = hexToRgb(theme.bloom);
+    this.thNucGlow = hexToRgb(theme.nucGlow);
+  }
+
   /** Pointer position in SVG viewBox units (0..400, origin top-left). */
   setPointer(viewX: number, viewY: number): void {
     const dt = Math.max(0.001, this.tReal - this.ptrAt);
@@ -337,6 +363,21 @@ export class CellEngine {
     }
     this.gazeX.target = gx;
     this.gazeY.target = gy;
+
+    // Warm greeting when the cursor comes back after a long absence.
+    const away = this.tReal - this.lastPtrActiveAt;
+    this.lastPtrActiveAt = this.tReal;
+    if (
+      away > 25
+      && this.tReal > 1.5
+      && this.tReal - this.lastGreetAt > 30
+      && !this.reducedMotion
+      && this.irritation < 0.2
+      && (this.state === 'idle' || this.state === 'listening' || this.state === 'attention')
+    ) {
+      this.lastGreetAt = this.tReal;
+      this.playReaction(pickGreetReaction(this.pickCtx()));
+    }
   }
 
   clearPointer(): void {
@@ -364,6 +405,13 @@ export class CellEngine {
 
     if (now - this.lastPlayedWall < 0.14) return;
     this.lastPlayedWall = now;
+    this.lastPtrActiveAt = t;
+    // Tactile poke: the membrane dents in where the user touched it.
+    if (!this.reducedMotion && this.ptrDist < 1.35) {
+      const angle = Math.atan2(this.ptrY - CELL_CY, this.ptrX - CELL_CX);
+      this.dents.push({ angle, amount: 9 + this.rng() * 4, width: 0.55, t0: t, dur: 0.75 });
+      if (this.dents.length > 4) this.dents.shift();
+    }
     this.playReaction(pickClickReaction(this.pickCtx()));
   }
 
@@ -534,7 +582,22 @@ export class CellEngine {
       && this.reactW.value < 0.12
     ) {
       this.playReaction(pickMicroReaction(this.pickCtx()));
-      this.nextPlayful = t + 7 + this.rng() * 11;
+      this.nextPlayful = t + 6 + this.rng() * 10;
+    }
+
+    // Rare bigger idle beats (yawn, stretch, sneeze, little dances).
+    if (
+      this.state === 'idle'
+      && t >= this.nextBigIdle
+      && t - this.lastPokeAt > 5
+      && t - this.stateChangedAt > 4
+      && this.reactW.value < 0.08
+      && this.sSmooth < 0.05
+      && this.irritation < 0.15
+    ) {
+      const bored = clamp01((t - this.lastPtrActiveAt - 25) / 60);
+      this.playReaction(pickBigIdleReaction(this.pickCtx(), bored));
+      this.nextBigIdle = t + (13 + this.rng() * 19) * (1 - 0.45 * bored);
     }
   }
 
@@ -746,11 +809,17 @@ export class CellEngine {
     this.updateMicro(behavior);
     this.updateImpulses();
 
-    // 3. speech envelope: fast attack, slower release
+    // 3. speech envelopes: fast attack, slower release. `sSmooth` drives body &
+    // glow, `mouthEnv` is snappier for lip articulation, and the gap between
+    // sSmooth and its slow baseline marks syllable emphasis (head bob, brows).
     const sTarget = this.speechTarget(behavior);
     const tau = sTarget > this.sSmooth ? 0.045 : 0.16;
     this.sSmooth += (sTarget - this.sSmooth) * (1 - Math.exp(-dt / tau));
     const sp = this.sSmooth;
+    const mTau = sTarget > this.mouthEnv ? 0.028 : 0.085;
+    this.mouthEnv += (sTarget - this.mouthEnv) * (1 - Math.exp(-dt / mTau));
+    this.sSlow += (sp - this.sSlow) * (1 - Math.exp(-dt / 0.3));
+    const spFast = Math.max(0, sp - this.sSlow);
 
     const f = this.frame;
     const imp = this.imp;
@@ -760,8 +829,21 @@ export class CellEngine {
     const breathAmp = this.p('breathAmp') * ampMul * (motion === 0 ? 0.25 : 1);
     const squashX = 1 + breath * breathAmp * 0.7;
     const squashY = 1 - breath * breathAmp * 1.05;
-    const wobble = (this.p('wobbleAmp') + sp * 1.9) * ampMul * motion;
-    f.membraneD = membranePath(t, wobble, this.p('wobbleSpeed'), squashX, squashY, 1 + sp * 0.008);
+    const wobble = (this.p('wobbleAmp') + sp * 1.9 + imp.wobble) * ampMul * motion;
+
+    // Active poke dents on the membrane: quick push in, jelly bounce out.
+    this.dentScratch.length = 0;
+    for (let i = this.dents.length - 1; i >= 0; i--) {
+      const d = this.dents[i];
+      const k = (this.tReal - d.t0) / d.dur;
+      if (k >= 1) {
+        this.dents.splice(i, 1);
+        continue;
+      }
+      const env = k < 0.16 ? k / 0.16 : Math.cos((k - 0.16) * 7.5) * Math.exp(-3.6 * (k - 0.16));
+      this.dentScratch.push({ angle: d.angle, amount: -d.amount * env * motion, width: d.width });
+    }
+    f.membraneD = membranePath(t, wobble, this.p('wobbleSpeed'), squashX, squashY, 1 + sp * 0.008, this.dentScratch);
 
     const shiver = this.p('shiver') * motion + imp.shiver * motion;
     const bob = Math.sin(t * Math.PI * 2 * this.p('bobRate')) * this.p('bobAmp') * ampMul * motion;
@@ -771,7 +853,7 @@ export class CellEngine {
     const toward = this.irritation > 0.42 ? lerp(1, -0.85, smoothstep(0.42, 0.78, this.irritation)) : 1;
     const lean = prox * 6.4 * toward;
     const bx = this.p('bodyX') + sway + (shiver > 0 ? vnoise(this.tReal * 31, 211) * 2.3 * shiver : 0) + imp.x + this.gazeX.value * lean;
-    const by = this.p('bodyY') + bob + (shiver > 0 ? vnoise(this.tReal * 27, 213) * 1.1 * shiver : 0) + imp.y;
+    const by = this.p('bodyY') + bob + (shiver > 0 ? vnoise(this.tReal * 27, 213) * 1.1 * shiver : 0) + imp.y - spFast * 4.5 * motion;
     const bs = this.p('bodyScale') + sp * 0.012 * motion + imp.scale;
     const tilt = this.p('bodyTilt') + driftTilt + imp.tilt + this.gazeX.value * prox * 3.6 * toward;
     f.bodyTransform =
@@ -793,13 +875,13 @@ export class CellEngine {
     const shift = clamp(this.p('colorShift') - this.irritation * 0.82, -1, 1);
     const tt = Math.abs(shift) * 0.85;
     const tint = shift < 0 ? ERR : OK;
-    f.rimTop = rgbCss(mixRgb(RIM_TOP, tint.rimTop, tt));
-    f.rimBot = rgbCss(mixRgb(RIM_BOT, tint.rimBot, tt));
-    f.bloomColor = rgbCss(mixRgb(BLOOM, tint.bloom, tt));
-    f.atmoColor = rgbCss(mixRgb(BLOOM, tint.bloom, tt * 0.9));
-    f.nucGlowColor = rgbCss(mixRgb(NUC_GLOW, tint.nuc, tt * 0.7));
-    const shadowA = rgbCss(mixRgb(RIM_BOT, tint.rimBot, tt), clamp(0.75 * rim, 0.2, 0.9));
-    const shadowB = rgbCss(mixRgb(BLOOM, tint.bloom, tt), clamp(0.4 * rim + sp * 0.15, 0.1, 0.65));
+    f.rimTop = rgbCss(mixRgb(this.thRimTop, tint.rimTop, tt));
+    f.rimBot = rgbCss(mixRgb(this.thRimBot, tint.rimBot, tt));
+    f.bloomColor = rgbCss(mixRgb(this.thBloom, tint.bloom, tt));
+    f.atmoColor = rgbCss(mixRgb(this.thBloom, tint.bloom, tt * 0.9));
+    f.nucGlowColor = rgbCss(mixRgb(this.thNucGlow, tint.nuc, tt * 0.7));
+    const shadowA = rgbCss(mixRgb(this.thRimBot, tint.rimBot, tt), clamp(0.75 * rim, 0.2, 0.9));
+    const shadowB = rgbCss(mixRgb(this.thBloom, tint.bloom, tt), clamp(0.4 * rim + sp * 0.15, 0.1, 0.65));
     f.rimShadow = `drop-shadow(0 0 5px ${shadowA}) drop-shadow(0 0 18px ${shadowB})`;
 
     // 6. face -------------------------------------------------------------------
@@ -833,9 +915,9 @@ export class CellEngine {
     const angryW = smoothstep(0.14, 0.52, irr);
     const overW = smoothstep(0.66, 0.98, irr);
     const browRotAdd = 17 * angryW - 28 * overW;
-    const browYAdd = 3.2 * angryW;
+    const browYAdd = 3.2 * angryW - spFast * 3 * motion;
     const mouthAdd = -0.62 * angryW - 0.12 * overW;
-    const eyeAdd = -0.22 * angryW + 0.28 * overW;
+    const eyeAdd = -0.22 * angryW + 0.28 * overW + spFast * 0.07 * motion;
 
     const browY = imp.browY + browYAdd;
     f.browLTransform =
@@ -843,18 +925,33 @@ export class CellEngine {
     f.browRTransform =
       `translate(${BROW_R.x},${(BROW_R.y + this.p('browRY') + browY).toFixed(2)}) scale(-1,1) rotate(${(this.p('browRRot') + imp.browRRot + browRotAdd).toFixed(2)})`;
 
+    // Lip articulation: the snappy mouth envelope shapes openness, the slower
+    // noise streams pick pseudo-visemes (wide "ah" vs rounded "oh"), and the
+    // corners lift a touch while talking so speech reads as friendly.
+    const msm = this.mouthEnv;
     const artA = fnoise(this.tReal * 9.3, 231);
-    const artB = vnoise(this.tReal * 7.1, 233);
-    const open = clamp(this.p('mouthOpen') + sp * (0.75 + 0.35 * Math.max(0, artA)) + imp.mouthOpen, 0, 1.15);
-    const mw = this.p('mouthW') * (1 + sp * (-0.1 + 0.18 * artB));
-    const round = clamp01(this.p('mouthRound') + sp * 0.3 * (0.5 + 0.5 * artB) + imp.mouthRound);
-    f.mouthD = mouthPath({
+    const artB = vnoise(this.tReal * 4.6, 233);
+    const open = clamp(this.p('mouthOpen') + msm * (0.78 + 0.34 * Math.max(0, artA)) + imp.mouthOpen, 0, 1.15);
+    const mw = this.p('mouthW') * (1 + msm * (-0.16 + 0.26 * artB));
+    const round = clamp01(this.p('mouthRound') + msm * (0.3 - 0.28 * artB) + imp.mouthRound);
+    const geom = mouthGeom({
       cx: MOUTH.x, cy: MOUTH.y, w: mw, open,
-      curve: clamp(this.p('mouthCurve') + imp.mouthCurve + mouthAdd, -1, 1), round,
+      curve: clamp(this.p('mouthCurve') + imp.mouthCurve + mouthAdd + msm * 0.16, -1, 1), round,
     });
+    f.mouthD = geom.d;
     f.mouthFillOpacity = smoothstep(0.05, 0.2, open + round * 0.35) * 0.92;
     f.mouthStrokeW = clamp(5 - open * 1.6, 3.4, 5);
     f.blushOpacity = clamp01(this.p('blush') + imp.blush) * 0.75;
+
+    // Tongue peeks in when the mouth is well open — sells the "talking" look.
+    const tOp = smoothstep(0.34, 0.72, geom.open + geom.round * 0.12);
+    f.tongueOpacity = tOp * 0.9;
+    if (tOp > 0.005) {
+      const ty = geom.cy + geom.openH * 0.66;
+      const tsx = clamp(geom.w / 26, 0.5, 1.4) * (1 + msm * 0.12 * artB);
+      const tsy = clamp(0.35 + geom.openH * 0.05, 0.35, 1.5);
+      f.tongueTransform = `translate(${geom.cx.toFixed(2)},${ty.toFixed(2)}) scale(${tsx.toFixed(3)},${tsy.toFixed(3)})`;
+    }
 
     f.eyeOpenL = clamp(f.eyeOpenL + eyeAdd, 0.03, 1.38);
     f.eyeOpenR = clamp(f.eyeOpenR + eyeAdd, 0.03, 1.38);

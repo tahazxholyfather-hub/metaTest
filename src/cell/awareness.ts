@@ -21,13 +21,15 @@ export interface FaceImpulse {
   shiver: number;
   winkL: number;
   winkR: number;
+  /** Extra membrane wobble (px), for bursts like sneezes and laughter. */
+  wobble: number;
 }
 
 export const ZERO_IMPULSE: FaceImpulse = {
   x: 0, y: 0, scale: 0, tilt: 0, browY: 0, mouthCurve: 0, eyeOpen: 0,
   lookX: 0, lookY: 0, mouthOpen: 0, mouthRound: 0, blush: 0,
   browLRot: 0, browRRot: 0, eyeCurve: 0, pupilScale: 0, shiver: 0,
-  winkL: 0, winkR: 0,
+  winkL: 0, winkR: 0, wobble: 0,
 };
 
 export type ImpulseFn = (k: number, imp: FaceImpulse) => void;
@@ -48,6 +50,11 @@ export interface Reaction {
 }
 
 const envelope = (k: number) => Math.sin(Math.PI * Math.min(1, Math.max(0, k)));
+
+const smoothstepLocal = (a: number, b: number, x: number) => {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
 
 /** Anticipation squash then a springy pop — used as a shared click "hit" feel. */
 function pokeHit(strength = 1): ImpulseSpec {
@@ -321,13 +328,192 @@ const REACTIONS: Record<string, (side: number) => Reaction> = {
       { dur: 1.0, fn: (k, imp) => { imp.browY -= envelope(k) * 3.4; } },
     ],
   }),
+
+  // -- bigger personality beats ---------------------------------------------
+
+  puff: (side) => ({
+    id: 'puff',
+    hold: 0.8,
+    params: {
+      mouthCurve: -0.08, mouthW: 12, mouthRound: 0.85, mouthOpen: 0.22,
+      blush: 0.7, eyeOpen: 0.82, browLY: 2, browRY: 2,
+    },
+    impulses: [
+      {
+        dur: 0.95,
+        fn: (k, imp) => {
+          const inflate = k < 0.3 ? k / 0.3 : k > 0.75 ? (1 - k) / 0.25 : 1;
+          imp.scale += 0.065 * Math.max(0, inflate);
+          imp.tilt += envelope(k) * 2 * side;
+        },
+      },
+    ],
+  }),
+  ticklish: (side) => ({
+    id: 'ticklish',
+    hold: 0.75,
+    params: { eyeCurve: 1, mouthCurve: 0.92, mouthOpen: 0.42, mouthW: 28, blush: 0.6 },
+    impulses: [
+      {
+        dur: 0.85,
+        fn: (k, imp) => {
+          imp.tilt += Math.sin(k * Math.PI * 5) * 3.6 * side * (1 - k);
+          imp.wobble += envelope(k) * 2.2;
+          imp.y -= envelope(k) * 4;
+        },
+      },
+    ],
+  }),
+  spinWiggle: (side) => ({
+    id: 'spinWiggle',
+    hold: 0.7,
+    params: { eyeCurve: 0.8, mouthCurve: 0.85, mouthOpen: 0.25, blush: 0.45 },
+    impulses: [
+      {
+        dur: 1.0,
+        fn: (k, imp) => {
+          imp.tilt += Math.sin(k * Math.PI * 3) * 8 * side * (1 - k * 0.6);
+          imp.x += Math.sin(k * Math.PI * 2) * 5 * side * (1 - k);
+          imp.scale += envelope(k) * 0.02;
+        },
+      },
+    ],
+  }),
+  greet: (side) => ({
+    id: 'greet',
+    hold: 0.9,
+    params: {
+      eyeCurve: 0.9, mouthCurve: 0.9, mouthOpen: 0.3, mouthW: 29,
+      blush: 0.5, sparkle: 0.7, browLY: -6, browRY: -6,
+    },
+    impulses: [
+      hop(0.8, 9, 0.03),
+      {
+        dur: 1.0,
+        fn: (k, imp) => {
+          imp.tilt += Math.sin(k * Math.PI * 4) * 4.5 * side * (1 - k);
+        },
+      },
+    ],
+  }),
+  yawn: () => ({
+    id: 'yawn',
+    hold: 1.35,
+    params: {
+      mouthRound: 0.8, mouthOpen: 1.0, mouthW: 24,
+      eyeOpen: 0.13, browLY: -2, browRY: -2, browLRot: -7, browRRot: -7,
+      lookY: 0.1,
+    },
+    impulses: [
+      {
+        dur: 1.9,
+        fn: (k, imp) => {
+          // slow inhale-stretch, then a settling sigh
+          const s = k < 0.55 ? envelope(k / 0.55) : 0;
+          const sigh = k > 0.62 ? envelope((k - 0.62) / 0.38) : 0;
+          imp.scale += s * 0.045 - sigh * 0.02;
+          imp.y -= s * 5 - sigh * 3;
+          imp.tilt -= s * 2.5;
+        },
+      },
+    ],
+    blink: true,
+  }),
+  sneeze: (side) => ({
+    id: 'sneeze',
+    hold: 1.15,
+    params: { mouthRound: 0.55, mouthOpen: 0.35, browLY: -5, browRY: -5, eyeOpen: 1.1 },
+    impulses: [
+      {
+        dur: 1.5,
+        fn: (k, imp) => {
+          if (k < 0.42) {
+            // wind-up: inhale, brows up, tilting back
+            const a = k / 0.42;
+            imp.scale += a * 0.055;
+            imp.y -= a * 6;
+            imp.browY -= a * 3;
+            imp.eyeOpen += a * 0.15;
+          } else if (k < 0.56) {
+            // achoo! fast squash forward
+            const a = (k - 0.42) / 0.14;
+            imp.scale += 0.055 - a * 0.14;
+            imp.y += a * 10 - 6;
+            imp.tilt += a * 6 * side;
+            imp.wobble += a * 4;
+          } else {
+            // dazed recovery
+            const a = (k - 0.56) / 0.44;
+            const e = 1 - a;
+            imp.scale += -0.085 * e;
+            imp.y += 4 * e;
+            imp.tilt += 6 * side * e;
+            imp.eyeOpen -= 0.25 * e;
+            imp.wobble += 2.5 * e;
+          }
+        },
+      },
+    ],
+    blink: true,
+  }),
+  stretch: () => ({
+    id: 'stretch',
+    hold: 1.1,
+    params: { eyeCurve: 1, mouthCurve: 0.5, mouthOpen: 0.3, mouthRound: 0.5, browLY: -4, browRY: -4 },
+    impulses: [
+      {
+        dur: 1.7,
+        fn: (k, imp) => {
+          const s = envelope(Math.min(1, k * 1.25));
+          imp.scale += s * 0.055;
+          imp.y -= s * 8;
+          imp.tilt += Math.sin(k * Math.PI) * 3;
+        },
+      },
+    ],
+  }),
+  peek: (side) => ({
+    id: 'peek',
+    hold: 1.3,
+    params: {
+      eyeOpen: 1.12, pupilScale: 1.14, lookX: 0.6 * side, lookY: -0.1,
+      browLY: side > 0 ? -6 : -1, browRY: side > 0 ? -1 : -6,
+      mouthW: 16, mouthCurve: 0.3, bodyTilt: -4 * side,
+    },
+    impulses: [
+      {
+        dur: 1.8,
+        fn: (k, imp) => {
+          const e = envelope(Math.min(1, k * 1.3));
+          imp.x += e * 11 * side;
+          imp.tilt -= e * 4 * side;
+        },
+      },
+    ],
+  }),
+  dotChase: (side) => ({
+    id: 'dotChase',
+    hold: 1.5,
+    params: { eyeOpen: 1.08, pupilScale: 1.18, mouthW: 15, mouthOpen: 0.1, mouthRound: 0.4 },
+    impulses: [
+      {
+        dur: 1.9,
+        fn: (k, imp) => {
+          const fade = 1 - smoothstepLocal(0.75, 1, k);
+          imp.lookX += Math.cos(k * Math.PI * 3.5) * 0.55 * side * fade;
+          imp.lookY += Math.sin(k * Math.PI * 3.5) * 0.42 * fade;
+        },
+      },
+    ],
+  }),
 };
 
-const PLAYFUL_IDS = ['laugh', 'surprise', 'wink', 'giggle', 'bounce', 'smile', 'curious', 'nuzzle'];
-const ANNOYED_IDS = ['annoyed', 'blink', 'huff', 'flinch', 'curious'];
+const PLAYFUL_IDS = ['laugh', 'surprise', 'wink', 'giggle', 'bounce', 'smile', 'ticklish', 'spinWiggle', 'puff', 'curious', 'nuzzle'];
+const ANNOYED_IDS = ['annoyed', 'blink', 'huff', 'flinch', 'puff'];
 const ANGRY_IDS = ['huff', 'angry', 'annoyed', 'flinch'];
 const OVER_IDS = ['overwhelmed', 'flinch', 'angry'];
 const MICRO_IDS = ['glance', 'tinySmile', 'tinyTilt', 'browUp', 'blink'];
+const BIG_IDLE_IDS = ['yawn', 'stretch', 'spinWiggle', 'peek', 'sneeze', 'dotChase', 'ticklish'];
 
 function pickFrom(ids: string[], recent: string[], rand: () => number): string {
   const pool = ids.filter((id) => !recent.includes(id));
@@ -360,7 +546,7 @@ export function pickClickReaction(ctx: PickContext): Reaction {
   else if (state === 'sleeping' || state === 'sleepy') ids = ['stir', 'blink', 'tinySmile'];
   else if (state === 'sad' || state === 'worried') ids = ['flinch', 'tinySmile', 'blink', 'nuzzle'];
   else if (state === 'angry') ids = ['huff', 'angry', 'annoyed'];
-  else if (state === 'happy' || state === 'excited' || state === 'success') ids = ['laugh', 'giggle', 'bounce', 'wink', 'smile'];
+  else if (state === 'happy' || state === 'excited' || state === 'success') ids = ['laugh', 'giggle', 'bounce', 'wink', 'ticklish', 'spinWiggle'];
   else if (state === 'thinking' || state === 'focused' || state === 'processing') ids = ['surprise', 'curious', 'blink', 'smile'];
   else ids = PLAYFUL_IDS;
 
@@ -386,4 +572,18 @@ export function pickHoverReaction(ctx: PickContext): Reaction {
 
 export function pickStartleReaction(ctx: PickContext): Reaction {
   return REACTIONS.surprise!(sideFrom(ctx.rand, ctx.lookX));
+}
+
+/** Rare, bigger idle beats — yawns, stretches, sneezes, little dances. */
+export function pickBigIdleReaction(ctx: PickContext, bored: number): Reaction {
+  const side = sideFrom(ctx.rand, ctx.lookX);
+  // When bored, favor sleepy/lazy beats over energetic ones.
+  const ids = bored > 0.5 ? ['yawn', 'stretch', 'peek', 'yawn', 'dotChase'] : BIG_IDLE_IDS;
+  const id = pickFrom(ids, ctx.recent, ctx.rand);
+  return REACTIONS[id]!(side);
+}
+
+/** Warm hello when the user's cursor comes back after a long absence. */
+export function pickGreetReaction(ctx: PickContext): Reaction {
+  return REACTIONS.greet!(sideFrom(ctx.rand, ctx.lookX));
 }

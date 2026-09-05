@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AICell, CELL_MOODS, CELL_STATES } from './cell';
-import type { AICellHandle, CellMood, CellState } from './cell';
+import { AICell, CELL_MOODS, CELL_STATES, THEMES } from './cell';
+import type { AICellHandle, CellColorName, CellMood, CellState } from './cell';
 
 const SIZES = [
   { label: 'S · 120px', value: 120 },
   { label: 'M · 220px', value: 220 },
   { label: 'L · 340px', value: 340 },
 ];
+
+const COLORS = Object.keys(THEMES) as CellColorName[];
 
 export default function App() {
   const cell = useRef<AICellHandle>(null);
@@ -21,6 +23,7 @@ export default function App() {
   const [reducedMotion, setReducedMotion] = useState(false);
   const [size, setSize] = useState(340);
   const [tour, setTour] = useState(false);
+  const [cellColor, setCellColor] = useState<CellColorName>('violet');
 
   const applyState = useCallback((s: CellState) => {
     setActiveState(s);
@@ -58,7 +61,7 @@ export default function App() {
     <div className="app">
       <header className="header">
         <div>
-          <h1>AI Cell Character</h1>
+          <h1>Met · AI Cell Character</h1>
           <p>Living, stateful assistant avatar · React + TypeScript + SVG</p>
         </div>
         <div className="header-actions">
@@ -74,6 +77,7 @@ export default function App() {
             ref={cell}
             size={size}
             initialState="idle"
+            color={cellColor}
             reducedMotion={reducedMotion || undefined}
           />
           <div className="stage-caption">
@@ -87,6 +91,18 @@ export default function App() {
               <button key={s.value} className={`chip small${size === s.value ? ' on' : ''}`} onClick={() => setSize(s.value)}>
                 {s.label}
               </button>
+            ))}
+          </div>
+          <div className="size-row">
+            {COLORS.map((c) => (
+              <button
+                key={c}
+                className={`swatch${cellColor === c ? ' on' : ''}`}
+                title={c}
+                aria-label={`Body color: ${c}`}
+                style={{ background: `radial-gradient(circle at 35% 30%, ${THEMES[c].rimBot}, ${THEMES[c].membrane[3]})` }}
+                onClick={() => setCellColor(c)}
+              />
             ))}
           </div>
         </section>

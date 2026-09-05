@@ -5,6 +5,7 @@ import { CellEngine, type CellFrame } from './engine';
 import {
   BLUSH_L, BLUSH_R, CELL_CX, CELL_CY, CELL_R, EYE_L, EYE_R, EYE_RX, EYE_RY, PUPIL_R,
 } from './geometry';
+import { DEFAULT_COLOR, THEMES, type CellColorName } from './themes';
 import type { AICellHandle, AICellProps } from './types';
 import './aicell.css';
 
@@ -19,7 +20,7 @@ export const AICell = forwardRef<AICellHandle, AICellProps>(function AICell(prop
     size = '100%',
     initialState = 'idle',
     state, speaking, listening, mood, energy, speechIntensity,
-    reducedMotion, atmosphere = true, interactive = true,
+    reducedMotion, atmosphere = true, interactive = true, color,
     className, style, ariaLabel = 'AI assistant character',
   } = props;
 
@@ -111,8 +112,13 @@ export const AICell = forwardRef<AICellHandle, AICellProps>(function AICell(prop
     setA('browR', 'transform', f.browRTransform);
 
     setA('mouth', 'd', f.mouthD);
+    setA('mouthClip', 'd', f.mouthD);
     setA('mouth', 'fill-opacity', f.mouthFillOpacity.toFixed(3));
     setA('mouth', 'stroke-width', f.mouthStrokeW.toFixed(2));
+    setA('tongue', 'opacity', f.tongueOpacity.toFixed(3));
+    if (f.tongueOpacity > 0.005) {
+      setA('tongue', 'transform', f.tongueTransform);
+    }
     const blushO = f.blushOpacity.toFixed(3);
     setA('blushL', 'opacity', blushO);
     setA('blushR', 'opacity', blushO);
@@ -247,6 +253,31 @@ export const AICell = forwardRef<AICellHandle, AICellProps>(function AICell(prop
     return () => mq.removeEventListener('change', onChange);
   }, [reducedMotion]);
 
+  // Body color theme -------------------------------------------------------------
+  const applyTheme = useCallback((name: CellColorName) => {
+    const th = THEMES[name] ?? THEMES[DEFAULT_COLOR];
+    const set = (key: string, attr: string, value: string) => {
+      nodes.current[key]?.setAttribute(attr, value);
+      cache.current[key + '\u0000' + attr] = value;
+    };
+    th.membrane.forEach((c, i) => set(`memStop${i}`, 'stop-color', c));
+    set('coreStopA', 'stop-color', th.coreA);
+    set('coreStopB', 'stop-color', th.coreB);
+    th.nucleus.forEach((c, i) => set(`nucStop${i}`, 'stop-color', c));
+    set('inner', 'stroke', th.inner);
+    set('dotsGroup', 'fill', th.dots);
+    set('zzzGroup', 'fill', th.dots);
+    set('sparkGroup', 'fill', th.dots);
+    set('ringC1', 'stroke', th.inner);
+    set('blushL', 'fill', th.blush);
+    set('blushR', 'fill', th.blush);
+    engineRef.current?.setTheme(th);
+  }, []);
+
+  useEffect(() => {
+    applyTheme(color ?? DEFAULT_COLOR);
+  }, [color, applyTheme]);
+
   // Controlled props → engine ---------------------------------------------------
   useEffect(() => {
     if (state !== undefined) engineRef.current?.setState(state);
@@ -279,8 +310,9 @@ export const AICell = forwardRef<AICellHandle, AICellProps>(function AICell(prop
       setEnergy: (v) => engineRef.current?.setEnergy(v),
       setSpeechIntensity: (v) => engineRef.current?.setSpeechIntensity(v),
       poke: () => engineRef.current?.poke(),
+      setColor: (c) => applyTheme(c),
     }),
-    [],
+    [applyTheme],
   );
 
   const sizeCss = typeof size === 'number' ? `${size}px` : size;
@@ -305,27 +337,27 @@ export const AICell = forwardRef<AICellHandle, AICellProps>(function AICell(prop
             <stop offset="100%" stopColor="#0B0318" stopOpacity="0" />
           </radialGradient>
           <radialGradient id={id('membraneG')} cx="42%" cy="36%" r="72%">
-            <stop offset="0%" stopColor="#401E7D" />
-            <stop offset="38%" stopColor="#361766" />
-            <stop offset="68%" stopColor="#411C80" />
-            <stop offset="86%" stopColor="#5524A6" />
-            <stop offset="96%" stopColor="#6D28D9" />
-            <stop offset="100%" stopColor="#7C3AED" />
+            <stop ref={n('memStop0')} offset="0%" stopColor="#401E7D" />
+            <stop ref={n('memStop1')} offset="38%" stopColor="#361766" />
+            <stop ref={n('memStop2')} offset="68%" stopColor="#411C80" />
+            <stop ref={n('memStop3')} offset="86%" stopColor="#5524A6" />
+            <stop ref={n('memStop4')} offset="96%" stopColor="#6D28D9" />
+            <stop ref={n('memStop5')} offset="100%" stopColor="#7C3AED" />
           </radialGradient>
           <linearGradient id={id('rimG')} x1="0" y1="0" x2="0" y2="1">
             <stop ref={n('rimStopTop')} offset="0%" stopColor="#D8CCFF" />
             <stop ref={n('rimStopBot')} offset="100%" stopColor="#8B5CF6" />
           </linearGradient>
           <radialGradient id={id('coreG')} cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#A855F7" stopOpacity="0.65" />
-            <stop offset="55%" stopColor="#8B5CF6" stopOpacity="0.22" />
+            <stop ref={n('coreStopA')} offset="0%" stopColor="#A855F7" stopOpacity="0.65" />
+            <stop ref={n('coreStopB')} offset="55%" stopColor="#8B5CF6" stopOpacity="0.22" />
             <stop offset="100%" stopColor="#8B5CF6" stopOpacity="0" />
           </radialGradient>
           <radialGradient id={id('nucG')} cx="38%" cy="30%" r="75%">
-            <stop offset="0%" stopColor="#A863F2" />
-            <stop offset="42%" stopColor="#8241DC" />
-            <stop offset="82%" stopColor="#6526B4" />
-            <stop offset="100%" stopColor="#571FA0" />
+            <stop ref={n('nucStop0')} offset="0%" stopColor="#A863F2" />
+            <stop ref={n('nucStop1')} offset="42%" stopColor="#8241DC" />
+            <stop ref={n('nucStop2')} offset="82%" stopColor="#6526B4" />
+            <stop ref={n('nucStop3')} offset="100%" stopColor="#571FA0" />
           </radialGradient>
           <radialGradient id={id('pupilG')} cx="38%" cy="34%" r="70%">
             <stop offset="0%" stopColor="#301352" />
@@ -348,6 +380,9 @@ export const AICell = forwardRef<AICellHandle, AICellProps>(function AICell(prop
           </clipPath>
           <clipPath id={id('eyeclipR')}>
             <ellipse ref={n('eyeClipR')} cx="0" cy="0" rx={EYE_RX} ry={EYE_RY} />
+          </clipPath>
+          <clipPath id={id('mouthclip')}>
+            <path ref={n('mouthClip')} d="" />
           </clipPath>
         </defs>
 
@@ -372,7 +407,7 @@ export const AICell = forwardRef<AICellHandle, AICellProps>(function AICell(prop
             <ellipse ref={n('coreLight')} cx="214" cy="252" rx="92" ry="78" fill={url('coreG')} opacity="0.24" />
 
             {/* drifting cytoplasm dots */}
-            <g fill="#C4B5FD">
+            <g ref={n('dotsGroup')} fill="#C4B5FD">
               {Array.from({ length: 9 }, (_, i) => (
                 <circle key={i} ref={n(`dot${i}`)} r={[2.6, 1.8, 3.2, 2.1, 1.6, 2.8, 1.9, 2.4, 1.7][i]} opacity="0.2" />
               ))}
@@ -451,6 +486,10 @@ export const AICell = forwardRef<AICellHandle, AICellProps>(function AICell(prop
                 strokeLinejoin="round"
                 strokeLinecap="round"
               />
+              {/* tongue, clipped inside the mouth cavity */}
+              <g clipPath={url('mouthclip')}>
+                <ellipse ref={n('tongue')} rx="9" ry="5.5" fill="#C2497F" opacity="0" />
+              </g>
             </g>
           </g>
 
@@ -468,7 +507,7 @@ export const AICell = forwardRef<AICellHandle, AICellProps>(function AICell(prop
 
         {/* orbit ring (loading / processing) */}
         <g ref={n('ring')} opacity="0">
-          <circle cx={CELL_CX} cy={CELL_CY} r={CELL_R + 26} fill="none" stroke="#A78BFA" strokeWidth="2" strokeDasharray="3 17" strokeLinecap="round" />
+          <circle ref={n('ringC1')} cx={CELL_CX} cy={CELL_CY} r={CELL_R + 26} fill="none" stroke="#A78BFA" strokeWidth="2" strokeDasharray="3 17" strokeLinecap="round" />
           <path
             d={`M ${CELL_CX + CELL_R + 26} ${CELL_CY} A ${CELL_R + 26} ${CELL_R + 26} 0 0 1 ${CELL_CX} ${CELL_CY + CELL_R + 26}`}
             fill="none" stroke="#C4B5FD" strokeWidth="2.6" strokeLinecap="round" opacity="0.9"
@@ -476,14 +515,14 @@ export const AICell = forwardRef<AICellHandle, AICellProps>(function AICell(prop
         </g>
 
         {/* sparkles */}
-        <g fill="#E9D5FF" className="aicell-glow-spark">
+        <g ref={n('sparkGroup')} fill="#E9D5FF" className="aicell-glow-spark">
           {Array.from({ length: 6 }, (_, i) => (
             <path key={i} ref={n(`spark${i}`)} d="M 0 -3.2 L 0.95 -0.95 L 3.2 0 L 0.95 0.95 L 0 3.2 L -0.95 0.95 L -3.2 0 L -0.95 -0.95 Z" opacity="0" />
           ))}
         </g>
 
         {/* zzz */}
-        <g fill="#DDD6FE" fontFamily="Georgia, 'Times New Roman', serif" fontStyle="italic" fontWeight="700" fontSize="21" className="aicell-glow-spark">
+        <g ref={n('zzzGroup')} fill="#DDD6FE" fontFamily="Georgia, 'Times New Roman', serif" fontStyle="italic" fontWeight="700" fontSize="21" className="aicell-glow-spark">
           {Array.from({ length: 3 }, (_, i) => (
             <text key={i} ref={n(`zzz${i}`)} opacity="0">
               z

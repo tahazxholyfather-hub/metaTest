@@ -124,6 +124,30 @@ body {
 .size-row {
   display: flex;
   gap: 8px;
+  align-items: center;
+}
+
+.swatch {
+  appearance: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid rgba(139, 92, 246, 0.25);
+  cursor: pointer;
+  padding: 0;
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.swatch:hover {
+  transform: scale(1.12);
+}
+
+.swatch.on {
+  border-color: #ede9fe;
+  box-shadow: 0 0 12px rgba(196, 181, 253, 0.5);
 }
 
 .panel {
