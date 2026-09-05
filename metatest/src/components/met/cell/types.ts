@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import type { CellColorName } from './themes';
 
 /** All behavioral states the character supports. */
 export const CELL_STATES = [
@@ -127,6 +128,8 @@ export interface AICellHandle {
   setSpeechIntensity(value: number): void;
   /** Trigger a context-aware click reaction (also fired by clicking the character). */
   poke(): void;
+  /** Swap the body color theme. */
+  setColor(color: CellColorName): void;
 }
 
 export interface AICellProps {
@@ -146,6 +149,8 @@ export interface AICellProps {
   atmosphere?: boolean;
   /** Eye-tracking, proximity and click personality. Default true. */
   interactive?: boolean;
+  /** Body color theme. Default 'violet' (the reference purple). */
+  color?: CellColorName;
   className?: string;
   style?: CSSProperties;
   ariaLabel?: string;

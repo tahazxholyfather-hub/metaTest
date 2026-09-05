@@ -17,6 +17,14 @@ export function useTypingLoop(lines: string[], opts: Options = {}) {
     const [lineIndex, setLineIndex] = useState(0);
     const [text, setText] = useState('');
     const [phase, setPhase] = useState<'typing' | 'holding' | 'erasing' | 'pausing'>('typing');
+    const linesKey = lines.join('|');
+
+    // Restart cleanly whenever the line set itself changes (e.g. slide change).
+    useEffect(() => {
+        setLineIndex(0);
+        setText('');
+        setPhase('typing');
+    }, [linesKey]);
 
     useEffect(() => {
         if (!enabled || !lines.length) return;
@@ -46,7 +54,7 @@ export function useTypingLoop(lines: string[], opts: Options = {}) {
 
         return () => clearTimeout(timer);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [text, phase, lineIndex, enabled, lines.join('|')]);
+    }, [text, phase, lineIndex, enabled, linesKey]);
 
     return { text, isTyping: phase === 'typing' || phase === 'erasing' };
 }

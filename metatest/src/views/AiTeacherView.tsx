@@ -9,7 +9,9 @@ import { aiTeacherApi } from './ai-teacher-ui/api';
 import { SUBJECT_FALLBACKS, SUBJECT_ORDER } from './ai-teacher-ui/subjectIcons';
 import type {
     AiConversationSummary,
+    AiFeatures,
     AiMessage,
+    AiSettings,
     AiSubject,
     AiWallet,
     ChatStatus,
@@ -30,6 +32,16 @@ const FALLBACK_SUBJECTS: AiSubject[] = SUBJECT_ORDER.map((key) => ({
     color: SUBJECT_FALLBACKS[key].color,
 }));
 
+const DEFAULT_SETTINGS: AiSettings = {
+    efficientMode: false,
+    shortAnswers: false,
+    alwaysExamples: true,
+    stepByStep: true,
+    voiceReplies: true,
+};
+
+const DEFAULT_FEATURES: AiFeatures = { voice: true, imageGeneration: true, vision: true };
+
 export function AiTeacherView({ onStateChange, onNavigateHome }: Props) {
     const isMobile = useIsMobile();
     const [bootLoading, setBootLoading] = useState(true);
@@ -40,6 +52,8 @@ export function AiTeacherView({ onStateChange, onNavigateHome }: Props) {
     const [conversationTitle, setConversationTitle] = useState('گفتگوی جدید');
     const [messages, setMessages] = useState<AiMessage[]>([]);
     const [wallet, setWallet] = useState<AiWallet>({ balance: 0 });
+    const [settings, setSettings] = useState<AiSettings>(DEFAULT_SETTINGS);
+    const [features, setFeatures] = useState<AiFeatures>(DEFAULT_FEATURES);
     const [chatStatus, setChatStatus] = useState<ChatStatus>('ready');
     const [conversations, setConversations] = useState<AiConversationSummary[]>([]);
     const [conversationsLoading, setConversationsLoading] = useState(false);
@@ -48,7 +62,7 @@ export function AiTeacherView({ onStateChange, onNavigateHome }: Props) {
     const [firstName, setFirstName] = useState<string | undefined>();
 
     useEffect(() => {
-        onStateChange?.({ title: 'Met', showBackButton: false });
+        onStateChange?.({ title: 'مِت', showBackButton: false });
     }, [onStateChange]);
 
     const goHome = useCallback(() => {
@@ -60,7 +74,7 @@ export function AiTeacherView({ onStateChange, onNavigateHome }: Props) {
     const refreshConversations = useCallback(async () => {
         setConversationsLoading(true);
         try {
-            const res = await aiTeacherApi.listConversations({ limit: 40 });
+            const res = await aiTeacherApi.listConversations({ limit: 50 });
             setConversations(res.data || []);
         } catch {
             setConversations([]);
@@ -78,6 +92,8 @@ export function AiTeacherView({ onStateChange, onNavigateHome }: Props) {
             setWallet(data.wallet || { balance: 0 });
             if (data.subjects?.length) setSubjects(data.subjects);
             if (data.lastSubject) setActiveSubjectKey(data.lastSubject);
+            if (data.settings) setSettings(data.settings);
+            if (data.features) setFeatures(data.features);
 
             if (!data.introSeen) {
                 setStep('intro');
@@ -96,7 +112,7 @@ export function AiTeacherView({ onStateChange, onNavigateHome }: Props) {
             setStep('chat');
             refreshConversations();
         } catch (err: any) {
-            toast.error(err?.message || 'خطا در بارگذاری Met');
+            toast.error(err?.message || 'خطا در بارگذاری مِت');
             setStep('intro');
         } finally {
             setBootLoading(false);
@@ -116,6 +132,23 @@ export function AiTeacherView({ onStateChange, onNavigateHome }: Props) {
         setStep('chat');
         refreshConversations();
     };
+
+    const handleSubjectChange = useCallback((key: SubjectKey) => {
+        setActiveSubjectKey(key);
+    }, []);
+
+    const handleSettingsChange = useCallback((patch: Partial<AiSettings>) => {
+        setSettings((prev) => {
+            const next = { ...prev, ...patch };
+            aiTeacherApi.updateSettings(patch)
+                .then((res) => setSettings((cur) => ({ ...cur, ...res.data })))
+                .catch(() => {
+                    setSettings(prev);
+                    toast.error('ذخیره تنظیمات ناموفق بود');
+                });
+            return next;
+        });
+    }, []);
 
     const handleSelectConversation = async (id: number) => {
         if (id === conversationId) { setHistorySheetOpen(false); return; }
@@ -185,6 +218,11 @@ export function AiTeacherView({ onStateChange, onNavigateHome }: Props) {
         onDeleteConversation: handleDeleteConversation,
         chatStatus,
         subjects,
+        activeSubjectKey,
+        onSubjectChange: handleSubjectChange,
+        settings,
+        onSettingsChange: handleSettingsChange,
+        voiceEnabled: features.voice,
     };
 
     if (bootLoading) {
@@ -202,7 +240,7 @@ export function AiTeacherView({ onStateChange, onNavigateHome }: Props) {
     if (step === 'intro') {
         return (
             <div className="flex-1 flex flex-col min-h-0 h-full overflow-hidden">
-                <IntroScreen loading={busy} onStart={handleStart} />
+                <IntroScreen loading={busy} onStart={handleStart} onBack={goHome} />
             </div>
         );
     }
@@ -213,7 +251,7 @@ export function AiTeacherView({ onStateChange, onNavigateHome }: Props) {
                 <ChatScreen
                     subjects={subjects}
                     activeSubjectKey={activeSubjectKey}
-                    onSubjectChange={setActiveSubjectKey}
+                    onSubjectChange={handleSubjectChange}
                     conversationId={conversationId}
                     conversationTitle={conversationTitle}
                     initialMessages={messages}
@@ -225,6 +263,8 @@ export function AiTeacherView({ onStateChange, onNavigateHome }: Props) {
                     onOpenHistory={() => setHistorySheetOpen(true)}
                     onNewChat={handleNewChat}
                     onLeave={goHome}
+                    voiceEnabled={features.voice}
+                    voiceRepliesEnabled={settings.voiceReplies}
                     studentFirstName={firstName}
                 />
             </div>

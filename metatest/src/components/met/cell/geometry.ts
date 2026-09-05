@@ -38,9 +38,21 @@ const STATIC_OFFSETS: number[] = Array.from({ length: MEMBRANE_POINTS }, (_, i) 
 
 const scratch: Pt[] = Array.from({ length: MEMBRANE_POINTS }, () => ({ x: 0, y: 0 }));
 
+export interface MembraneDent {
+  /** Angle from the cell center, radians. */
+  angle: number;
+  /** Radius delta in px (negative = poke inward). */
+  amount: number;
+  /** Angular gaussian width, radians. */
+  width: number;
+}
+
+const noDents: MembraneDent[] = [];
+
 /**
  * Build the living membrane outline. `wobbleAmp` is in px, `time` in seconds,
- * `squashX/squashY` allow directional breathing.
+ * `squashX/squashY` allow directional breathing. `dents` are local touch
+ * deformations (e.g. where the user pokes Met).
  */
 export function membranePath(
   time: number,
@@ -49,13 +61,20 @@ export function membranePath(
   squashX: number,
   squashY: number,
   scale = 1,
+  dents: MembraneDent[] = noDents,
 ): string {
   const n = MEMBRANE_POINTS;
   for (let i = 0; i < n; i++) {
     const a = (i / n) * Math.PI * 2 - Math.PI / 2;
     const wob = fnoise(time * wobbleSpeed * 0.42 + i * 7.31, 37) * wobbleAmp;
     const slow = fnoise(time * 0.11 + i * 3.77, 91) * wobbleAmp * 0.55;
-    const r = CELL_R * (1 + STATIC_OFFSETS[i]) * scale + wob + slow;
+    let r = CELL_R * (1 + STATIC_OFFSETS[i]) * scale + wob + slow;
+    for (let d = 0; d < dents.length; d++) {
+      const dent = dents[d];
+      let da = a - dent.angle;
+      da = Math.atan2(Math.sin(da), Math.cos(da));
+      r += dent.amount * Math.exp(-(da * da) / (2 * dent.width * dent.width));
+    }
     scratch[i].x = CELL_CX + Math.cos(a) * r * squashX;
     scratch[i].y = CELL_CY + Math.sin(a) * r * squashY;
   }
@@ -71,28 +90,44 @@ export interface MouthShape {
   round: number; // 0..1
 }
 
+export interface MouthGeom {
+  d: string;
+  cx: number;
+  /** Vertical mouth center after jaw drop. */
+  cy: number;
+  w: number;
+  openH: number;
+  open: number;
+  round: number;
+}
+
 /**
- * One morphable mouth path covering smile, frown, open talk shapes and the
- * surprised "o". Rendered with fill (inner mouth) + rounded stroke (lip line);
- * when closed the fill collapses and only the stroke line remains.
+ * One morphable mouth covering smile, frown, open talk shapes and the
+ * surprised "o". The whole mouth drops slightly with openness (jaw), which
+ * makes speech read as articulation instead of a scaling hole.
  */
-export function mouthPath(m: MouthShape): string {
+export function mouthGeom(m: MouthShape): MouthGeom {
   const round = clamp01(m.round);
   const open = Math.max(0, m.open);
   const curve = m.curve * (1 - 0.7 * round);
   const w = Math.max(6, m.w * (1 - 0.3 * round));
   const hw = w / 2;
-  const cornerY = m.cy - curve * 5.5 * (1 - 0.5 * round);
-  const topCtrlY = m.cy + curve * 7.5 - open * 3.5 - round * open * 5;
+  const cy = m.cy + open * 4.5; // jaw drop
+  const cornerY = cy - curve * 5.5 * (1 - 0.5 * round) - open * 1.5;
+  const topCtrlY = cy + curve * 7.5 - open * 3.5 - round * open * 5;
   const openH = open * (15 + 6 * round) + round * (3 + open * 4);
   const botCtrlY = topCtrlY + openH * 2; // quadratic ctrl overshoots to reach depth
   const lx = m.cx - hw;
   const rx = m.cx + hw;
-  return (
+  const d =
     `M ${lx.toFixed(2)} ${cornerY.toFixed(2)}` +
     ` Q ${m.cx.toFixed(2)} ${topCtrlY.toFixed(2)} ${rx.toFixed(2)} ${cornerY.toFixed(2)}` +
-    ` Q ${m.cx.toFixed(2)} ${botCtrlY.toFixed(2)} ${lx.toFixed(2)} ${cornerY.toFixed(2)} Z`
-  );
+    ` Q ${m.cx.toFixed(2)} ${botCtrlY.toFixed(2)} ${lx.toFixed(2)} ${cornerY.toFixed(2)} Z`;
+  return { d, cx: m.cx, cy, w, openH, open, round };
+}
+
+export function mouthPath(m: MouthShape): string {
+  return mouthGeom(m).d;
 }
 
 // Face layout (matched to the reference proportions on a 400×400 viewBox).

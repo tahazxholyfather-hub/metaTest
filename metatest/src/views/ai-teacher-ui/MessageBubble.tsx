@@ -1,18 +1,49 @@
-import React, { useMemo } from 'react';
-import { Copy, Check, Flag, ImageOff } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Copy, Check, Flag, ImageOff, Volume2, Square } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { MathRenderer } from '../../components/ui/MathRenderer';
 import { Met } from '../../components/met';
 import type { AiMessage } from './types';
-import { easeOut } from './ui';
+import type { MetColor } from '../../components/met';
+import { GraySpinner, easeOut } from './ui';
 
 type Props = {
     message: AiMessage;
     isGroupEnd?: boolean;
     isGroupStart?: boolean;
+    metColor?: MetColor;
+    /** Resolve (and bill once) the spoken version of this message; returns the audio URL. */
+    onSpeak?: (messageId: number) => Promise<string | null>;
+    canSpeak?: boolean;
     onReport?: (message: AiMessage) => void;
 };
+
+/** One shared player so replies never talk over each other. */
+let sharedAudio: HTMLAudioElement | null = null;
+let sharedAudioStop: (() => void) | null = null;
+
+function playShared(url: string, onEnd: () => void) {
+    stopShared();
+    const audio = new Audio(url);
+    sharedAudio = audio;
+    sharedAudioStop = onEnd;
+    audio.onended = () => { if (sharedAudio === audio) { sharedAudio = null; sharedAudioStop = null; } onEnd(); };
+    audio.onerror = () => { if (sharedAudio === audio) { sharedAudio = null; sharedAudioStop = null; } onEnd(); };
+    audio.play().catch(() => onEnd());
+}
+
+function stopShared() {
+    if (sharedAudio) {
+        try { sharedAudio.pause(); } catch { /* ignore */ }
+        sharedAudio = null;
+    }
+    if (sharedAudioStop) {
+        const cb = sharedAudioStop;
+        sharedAudioStop = null;
+        cb();
+    }
+}
 
 function formatMsgTime(iso?: string) {
     if (!iso) {
@@ -116,11 +147,40 @@ export function MessageBubble({
     message,
     isGroupEnd = true,
     isGroupStart = true,
+    metColor = 'violet',
+    onSpeak,
+    canSpeak = false,
     onReport,
 }: Props) {
     const [copied, setCopied] = React.useState(false);
+    const [speechState, setSpeechState] = useState<'idle' | 'loading' | 'playing'>('idle');
     const isUser = message.role === 'user';
     const time = formatMsgTime(message.createdAt);
+    const numericId = typeof message.id === 'number' ? message.id : Number(message.id);
+    const speakable = canSpeak && !isUser && !message.streaming && !!message.content && Number.isFinite(numericId) && numericId > 0;
+
+    useEffect(() => () => { if (speechState === 'playing') stopShared(); }, [speechState]);
+
+    const handleSpeak = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (speechState === 'playing') { stopShared(); return; }
+        if (speechState === 'loading') return;
+
+        const cachedUrl = (message.attachments || []).find((a) => a.type === 'audio' && a.url)?.url;
+        try {
+            let url = cachedUrl || null;
+            if (!url && onSpeak) {
+                setSpeechState('loading');
+                url = await onSpeak(numericId);
+            }
+            if (!url) { setSpeechState('idle'); return; }
+            setSpeechState('playing');
+            playShared(url, () => setSpeechState('idle'));
+        } catch (err: any) {
+            setSpeechState('idle');
+            toast.error(err?.message || 'پخش صدا ناموفق بود');
+        }
+    };
 
     const handleCopy = async (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -180,7 +240,7 @@ export function MessageBubble({
             <div className="max-w-[85%] sm:max-w-[72%] min-w-0 group">
                 {isGroupStart && (
                     <div className="flex items-center gap-2 mb-1.5 justify-end" dir="rtl">
-                        <span className="text-[11px] font-bold text-[var(--text-secondary)] truncate">Met</span>
+                        <span className="text-[11px] font-bold text-[var(--text-secondary)] truncate">مِت</span>
                     </div>
                 )}
 
@@ -208,6 +268,22 @@ export function MessageBubble({
 
                 {!message.streaming && !!message.content && (
                     <div className="flex items-center justify-end gap-2.5 mt-1 px-0.5 opacity-45 group-hover:opacity-100 transition-opacity">
+                        {speakable && (
+                            <button
+                                type="button"
+                                onClick={handleSpeak}
+                                className={`p-0.5 transition-colors ${speechState === 'playing' ? 'text-[var(--color-primary-400)] opacity-100' : 'text-[var(--text-muted)]'}`}
+                                aria-label={speechState === 'playing' ? 'توقف پخش' : 'پخش صوتی پاسخ'}
+                            >
+                                {speechState === 'loading' ? (
+                                    <GraySpinner size={12} />
+                                ) : speechState === 'playing' ? (
+                                    <Square size={12} />
+                                ) : (
+                                    <Volume2 size={12} />
+                                )}
+                            </button>
+                        )}
                         <button type="button" onClick={handleReport} className="p-0.5 text-[var(--text-muted)]" aria-label="گزارش مشکل">
                             <Flag size={12} />
                         </button>
@@ -226,8 +302,8 @@ export function MessageBubble({
 
             <div className="w-8 shrink-0 self-end mb-5">
                 {isGroupEnd ? (
-                    <div className="w-8 h-8 rounded-full overflow-hidden ring-1 ring-[var(--border)]">
-                        <Met size="100%" initialState="idle" interactive={false} atmosphere={false} reducedMotion />
+                    <div className="w-8 h-8">
+                        <Met size="100%" initialState="idle" color={metColor} interactive={false} atmosphere={false} reducedMotion />
                     </div>
                 ) : null}
             </div>

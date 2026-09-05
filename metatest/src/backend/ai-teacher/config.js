@@ -58,6 +58,11 @@ const CONTEXT_LIMITS = Object.freeze({
     ragMaxChars: 2600,
 });
 
+/**
+ * One model per capability — chat, vision, tools, embeddings, image
+ * generation, speech-to-text, and text-to-speech are each independently
+ * configurable so they can be swapped/priced separately.
+ */
 const MODELS = Object.freeze({
     default: process.env.AI_TEACHER_MODEL || process.env.GAPGPT_MODEL || 'gpt-5.6-luna',
     lowCost: process.env.AI_TEACHER_MODEL_LOW || process.env.GAPGPT_MODEL_LOW || 'gpt-5.6-luna',
@@ -66,6 +71,9 @@ const MODELS = Object.freeze({
     tools: process.env.AI_TEACHER_MODEL_TOOLS || process.env.GAPGPT_MODEL_TOOLS || 'gpt-5.6-terra',
     embedding: process.env.AI_TEACHER_EMBEDDING_MODEL || process.env.GAPGPT_EMBEDDING_MODEL || 'text-embedding-3-small',
     image: process.env.AI_TEACHER_IMAGE_MODEL || process.env.GAPGPT_IMAGE_MODEL || 'dall-e-3',
+    stt: process.env.AI_TEACHER_STT_MODEL || process.env.GAPGPT_STT_MODEL || 'whisper-1',
+    tts: process.env.AI_TEACHER_TTS_MODEL || process.env.GAPGPT_TTS_MODEL || 'tts-1',
+    ttsVoice: process.env.AI_TEACHER_TTS_VOICE || 'alloy',
 });
 
 const PROVIDER = Object.freeze({
@@ -87,10 +95,15 @@ const FEATURES = Object.freeze({
     imageGeneration: String(process.env.AI_TEACHER_ENABLE_IMAGE_GEN || 'true').toLowerCase() !== 'false',
     vision: String(process.env.AI_TEACHER_ENABLE_VISION || 'true').toLowerCase() !== 'false',
     rag: String(process.env.AI_TEACHER_ENABLE_RAG || 'true').toLowerCase() !== 'false',
+    voice: String(process.env.AI_TEACHER_ENABLE_VOICE || 'true').toLowerCase() !== 'false',
 });
 
 /** Flat energy surcharge for a Met-generated image (on top of token cost). */
 const IMAGE_ENERGY_COST = Math.max(0, Number(process.env.AI_TEACHER_IMAGE_ENERGY_COST || 40));
+/** Flat energy price for transcribing one voice message (STT). */
+const STT_ENERGY_COST = Math.max(0, Number(process.env.AI_TEACHER_STT_ENERGY_COST || 2));
+/** Flat energy price for synthesizing one reply to audio (TTS). Replays are free. */
+const TTS_ENERGY_COST = Math.max(0, Number(process.env.AI_TEACHER_TTS_ENERGY_COST || 6));
 
 function dailyRefillForPlan(planKey) {
     const key = String(planKey || 'free').toLowerCase();
@@ -135,6 +148,8 @@ module.exports = {
     PROVIDER,
     FEATURES,
     IMAGE_ENERGY_COST,
+    STT_ENERGY_COST,
+    TTS_ENERGY_COST,
     dailyRefillForPlan,
     localDateString,
     modelPrices,

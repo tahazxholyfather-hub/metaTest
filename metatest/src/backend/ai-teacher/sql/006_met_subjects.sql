@@ -21,10 +21,11 @@ CREATE TABLE IF NOT EXISTS tam24_ai_subjects (
   PRIMARY KEY (`key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- Colors match the Met character's 4 body themes (violet/blue/green/pink).
 INSERT INTO tam24_ai_subjects (`key`, name_fa, name_en, icon, color, max_output_tokens, sort_order) VALUES
-('math', 'ریاضی', 'Math', 'sigma', '#6366F1', 700, 1),
+('math', 'ریاضی', 'Math', 'sigma', '#8B5CF6', 700, 1),
 ('biology', 'زیست‌شناسی', 'Biology', 'dna', '#10B981', 700, 2),
-('physics', 'فیزیک', 'Physics', 'atom', '#F59E0B', 700, 3),
+('physics', 'فیزیک', 'Physics', 'atom', '#3B82F6', 700, 3),
 ('chemistry', 'شیمی', 'Chemistry', 'flask-conical', '#EC4899', 700, 4)
 ON DUPLICATE KEY UPDATE name_fa = VALUES(name_fa), name_en = VALUES(name_en);
 

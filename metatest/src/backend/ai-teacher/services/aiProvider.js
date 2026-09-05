@@ -279,6 +279,78 @@ async function embed({ input, model } = {}) {
 }
 
 /**
+ * Speech-to-text (OpenAI-compatible /audio/transcriptions).
+ * `audio` is a Buffer; returns the transcribed text.
+ */
+async function transcribe({ audio, filename = 'voice.webm', mimeType = 'audio/webm', model, language } = {}) {
+    assertConfigured();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), PROVIDER.timeoutMs);
+    try {
+        const form = new FormData();
+        form.append('file', new Blob([audio], { type: mimeType }), filename);
+        form.append('model', model || MODELS.stt);
+        if (language) form.append('language', language);
+
+        const res = await fetch(`${PROVIDER.baseUrl}/audio/transcriptions`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${PROVIDER.apiKey}` },
+            body: form,
+            signal: controller.signal,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            throw new AiProviderError(extractErrorMessage(data, 'خطا در تبدیل گفتار به متن'), 'AI_STT_ERROR', res.status);
+        }
+        return String(data?.text || '').trim();
+    } catch (err) {
+        if (err.name === 'AbortError') throw new AiProviderError('زمان پاسخ‌گویی به پایان رسید.', 'AI_TIMEOUT', 504);
+        if (err instanceof AiProviderError) throw err;
+        throw new AiProviderError(err.message || 'خطای شبکه هوش مصنوعی', 'AI_NETWORK', 502);
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+/**
+ * Text-to-speech (OpenAI-compatible /audio/speech).
+ * Returns an mp3 Buffer.
+ */
+async function speak({ text, model, voice, format = 'mp3' } = {}) {
+    assertConfigured();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), PROVIDER.timeoutMs);
+    try {
+        const res = await fetch(`${PROVIDER.baseUrl}/audio/speech`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${PROVIDER.apiKey}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                model: model || MODELS.tts,
+                voice: voice || MODELS.ttsVoice,
+                input: String(text || '').slice(0, 3000),
+                response_format: format,
+            }),
+            signal: controller.signal,
+        });
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new AiProviderError(extractErrorMessage(data, 'خطا در تولید صدا'), 'AI_TTS_ERROR', res.status);
+        }
+        const arrayBuffer = await res.arrayBuffer();
+        return Buffer.from(arrayBuffer);
+    } catch (err) {
+        if (err.name === 'AbortError') throw new AiProviderError('زمان پاسخ‌گویی به پایان رسید.', 'AI_TIMEOUT', 504);
+        if (err instanceof AiProviderError) throw err;
+        throw new AiProviderError(err.message || 'خطای شبکه هوش مصنوعی', 'AI_NETWORK', 502);
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+/**
  * Image generation (OpenAI-compatible /images/generations).
  * Returns { url } or { b64 } depending on gateway response shape.
  */
@@ -301,6 +373,8 @@ module.exports = {
     stream,
     embed,
     generateImage,
+    transcribe,
+    speak,
     AiProviderError,
     estimateUsage,
     extractUsage,

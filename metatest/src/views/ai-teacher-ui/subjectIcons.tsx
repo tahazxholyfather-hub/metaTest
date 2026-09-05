@@ -20,10 +20,11 @@ export function SubjectIcon({ icon, size = 14, className }: { icon?: string; siz
 }
 
 /** Static fallback labels/colors so the UI never blanks out before /subjects resolves. */
+/** Colors match the Met character's 4 body themes (violet/blue/green/pink). */
 export const SUBJECT_FALLBACKS: Record<SubjectKey, { nameFa: string; icon: string; color: string }> = {
-    math: { nameFa: 'ریاضی', icon: 'sigma', color: '#6366F1' },
+    math: { nameFa: 'ریاضی', icon: 'sigma', color: '#8B5CF6' },
     biology: { nameFa: 'زیست‌شناسی', icon: 'dna', color: '#10B981' },
-    physics: { nameFa: 'فیزیک', icon: 'atom', color: '#F59E0B' },
+    physics: { nameFa: 'فیزیک', icon: 'atom', color: '#3B82F6' },
     chemistry: { nameFa: 'شیمی', icon: 'flask-conical', color: '#EC4899' },
 };
 

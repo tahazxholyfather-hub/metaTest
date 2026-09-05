@@ -3,6 +3,7 @@ import type {
     AiBootstrap,
     AiConversationSummary,
     AiMessage,
+    AiSettings,
     AiSubject,
     AiWallet,
     SubjectKey,
@@ -90,6 +91,35 @@ export const aiTeacherApi = {
 
     getWallet: () =>
         request<{ success: boolean; data: AiWallet }>('/ai-teacher/wallet', { method: 'GET' }),
+
+    updateSettings: (patch: Partial<AiSettings>) =>
+        request<{ success: boolean; data: AiSettings }>('/ai-teacher/settings', {
+            method: 'POST',
+            body: JSON.stringify(patch),
+        }),
+
+    /** Speech-to-text for the mic button. */
+    transcribeVoice: async (audio: Blob): Promise<{ text: string; charged: number; balance: number }> => {
+        const token = getAuthToken();
+        const form = new FormData();
+        form.append('audio', audio, 'voice.webm');
+        const res = await fetch(`${API_BASE}/ai-teacher/voice/transcribe`, {
+            method: 'POST',
+            headers: token ? { 'x-app-token': token } : undefined,
+            body: form,
+            credentials: 'include',
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data?.success) throw new Error(data?.message || 'تبدیل صدا ناموفق بود');
+        return data.data;
+    },
+
+    /** Text-to-speech for an assistant message (cached after first synthesis). */
+    speakMessage: (messageId: number) =>
+        request<{ success: boolean; data: { url: string; charged: number; balance?: number; cached: boolean } }>(
+            '/ai-teacher/voice/speak',
+            { method: 'POST', body: JSON.stringify({ messageId }) }
+        ),
 
     uploadImage: async (file: File): Promise<{ url: string; mimeType: string }> => {
         const token = getAuthToken();

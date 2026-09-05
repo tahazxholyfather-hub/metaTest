@@ -749,13 +749,18 @@ mjx-container[display="true"] {
 
 /* AI Teacher — chat top fade (no color-mix; must remain visible in all browsers) */
 .ai-chat-fade-top {
-    height: 11rem;
+    height: 4.5rem;
     background: linear-gradient(
             to bottom,
             var(--bg-app) 0%,
-            var(--bg-app) 52%,
+            color-mix(in srgb, var(--bg-app) 72%, transparent) 45%,
             transparent 100%
     );
+}
+@supports not (background: color-mix(in srgb, red 50%, blue)) {
+    .ai-chat-fade-top {
+        background: linear-gradient(to bottom, var(--bg-app) 0%, transparent 100%);
+    }
 }
 
 /* Slow professional text shimmer (working status) */

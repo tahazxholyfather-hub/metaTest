@@ -58,7 +58,7 @@ const APP_VIEWS: View[] = [
     "reports",
     "reviewbox",
     "History",
-    "ai_teacher",
+    "met",
 ];
 
 
@@ -328,8 +328,9 @@ function MainApp() {
             reports: "گزارش ها",
             History: " سوابق آزمون ها",
             reviewbox: "جعبه مرور",
-            ai_teacher: "Met",
-            chat: "Met",
+            met: "مِت",
+            ai_teacher: "مِت",
+            chat: "مِت",
         };
 
         document.title = `${titles[activeView] ?? "متاتست"} | Metatest`;
@@ -389,7 +390,7 @@ function MainApp() {
         if (view === "reviewbox") setHeaderState({ title: "جعبه مرور", showBackButton: true });
         if (view === "documents") setHeaderState({ title: "نمونه سوالات", showBackButton: true });
         if (view === "History") setHeaderState({ title: "سابقه آزمون ها", showBackButton: true });
-        if (view === "ai_teacher" || view === "chat") setHeaderState({ title: "Met", showBackButton: false });
+        if (view === "met" || view === "ai_teacher" || view === "chat") setHeaderState({ title: "مِت", showBackButton: false });
 
         if (pushToHistory) {
             if (pushToHistory) {
@@ -425,6 +426,13 @@ function MainApp() {
     useEffect(() => {
         const pathName = location.pathname.replace(/^\/+/, "") as View;
 
+        // Legacy URLs for the AI tutor now live at /met
+        if (pathName === "ai_teacher" || pathName === "chat") {
+            setActiveView("met");
+            navigate("/met", { replace: true });
+            return;
+        }
+
         if (APP_VIEWS.includes(pathName)) {
             setActiveView(pathName);
             return;
@@ -433,7 +441,7 @@ function MainApp() {
         if (location.pathname === "/") {
             setActiveView("dashboard");
         }
-    }, [location.pathname]);
+    }, [location.pathname, navigate]);
 
 
 
@@ -518,11 +526,12 @@ function MainApp() {
                 return <NotesView key="notes" onBack={handleBack} onStateChange={handleViewStateChange}/>;
             case "tests":
                 return <TestWorldView key="tests" theme={theme} onStateChange={handleViewStateChange} onToggleHeader={setIsHeaderHiddenByChild} isCollapsed={isCollapsed} onToggleCollapse={() => setIsCollapsed(!isCollapsed)}/>;
+            case "met":
             case "ai_teacher":
             case "chat":
                 return (
                     <AiTeacherView
-                        key="ai_teacher"
+                        key="met"
                         onStateChange={handleViewStateChange}
                         onNavigateHome={() => handleNavigation("dashboard")}
                     />
@@ -534,7 +543,7 @@ function MainApp() {
     }, [activeView, handleBack, handleNavigation, handleStartQuiz, handleViewStateChange, isCollapsed]);
 
     // AI Teacher uses its own header / mobile chrome — hide global TopHeader + BottomNav
-    const isAiTeacherChrome = activeView === "ai_teacher" || activeView === "chat";
+    const isAiTeacherChrome = activeView === "met" || activeView === "ai_teacher" || activeView === "chat";
     const showGlobalHeader = !isHeaderHiddenByChild && !isQuizActive && !isAiTeacherChrome && activeView !== "profile" && activeView !== "tests";
     const showGlobalBottomNav = !isQuizActive && !isAiTeacherChrome && !isHeaderHiddenByChild;
     const mainClassName = useMemo(

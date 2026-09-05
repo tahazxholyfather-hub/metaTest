@@ -297,6 +297,53 @@ async function refundReservation(conn, userId, reserved, referenceId, reason = '
     return { refunded: amount, balance: after };
 }
 
+/**
+ * Simple flat debit (voice features and similar fixed-price actions).
+ * Throws INSUFFICIENT_COINS when the balance can't cover it.
+ */
+async function chargeFlat(dbOrConn, userId, amount, { reason, referenceType = 'ai_voice', referenceId } = {}) {
+    const cost = Math.max(0, Math.ceil(Number(amount) || 0));
+    const ownsConnection = typeof dbOrConn.getConnection === 'function';
+    const conn = ownsConnection ? await dbOrConn.getConnection() : dbOrConn;
+    try {
+        if (ownsConnection) await conn.beginTransaction();
+        const wallet = await getWallet(conn, userId, { forUpdate: true });
+        const before = Number(wallet.balance) || 0;
+        if (cost === 0) {
+            if (ownsConnection) await conn.commit();
+            return { charged: 0, balance: before };
+        }
+        if (before < cost) {
+            const err = new Error('موجودی انرژی کافی نیست.');
+            err.code = 'INSUFFICIENT_COINS';
+            err.balance = before;
+            throw err;
+        }
+        const after = before - cost;
+        await conn.query(
+            `UPDATE tam24_ai_wallets SET balance = ?, lifetime_spent = lifetime_spent + ?, updated_at = NOW() WHERE user_id = ?`,
+            [after, cost, userId]
+        );
+        await writeTransaction(conn, {
+            userId,
+            type: 'ai_message',
+            amount: -cost,
+            balanceBefore: before,
+            balanceAfter: after,
+            reason: reason || 'هزینه سرویس صوتی',
+            referenceType,
+            referenceId: referenceId ? String(referenceId) : String(Date.now()),
+        });
+        if (ownsConnection) await conn.commit();
+        return { charged: cost, balance: after };
+    } catch (err) {
+        if (ownsConnection) await conn.rollback();
+        throw err;
+    } finally {
+        if (ownsConnection) conn.release();
+    }
+}
+
 function quoteMessageCost(opts) {
     return pricing.quoteUsage(opts);
 }
@@ -308,6 +355,7 @@ module.exports = {
     reserveCoins,
     finalizeCharge,
     refundReservation,
+    chargeFlat,
     quoteMessageCost,
     nextDailyBalance,
 };

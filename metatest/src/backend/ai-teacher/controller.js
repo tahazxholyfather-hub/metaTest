@@ -6,7 +6,7 @@
  */
 
 const db = require('../db');
-const { CONTEXT_LIMITS, dailyRefillForPlan, FEATURES } = require('./config');
+const { CONTEXT_LIMITS, dailyRefillForPlan, FEATURES, STT_ENERGY_COST, TTS_ENERGY_COST } = require('./config');
 const { SUBJECT_LIST, isValidSubject, getSubject } = require('./subjects');
 const coinWallet = require('./services/coinWallet');
 const pricing = require('./services/pricing');
@@ -74,6 +74,17 @@ async function ensureSettings(userId) {
     return settings;
 }
 
+function publicSettings(row) {
+    return {
+        efficientMode: !!row?.low_coin_mode,
+        shortAnswers: !!row?.concise_responses,
+        alwaysExamples: row?.always_examples == null ? true : !!row.always_examples,
+        stepByStep: row?.step_by_step == null ? true : !!row.step_by_step,
+        // Column added in 007 — default on when the migration hasn't run yet.
+        voiceReplies: row?.voice_replies == null ? true : !!row.voice_replies,
+    };
+}
+
 function nextRefillAtIso() {
     const next = new Date();
     next.setHours(24, 0, 0, 0);
@@ -124,6 +135,7 @@ const getBootstrap = async (req, res) => {
 
         const wallet = await getBalanceSnapshot(userId, user.current_plan);
         const subjectRows = await listSubjectsFromDb();
+        const settings = await ensureSettings(userId);
         const latestConversation = await conversationService.getLatestConversation(db, userId);
 
         return res.json({
@@ -138,6 +150,12 @@ const getBootstrap = async (req, res) => {
                 },
                 subjects: subjectRows.map(publicSubject),
                 lastSubject: user.ai_last_subject || null,
+                settings: publicSettings(settings),
+                features: {
+                    voice: FEATURES.voice,
+                    imageGeneration: FEATURES.imageGeneration,
+                    vision: FEATURES.vision,
+                },
                 wallet,
                 latestConversation: latestConversation ? publicConversation(latestConversation) : null,
             },
@@ -271,6 +289,171 @@ const getWallet = async (req, res) => {
     } catch (err) {
         console.error('[ai-teacher] getWallet', err);
         return res.status(500).json({ success: false, message: 'خطا در دریافت انرژی.' });
+    }
+};
+
+// ─── Settings (efficient usage / short answers / voice replies …) ───────────
+const SETTING_COLUMNS = {
+    efficientMode: 'low_coin_mode',
+    shortAnswers: 'concise_responses',
+    alwaysExamples: 'always_examples',
+    stepByStep: 'step_by_step',
+    voiceReplies: 'voice_replies',
+};
+
+const updateSettings = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        await ensureSettings(userId);
+
+        const sets = [];
+        const vals = [];
+        for (const [field, column] of Object.entries(SETTING_COLUMNS)) {
+            if (typeof req.body?.[field] === 'boolean') {
+                sets.push(`${column} = ?`);
+                vals.push(req.body[field] ? 1 : 0);
+            }
+        }
+
+        if (sets.length) {
+            try {
+                await db.query(
+                    `UPDATE tam24_ai_user_settings SET ${sets.join(', ')}, updated_at = NOW() WHERE user_id = ?`,
+                    [...vals, userId]
+                );
+            } catch (err) {
+                // voice_replies column arrives with migration 007 — retry without it.
+                if (/Unknown column/i.test(err.message || '') || err.code === 'ER_BAD_FIELD_ERROR') {
+                    const filtered = sets.map((s, i) => [s, vals[i]]).filter(([s]) => !s.startsWith('voice_replies'));
+                    if (filtered.length) {
+                        await db.query(
+                            `UPDATE tam24_ai_user_settings SET ${filtered.map(([s]) => s).join(', ')}, updated_at = NOW() WHERE user_id = ?`,
+                            [...filtered.map(([, v]) => v), userId]
+                        );
+                    }
+                } else {
+                    throw err;
+                }
+            }
+        }
+
+        const settings = await ensureSettings(userId);
+        return res.json({ success: true, data: publicSettings(settings) });
+    } catch (err) {
+        console.error('[ai-teacher] updateSettings', err);
+        return res.status(500).json({ success: false, message: 'خطا در ذخیره تنظیمات.' });
+    }
+};
+
+// ─── Voice: speech-to-text (mic button) ──────────────────────────────────────
+const voiceTranscribe = async (req, res) => {
+    try {
+        if (!FEATURES.voice) {
+            return res.status(403).json({ success: false, message: 'قابلیت صوتی غیرفعال است.' });
+        }
+        if (!req.file?.buffer?.length) {
+            return res.status(400).json({ success: false, message: 'فایل صوتی دریافت نشد.' });
+        }
+
+        const user = await loadUserRow(req.user.id);
+        const refill = await coinWallet.applyDailyRefill(db, req.user.id, user?.current_plan);
+        if (refill.balance < STT_ENERGY_COST) {
+            return res.status(402).json({ success: false, code: 'INSUFFICIENT_COINS', message: 'موجودی انرژی کافی نیست.' });
+        }
+
+        const text = await aiProvider.transcribe({
+            audio: req.file.buffer,
+            filename: req.file.originalname || 'voice.webm',
+            mimeType: req.file.mimetype || 'audio/webm',
+            language: 'fa',
+        });
+
+        if (!text) {
+            return res.status(422).json({ success: false, message: 'صدایی تشخیص داده نشد. دوباره تلاش کن.' });
+        }
+
+        const charge = await coinWallet.chargeFlat(db, req.user.id, STT_ENERGY_COST, {
+            reason: 'تبدیل گفتار به متن',
+            referenceType: 'ai_voice_stt',
+        });
+
+        return res.json({ success: true, data: { text, charged: charge.charged, balance: charge.balance } });
+    } catch (err) {
+        console.error('[ai-teacher] voiceTranscribe', err);
+        const status = err.code === 'INSUFFICIENT_COINS' ? 402 : 500;
+        return res.status(status).json({ success: false, code: err.code, message: err.message || 'خطا در پردازش صدا.' });
+    }
+};
+
+/** Strip markdown/LaTeX so TTS reads clean prose, not raw formulas. */
+function sanitizeForSpeech(text) {
+    return String(text || '')
+        .replace(/\$\$[\s\S]+?\$\$|\$[^$\n]+\$/g, ' (فرمول) ')
+        .replace(/\*\*([^*]+)\*\*/g, '$1')
+        .replace(/^[ \t]{0,3}#{1,6}[ \t]+/gm, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+// ─── Voice: text-to-speech for an assistant message ──────────────────────────
+const voiceSpeak = async (req, res) => {
+    try {
+        if (!FEATURES.voice) {
+            return res.status(403).json({ success: false, message: 'قابلیت صوتی غیرفعال است.' });
+        }
+        const userId = req.user.id;
+        const messageId = Number(req.body?.messageId);
+        if (!messageId) {
+            return res.status(400).json({ success: false, message: 'شناسه پیام الزامی است.' });
+        }
+
+        const [[row]] = await db.query(
+            `SELECT m.id, m.role, m.content, m.attachments
+             FROM tam24_ai_messages m
+             JOIN tam24_ai_conversations c ON c.id = m.conversation_id
+             WHERE m.id = ? AND c.user_id = ?
+             LIMIT 1`,
+            [messageId, userId]
+        );
+        if (!row || row.role !== 'assistant') {
+            return res.status(404).json({ success: false, message: 'پیام یافت نشد.' });
+        }
+
+        // Replays are free — reuse the audio synthesized the first time.
+        const attachments = conversationService.parseAttachments(row.attachments);
+        const existing = attachments.find((a) => a.type === 'audio' && a.url);
+        if (existing) {
+            return res.json({ success: true, data: { url: existing.url, charged: 0, cached: true } });
+        }
+
+        const user = await loadUserRow(userId);
+        const refill = await coinWallet.applyDailyRefill(db, userId, user?.current_plan);
+        if (refill.balance < TTS_ENERGY_COST) {
+            return res.status(402).json({ success: false, code: 'INSUFFICIENT_COINS', message: 'موجودی انرژی کافی نیست.' });
+        }
+
+        const speech = sanitizeForSpeech(row.content);
+        if (!speech) {
+            return res.status(422).json({ success: false, message: 'متنی برای خواندن وجود ندارد.' });
+        }
+
+        const audioBuffer = await aiProvider.speak({ text: speech });
+        const url = imageService.saveAudioBuffer(audioBuffer, 'mp3');
+
+        const nextAttachments = [...attachments, { type: 'audio', url, mimeType: 'audio/mpeg' }];
+        await db.query(`UPDATE tam24_ai_messages SET attachments = ? WHERE id = ?`, [JSON.stringify(nextAttachments), messageId]);
+
+        const charge = await coinWallet.chargeFlat(db, userId, TTS_ENERGY_COST, {
+            reason: 'تولید پاسخ صوتی',
+            referenceType: 'ai_voice_tts',
+            referenceId: messageId,
+        });
+
+        return res.json({ success: true, data: { url, charged: charge.charged, balance: charge.balance, cached: false } });
+    } catch (err) {
+        console.error('[ai-teacher] voiceSpeak', err);
+        const status = err.code === 'INSUFFICIENT_COINS' ? 402 : 500;
+        return res.status(status).json({ success: false, code: err.code, message: err.message || 'خطا در تولید صدا.' });
     }
 };
 
@@ -668,6 +851,9 @@ module.exports = {
     renameConversation,
     deleteConversation,
     getWallet,
+    updateSettings,
+    voiceTranscribe,
+    voiceSpeak,
     uploadChatImage,
     streamChat,
 };

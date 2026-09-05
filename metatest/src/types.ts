@@ -13,7 +13,8 @@ export type View =
     | "notes"
     | "tests"
     | "History"
-    | "ai_teacher"
+    | "met"
+    | "ai_teacher" // legacy alias support
     | "chat"; // legacy alias support
 
 

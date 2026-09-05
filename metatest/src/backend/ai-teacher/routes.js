@@ -9,7 +9,7 @@ const express = require('express');
 const router = express.Router();
 const { requireToken } = require('../middleware/auth');
 const controller = require('./controller');
-const { uploadMiddleware } = require('./services/imageService');
+const { uploadMiddleware, audioUploadMiddleware } = require('./services/imageService');
 
 router.use(requireToken);
 
@@ -25,6 +25,7 @@ router.patch('/conversations/:id', controller.renameConversation);
 router.delete('/conversations/:id', controller.deleteConversation);
 
 router.get('/wallet', controller.getWallet);
+router.post('/settings', controller.updateSettings);
 
 router.post('/upload-image', (req, res, next) => {
     uploadMiddleware(req, res, (err) => {
@@ -34,6 +35,16 @@ router.post('/upload-image', (req, res, next) => {
         next();
     });
 }, controller.uploadChatImage);
+
+router.post('/voice/transcribe', (req, res, next) => {
+    audioUploadMiddleware(req, res, (err) => {
+        if (err) {
+            return res.status(400).json({ success: false, message: 'فایل صوتی نامعتبر است (نوع یا حجم).' });
+        }
+        next();
+    });
+}, controller.voiceTranscribe);
+router.post('/voice/speak', controller.voiceSpeak);
 
 router.post('/chat/stream', controller.streamChat);
 

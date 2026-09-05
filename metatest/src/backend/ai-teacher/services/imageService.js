@@ -43,6 +43,35 @@ function publicUrlFor(filename) {
     return `${PUBLIC_PREFIX}/${filename}`;
 }
 
+const ALLOWED_AUDIO_MIME = new Set([
+    'audio/webm', 'audio/ogg', 'audio/mpeg', 'audio/mp3', 'audio/mp4',
+    'audio/wav', 'audio/x-wav', 'audio/m4a', 'audio/x-m4a', 'audio/aac',
+]);
+
+/**
+ * Voice-message uploads go straight to the STT provider, so keep them
+ * in memory instead of writing throwaway files to disk.
+ */
+const audioUploadMiddleware = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 15 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        const base = String(file.mimetype || '').split(';')[0].trim();
+        if (!ALLOWED_AUDIO_MIME.has(base)) {
+            return cb(new Error('UNSUPPORTED_FILE_TYPE'));
+        }
+        cb(null, true);
+    },
+}).single('audio');
+
+/** Persist a synthesized TTS reply so replays never re-bill the student. */
+function saveAudioBuffer(buffer, ext = 'mp3') {
+    ensureDir();
+    const filename = `tts-${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
+    fs.writeFileSync(path.join(UPLOAD_DIR, filename), buffer);
+    return publicUrlFor(filename);
+}
+
 /**
  * Ask the provider to generate an image, then persist it locally so it
  * survives even if the provider's own hosted URL later expires.
@@ -67,6 +96,8 @@ async function generateAndStoreImage({ prompt, model, size }) {
 
 module.exports = {
     uploadMiddleware,
+    audioUploadMiddleware,
+    saveAudioBuffer,
     publicUrlFor,
     generateAndStoreImage,
     UPLOAD_DIR,
