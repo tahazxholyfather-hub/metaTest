@@ -201,6 +201,7 @@ export class CellEngine {
   private ptrY = CELL_CY;
   private irritation = 0;
   private lastPokeAt = -10;
+  private lastPokeWall = -10;
   private lastPlayedWall = -10;
   private clickTimes: number[] = [];
   private recentReactions: string[] = [];
@@ -395,6 +396,9 @@ export class CellEngine {
   poke(): void {
     const t = this.tReal;
     const now = typeof performance !== 'undefined' ? performance.now() / 1000 : t;
+    // One physical click can arrive via pointerdown + click — count it once.
+    if (now - this.lastPokeWall < 0.055) return;
+    this.lastPokeWall = now;
     this.clickTimes.push(now);
     this.clickTimes = this.clickTimes.filter((c) => now - c < 1.85);
     const n = this.clickTimes.length;
@@ -556,8 +560,9 @@ export class CellEngine {
 
     const t = this.tReal;
     const over = this.ptrPresent && this.ptrDist < 1.12;
+    const reacting = this.reactW.target === 1 && t < this.reactUntil;
 
-    if (over && !this.wasOver && t - this.lastHoverAt > 3.4 && this.irritation < 0.78) {
+    if (over && !this.wasOver && t - this.lastHoverAt > 3.4 && this.irritation < 0.78 && !reacting) {
       this.lastHoverAt = t;
       this.playReaction(pickHoverReaction(this.pickCtx()));
     }
@@ -569,6 +574,7 @@ export class CellEngine {
       && this.prevDist - this.ptrDist > 0.5
       && this.ptrSpeed > 380
       && t - this.lastStartleAt > 4.8
+      && !reacting
     ) {
       this.lastStartleAt = t;
       this.playReaction(pickStartleReaction(this.pickCtx()));

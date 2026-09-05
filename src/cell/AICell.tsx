@@ -186,49 +186,23 @@ export const AICell = forwardRef<AICellHandle, AICellProps>(function AICell(prop
         y: ((e.clientY - r.top) / r.height) * 400,
       };
     };
-    const inBox = (e: PointerEvent | MouseEvent) => {
-      if (!el) return false;
-      const r = el.getBoundingClientRect();
-      return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
-    };
     const onMove = (e: PointerEvent) => {
       if (!interactiveRef.current) return;
       const v = toView(e);
       if (v) engine.setPointer(v.x, v.y);
-    };
-    const onDown = (e: PointerEvent | MouseEvent) => {
-      if (!interactiveRef.current) return;
-      if ('button' in e && e.button !== 0) return;
-      const v = toView(e);
-      const onCell = !!(v && inBox(e));
-      if (!onCell && !engine.isPointerOver()) return;
-      if (onCell && v) engine.setPointer(v.x, v.y);
-      engine.poke();
     };
     const onOut = (e: PointerEvent) => {
       if (!e.relatedTarget) engine.clearPointer();
     };
 
     window.addEventListener('pointermove', onMove, { passive: true });
-    window.addEventListener('pointerdown', onDown, true);
-    window.addEventListener('mousedown', onDown, true);
-    window.addEventListener('click', onDown, true);
     window.addEventListener('pointerout', onOut);
-    el?.addEventListener('pointerdown', onDown);
-    el?.addEventListener('mousedown', onDown);
-    el?.addEventListener('click', onDown);
 
     return () => {
       document.removeEventListener('visibilitychange', onVisibility);
       observer?.disconnect();
       window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerdown', onDown, true);
-      window.removeEventListener('mousedown', onDown, true);
-      window.removeEventListener('click', onDown, true);
       window.removeEventListener('pointerout', onOut);
-      el?.removeEventListener('pointerdown', onDown);
-      el?.removeEventListener('mousedown', onDown);
-      el?.removeEventListener('click', onDown);
       engine.stop();
       engineRef.current = null;
       cache.current = {};
