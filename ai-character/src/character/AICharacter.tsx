@@ -172,10 +172,16 @@ export function AICharacter({
     }
 
     let unsubscribe: (() => void) | null = null
+    let paused = false
     const start = () => {
-      if (!unsubscribe) unsubscribe = subscribe(tick)
+      if (unsubscribe) return
+      // Catch up so a character scrolled back into view is already in its pose.
+      if (paused) engine.settle(1.5)
+      paused = false
+      unsubscribe = subscribe(tick)
     }
     const stop = () => {
+      paused = true
       unsubscribe?.()
       unsubscribe = null
     }
@@ -190,6 +196,8 @@ export function AICharacter({
       start()
     }
 
+    // First paint should already be in pose rather than mid-transition.
+    engine.settle(1.5)
     tick(0)
     return () => {
       observer?.disconnect()

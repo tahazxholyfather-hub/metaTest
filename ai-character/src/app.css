@@ -368,20 +368,13 @@ input:focus-visible,
 }
 
 .swatch span {
-  position: relative;
-  left: -4px;
   width: 5px;
   height: 12px;
   border-radius: 3px;
-}
-
-.swatch span::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  left: 9px;
-  border-radius: 3px;
-  background: inherit;
+  box-shadow: 9px 0 0 var(--eye);
+  position: relative;
+  left: -4.5px;
+  background: var(--eye) !important;
 }
 
 .swatch:hover {

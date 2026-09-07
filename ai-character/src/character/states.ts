@@ -80,7 +80,7 @@ export const STATES: Record<AICharacterState, StateDefinition> = {
       every(9, 18, () => ({
         duration: 1.6,
         keys: [
-          { at: 0, pose: { topLid: 0.12, topCurve: 0.1 }, poseSpring: soft },
+          { at: 0, pose: { topLid: 0.05, topCurve: 0.15, height: 0.97 }, poseSpring: soft },
           { at: 1.0, poseSpring: spring(2, 0.8) },
         ],
       })),
@@ -158,11 +158,11 @@ export const STATES: Record<AICharacterState, StateDefinition> = {
   sad: {
     pose: pose({
       width: 0.94,
-      height: 0.9,
-      tilt: 0.16,
-      topLid: 0.3,
-      topCurve: 0.15,
-      topSlant: 0.55,
+      height: 0.95,
+      tilt: 0.14,
+      topLid: 0.22,
+      topCurve: 0.1,
+      topSlant: 0.5,
       shiftEl: -0.03,
     }),
     behavior: behavior({
@@ -288,12 +288,12 @@ export const STATES: Record<AICharacterState, StateDefinition> = {
 
   sleepy: {
     pose: pose({
-      width: 1,
-      height: 0.88,
-      topLid: 0.55,
-      topCurve: 0.45,
+      width: 1.06,
+      height: 0.9,
+      topLid: 0.5,
+      topCurve: 0.3,
       topSlant: 0.1,
-      bottomLid: 0.06,
+      bottomLid: 0.04,
       shiftEl: -0.02,
     }),
     behavior: behavior({

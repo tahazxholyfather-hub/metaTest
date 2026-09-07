@@ -58,13 +58,16 @@ export interface EngineConfig {
 export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
   radius: 96,
   center: 100,
-  eyeWidth: 0.135,
-  eyeHeight: 0.32,
-  eyeSeparation: 0.32,
+  eyeWidth: 0.16,
+  eyeHeight: 0.4,
+  eyeSeparation: 0.33,
   eyeElevation: 0.06,
-  maxYaw: 0.78,
-  maxPitch: 0.55,
+  maxYaw: 0.74,
+  maxPitch: 0.5,
 }
+
+/** Meridian tilt is physically ~1, but softened so a downward gaze never reads as a frown. */
+const MERIDIAN_STRENGTH = 0.75
 
 const POSE_KEYS = Object.keys(NEUTRAL_POSE) as (keyof EyePose)[]
 
@@ -124,7 +127,7 @@ class Blinker {
     this.hold = (b.holdMs / 1000) * speed
     this.open = (b.openMs / 1000) * speed
     this.queueDouble = allowDouble && chance(b.doubleChance)
-    this.eyeDelay = rand(0, 0.025)
+    this.eyeDelay = rand(0, 0.012)
     this.elapsed = 0
     this.running = true
   }
@@ -350,6 +353,16 @@ export class CharacterEngine {
       left: {},
       right: {},
     }
+  }
+
+  /**
+   * Advance time without rendering every step, so a character that was
+   * paused (off-screen, hidden tab) resumes already settled into its pose.
+   */
+  settle(seconds: number): RenderFrame {
+    const step = 1 / 30
+    for (let t = 0; t < seconds; t += step) this.update(step)
+    return this.frame
   }
 
   // ---------------------------------------------------------------- update
@@ -611,8 +624,18 @@ export class CharacterEngine {
       tx += this.correction.x
       ty += this.correction.y
     }
-    this.gaze.setTarget(clamp(tx, -this.config.maxYaw, this.config.maxYaw), clamp(ty, -this.config.maxPitch, this.config.maxPitch))
+    const limited = this.limitGaze(tx, ty)
+    this.gaze.setTarget(limited.x, limited.y)
     this.gaze.update(dt)
+  }
+
+  /** Keep the gaze inside an ellipse so diagonal corners are no more extreme than the axes. */
+  private limitGaze(yaw: number, pitch: number): Vec2 {
+    const nx = yaw / this.config.maxYaw
+    const ny = pitch / this.config.maxPitch
+    const n = Math.hypot(nx, ny)
+    if (n <= 1) return vec(yaw, pitch)
+    return vec(yaw / n, pitch / n)
   }
 
   private scheduleBlink(): void {
@@ -665,7 +688,7 @@ export class CharacterEngine {
       mRotate(sample.radialAngle),
       mScale(foreshorten, 1),
       mRotate(-sample.radialAngle),
-      mRotate(sample.meridianAngle - side * p.tilt),
+      mRotate(sample.meridianAngle * MERIDIAN_STRENGTH - side * p.tilt),
       mScale(perspective, perspective),
       mTranslate(0, closingDrop),
     )

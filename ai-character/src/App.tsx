@@ -70,8 +70,13 @@ function LookPad({ value, onChange }: { value: Vec2 | null; onChange: (v: Vec2 |
   )
 }
 
+const initialState = (): AICharacterState => {
+  const q = new URLSearchParams(window.location.search).get('state')
+  return (AI_CHARACTER_STATES as readonly string[]).includes(q ?? '') ? (q as AICharacterState) : 'idle'
+}
+
 export default function App() {
-  const [state, setState] = useState<AICharacterState>('idle')
+  const [state, setState] = useState<AICharacterState>(initialState)
   const [interactive, setInteractive] = useState(true)
   const [intensity, setIntensity] = useState(1)
   const [theme, setTheme] = useState(0)
@@ -207,12 +212,12 @@ export default function App() {
                   key={t.name}
                   type="button"
                   className={`swatch${i === theme ? ' is-active' : ''}`}
-                  style={{ background: t.color }}
+                  style={{ background: t.color, ['--eye' as string]: t.eye }}
                   onClick={() => setTheme(i)}
                   aria-label={t.name}
                   title={t.name}
                 >
-                  <span style={{ background: t.eye }} />
+                  <span />
                 </button>
               ))}
             </div>
