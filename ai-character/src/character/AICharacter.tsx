@@ -225,6 +225,7 @@ export function AICharacter({
       viewBox={`0 0 ${VIEW} ${VIEW}`}
       role="img"
       aria-label={label ?? `AI character, ${state}`}
+      data-state={state}
       onPointerDown={handlePointerDown}
     >
       <defs>

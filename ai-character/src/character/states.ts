@@ -351,8 +351,11 @@ export const STATES: Record<AICharacterState, StateDefinition> = {
           keys: [
             { at: 0, gaze: vec(0.45 * side, rand(0.3, 0.42)), gazeSpring: spring(2.8, 0.7) },
             { at: 0.08, blink: chance(0.5) },
-            { at: 1.9, gaze: vec(0.1 * side, 0.42) },
-            { at: 2.35, gaze: vec(0.42 * side, 0.34) },
+            // Tiny flutter, gears turning, before the gaze settles again.
+            { at: 1.7, gaze: vec(0.36 * side, 0.4), gazeSpring: spring(4.5, 0.7) },
+            { at: 1.85, gaze: vec(0.5 * side, 0.34) },
+            { at: 2.0, gaze: vec(0.1 * side, 0.42), gazeSpring: spring(2.8, 0.7) },
+            { at: 2.4, gaze: vec(0.42 * side, 0.34) },
           ],
         }
       }),
@@ -381,18 +384,19 @@ export const STATES: Record<AICharacterState, StateDefinition> = {
       blink: { interval: [3.5, 7], closeMs: 80, holdMs: 40, openMs: 160 },
       roll: 0.1,
       rollTowardPointer: true,
-      micro: { jitter: 0.002, drift: 0.006 },
+      // Very little jitter, but a slow horizontal scan as if reading the speaker's face.
+      micro: { jitter: 0.0015, drift: 0.02 },
       breath: { amp: 0.006, rate: 0.22 },
       poseSpring: spring(2.2, 0.8),
     }),
     gestures: [
-      // Attentive nod.
+      // Attentive nod: dip, then come up a little wider, as if taking it in.
       every(3, 5.5, () => ({
-        duration: 0.8,
+        duration: 1.0,
         keys: [
-          { at: 0, pose: { shiftEl: -0.03, height: 1.0 }, poseSpring: spring(3.2, 0.7) },
-          { at: 0.22, pose: { shiftEl: 0.03, height: 1.08 } },
-          { at: 0.45, pose: {} },
+          { at: 0, pose: { shiftEl: -0.04, height: 0.98 }, poseSpring: spring(3.2, 0.7) },
+          { at: 0.24, pose: { shiftEl: 0.035, height: 1.12, width: 1.1 } },
+          { at: 0.6, pose: {} },
         ],
       })),
     ],
@@ -493,9 +497,10 @@ export const STATES: Record<AICharacterState, StateDefinition> = {
           duration: 1.5,
           keys: [
             { at: 0, gaze: vec(0.35 * side, 0.5), gazeSpring: spring(2.4, 0.85), pose: { topLid: 0.3 } },
-            { at: 0.3, gaze: vec(-0.35 * side, 0.5) },
-            { at: 0.6, gaze: vec(-0.45 * side, 0.1), blink: true },
-            { at: 0.85, gaze: 'bias' },
+            { at: 0.3, gaze: vec(-0.3 * side, 0.52) },
+            // Hang at the apex for a beat before dropping: the visual "sigh".
+            { at: 0.72, gaze: vec(-0.45 * side, 0.1), blink: true },
+            { at: 0.98, gaze: 'bias' },
           ],
         }
       }),
