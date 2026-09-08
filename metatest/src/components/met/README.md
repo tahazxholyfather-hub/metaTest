@@ -1,31 +1,46 @@
 # Met
 
-The AI tutor's living character — a self-contained SVG + Canvas-free animation
-engine (`cell/`) ported from the standalone `ai-cell-character` prototype,
-wrapped as `Met` for consistent naming/branding across the app.
+Met is the AI's official identity in MetaTest: one flat circle and two black
+eyes. Every emotion — and the illusion that the body is a 3D ball — comes from
+how the eyes move, deform and sit on the surface. The engine lives in
+`character/` (vendored verbatim from the standalone `ai-character-eyes`
+prototype, zero dependencies beyond React) and is wrapped as `Met` so theming,
+naming and status mapping live in one place.
 
 ```tsx
-import { Met, chatStatusToMetState } from '@/components/met';
-// or: import { Met } from '../../components/met';
+import { Met, chatStatusToMetState, subjectToMetColor } from '../../components/met';
 
-<Met size={96} state="idle" mood="happy" interactive energy={0.6} />
+<Met size={96} state={chatStatusToMetState(status)} color={subjectToMetColor(subjectKey)} interactive glow />
 ```
 
-## Where each size/mode is used
+## Props
 
-| Context | Size | `interactive` | `state` source |
+| Prop | Notes |
+|---|---|
+| `state` | `idle` `curious` `happy` `sad` `surprised` `confused` `sleepy` `thinking` `listening` `speaking` `excited` `annoyed` `shocked` |
+| `color` | Theme name (`violet` `blue` `green` `pink` `neutral`) or any CSS colour |
+| `interactive` | Follows the pointer/finger and reacts to taps. Only the "live" instance should have this on. |
+| `reducedMotion` | Force calm motion (decorative/small instances). Defaults to the OS preference. |
+| `glow` | Soft coloured halo — for the nav rail and hero placements |
+| `lookAt` / `audioLevel` / `intensity` | Programmatic gaze, real-audio speech drive, expression strength |
+| `ref` | `{ blink(), poke() }` |
+
+## Where each instance lives
+
+| Context | Size | `interactive` | `state` |
 |---|---|---|---|
-| Intro screen | large (~220–280px) | yes | fixed `idle` |
-| Sidebar (desktop) / history sheet (mobile) | ~80–96px | yes | live `chatStatus` via `chatStatusToMetState` |
-| Mobile chat header (once a conversation exists) | ~36px | no | live `chatStatus` |
-| Message bubble avatar / typing indicator | ~32px | no, `reducedMotion` | fixed `idle` (static) |
+| Desktop floating rail / mobile chat header | 40–56px | yes | live chat status |
+| Empty chat hero | 150–200px | yes | live chat status |
+| Main navigation (side nav, bottom nav, mobile menu) | 22–26px | no, `reducedMotion` | fixed `idle` |
+| Assistant message avatar | 22–28px | no, `reducedMotion` | fixed `idle` |
 
-Per the product spec: **only** the sidebar/header Met reflects live states,
-moods, and eye-tracking. Every avatar rendered inside the message list is
-intentionally static (`reducedMotion`, `interactive={false}`) — it is a
-portrait, not a second live character, both for visual clarity and so dozens
-of chat bubbles don't each run their own animation loop.
+Only one instance per screen is "alive" (interactive, mirroring the chat
+status). Everything else is a calm idle portrait, so dozens of avatars don't
+each fight for attention. All instances share a single `requestAnimationFrame`
+loop and pause automatically when off-screen.
 
-See `cell/types.ts` for the full `CellState`/`CellMood`/`AICellHandle` API —
-`setState`, `setSpeaking`, `setListening`, `setMood`, `setEnergy`,
-`setSpeechIntensity`, `poke()`.
+## Status mapping
+
+`chatStatusToMetState` maps the chat pipeline to eye states:
+`ready → idle`, `listening/sending → listening`, `thinking/processing → thinking`,
+`generating/speaking → speaking`, `success → happy`, `error → confused`.
