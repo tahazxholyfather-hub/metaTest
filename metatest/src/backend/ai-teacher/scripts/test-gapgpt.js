@@ -16,7 +16,7 @@ const { PROVIDER, MODELS } = require('../config');
 async function main() {
     console.log('Provider:', PROVIDER.name);
     console.log('Base URL:', PROVIDER.baseUrl);
-    console.log('Model:', MODELS.default);
+    console.log('Model:', MODELS.text);
     console.log('API key:', PROVIDER.apiKey ? `${PROVIDER.apiKey.slice(0, 6)}…` : '(missing)');
 
     if (!PROVIDER.apiKey) {
@@ -30,7 +30,7 @@ async function main() {
             { role: 'system', content: 'Reply briefly in Persian.' },
             { role: 'user', content: 'سلام، یک جمله کوتاه بگو.' },
         ],
-        model: MODELS.default,
+        model: MODELS.text,
         maxTokens: 80,
         temperature: 0.4,
     });
@@ -44,7 +44,7 @@ async function main() {
             { role: 'system', content: 'Reply briefly in Persian.' },
             { role: 'user', content: 'عدد ۲+۲ چند می‌شود؟' },
         ],
-        model: MODELS.default,
+        model: MODELS.text,
         maxTokens: 60,
         temperature: 0.2,
     })) {

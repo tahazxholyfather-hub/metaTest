@@ -1,7 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
-const { CONTEXT_LIMITS, FEATURES } = require('../config');
+const { CONTEXT_LIMITS, MODELS, featureStatus } = require('../config');
 const aiProvider = require('./aiProvider');
 
 /**
@@ -159,7 +159,7 @@ function invalidateChunkCache(bookId) {
  * for this subject given the student's current message.
  */
 async function retrieveContext(db, { subjectKey, queryText, topK = CONTEXT_LIMITS.ragTopK } = {}) {
-    if (!FEATURES.rag || !subjectKey) return null;
+    if (!featureStatus().pdfReferences || !subjectKey || subjectKey === 'general') return null;
 
     const book = await loadBookForSubject(db, subjectKey);
     if (!book) return null;
@@ -256,7 +256,7 @@ async function ingestBookText(db, bookId, subjectKey, fullText) {
                 content,
                 hash,
                 Math.ceil(content.length / 4),
-                embedding ? require('../config').MODELS.embedding : null,
+                embedding ? MODELS.embedding : null,
                 embedding ? JSON.stringify(embedding) : null,
             ]
         );
@@ -278,6 +278,11 @@ async function ingestBookText(db, bookId, subjectKey, fullText) {
 module.exports = {
     chunkText,
     cosineSimilarity,
+    tokenize,
+    keywordScore,
+    hashOf,
+    safeParseEmbedding,
+    joinChunks,
     retrieveContext,
     ingestBookText,
     invalidateBookCache,

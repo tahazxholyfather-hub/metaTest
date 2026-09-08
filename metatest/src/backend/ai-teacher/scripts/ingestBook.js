@@ -9,8 +9,8 @@
  *   node ai-teacher/scripts/ingestBook.js --book=4 --file=/path/to/biology-10.pdf
  *   node ai-teacher/scripts/ingestBook.js --book=4 --text=/path/to/already-extracted.txt
  *
- * Requires `pdf-parse` (added to package.json) and GAPGPT_API_KEY for
- * embeddings. Safe to re-run: unchanged chunks are not re-embedded.
+ * Requires `pdf-parse` (in package.json) and AI_API_KEY for embeddings.
+ * Safe to re-run: unchanged chunks are not re-embedded.
  */
 
 require('dotenv').config();
@@ -18,6 +18,7 @@ const fs = require('fs');
 const path = require('path');
 const db = require('../../db');
 const ragService = require('../services/ragService');
+const { extractPdfText } = require('../services/pdfText');
 
 function parseArgs(argv) {
     const out = {};
@@ -31,10 +32,8 @@ function parseArgs(argv) {
 async function extractText(filePath) {
     const ext = path.extname(filePath).toLowerCase();
     if (ext === '.pdf') {
-        const pdfParse = require('pdf-parse');
-        const buffer = fs.readFileSync(filePath);
-        const data = await pdfParse(buffer);
-        return data.text;
+        const { text } = await extractPdfText(fs.readFileSync(filePath), { maxPages: 2000 });
+        return text;
     }
     return fs.readFileSync(filePath, 'utf8');
 }

@@ -18,7 +18,7 @@ class AiProviderError extends Error {
 function assertConfigured() {
     if (!PROVIDER.apiKey) {
         throw new AiProviderError(
-            'سرویس هوش مصنوعی پیکربندی نشده است. GAPGPT_API_KEY را تنظیم کنید.',
+            'سرویس هوش مصنوعی پیکربندی نشده است. AI_API_KEY را تنظیم کنید.',
             'AI_NOT_CONFIGURED',
             503
         );
@@ -146,7 +146,7 @@ async function fetchJson(path, { method = 'POST', body, timeoutMs = PROVIDER.tim
 }
 
 async function generate({ messages, model, maxTokens, temperature = 0.6, tools, toolChoice }) {
-    const usedModel = model || MODELS.default;
+    const usedModel = model || MODELS.text;
     const data = await fetchJson('/chat/completions', {
         body: buildBody({ messages, model: usedModel, maxTokens, temperature, stream: false, tools, toolChoice }),
     });
@@ -166,12 +166,19 @@ async function generate({ messages, model, maxTokens, temperature = 0.6, tools, 
 /**
  * Stream chat completion. Yields { type: 'delta'|'done', ... }
  */
-async function* stream({ messages, model, maxTokens, temperature = 0.6 }) {
+async function* stream({ messages, model, maxTokens, temperature = 0.6, signal = null }) {
     assertConfigured();
-    const usedModel = model || MODELS.default;
+    const usedModel = model || MODELS.text;
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), PROVIDER.timeoutMs);
+    // Caller-side cancellation (student pressed "stop") — partial text is still returned.
+    let stopped = false;
+    const onExternalAbort = () => { stopped = true; controller.abort(); };
+    if (signal) {
+        if (signal.aborted) onExternalAbort();
+        else signal.addEventListener('abort', onExternalAbort, { once: true });
+    }
 
     let res;
     try {
@@ -193,7 +200,9 @@ async function* stream({ messages, model, maxTokens, temperature = 0.6 }) {
         });
     } catch (err) {
         clearTimeout(timer);
+        if (signal) signal.removeEventListener('abort', onExternalAbort);
         if (err.name === 'AbortError') {
+            if (stopped) throw new AiProviderError('تولید پاسخ متوقف شد.', 'AI_STOPPED', 499);
             throw new AiProviderError('زمان پاسخ‌گویی به پایان رسید.', 'AI_TIMEOUT', 504);
         }
         throw new AiProviderError(err.message || 'خطای شبکه هوش مصنوعی', 'AI_NETWORK', 502);
@@ -201,6 +210,7 @@ async function* stream({ messages, model, maxTokens, temperature = 0.6 }) {
 
     if (!res.ok) {
         clearTimeout(timer);
+        if (signal) signal.removeEventListener('abort', onExternalAbort);
         const data = await res.json().catch(() => ({}));
         throw new AiProviderError(
             extractErrorMessage(data, 'خطا در سرویس هوش مصنوعی'),
@@ -217,7 +227,15 @@ async function* stream({ messages, model, maxTokens, temperature = 0.6 }) {
 
     try {
         while (true) {
-            const { done, value } = await reader.read();
+            let chunk;
+            try {
+                chunk = await reader.read();
+            } catch (err) {
+                if (stopped) break; // student stopped generation — keep what we have
+                if (err.name === 'AbortError') throw new AiProviderError('زمان پاسخ‌گویی به پایان رسید.', 'AI_TIMEOUT', 504);
+                throw new AiProviderError(err.message || 'خطای شبکه هوش مصنوعی', 'AI_NETWORK', 502);
+            }
+            const { done, value } = chunk;
             if (done) break;
             buffer += decoder.decode(value, { stream: true });
 
@@ -249,6 +267,7 @@ async function* stream({ messages, model, maxTokens, temperature = 0.6 }) {
         }
     } finally {
         clearTimeout(timer);
+        if (signal) signal.removeEventListener('abort', onExternalAbort);
         try { reader.releaseLock(); } catch { /* ignore */ }
     }
 
@@ -261,6 +280,7 @@ async function* stream({ messages, model, maxTokens, temperature = 0.6 }) {
         content: fullText,
         model: usedModel,
         usage,
+        stopped,
     };
 }
 

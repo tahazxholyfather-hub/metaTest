@@ -1,178 +1,60 @@
 'use strict';
 
 /**
- * Met — AI tutor HTTP controller.
- * Mounted at /api/ai-teacher (see routes.js).
+ * Met — AI tutor HTTP controller (everything except the streaming chat turn,
+ * which lives in chatController.js). Mounted at /api/ai-teacher.
  */
 
-const db = require('../db');
-const { CONTEXT_LIMITS, dailyRefillForPlan, FEATURES, STT_ENERGY_COST, TTS_ENERGY_COST } = require('./config');
-const { SUBJECT_LIST, isValidSubject, getSubject } = require('./subjects');
+const { MODELS, featureStatus } = require('./config');
+const { isValidSubject } = require('./subjects');
+const {
+    db, publicMessage, publicConversation, publicSubject, publicFeatures,
+    loadUserRow, ensureSettings, walletSnapshot, walletFromBuckets,
+    listSubjectsFromDb, userMessageForError,
+} = require('./shared');
 const coinWallet = require('./services/coinWallet');
 const pricing = require('./services/pricing');
 const aiProvider = require('./services/aiProvider');
-const promptBuilder = require('./services/promptBuilder');
 const memoryService = require('./services/memoryService');
 const conversationService = require('./services/conversationService');
-const ragService = require('./services/ragService');
-const toolsService = require('./services/toolsService');
-const imageService = require('./services/imageService');
+const fileStorage = require('./services/fileStorage');
+const suggestionsService = require('./services/suggestionsService');
+const referencesService = require('./services/referencesService');
+const { logUsage } = require('./services/usageLogger');
 
-const DATA_TOOL_TRIGGERS = /(نمره|امتیاز|عملکرد|فعالیت|پیشرفت|چطورم|چطور بودم|رتبه|activity|progress|score)/i;
-const IMAGE_TOOL_TRIGGERS = /(تصویر|عکس|نقاشی|دیاگرام|نمودار|شکل بکش|رسم کن|بکش|diagram|illustrat|draw|image|picture|schematic)/i;
-
-function publicMessage(row) {
-    return {
-        id: row.id,
-        role: row.role,
-        content: row.content,
-        inputTokens: row.input_tokens || 0,
-        outputTokens: row.output_tokens || 0,
-        totalTokens: row.total_tokens || 0,
-        coinCost: row.coin_cost || 0,
-        model: row.model || null,
-        attachments: conversationService.parseAttachments(row.attachments),
-        isStarter: !!row.is_starter,
-        createdAt: row.created_at,
-    };
-}
-
-function publicConversation(row) {
-    return {
-        id: row.id,
-        title: row.title,
-        subjectKey: row.subject_key,
-        messageCount: row.message_count,
-        lastMessageAt: row.last_message_at,
-        titleGenerated: !!row.title_generated,
-    };
-}
-
-function publicSubject(row) {
-    return {
-        key: row.key,
-        nameFa: row.nameFa || row.name_fa,
-        nameEn: row.nameEn || row.name_en,
-        icon: row.icon,
-        color: row.color,
-    };
-}
-
-async function loadUserRow(userId) {
-    const [[user]] = await db.query(
-        `SELECT id, first_name, last_name, current_plan, plan_expires_at,
-                ai_met_intro_seen, ai_last_subject
-         FROM tam24_users WHERE id = ?`,
-        [userId]
-    );
-    return user || null;
-}
-
-async function ensureSettings(userId) {
-    await db.query(`INSERT IGNORE INTO tam24_ai_user_settings (user_id) VALUES (?)`, [userId]);
-    const [[settings]] = await db.query(`SELECT * FROM tam24_ai_user_settings WHERE user_id = ?`, [userId]);
-    return settings;
-}
-
-function publicSettings(row) {
-    return {
-        efficientMode: !!row?.low_coin_mode,
-        shortAnswers: !!row?.concise_responses,
-        alwaysExamples: row?.always_examples == null ? true : !!row.always_examples,
-        stepByStep: row?.step_by_step == null ? true : !!row.step_by_step,
-        // Column added in 007 — default on when the migration hasn't run yet.
-        voiceReplies: row?.voice_replies == null ? true : !!row.voice_replies,
-    };
-}
-
-function nextRefillAtIso() {
-    const next = new Date();
-    next.setHours(24, 0, 0, 0);
-    return next.toISOString();
-}
-
-async function getBalanceSnapshot(userId, planKey) {
-    const refill = await coinWallet.applyDailyRefill(db, userId, planKey);
-    return {
-        balance: refill.balance,
-        refilled: refill.refilled,
-        refillAmount: refill.amount,
-        dailyAllowance: dailyRefillForPlan(planKey),
-        nextRefillAt: nextRefillAtIso(),
-    };
-}
-
-/** DB rows override code-authored subject text; fall back gracefully if the table isn't migrated yet. */
-async function listSubjectsFromDb() {
-    try {
-        const [rows] = await db.query(
-            `SELECT \`key\`, name_fa, name_en, icon, color, general_prompt, reference_instructions, model, max_output_tokens
-             FROM tam24_ai_subjects WHERE is_active = 1 ORDER BY sort_order ASC`
-        );
-        if (rows.length) return rows;
-    } catch { /* table missing — fall back to code config */ }
-    return SUBJECT_LIST.map((s) => ({
-        key: s.key, name_fa: s.nameFa, name_en: s.nameEn, icon: s.icon, color: s.color,
-        general_prompt: null, reference_instructions: null, model: s.model, max_output_tokens: 700,
-    }));
-}
-
-async function loadSubjectRow(subjectKey) {
-    try {
-        const [[row]] = await db.query(`SELECT * FROM tam24_ai_subjects WHERE \`key\` = ? LIMIT 1`, [subjectKey]);
-        return row || null;
-    } catch {
-        return null;
-    }
-}
+const fail = (res, status, code, message) => res.status(status).json({ success: false, code, message: message || userMessageForError(code) });
+const idParam = (v) => { const n = Number(v); return Number.isInteger(n) && n > 0 ? n : null; };
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 const getBootstrap = async (req, res) => {
     try {
         const userId = req.user.id;
         const user = await loadUserRow(userId);
-        if (!user) return res.status(404).json({ success: false, message: 'کاربر یافت نشد.' });
+        if (!user) return fail(res, 404, 'NOT_FOUND', 'کاربر یافت نشد.');
 
-        const wallet = await getBalanceSnapshot(userId, user.current_plan);
-        const subjectRows = await listSubjectsFromDb();
-        const settings = await ensureSettings(userId);
-        const latestConversation = await conversationService.getLatestConversation(db, userId);
+        const [wallet, subjectRows, settings, latestConversation] = await Promise.all([
+            walletSnapshot(userId, user.current_plan),
+            listSubjectsFromDb(),
+            ensureSettings(userId),
+            conversationService.getLatestConversation(db, userId),
+        ]);
+        pricing.loadPricingTable(db).catch(() => {});
 
         return res.json({
             success: true,
             data: {
-                introSeen: !!user.ai_met_intro_seen,
-                user: {
-                    id: user.id,
-                    firstName: user.first_name,
-                    lastName: user.last_name,
-                    currentPlan: user.current_plan,
-                },
+                features: publicFeatures(),
+                user: { id: user.id, firstName: user.first_name, lastName: user.last_name, currentPlan: user.current_plan },
                 subjects: subjectRows.map(publicSubject),
                 lastSubject: user.ai_last_subject || null,
-                settings: publicSettings(settings),
-                features: {
-                    voice: FEATURES.voice,
-                    imageGeneration: FEATURES.imageGeneration,
-                    vision: FEATURES.vision,
-                },
+                settings,
                 wallet,
                 latestConversation: latestConversation ? publicConversation(latestConversation) : null,
             },
         });
     } catch (err) {
-        console.error('[ai-teacher] getBootstrap', err);
-        return res.status(500).json({ success: false, message: 'خطا در بارگذاری Met.' });
-    }
-};
-
-const markIntroSeen = async (req, res) => {
-    try {
-        await db.query(`UPDATE tam24_users SET ai_met_intro_seen = 1 WHERE id = ?`, [req.user.id]);
-        return res.json({ success: true });
-    } catch (err) {
-        console.error('[ai-teacher] markIntroSeen', err);
-        return res.status(500).json({ success: false, message: 'خطا در ذخیره وضعیت معرفی.' });
+        console.error('[met] getBootstrap', err);
+        return fail(res, 500, 'SERVER_ERROR', 'خطا در بارگذاری مِت.');
     }
 };
 
@@ -181,9 +63,27 @@ const listSubjects = async (req, res) => {
         const rows = await listSubjectsFromDb();
         return res.json({ success: true, data: rows.map(publicSubject) });
     } catch (err) {
-        console.error('[ai-teacher] listSubjects', err);
-        return res.status(500).json({ success: false, message: 'خطا در دریافت درس‌ها.' });
+        console.error('[met] listSubjects', err);
+        return fail(res, 500, 'SERVER_ERROR', 'خطا در دریافت درس‌ها.');
     }
+};
+
+const getSuggestions = async (req, res) => {
+    try {
+        const subjectKey = String(req.query.subject || req.query.subjectKey || 'general').toLowerCase();
+        if (!isValidSubject(subjectKey)) return fail(res, 400, 'INVALID_SUBJECT', 'موضوع نامعتبر است.');
+        const items = await suggestionsService.getSuggestions(db, subjectKey);
+        return res.json({ success: true, data: items });
+    } catch (err) {
+        console.error('[met] getSuggestions', err);
+        return res.json({ success: true, data: [] });
+    }
+};
+
+const useSuggestion = async (req, res) => {
+    const id = idParam(req.params.id);
+    if (id) suggestionsService.markUsed(db, id).catch(() => {});
+    return res.json({ success: true });
 };
 
 // ─── Conversations ────────────────────────────────────────────────────────────
@@ -191,197 +91,323 @@ const openSession = async (req, res) => {
     try {
         const userId = req.user.id;
         const user = await loadUserRow(userId);
-        if (!user) return res.status(404).json({ success: false, message: 'کاربر یافت نشد.' });
-
-        const wallet = await getBalanceSnapshot(userId, user.current_plan);
+        if (!user) return fail(res, 404, 'NOT_FOUND', 'کاربر یافت نشد.');
+        const wallet = await walletSnapshot(userId, user.current_plan);
         const conversation = await conversationService.getLatestConversation(db, userId);
-        if (!conversation) {
-            return res.json({ success: true, data: { conversation: null, messages: [], wallet } });
-        }
-
+        if (!conversation) return res.json({ success: true, data: { conversation: null, messages: [], hasMore: false, wallet } });
         const messages = await conversationService.getMessages(db, conversation.id, { limit: 50 });
         return res.json({
             success: true,
-            data: { conversation: publicConversation(conversation), messages: messages.map(publicMessage), wallet },
+            data: { conversation: publicConversation(conversation), messages: messages.map(publicMessage), hasMore: messages.hasMore, wallet },
         });
     } catch (err) {
-        console.error('[ai-teacher] openSession', err);
-        return res.status(500).json({ success: false, message: 'خطا در باز کردن گفتگو.' });
+        console.error('[met] openSession', err);
+        return fail(res, 500, 'SERVER_ERROR', 'خطا در باز کردن گفتگو.');
     }
 };
 
 const createConversation = async (req, res) => {
     try {
-        const userId = req.user.id;
-        const subjectKey = String(req.body?.subjectKey || '').toLowerCase();
-        if (!isValidSubject(subjectKey)) {
-            return res.status(400).json({ success: false, message: 'موضوع نامعتبر است.' });
-        }
-        const conversation = await conversationService.createConversation(db, { userId, subjectKey });
-        return res.json({ success: true, data: { conversation: publicConversation({ ...conversation, message_count: 0 }) } });
+        const subjectKey = String(req.body?.subjectKey || 'general').toLowerCase();
+        if (!isValidSubject(subjectKey)) return fail(res, 400, 'INVALID_SUBJECT', 'موضوع نامعتبر است.');
+        const conversation = await conversationService.createConversation(db, { userId: req.user.id, subjectKey });
+        return res.json({ success: true, data: { conversation: publicConversation(conversation) } });
     } catch (err) {
-        console.error('[ai-teacher] createConversation', err);
-        return res.status(500).json({ success: false, message: 'خطا در ایجاد گفتگوی جدید.' });
+        console.error('[met] createConversation', err);
+        return fail(res, 500, 'SERVER_ERROR', 'خطا در ایجاد گفتگوی جدید.');
     }
 };
 
 const listConversations = async (req, res) => {
     try {
-        const userId = req.user.id;
-        const limit = Math.min(50, Number(req.query.limit) || 30);
+        const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 30));
         const offset = Math.max(0, Number(req.query.offset) || 0);
-        const rows = await conversationService.listConversations(db, userId, { limit, offset });
-        return res.json({ success: true, data: rows.map(publicConversation) });
+        const subjectKey = req.query.subject ? String(req.query.subject).toLowerCase() : null;
+        if (subjectKey && !isValidSubject(subjectKey)) return fail(res, 400, 'INVALID_SUBJECT', 'موضوع نامعتبر است.');
+        const rows = await conversationService.listConversations(db, req.user.id, {
+            limit, offset, subjectKey, search: req.query.q ? String(req.query.q).slice(0, 80) : null,
+        });
+        return res.json({ success: true, data: rows.map(publicConversation), hasMore: rows.length === limit });
     } catch (err) {
-        console.error('[ai-teacher] listConversations', err);
-        return res.status(500).json({ success: false, message: 'خطا در دریافت تاریخچه.' });
+        console.error('[met] listConversations', err);
+        return fail(res, 500, 'SERVER_ERROR', 'خطا در دریافت تاریخچه.');
     }
 };
 
 const getConversation = async (req, res) => {
     try {
-        const userId = req.user.id;
-        const conversationId = Number(req.params.id);
-        const beforeId = req.query.beforeId ? Number(req.query.beforeId) : null;
-        const limit = Math.min(100, Number(req.query.limit) || 50);
+        const conversationId = idParam(req.params.id);
+        if (!conversationId) return fail(res, 404, 'NOT_FOUND', 'گفتگو یافت نشد.');
+        const beforeId = idParam(req.query.beforeId);
+        const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
 
-        const conversation = await conversationService.getConversationForUser(db, conversationId, userId);
-        if (!conversation) return res.status(404).json({ success: false, message: 'گفتگو یافت نشد.' });
+        const conversation = await conversationService.getConversationForUser(db, conversationId, req.user.id);
+        if (!conversation) return fail(res, 404, 'NOT_FOUND', 'گفتگو یافت نشد.');
 
-        const messages = await conversationService.getMessages(db, conversationId, { limit, beforeId });
+        const [messages, references] = await Promise.all([
+            conversationService.getMessages(db, conversationId, { limit, beforeId }),
+            featureStatus().pdfReferences ? referencesService.listReferences(db, conversationId, req.user.id).catch(() => []) : [],
+        ]);
         return res.json({
             success: true,
-            data: { conversation: publicConversation(conversation), messages: messages.map(publicMessage) },
+            data: { conversation: publicConversation(conversation), messages: messages.map(publicMessage), hasMore: messages.hasMore, references },
         });
     } catch (err) {
-        console.error('[ai-teacher] getConversation', err);
-        return res.status(500).json({ success: false, message: 'خطا در دریافت گفتگو.' });
+        console.error('[met] getConversation', err);
+        return fail(res, 500, 'SERVER_ERROR', 'خطا در دریافت گفتگو.');
     }
 };
 
 const renameConversation = async (req, res) => {
     try {
-        const title = await conversationService.renameConversation(db, req.user.id, Number(req.params.id), req.body?.title);
+        const title = await conversationService.renameConversation(db, req.user.id, idParam(req.params.id), req.body?.title);
         return res.json({ success: true, data: { title } });
     } catch (err) {
         const notFound = err.message === 'NOT_FOUND';
-        return res.status(notFound ? 404 : 400).json({
-            success: false,
-            message: notFound ? 'گفتگو یافت نشد.' : 'عنوان نامعتبر است.',
-        });
+        return fail(res, notFound ? 404 : 400, notFound ? 'NOT_FOUND' : 'INVALID_TITLE', notFound ? 'گفتگو یافت نشد.' : 'عنوان نامعتبر است.');
     }
 };
 
 const deleteConversation = async (req, res) => {
     try {
-        await conversationService.deleteConversation(db, req.user.id, Number(req.params.id));
+        await conversationService.deleteConversation(db, req.user.id, idParam(req.params.id));
         return res.json({ success: true });
-    } catch (err) {
-        return res.status(404).json({ success: false, message: 'گفتگو یافت نشد.' });
+    } catch {
+        return fail(res, 404, 'NOT_FOUND', 'گفتگو یافت نشد.');
     }
 };
 
+// ─── Wallet / ledger ──────────────────────────────────────────────────────────
 const getWallet = async (req, res) => {
     try {
         const user = await loadUserRow(req.user.id);
-        const wallet = await getBalanceSnapshot(req.user.id, user?.current_plan);
+        const wallet = await walletSnapshot(req.user.id, user?.current_plan);
         return res.json({ success: true, data: wallet });
     } catch (err) {
-        console.error('[ai-teacher] getWallet', err);
-        return res.status(500).json({ success: false, message: 'خطا در دریافت انرژی.' });
+        console.error('[met] getWallet', err);
+        return fail(res, 500, 'SERVER_ERROR', 'خطا در دریافت سکه‌ها.');
     }
 };
 
-// ─── Settings (efficient usage / short answers / voice replies …) ───────────
-const SETTING_COLUMNS = {
-    efficientMode: 'low_coin_mode',
-    shortAnswers: 'concise_responses',
-    alwaysExamples: 'always_examples',
-    stepByStep: 'step_by_step',
-    voiceReplies: 'voice_replies',
+const getLedger = async (req, res) => {
+    try {
+        const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 30));
+        const offset = Math.max(0, Number(req.query.offset) || 0);
+        const rows = await coinWallet.listLedger(db, req.user.id, { limit, offset });
+        return res.json({
+            success: true,
+            data: rows.map((r) => ({
+                id: r.id, type: r.type, amount: r.amount, dailyDelta: r.daily_delta, purchasedDelta: r.purchased_delta,
+                balanceBefore: r.balance_before, balanceAfter: r.balance_after, reason: r.reason,
+                operationType: r.operation_type, conversationId: r.conversation_id, messageId: r.message_id, createdAt: r.created_at,
+            })),
+            hasMore: rows.length === limit,
+        });
+    } catch (err) {
+        console.error('[met] getLedger', err);
+        return fail(res, 500, 'SERVER_ERROR', 'خطا در دریافت تراکنش‌ها.');
+    }
+};
+
+// ─── Settings ─────────────────────────────────────────────────────────────────
+const SETTING_WRITERS = {
+    tone: (v) => (['friendly', 'formal', 'playful'].includes(v) ? ['tone', v] : null),
+    reasoningLevel: (v) => (['fast', 'balanced', 'deep'].includes(v) ? ['reasoning_level', v] : null),
+    verbosity: (v) => (['short', 'normal', 'detailed'].includes(v) ? ['verbosity', v] : null),
+    creativity: (v) => (Number.isFinite(Number(v)) ? ['creativity', Math.round(Math.min(100, Math.max(0, Number(v))))] : null),
+    conciseMode: (v) => (typeof v === 'boolean' ? ['concise_responses', v ? 1 : 0] : null),
+    efficientMode: (v) => (typeof v === 'boolean' ? ['low_coin_mode', v ? 1 : 0] : null),
+    alwaysExamples: (v) => (typeof v === 'boolean' ? ['always_examples', v ? 1 : 0] : null),
+    stepByStep: (v) => (typeof v === 'boolean' ? ['step_by_step', v ? 1 : 0] : null),
+    voiceReplies: (v) => (typeof v === 'boolean' ? ['voice_replies', v ? 1 : 0] : null),
+    memoryEnabled: (v) => (typeof v === 'boolean' ? ['memory_enabled', v ? 1 : 0] : null),
+    knowledgeEnabled: (v) => (typeof v === 'boolean' ? ['knowledge_enabled', v ? 1 : 0] : null),
+    pdfReferencesEnabled: (v) => (typeof v === 'boolean' ? ['pdf_references_enabled', v ? 1 : 0] : null),
+};
+
+const getSettings = async (req, res) => {
+    try {
+        return res.json({ success: true, data: await ensureSettings(req.user.id) });
+    } catch (err) {
+        console.error('[met] getSettings', err);
+        return fail(res, 500, 'SERVER_ERROR', 'خطا در دریافت تنظیمات.');
+    }
 };
 
 const updateSettings = async (req, res) => {
     try {
         const userId = req.user.id;
         await ensureSettings(userId);
-
         const sets = [];
         const vals = [];
-        for (const [field, column] of Object.entries(SETTING_COLUMNS)) {
-            if (typeof req.body?.[field] === 'boolean') {
-                sets.push(`${column} = ?`);
-                vals.push(req.body[field] ? 1 : 0);
-            }
+        for (const [field, write] of Object.entries(SETTING_WRITERS)) {
+            if (req.body?.[field] === undefined) continue;
+            const pair = write(req.body[field]);
+            if (!pair) return fail(res, 400, 'INVALID_SETTING', `مقدار «${field}» نامعتبر است.`);
+            sets.push(`${pair[0]} = ?`);
+            vals.push(pair[1]);
         }
-
         if (sets.length) {
-            try {
-                await db.query(
-                    `UPDATE tam24_ai_user_settings SET ${sets.join(', ')}, updated_at = NOW() WHERE user_id = ?`,
-                    [...vals, userId]
-                );
-            } catch (err) {
-                // voice_replies column arrives with migration 007 — retry without it.
-                if (/Unknown column/i.test(err.message || '') || err.code === 'ER_BAD_FIELD_ERROR') {
-                    const filtered = sets.map((s, i) => [s, vals[i]]).filter(([s]) => !s.startsWith('voice_replies'));
-                    if (filtered.length) {
-                        await db.query(
-                            `UPDATE tam24_ai_user_settings SET ${filtered.map(([s]) => s).join(', ')}, updated_at = NOW() WHERE user_id = ?`,
-                            [...filtered.map(([, v]) => v), userId]
-                        );
-                    }
-                } else {
-                    throw err;
-                }
-            }
+            await db.query(`UPDATE tam24_ai_user_settings SET ${sets.join(', ')}, updated_at = NOW() WHERE user_id = ?`, [...vals, userId]);
         }
-
-        const settings = await ensureSettings(userId);
-        return res.json({ success: true, data: publicSettings(settings) });
+        return res.json({ success: true, data: await ensureSettings(userId) });
     } catch (err) {
-        console.error('[ai-teacher] updateSettings', err);
-        return res.status(500).json({ success: false, message: 'خطا در ذخیره تنظیمات.' });
+        console.error('[met] updateSettings', err);
+        return fail(res, 500, 'SERVER_ERROR', 'خطا در ذخیره تنظیمات.');
     }
 };
 
-// ─── Voice: speech-to-text (mic button) ──────────────────────────────────────
-const voiceTranscribe = async (req, res) => {
+// ─── Memory (auditable by the student) ───────────────────────────────────────
+const listMemory = async (req, res) => {
     try {
-        if (!FEATURES.voice) {
-            return res.status(403).json({ success: false, message: 'قابلیت صوتی غیرفعال است.' });
-        }
-        if (!req.file?.buffer?.length) {
-            return res.status(400).json({ success: false, message: 'فایل صوتی دریافت نشد.' });
-        }
+        const rows = await memoryService.listMemories(db, req.user.id);
+        return res.json({
+            success: true,
+            data: rows.map((m) => ({
+                id: m.id, type: m.memory_type, content: m.content, importance: m.importance, confidence: m.confidence,
+                subjectKey: m.subject_key, createdAt: m.created_at, updatedAt: m.updated_at,
+            })),
+        });
+    } catch (err) {
+        console.error('[met] listMemory', err);
+        return fail(res, 500, 'SERVER_ERROR', 'خطا در دریافت حافظه.');
+    }
+};
 
-        const user = await loadUserRow(req.user.id);
-        const refill = await coinWallet.applyDailyRefill(db, req.user.id, user?.current_plan);
-        if (refill.balance < STT_ENERGY_COST) {
-            return res.status(402).json({ success: false, code: 'INSUFFICIENT_COINS', message: 'موجودی انرژی کافی نیست.' });
-        }
+const forgetMemory = async (req, res) => {
+    try {
+        const ok = await memoryService.forgetMemory(db, req.user.id, idParam(req.params.id));
+        return ok ? res.json({ success: true }) : fail(res, 404, 'NOT_FOUND');
+    } catch (err) {
+        console.error('[met] forgetMemory', err);
+        return fail(res, 500, 'SERVER_ERROR');
+    }
+};
 
+const clearMemory = async (req, res) => {
+    try {
+        const count = await memoryService.clearMemories(db, req.user.id);
+        return res.json({ success: true, data: { cleared: count } });
+    } catch (err) {
+        console.error('[met] clearMemory', err);
+        return fail(res, 500, 'SERVER_ERROR');
+    }
+};
+
+// ─── References (PDFs per conversation) ──────────────────────────────────────
+async function ownedConversation(req, res) {
+    const conversationId = idParam(req.params.id);
+    const conversation = conversationId ? await conversationService.getConversationForUser(db, conversationId, req.user.id) : null;
+    if (!conversation) { fail(res, 404, 'NOT_FOUND', 'گفتگو یافت نشد.'); return null; }
+    return conversation;
+}
+
+const listReferences = async (req, res) => {
+    try {
+        const conversation = await ownedConversation(req, res);
+        if (!conversation) return;
+        return res.json({ success: true, data: await referencesService.listReferences(db, conversation.id, req.user.id) });
+    } catch (err) {
+        console.error('[met] listReferences', err);
+        return fail(res, 500, 'SERVER_ERROR', 'خطا در دریافت منابع.');
+    }
+};
+
+const addReference = async (req, res) => {
+    try {
+        const conversation = await ownedConversation(req, res);
+        if (!conversation) return;
+        if (!req.file?.buffer?.length) return fail(res, 400, 'NO_FILE', 'فایل PDF دریافت نشد.');
+        const reference = await referencesService.addReference(db, {
+            userId: req.user.id, conversationId: conversation.id, buffer: req.file.buffer,
+            originalName: req.file.originalname, mimeType: req.file.mimetype,
+        });
+        return res.json({ success: true, data: reference });
+    } catch (err) {
+        console.error('[met] addReference', err);
+        return fail(res, err.status || 500, err.code || 'SERVER_ERROR', err.code ? undefined : 'آپلود منبع ناموفق بود.');
+    }
+};
+
+const removeReference = async (req, res) => {
+    try {
+        const conversation = await ownedConversation(req, res);
+        if (!conversation) return;
+        await referencesService.removeReference(db, { userId: req.user.id, conversationId: conversation.id, referenceId: idParam(req.params.refId) });
+        return res.json({ success: true });
+    } catch (err) {
+        return fail(res, err.status || 500, err.code || 'SERVER_ERROR');
+    }
+};
+
+// ─── Uploads: image for vision ───────────────────────────────────────────────
+const uploadChatImage = async (req, res) => {
+    try {
+        if (!req.file?.buffer?.length) return fail(res, 400, 'NO_FILE', 'فایلی ارسال نشده است.');
+        const stored = await fileStorage.saveBuffer('image', req.file.buffer, { mime: req.file.mimetype, originalName: req.file.originalname });
+        const conversationId = idParam(req.body?.conversationId);
+        const fileId = await fileStorage.recordFile(db, { userId: req.user.id, conversationId, kind: 'image', stored });
+        return res.json({
+            success: true,
+            data: { fileId, type: 'image', url: stored.publicUrl, mimeType: stored.mimeType, width: stored.width, height: stored.height, sizeBytes: stored.sizeBytes },
+        });
+    } catch (err) {
+        console.error('[met] uploadChatImage', err);
+        return fail(res, err.code === 'UNSUPPORTED_FILE_TYPE' ? 400 : 500, err.code || 'UPLOAD_FAILED', err.code ? undefined : 'آپلود تصویر ناموفق بود.');
+    }
+};
+
+// ─── Voice: speech-to-text ───────────────────────────────────────────────────
+const voiceTranscribe = async (req, res) => {
+    const started = Date.now();
+    const userId = req.user.id;
+    try {
+        if (!req.file?.buffer?.length) return fail(res, 400, 'NO_FILE', 'فایل صوتی دریافت نشد.');
+        const user = await loadUserRow(userId);
+        const wallet = await walletSnapshot(userId, user?.current_plan);
+        const cost = pricing.flatCoinCost('stt', MODELS.stt);
+        if (wallet.total < cost) return res.status(402).json({ success: false, code: 'INSUFFICIENT_COINS', message: userMessageForError('INSUFFICIENT_COINS'), wallet });
+
+        const durationSeconds = Math.max(0, Math.min(600, Number(req.body?.durationSeconds) || 0)) || null;
+        const conversationId = idParam(req.body?.conversationId);
+
+        const stored = await fileStorage.saveBuffer('audio', req.file.buffer, { mime: req.file.mimetype, originalName: req.file.originalname || 'voice.webm' });
         const text = await aiProvider.transcribe({
-            audio: req.file.buffer,
-            filename: req.file.originalname || 'voice.webm',
-            mimeType: req.file.mimetype || 'audio/webm',
-            language: 'fa',
+            audio: req.file.buffer, filename: req.file.originalname || `voice.${stored.mimeType.split('/')[1] || 'webm'}`,
+            mimeType: stored.mimeType, language: 'fa',
         });
 
         if (!text) {
-            return res.status(422).json({ success: false, message: 'صدایی تشخیص داده نشد. دوباره تلاش کن.' });
+            await fileStorage.deleteStored('audio', stored.storedName);
+            return fail(res, 422, 'NO_SPEECH', 'صدایی تشخیص داده نشد. دوباره تلاش کن.');
         }
 
-        const charge = await coinWallet.chargeFlat(db, req.user.id, STT_ENERGY_COST, {
-            reason: 'تبدیل گفتار به متن',
-            referenceType: 'ai_voice_stt',
+        const fileId = await fileStorage.recordFile(db, {
+            userId, conversationId, kind: 'audio', stored, durationSeconds, transcript: text.slice(0, 4000), model: MODELS.stt, coinCost: cost,
+        });
+        const charge = await coinWallet.chargeFlat(db, userId, cost, {
+            reason: 'تبدیل گفتار به متن', referenceType: 'ai_voice_stt', referenceId: `stt-${fileId}`, operationType: 'stt', conversationId,
+        });
+        const unit = pricing.quoteUnits({ model: MODELS.stt, operationType: 'stt', units: durationSeconds || Math.round(req.file.size / 16000) });
+        await logUsage(db, {
+            userId, conversationId, operationType: 'stt', model: MODELS.stt, units: unit.units, coinCost: charge.charged,
+            costUsd: unit.usd, costIrr: unit.irr, exchangeRateIrr: unit.exchangeRateIrr, durationMs: Date.now() - started, attachedFiles: [fileId],
         });
 
-        return res.json({ success: true, data: { text, charged: charge.charged, balance: charge.balance } });
+        return res.json({
+            success: true,
+            data: {
+                text,
+                file: { fileId, type: 'audio', url: stored.publicUrl, mimeType: stored.mimeType, durationSeconds },
+                charged: charge.charged,
+                wallet: walletFromBuckets(charge.wallet, user?.current_plan),
+            },
+        });
     } catch (err) {
-        console.error('[ai-teacher] voiceTranscribe', err);
-        const status = err.code === 'INSUFFICIENT_COINS' ? 402 : 500;
-        return res.status(status).json({ success: false, code: err.code, message: err.message || 'خطا در پردازش صدا.' });
+        console.error('[met] voiceTranscribe', err);
+        await logUsage(db, { userId, operationType: 'stt', model: MODELS.stt, status: 'error', errorCode: err.code || 'STT_FAILED', errorMessage: err.message, durationMs: Date.now() - started });
+        const status = err.code === 'INSUFFICIENT_COINS' ? 402 : err.code === 'UNSUPPORTED_FILE_TYPE' ? 400 : 500;
+        return fail(res, status, err.code || 'STT_FAILED', err.code ? undefined : 'خطا در پردازش صدا.');
     }
 };
 
@@ -390,460 +416,73 @@ function sanitizeForSpeech(text) {
     return String(text || '')
         .replace(/\$\$[\s\S]+?\$\$|\$[^$\n]+\$/g, ' (فرمول) ')
         .replace(/\*\*([^*]+)\*\*/g, '$1')
+        .replace(/`{1,3}[^`]*`{1,3}/g, ' ')
         .replace(/^[ \t]{0,3}#{1,6}[ \t]+/gm, '')
+        .replace(/^[ \t]*[-*•]\s+/gm, '')
         .replace(/\s+/g, ' ')
         .trim();
 }
 
 // ─── Voice: text-to-speech for an assistant message ──────────────────────────
 const voiceSpeak = async (req, res) => {
+    const started = Date.now();
+    const userId = req.user.id;
     try {
-        if (!FEATURES.voice) {
-            return res.status(403).json({ success: false, message: 'قابلیت صوتی غیرفعال است.' });
-        }
-        const userId = req.user.id;
-        const messageId = Number(req.body?.messageId);
-        if (!messageId) {
-            return res.status(400).json({ success: false, message: 'شناسه پیام الزامی است.' });
-        }
+        const messageId = idParam(req.body?.messageId);
+        if (!messageId) return fail(res, 400, 'INVALID_MESSAGE', 'شناسه پیام الزامی است.');
 
-        const [[row]] = await db.query(
-            `SELECT m.id, m.role, m.content, m.attachments
-             FROM tam24_ai_messages m
-             JOIN tam24_ai_conversations c ON c.id = m.conversation_id
-             WHERE m.id = ? AND c.user_id = ?
-             LIMIT 1`,
-            [messageId, userId]
-        );
-        if (!row || row.role !== 'assistant') {
-            return res.status(404).json({ success: false, message: 'پیام یافت نشد.' });
-        }
+        const row = await conversationService.getMessageForUser(db, messageId, userId);
+        if (!row || row.role !== 'assistant') return fail(res, 404, 'NOT_FOUND', 'پیام یافت نشد.');
 
         // Replays are free — reuse the audio synthesized the first time.
-        const attachments = conversationService.parseAttachments(row.attachments);
-        const existing = attachments.find((a) => a.type === 'audio' && a.url);
-        if (existing) {
-            return res.json({ success: true, data: { url: existing.url, charged: 0, cached: true } });
-        }
+        const existing = row.attachments.find((a) => a.type === 'audio' && a.url);
+        if (existing) return res.json({ success: true, data: { url: existing.url, charged: 0, cached: true } });
 
         const user = await loadUserRow(userId);
-        const refill = await coinWallet.applyDailyRefill(db, userId, user?.current_plan);
-        if (refill.balance < TTS_ENERGY_COST) {
-            return res.status(402).json({ success: false, code: 'INSUFFICIENT_COINS', message: 'موجودی انرژی کافی نیست.' });
-        }
+        const wallet = await walletSnapshot(userId, user?.current_plan);
+        const cost = pricing.flatCoinCost('tts', MODELS.tts);
+        if (wallet.total < cost) return res.status(402).json({ success: false, code: 'INSUFFICIENT_COINS', message: userMessageForError('INSUFFICIENT_COINS'), wallet });
 
         const speech = sanitizeForSpeech(row.content);
-        if (!speech) {
-            return res.status(422).json({ success: false, message: 'متنی برای خواندن وجود ندارد.' });
-        }
+        if (!speech) return fail(res, 422, 'NO_TEXT', 'متنی برای خواندن وجود ندارد.');
 
         const audioBuffer = await aiProvider.speak({ text: speech });
-        const url = imageService.saveAudioBuffer(audioBuffer, 'mp3');
+        const stored = await fileStorage.saveBuffer('tts_audio', audioBuffer, { mime: 'audio/mpeg', originalName: `met-${messageId}.mp3` });
+        const fileId = await fileStorage.recordFile(db, {
+            userId, conversationId: row.conversation_id, messageId, kind: 'tts_audio', stored, model: MODELS.tts, coinCost: cost,
+            metadata: { characters: speech.length },
+        });
 
-        const nextAttachments = [...attachments, { type: 'audio', url, mimeType: 'audio/mpeg' }];
+        const nextAttachments = [...row.attachments, { type: 'audio', url: stored.publicUrl, mimeType: 'audio/mpeg', fileId }];
         await db.query(`UPDATE tam24_ai_messages SET attachments = ? WHERE id = ?`, [JSON.stringify(nextAttachments), messageId]);
 
-        const charge = await coinWallet.chargeFlat(db, userId, TTS_ENERGY_COST, {
-            reason: 'تولید پاسخ صوتی',
-            referenceType: 'ai_voice_tts',
-            referenceId: messageId,
+        const charge = await coinWallet.chargeFlat(db, userId, cost, {
+            reason: 'تولید پاسخ صوتی', referenceType: 'ai_voice_tts', referenceId: `tts-${messageId}`,
+            operationType: 'tts', conversationId: row.conversation_id, messageId,
+        });
+        const unit = pricing.quoteUnits({ model: MODELS.tts, operationType: 'tts', units: speech.length });
+        await logUsage(db, {
+            userId, conversationId: row.conversation_id, messageId, operationType: 'tts', model: MODELS.tts, units: speech.length,
+            coinCost: charge.charged, costUsd: unit.usd, costIrr: unit.irr, exchangeRateIrr: unit.exchangeRateIrr,
+            durationMs: Date.now() - started, attachedFiles: [fileId],
         });
 
-        return res.json({ success: true, data: { url, charged: charge.charged, balance: charge.balance, cached: false } });
+        return res.json({
+            success: true,
+            data: { url: stored.publicUrl, fileId, charged: charge.charged, cached: false, wallet: walletFromBuckets(charge.wallet, user?.current_plan) },
+        });
     } catch (err) {
-        console.error('[ai-teacher] voiceSpeak', err);
-        const status = err.code === 'INSUFFICIENT_COINS' ? 402 : 500;
-        return res.status(status).json({ success: false, code: err.code, message: err.message || 'خطا در تولید صدا.' });
-    }
-};
-
-// ─── Image upload (message-bar attach button) ────────────────────────────────
-const uploadChatImage = async (req, res) => {
-    if (!req.file) {
-        return res.status(400).json({ success: false, message: 'فایلی ارسال نشده است.' });
-    }
-    return res.json({
-        success: true,
-        data: { url: imageService.publicUrlFor(req.file.filename), mimeType: req.file.mimetype },
-    });
-};
-
-/**
- * SSE streaming chat endpoint.
- * Body: { conversationId?, subjectKey?, message, attachments?: [{type:'image', url}] }
- */
-const streamChat = async (req, res) => {
-    const userId = req.user.id;
-    const message = String(req.body?.message || '').trim();
-    const attachments = Array.isArray(req.body?.attachments) ? req.body.attachments.slice(0, 3) : [];
-    let conversationId = req.body?.conversationId ? Number(req.body.conversationId) : null;
-    let requestedSubject = req.body?.subjectKey ? String(req.body.subjectKey).toLowerCase() : null;
-
-    if (!message && !attachments.length) {
-        return res.status(400).json({ success: false, message: 'پیام نمی‌تواند خالی باشد.' });
-    }
-    if (message.length > CONTEXT_LIMITS.maxUserMessageChars) {
-        return res.status(400).json({ success: false, message: 'پیام بیش از حد طولانی است.' });
-    }
-    if (requestedSubject && !isValidSubject(requestedSubject)) {
-        return res.status(400).json({ success: false, message: 'موضوع نامعتبر است.' });
-    }
-
-    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-    res.setHeader('Cache-Control', 'no-cache, no-transform');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no');
-    if (typeof res.flushHeaders === 'function') res.flushHeaders();
-
-    const sendEvent = (event, data) => {
-        res.write(`event: ${event}\n`);
-        res.write(`data: ${JSON.stringify(data)}\n\n`);
-    };
-
-    const reservationRef = `msg-${userId}-${Date.now()}`;
-    let reserved = 0;
-    let conn = null;
-
-    try {
-        const user = await loadUserRow(userId);
-        if (!user) {
-            sendEvent('error', { code: 'USER_NOT_FOUND', message: 'کاربر یافت نشد.' });
-            return res.end();
-        }
-
-        let conversation = conversationId
-            ? await conversationService.getConversationForUser(db, conversationId, userId)
-            : null;
-
-        if (conversationId && !conversation) {
-            sendEvent('error', { code: 'CONVERSATION_NOT_FOUND', message: 'گفتگو یافت نشد.' });
-            return res.end();
-        }
-
-        const subjectKey = requestedSubject || conversation?.subject_key || user.ai_last_subject || 'math';
-        if (!isValidSubject(subjectKey)) {
-            sendEvent('error', { code: 'INVALID_SUBJECT', message: 'موضوع نامعتبر است.' });
-            return res.end();
-        }
-
-        if (!conversation) {
-            const created = await conversationService.createConversation(db, { userId, subjectKey });
-            conversation = { ...created, message_count: 0, subject_key: subjectKey, title_generated: 0 };
-        } else if (requestedSubject && requestedSubject !== conversation.subject_key) {
-            await conversationService.setConversationSubject(db, conversation.id, requestedSubject);
-            conversation.subject_key = requestedSubject;
-        }
-        conversationId = conversation.id;
-        await db.query(`UPDATE tam24_users SET ai_last_subject = ? WHERE id = ?`, [subjectKey, userId]);
-
-        const subjectRow = await loadSubjectRow(subjectKey);
-        const subject = promptBuilder.resolveSubjectPrompts(subjectKey, subjectRow);
-
-        const settings = await ensureSettings(userId);
-        const hasImageAttachment = attachments.some((a) => a?.type === 'image' && a?.url);
-
-        const refill = await coinWallet.applyDailyRefill(db, userId, user.current_plan);
-        // Fair-use auto guard: once daily energy runs low, quietly shrink replies
-        // instead of abruptly cutting the student off mid-conversation.
-        const dailyAllowance = dailyRefillForPlan(user.current_plan);
-        const effectiveSettings = {
-            ...settings,
-            low_coin_mode: !!settings.low_coin_mode || refill.balance <= Math.max(15, dailyAllowance * 0.15),
-        };
-
-        const model = promptBuilder.resolveModel(effectiveSettings, subject, { hasImageAttachment });
-        const maxTokens = promptBuilder.resolveMaxOutputTokens(subject, effectiveSettings);
-        const typical = pricing.estimateTypicalEnergy({ model, maxOutputTokens: maxTokens });
-        const maxEst = pricing.estimateMaxEnergy({ model, maxOutputTokens: maxTokens });
-
-        if (refill.balance < typical.energy) {
-            sendEvent('error', {
-                code: 'INSUFFICIENT_COINS',
-                message: 'موجودی انرژی کافی نیست.',
-                balance: refill.balance,
-                needed: typical.energy,
-            });
-            return res.end();
-        }
-
-        const reserveAmount = Math.max(typical.energy, Math.min(refill.balance, maxEst.energy));
-
-        conn = await db.getConnection();
-        await conn.beginTransaction();
-        const reservation = await coinWallet.reserveCoins(conn, userId, reserveAmount, reservationRef);
-        reserved = reservation.reserved;
-        await conn.commit();
-        conn.release();
-        conn = null;
-
-        sendEvent('status', { status: 'thinking', balance: reservation.balance });
-        sendEvent('meta', { conversationId, subjectKey, reserved, typicalEnergy: typical.energy });
-
-        const isFirstExchange = Number(conversation.message_count || 0) === 0;
-
-        const [userMsgResult] = await db.query(
-            `INSERT INTO tam24_ai_messages (conversation_id, role, content, attachments, subject_key)
-             VALUES (?, 'user', ?, ?, ?)`,
-            [conversationId, message, attachments.length ? JSON.stringify(attachments) : null, subjectKey]
-        );
-        const userMessageId = userMsgResult.insertId;
-        sendEvent('user_message', { id: userMessageId, role: 'user', content: message, attachments, conversationId });
-
-        const memories = await memoryService.getActiveMemories(db, userId);
-        const summary = await memoryService.maybeSummarizeConversation(db, conversation);
-        const recent = await conversationService.getRecentMessages(db, conversationId, CONTEXT_LIMITS.recentMessages);
-        const recentWithoutCurrent = recent.filter((m) => m.id !== userMessageId);
-
-        let ragContext = null;
-        try {
-            ragContext = await ragService.retrieveContext(db, { subjectKey, queryText: message });
-        } catch (err) {
-            console.error('[ai-teacher] rag retrieval failed (continuing without it):', err.message);
-        }
-
-        const { systemPrompt } = promptBuilder.buildMetPrompt({
-            subjectKey,
-            subjectRow,
-            user,
-            memories,
-            settings: effectiveSettings,
-            conversationSummary: summary,
-            ragContext,
-            hasImageAttachment,
-        });
-
-        let providerMessages = promptBuilder.toProviderMessages({
-            systemPrompt,
-            recentMessages: recentWithoutCurrent,
-            currentUserMessage: message,
-            currentAttachments: attachments,
-        });
-
-        const collectedAttachments = [];
-        const wantsTools = FEATURES.tools
-            && (DATA_TOOL_TRIGGERS.test(message) || IMAGE_TOOL_TRIGGERS.test(message));
-
-        if (wantsTools) {
-            try {
-                const availableTools = toolsService.getAvailableTools();
-                if (availableTools.length) {
-                    sendEvent('status', { status: 'thinking' });
-                    const toolPass = await aiProvider.generate({
-                        messages: providerMessages,
-                        model,
-                        maxTokens: Math.min(maxTokens, 400),
-                        temperature: 0.3,
-                        tools: availableTools,
-                    });
-
-                    if (Array.isArray(toolPass.toolCalls) && toolPass.toolCalls.length) {
-                        providerMessages = [
-                            ...providerMessages,
-                            { role: 'assistant', content: toolPass.content || null, tool_calls: toolPass.toolCalls },
-                        ];
-                        for (const call of toolPass.toolCalls.slice(0, 3)) {
-                            const { content, attachment } = await toolsService.executeToolCall(call, { userId });
-                            if (attachment) collectedAttachments.push(attachment);
-                            providerMessages.push({
-                                role: 'tool',
-                                tool_call_id: call.id,
-                                content: JSON.stringify(content ?? {}),
-                            });
-                        }
-                    }
-                }
-            } catch (err) {
-                console.error('[ai-teacher] tool round skipped (continuing without tools):', err.message);
-            }
-        }
-
-        sendEvent('status', { status: 'generating' });
-        sendEvent('assistant_start', { conversationId });
-
-        const startedAt = Date.now();
-        let fullText = '';
-        let usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, cachedTokens: 0 };
-        let usedModel = model;
-
-        for await (const chunk of aiProvider.stream({
-            messages: providerMessages,
-            model,
-            maxTokens,
-            temperature: promptBuilder.resolveTemperature(effectiveSettings),
-        })) {
-            if (chunk.type === 'delta') {
-                fullText += chunk.text;
-                sendEvent('delta', { text: chunk.text });
-            } else if (chunk.type === 'done') {
-                fullText = chunk.content || fullText;
-                usage = chunk.usage || usage;
-                usedModel = chunk.model || model;
-            }
-        }
-
-        if (!String(fullText).trim() && !collectedAttachments.length) {
-            const emptyErr = new Error('empty response');
-            emptyErr.code = 'EMPTY_RESPONSE';
-            throw emptyErr;
-        }
-
-        const durationMs = Date.now() - startedAt;
-        const quote = coinWallet.quoteMessageCost({
-            inputTokens: usage.inputTokens,
-            outputTokens: usage.outputTokens,
-            cachedTokens: usage.cachedTokens || 0,
-            model: usedModel,
-            extraEnergy: collectedAttachments.some((a) => a.type === 'image') ? pricing.imageEnergyCost() : 0,
-        });
-        const finalCost = quote.energy;
-
-        conn = await db.getConnection();
-        await conn.beginTransaction();
-
-        const charge = await coinWallet.finalizeCharge(conn, userId, {
-            reserved,
-            finalCost,
-            referenceId: reservationRef,
-            metadata: { conversationId, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, model: usedModel },
-        });
-
-        const [assistantMsgResult] = await conn.query(
-            `INSERT INTO tam24_ai_messages
-             (conversation_id, role, content, input_tokens, output_tokens, total_tokens, coin_cost, model, attachments, subject_key)
-             VALUES (?, 'assistant', ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-                conversationId,
-                fullText,
-                usage.inputTokens,
-                usage.outputTokens,
-                usage.totalTokens,
-                charge.charged,
-                usedModel,
-                collectedAttachments.length ? JSON.stringify(collectedAttachments) : null,
-                subjectKey,
-            ]
-        );
-        const assistantMsgId = assistantMsgResult.insertId;
-
-        await conn.query(
-            `UPDATE tam24_ai_conversations
-             SET message_count = message_count + 2, total_tokens = total_tokens + ?,
-                 last_message_at = NOW(), updated_at = NOW()
-             WHERE id = ?`,
-            [usage.totalTokens, conversationId]
-        );
-
-        try {
-            await conn.query(
-                `INSERT INTO tam24_ai_usage_logs
-                 (user_id, conversation_id, message_id, model, input_tokens, output_tokens, total_tokens,
-                  coin_cost, request_duration_ms, success, energy_cost)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
-                [userId, conversationId, assistantMsgId, usedModel, usage.inputTokens, usage.outputTokens,
-                    usage.totalTokens, charge.charged, durationMs, charge.charged]
-            );
-        } catch (logErr) {
-            console.error('[ai-teacher] usage log skipped', logErr.message);
-        }
-
-        await conn.commit();
-        conn.release();
-        conn = null;
-        reserved = 0;
-
-        memoryService.maybeUpdateMemory(db, {
-            userId,
-            conversationId,
-            messageCount: (conversation.message_count || 0) + 2,
-            userMessage: message,
-            assistantMessage: fullText,
-        }).catch(() => {});
-
-        let generatedTitle = null;
-        if (isFirstExchange) {
-            try {
-                generatedTitle = await conversationService.generateTitle(db, {
-                    conversationId,
-                    userMessage: message || 'تصویر ارسال شد',
-                    assistantMessage: fullText,
-                });
-            } catch { /* fallback title already applied inside generateTitle */ }
-        }
-
-        sendEvent('done', {
-            message: {
-                id: assistantMsgId,
-                role: 'assistant',
-                content: fullText,
-                coinCost: charge.charged,
-                inputTokens: usage.inputTokens,
-                outputTokens: usage.outputTokens,
-                totalTokens: usage.totalTokens,
-                model: usedModel,
-                attachments: collectedAttachments,
-                conversationId,
-            },
-            wallet: { balance: charge.balance, charged: charge.charged, refunded: charge.refunded },
-            title: generatedTitle,
-            subjectKey,
-            durationMs,
-        });
-        sendEvent('status', { status: 'ready', balance: charge.balance });
-        return res.end();
-    } catch (err) {
-        console.error('[ai-teacher] streamChat', err);
-
-        let refundedAmount = 0;
-        let balanceAfterRefund = err.balance;
-
-        if (reserved > 0) {
-            try {
-                const refundConn = await db.getConnection();
-                try {
-                    await refundConn.beginTransaction();
-                    const refund = await coinWallet.refundReservation(refundConn, userId, reserved, reservationRef, 'بازگشت به دلیل خطای تولید پاسخ');
-                    await refundConn.commit();
-                    refundedAmount = refund.refunded;
-                    balanceAfterRefund = refund.balance;
-                } catch (refundErr) {
-                    await refundConn.rollback();
-                    console.error('[ai-teacher] refund failed', refundErr);
-                } finally {
-                    refundConn.release();
-                }
-            } catch (e) {
-                console.error('[ai-teacher] refund connection failed', e);
-            }
-        }
-
-        if (conn) {
-            try { await conn.rollback(); } catch { /* ignore */ }
-            try { conn.release(); } catch { /* ignore */ }
-        }
-
-        try {
-            await db.query(
-                `INSERT INTO tam24_ai_usage_logs (user_id, conversation_id, success, error_code) VALUES (?, ?, 0, ?)`,
-                [userId, conversationId || null, err.code || 'AI_ERROR']
-            );
-        } catch { /* ignore */ }
-
-        const code = err.code || 'AI_ERROR';
-        const errMessage =
-            code === 'INSUFFICIENT_COINS' ? 'موجودی انرژی کافی نیست.'
-                : code === 'AI_NOT_CONFIGURED' ? 'سرویس فعلاً در دسترس نیست.'
-                : code === 'EMPTY_RESPONSE' ? 'پاسخی دریافت نشد.'
-                : 'در تولید پاسخ مشکلی پیش آمد.';
-
-        sendEvent('error', { code, message: errMessage, balance: balanceAfterRefund, refunded: refundedAmount });
-        return res.end();
+        console.error('[met] voiceSpeak', err);
+        await logUsage(db, { userId, operationType: 'tts', model: MODELS.tts, status: 'error', errorCode: err.code || 'TTS_FAILED', errorMessage: err.message, durationMs: Date.now() - started });
+        return fail(res, err.code === 'INSUFFICIENT_COINS' ? 402 : 500, err.code || 'TTS_FAILED', err.code ? undefined : 'خطا در تولید صدا.');
     }
 };
 
 module.exports = {
     getBootstrap,
-    markIntroSeen,
     listSubjects,
+    getSuggestions,
+    useSuggestion,
     openSession,
     createConversation,
     listConversations,
@@ -851,9 +490,17 @@ module.exports = {
     renameConversation,
     deleteConversation,
     getWallet,
+    getLedger,
+    getSettings,
     updateSettings,
+    listMemory,
+    forgetMemory,
+    clearMemory,
+    listReferences,
+    addReference,
+    removeReference,
+    uploadChatImage,
     voiceTranscribe,
     voiceSpeak,
-    uploadChatImage,
-    streamChat,
+    sanitizeForSpeech,
 };

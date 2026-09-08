@@ -81,7 +81,7 @@ const upload = multer({
 app.use(cors({
     origin: 'http://localhost:5173', // <-- MUST BE YOUR ACTUAL FRONTEND URL (No trailing slash)
     credentials: true,               // <-- REQUIRED FOR COOKIES
-    methods: ['GET', 'POST', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-APP-TOKEN']
 }));
 

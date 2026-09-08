@@ -1,347 +1,332 @@
 'use strict';
 
-const { COIN_PRICING, dailyRefillForPlan, localDateString } = require('../config');
+const { COIN_PRICING, dailyCoinsForPlan, localDateString } = require('../config');
 const pricing = require('./pricing');
 
 /**
- * Reliable AI coin wallet with ledger + row locking.
- * Never trust the frontend for balance mutations.
+ * Coin wallet — the student's currency (distinct from provider tokens).
+ *
+ * Two buckets:
+ *  - daily_balance     free coins granted once per local calendar day; whatever
+ *                      is left expires when the next grant happens (no rollover)
+ *  - purchased_balance bought/bonus coins; never expire
+ *
+ * Spending always drains the daily bucket first. Every movement is written to
+ * tam24_ai_coin_transactions with per-bucket deltas, inside the caller's
+ * transaction, under a row lock (SELECT ... FOR UPDATE) so concurrent requests
+ * can never double-spend. `balance` on the wallet row is a mirrored total kept
+ * for older readers.
  */
+
+const LEDGER = Object.freeze({
+    DAILY_GRANT: 'daily_grant',
+    DAILY_EXPIRE: 'daily_expire',
+    AI_USAGE: 'ai_usage',
+    RESERVATION: 'reservation',
+    RESERVATION_RELEASE: 'reservation_release',
+    REFUND: 'refund',
+    PURCHASE: 'purchase',
+    BONUS: 'bonus',
+    ADMIN_ADJUSTMENT: 'admin_adjustment',
+});
+
+const insufficient = (balance) => {
+    const err = new Error('موجودی سکه کافی نیست.');
+    err.code = 'INSUFFICIENT_COINS';
+    err.balance = balance;
+    return err;
+};
+
+const n = (v) => Math.max(0, Math.floor(Number(v) || 0));
 
 async function ensureWallet(conn, userId) {
     await conn.query(
-        `INSERT IGNORE INTO tam24_ai_wallets (user_id, balance, lifetime_earned, lifetime_spent)
-         VALUES (?, 0, 0, 0)`,
+        `INSERT IGNORE INTO tam24_ai_wallets (user_id, balance, daily_balance, purchased_balance, lifetime_earned, lifetime_spent)
+         VALUES (?, 0, 0, 0, 0, 0)`,
         [userId]
     );
+}
+
+function shape(row) {
+    const daily = n(row?.daily_balance);
+    const purchased = n(row?.purchased_balance);
+    return {
+        userId: row?.user_id,
+        daily,
+        purchased,
+        total: daily + purchased,
+        lifetimeEarned: n(row?.lifetime_earned),
+        lifetimeSpent: n(row?.lifetime_spent),
+        dailyGrantedOn: row?.daily_granted_on || null,
+    };
 }
 
 async function getWallet(conn, userId, { forUpdate = false } = {}) {
     await ensureWallet(conn, userId);
     const [rows] = await conn.query(
-        `SELECT user_id, balance, lifetime_earned, lifetime_spent,
-                DATE_FORMAT(last_daily_refill_date, '%Y-%m-%d') AS last_daily_refill_date
-         FROM tam24_ai_wallets
-         WHERE user_id = ?
-         ${forUpdate ? 'FOR UPDATE' : ''}`,
+        `SELECT user_id, balance, daily_balance, purchased_balance, lifetime_earned, lifetime_spent,
+                DATE_FORMAT(daily_granted_on, '%Y-%m-%d') AS daily_granted_on
+         FROM tam24_ai_wallets WHERE user_id = ? ${forUpdate ? 'FOR UPDATE' : ''}`,
         [userId]
     );
-    return rows[0];
+    return shape(rows[0]);
 }
 
-async function writeTransaction(conn, {
-    userId,
-    type,
-    amount,
-    balanceBefore,
-    balanceAfter,
-    reason,
-    referenceType = null,
-    referenceId = null,
-    metadata = null,
+async function writeBuckets(conn, userId, daily, purchased, { earned = 0, spent = 0, grantedOn } = {}) {
+    await conn.query(
+        `UPDATE tam24_ai_wallets
+            SET daily_balance = ?, purchased_balance = ?, balance = ?,
+                lifetime_earned = lifetime_earned + ?, lifetime_spent = lifetime_spent + ?,
+                ${grantedOn ? 'daily_granted_on = ?, last_daily_refill_date = ?,' : ''}
+                updated_at = NOW()
+          WHERE user_id = ?`,
+        grantedOn
+            ? [daily, purchased, daily + purchased, earned, spent, grantedOn, grantedOn, userId]
+            : [daily, purchased, daily + purchased, earned, spent, userId]
+    );
+}
+
+async function writeLedger(conn, {
+    userId, type, dailyDelta = 0, purchasedDelta = 0, before, after, reason,
+    referenceType = null, referenceId = null, operationType = null, conversationId = null, messageId = null, metadata = null,
 }) {
     await conn.query(
         `INSERT INTO tam24_ai_coin_transactions
-         (user_id, type, amount, balance_before, balance_after, reason, reference_type, reference_id, metadata)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (user_id, type, amount, daily_delta, purchased_delta, balance_before, balance_after, reason,
+          reference_type, reference_id, operation_type, conversation_id, message_id, metadata)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-            userId,
-            type,
-            amount,
-            balanceBefore,
-            balanceAfter,
-            reason,
-            referenceType,
-            referenceId,
+            userId, type, dailyDelta + purchasedDelta, dailyDelta, purchasedDelta, before, after, reason,
+            referenceType, referenceId == null ? null : String(referenceId), operationType, conversationId, messageId,
             metadata ? JSON.stringify(metadata) : null,
         ]
     );
 }
 
-/**
- * Daily energy never stacks above the plan's daily allowance.
- * A new day tops the bar up to `dailyAllowance` and clamps anything over the cap.
- * Example: 100 leftover + 200/day → 200, not 300; after 3 days still 200, not 700.
- */
-function nextDailyBalance(currentBalance, dailyAllowance) {
-    const cap = Math.max(0, Number(dailyAllowance) || 0);
-    const before = Math.max(0, Number(currentBalance) || 0);
-    // Fill up to the daily cap; leftover never stacks above it.
-    return Math.min(cap, Math.max(before, cap));
+/** Split a debit across buckets: daily first, then purchased. */
+function splitDebit(daily, purchased, amount) {
+    const fromDaily = Math.min(daily, amount);
+    const fromPurchased = Math.min(purchased, amount - fromDaily);
+    return { fromDaily, fromPurchased, covered: fromDaily + fromPurchased };
 }
 
-/**
- * Idempotent daily refill based on subscription plan.
- * reference_id = YYYY-MM-DD prevents double refill via unique key.
- */
-async function applyDailyRefill(dbOrConn, userId, planKey) {
-    const ownsConnection = typeof dbOrConn.getConnection === 'function';
-    const conn = ownsConnection ? await dbOrConn.getConnection() : dbOrConn;
-
+async function withConnection(dbOrConn, fn) {
+    const owns = typeof dbOrConn.getConnection === 'function';
+    const conn = owns ? await dbOrConn.getConnection() : dbOrConn;
     try {
-        if (ownsConnection) await conn.beginTransaction();
-
-        const wallet = await getWallet(conn, userId, { forUpdate: true });
-        const todayStr = localDateString(new Date());
-
-        if (wallet.last_daily_refill_date) {
-            const lastStr = localDateString(wallet.last_daily_refill_date);
-            if (lastStr && lastStr === todayStr) {
-                if (ownsConnection) await conn.commit();
-                return {
-                    refilled: false,
-                    balance: wallet.balance,
-                    amount: 0,
-                    alreadyReceived: true,
-                };
-            }
-        }
-
-        const cap = dailyRefillForPlan(planKey);
-        const before = Number(wallet.balance) || 0;
-        const after = nextDailyBalance(before, cap);
-        const granted = Math.max(0, after - before);
-        const delta = after - before;
-
-        await conn.query(
-            `UPDATE tam24_ai_wallets
-             SET balance = ?, lifetime_earned = lifetime_earned + ?, last_daily_refill_date = ?, updated_at = NOW()
-             WHERE user_id = ?`,
-            [after, granted, todayStr, userId]
-        );
-
-        if (delta !== 0) {
-            try {
-                await writeTransaction(conn, {
-                    userId,
-                    type: 'daily_refill',
-                    amount: delta,
-                    balanceBefore: before,
-                    balanceAfter: after,
-                    reason: `شارژ روزانه پلن ${planKey || 'free'} (سقف ${cap})`,
-                    referenceType: 'daily_refill',
-                    referenceId: todayStr,
-                    metadata: { plan: planKey || 'free', cap },
-                });
-            } catch (err) {
-                if (err && (err.code === 'ER_DUP_ENTRY' || err.errno === 1062)) {
-                    const fresh = await getWallet(conn, userId);
-                    if (ownsConnection) await conn.commit();
-                    return {
-                        refilled: false,
-                        balance: fresh.balance,
-                        amount: 0,
-                        alreadyReceived: true,
-                    };
-                }
-                throw err;
-            }
-        }
-
-        if (ownsConnection) await conn.commit();
-        return { refilled: granted > 0, balance: after, amount: granted, alreadyReceived: false };
+        if (owns) await conn.beginTransaction();
+        const result = await fn(conn);
+        if (owns) await conn.commit();
+        return result;
     } catch (err) {
-        if (ownsConnection) await conn.rollback();
+        if (owns) { try { await conn.rollback(); } catch { /* ignore */ } }
         throw err;
     } finally {
-        if (ownsConnection) conn.release();
+        if (owns) conn.release();
     }
 }
 
 /**
- * Reserve coins before AI call (atomic). Throws INSUFFICIENT_COINS.
+ * Idempotent daily grant. On the first call of a new local day: expire what
+ * is left of yesterday's daily bucket, then grant today's quota. The unique
+ * key (user_id, type, reference_id=YYYY-MM-DD) makes this race-safe.
  */
-async function reserveCoins(conn, userId, amount, referenceId) {
-    const reserveAmount = Math.max(1, Number(amount) || COIN_PRICING.defaultReservation);
-    const wallet = await getWallet(conn, userId, { forUpdate: true });
-    const before = Number(wallet.balance) || 0;
-
-    if (before < COIN_PRICING.minBalanceToStart) {
-        const err = new Error('موجودی سکه کافی نیست.');
-        err.code = 'INSUFFICIENT_COINS';
-        err.balance = before;
-        throw err;
-    }
-
-    const actualReserve = Math.min(before, reserveAmount);
-    if (actualReserve < COIN_PRICING.minCharge) {
-        const err = new Error('موجودی سکه کافی نیست.');
-        err.code = 'INSUFFICIENT_COINS';
-        err.balance = before;
-        throw err;
-    }
-
-    const after = before - actualReserve;
-
-    await conn.query(
-        `UPDATE tam24_ai_wallets SET balance = ?, updated_at = NOW() WHERE user_id = ?`,
-        [after, userId]
-    );
-
-    await writeTransaction(conn, {
-        userId,
-        type: 'reservation',
-        amount: -actualReserve,
-        balanceBefore: before,
-        balanceAfter: after,
-        reason: 'رزرو موقت برای پیام هوش مصنوعی',
-        referenceType: 'ai_reservation',
-        referenceId: String(referenceId),
-        metadata: { reserved: actualReserve },
-    });
-
-    return { reserved: actualReserve, balance: after };
-}
-
-/**
- * After success: settle final cost against reservation.
- * Balance currently reflects "after reservation".
- * - if cost < reserved → refund difference
- * - if cost > reserved → deduct extra (clamped to available)
- * - record a single ai_message debit of -cost for audit clarity
- */
-async function finalizeCharge(conn, userId, {
-    reserved,
-    finalCost,
-    referenceId,
-    metadata = null,
-}) {
-    const wallet = await getWallet(conn, userId, { forUpdate: true });
-    const before = Number(wallet.balance) || 0;
-    const cost = Math.max(COIN_PRICING.minCharge, Math.ceil(Number(finalCost) || 0));
-    const reservedAmt = Math.max(0, Number(reserved) || 0);
-    const delta = reservedAmt - cost; // +refund / -extra
-
-    let after = before + delta;
-    if (after < 0) after = 0;
-
-    await conn.query(
-        `UPDATE tam24_ai_wallets
-         SET balance = ?,
-             lifetime_spent = lifetime_spent + ?,
-             updated_at = NOW()
-         WHERE user_id = ?`,
-        [after, cost, userId]
-    );
-
-    if (delta > 0) {
-        await writeTransaction(conn, {
-            userId,
-            type: 'reservation_release',
-            amount: delta,
-            balanceBefore: before,
-            balanceAfter: before + delta,
-            reason: 'بازگشت مبلغ رزرو استفاده‌نشده',
-            referenceType: 'ai_reservation',
-            referenceId: String(referenceId),
-            metadata: { reserved: reservedAmt, finalCost: cost },
-        });
-    } else if (delta < 0) {
-        await writeTransaction(conn, {
-            userId,
-            type: 'ai_message',
-            amount: delta,
-            balanceBefore: before,
-            balanceAfter: after,
-            reason: 'هزینه اضافی بیش از رزرو',
-            referenceType: 'ai_message',
-            referenceId: String(referenceId),
-            metadata: { ...(metadata || {}), reserved: reservedAmt, finalCost: cost },
-        });
-    }
-
-    // Audit row for the effective message cost (informational amount)
-    await writeTransaction(conn, {
-        userId,
-        type: 'ai_message',
-        amount: -cost,
-        balanceBefore: before + Math.max(0, delta),
-        balanceAfter: after,
-        reason: 'هزینه نهایی پیام هوش مصنوعی',
-        referenceType: 'ai_message',
-        referenceId: `${referenceId}:final`,
-        metadata: { ...(metadata || {}), reserved: reservedAmt, finalCost: cost },
-    });
-
-    return { charged: cost, balance: after, refunded: Math.max(0, delta) };
-}
-
-async function refundReservation(conn, userId, reserved, referenceId, reason = 'خطای تولید پاسخ') {
-    const amount = Math.max(0, Number(reserved) || 0);
-    if (amount <= 0) {
-        const wallet = await getWallet(conn, userId);
-        return { refunded: 0, balance: wallet.balance };
-    }
-
-    const wallet = await getWallet(conn, userId, { forUpdate: true });
-    const before = Number(wallet.balance) || 0;
-    const after = before + amount;
-
-    await conn.query(
-        `UPDATE tam24_ai_wallets SET balance = ?, updated_at = NOW() WHERE user_id = ?`,
-        [after, userId]
-    );
-
-    await writeTransaction(conn, {
-        userId,
-        type: 'refund',
-        amount,
-        balanceBefore: before,
-        balanceAfter: after,
-        reason,
-        referenceType: 'ai_reservation',
-        referenceId: String(referenceId),
-        metadata: { reserved: amount },
-    });
-
-    return { refunded: amount, balance: after };
-}
-
-/**
- * Simple flat debit (voice features and similar fixed-price actions).
- * Throws INSUFFICIENT_COINS when the balance can't cover it.
- */
-async function chargeFlat(dbOrConn, userId, amount, { reason, referenceType = 'ai_voice', referenceId } = {}) {
-    const cost = Math.max(0, Math.ceil(Number(amount) || 0));
-    const ownsConnection = typeof dbOrConn.getConnection === 'function';
-    const conn = ownsConnection ? await dbOrConn.getConnection() : dbOrConn;
-    try {
-        if (ownsConnection) await conn.beginTransaction();
-        const wallet = await getWallet(conn, userId, { forUpdate: true });
-        const before = Number(wallet.balance) || 0;
-        if (cost === 0) {
-            if (ownsConnection) await conn.commit();
-            return { charged: 0, balance: before };
+async function applyDailyGrant(dbOrConn, userId, planKey) {
+    return withConnection(dbOrConn, async (conn) => {
+        const w = await getWallet(conn, userId, { forUpdate: true });
+        const today = localDateString(new Date());
+        if (w.dailyGrantedOn && localDateString(w.dailyGrantedOn) === today) {
+            return { granted: false, amount: 0, expired: 0, wallet: w };
         }
-        if (before < cost) {
-            const err = new Error('موجودی انرژی کافی نیست.');
-            err.code = 'INSUFFICIENT_COINS';
-            err.balance = before;
+
+        const quota = dailyCoinsForPlan(planKey);
+        const expired = w.daily;
+        const nextDaily = quota;
+
+        try {
+            if (expired > 0) {
+                await writeLedger(conn, {
+                    userId, type: LEDGER.DAILY_EXPIRE, dailyDelta: -expired,
+                    before: w.total, after: w.total - expired,
+                    reason: 'انقضای سکه‌های روزانه‌ی استفاده‌نشده',
+                    referenceType: 'daily', referenceId: today, metadata: { plan: planKey || 'free' },
+                });
+            }
+            await writeLedger(conn, {
+                userId, type: LEDGER.DAILY_GRANT, dailyDelta: quota,
+                before: w.total - expired, after: w.purchased + quota,
+                reason: `سکه‌ی روزانه‌ی پلن ${planKey || 'free'}`,
+                referenceType: 'daily', referenceId: today, metadata: { plan: planKey || 'free', quota },
+            });
+        } catch (err) {
+            if (err && (err.code === 'ER_DUP_ENTRY' || err.errno === 1062)) {
+                return { granted: false, amount: 0, expired: 0, wallet: await getWallet(conn, userId) };
+            }
             throw err;
         }
-        const after = before - cost;
-        await conn.query(
-            `UPDATE tam24_ai_wallets SET balance = ?, lifetime_spent = lifetime_spent + ?, updated_at = NOW() WHERE user_id = ?`,
-            [after, cost, userId]
-        );
-        await writeTransaction(conn, {
-            userId,
-            type: 'ai_message',
-            amount: -cost,
-            balanceBefore: before,
-            balanceAfter: after,
-            reason: reason || 'هزینه سرویس صوتی',
-            referenceType,
-            referenceId: referenceId ? String(referenceId) : String(Date.now()),
+
+        await writeBuckets(conn, userId, nextDaily, w.purchased, { earned: quota, grantedOn: today });
+        return { granted: quota > 0, amount: quota, expired, wallet: await getWallet(conn, userId) };
+    });
+}
+
+/** Reserve coins before an AI call. Throws INSUFFICIENT_COINS. */
+async function reserveCoins(conn, userId, amount, referenceId, { operationType = 'chat', conversationId = null } = {}) {
+    const want = Math.max(1, n(amount) || COIN_PRICING.defaultReservation);
+    const w = await getWallet(conn, userId, { forUpdate: true });
+    if (w.total < COIN_PRICING.minBalanceToStart) throw insufficient(w.total);
+
+    const { fromDaily, fromPurchased, covered } = splitDebit(w.daily, w.purchased, Math.min(w.total, want));
+    if (covered < COIN_PRICING.minCharge) throw insufficient(w.total);
+
+    await writeBuckets(conn, userId, w.daily - fromDaily, w.purchased - fromPurchased);
+    await writeLedger(conn, {
+        userId, type: LEDGER.RESERVATION, dailyDelta: -fromDaily, purchasedDelta: -fromPurchased,
+        before: w.total, after: w.total - covered,
+        reason: 'رزرو موقت برای پاسخ مِت', referenceType: 'ai_reservation', referenceId,
+        operationType, conversationId, metadata: { reserved: covered },
+    });
+
+    return {
+        reserved: covered,
+        reservedDaily: fromDaily,
+        reservedPurchased: fromPurchased,
+        balance: w.total - covered,
+        wallet: { daily: w.daily - fromDaily, purchased: w.purchased - fromPurchased, total: w.total - covered },
+    };
+}
+
+/**
+ * Settle a reservation against the real cost. The reservation is released
+ * back into the buckets it came from, then the actual cost is charged
+ * daily-first. Two ledger rows keep the audit trail explicit.
+ */
+async function finalizeCharge(conn, userId, {
+    reserved, reservedDaily = null, reservedPurchased = null, finalCost, referenceId,
+    operationType = 'chat', conversationId = null, messageId = null, metadata = null,
+}) {
+    const w = await getWallet(conn, userId, { forUpdate: true });
+    const reservedAmt = n(reserved);
+    const rDaily = reservedDaily == null ? reservedAmt : n(reservedDaily);
+    const rPurch = reservedPurchased == null ? Math.max(0, reservedAmt - rDaily) : n(reservedPurchased);
+    const cost = Math.max(COIN_PRICING.minCharge, Math.ceil(Number(finalCost) || 0));
+
+    let daily = w.daily + rDaily;
+    let purchased = w.purchased + rPurch;
+    const afterRelease = daily + purchased;
+
+    if (reservedAmt > 0) {
+        await writeLedger(conn, {
+            userId, type: LEDGER.RESERVATION_RELEASE, dailyDelta: rDaily, purchasedDelta: rPurch,
+            before: w.total, after: afterRelease,
+            reason: 'آزادسازی رزرو', referenceType: 'ai_reservation', referenceId,
+            operationType, conversationId, messageId, metadata: { reserved: reservedAmt, finalCost: cost },
         });
-        if (ownsConnection) await conn.commit();
-        return { charged: cost, balance: after };
-    } catch (err) {
-        if (ownsConnection) await conn.rollback();
-        throw err;
-    } finally {
-        if (ownsConnection) conn.release();
     }
+
+    const { fromDaily, fromPurchased, covered } = splitDebit(daily, purchased, cost);
+    daily -= fromDaily;
+    purchased -= fromPurchased;
+
+    await writeBuckets(conn, userId, daily, purchased, { spent: covered });
+    await writeLedger(conn, {
+        userId, type: LEDGER.AI_USAGE, dailyDelta: -fromDaily, purchasedDelta: -fromPurchased,
+        before: afterRelease, after: daily + purchased,
+        reason: 'هزینه‌ی پاسخ مِت', referenceType: 'ai_message', referenceId,
+        operationType, conversationId, messageId,
+        metadata: { ...(metadata || {}), reserved: reservedAmt, finalCost: cost, shortfall: cost - covered },
+    });
+
+    return {
+        charged: covered,
+        chargedDaily: fromDaily,
+        chargedPurchased: fromPurchased,
+        refunded: Math.max(0, reservedAmt - covered),
+        balance: daily + purchased,
+        wallet: { daily, purchased, total: daily + purchased },
+    };
+}
+
+/** Return a reservation untouched (generation failed / was stopped before any cost). */
+async function refundReservation(dbOrConn, userId, reservation, referenceId, reason = 'بازگشت رزرو به دلیل خطا') {
+    const reservedAmt = typeof reservation === 'object' ? n(reservation.reserved) : n(reservation);
+    const rDaily = typeof reservation === 'object' && reservation.reservedDaily != null ? n(reservation.reservedDaily) : reservedAmt;
+    const rPurch = typeof reservation === 'object' && reservation.reservedPurchased != null ? n(reservation.reservedPurchased) : 0;
+
+    return withConnection(dbOrConn, async (conn) => {
+        const w = await getWallet(conn, userId, { forUpdate: true });
+        if (reservedAmt <= 0) return { refunded: 0, balance: w.total, wallet: w };
+
+        const daily = w.daily + rDaily;
+        const purchased = w.purchased + rPurch;
+        await writeBuckets(conn, userId, daily, purchased);
+        await writeLedger(conn, {
+            userId, type: LEDGER.REFUND, dailyDelta: rDaily, purchasedDelta: rPurch,
+            before: w.total, after: daily + purchased,
+            reason, referenceType: 'ai_reservation', referenceId, metadata: { reserved: reservedAmt },
+        });
+        return { refunded: reservedAmt, balance: daily + purchased, wallet: { daily, purchased, total: daily + purchased } };
+    });
+}
+
+/** Flat debit for fixed-price operations (STT, TTS, PDF indexing). Throws INSUFFICIENT_COINS. */
+async function chargeFlat(dbOrConn, userId, amount, {
+    reason, referenceType = 'ai_operation', referenceId, operationType = null, conversationId = null, messageId = null, metadata = null,
+} = {}) {
+    const cost = Math.ceil(Math.max(0, Number(amount) || 0));
+    return withConnection(dbOrConn, async (conn) => {
+        const w = await getWallet(conn, userId, { forUpdate: true });
+        if (cost === 0) return { charged: 0, balance: w.total, wallet: w };
+        if (w.total < cost) throw insufficient(w.total);
+
+        const { fromDaily, fromPurchased } = splitDebit(w.daily, w.purchased, cost);
+        const daily = w.daily - fromDaily;
+        const purchased = w.purchased - fromPurchased;
+        await writeBuckets(conn, userId, daily, purchased, { spent: cost });
+        await writeLedger(conn, {
+            userId, type: LEDGER.AI_USAGE, dailyDelta: -fromDaily, purchasedDelta: -fromPurchased,
+            before: w.total, after: daily + purchased,
+            reason: reason || 'هزینه‌ی سرویس', referenceType,
+            referenceId: referenceId ?? `${operationType || 'op'}-${Date.now()}`,
+            operationType, conversationId, messageId, metadata,
+        });
+        return { charged: cost, balance: daily + purchased, wallet: { daily, purchased, total: daily + purchased } };
+    });
+}
+
+/** Credit purchased coins (payments, bonuses, admin adjustments). Idempotent per (type, referenceId). */
+async function creditPurchased(dbOrConn, userId, amount, { type = LEDGER.PURCHASE, reason, referenceType = 'payment', referenceId, metadata = null } = {}) {
+    const amt = n(amount);
+    if (amt <= 0) throw new Error('INVALID_AMOUNT');
+    if (![LEDGER.PURCHASE, LEDGER.BONUS, LEDGER.ADMIN_ADJUSTMENT].includes(type)) throw new Error('INVALID_LEDGER_TYPE');
+    return withConnection(dbOrConn, async (conn) => {
+        const w = await getWallet(conn, userId, { forUpdate: true });
+        try {
+            await writeLedger(conn, {
+                userId, type, purchasedDelta: amt, before: w.total, after: w.total + amt,
+                reason: reason || 'شارژ سکه', referenceType, referenceId: referenceId ?? `${type}-${Date.now()}`, metadata,
+            });
+        } catch (err) {
+            if (err && (err.code === 'ER_DUP_ENTRY' || err.errno === 1062)) {
+                return { credited: 0, duplicate: true, balance: w.total, wallet: w };
+            }
+            throw err;
+        }
+        await writeBuckets(conn, userId, w.daily, w.purchased + amt, { earned: amt });
+        return { credited: amt, duplicate: false, balance: w.total + amt, wallet: { daily: w.daily, purchased: w.purchased + amt, total: w.total + amt } };
+    });
+}
+
+async function listLedger(db, userId, { limit = 30, offset = 0 } = {}) {
+    const [rows] = await db.query(
+        `SELECT id, type, amount, daily_delta, purchased_delta, balance_before, balance_after, reason,
+                operation_type, conversation_id, message_id, created_at
+         FROM tam24_ai_coin_transactions
+         WHERE user_id = ? AND type <> 'reservation' AND type <> 'reservation_release'
+         ORDER BY id DESC LIMIT ? OFFSET ?`,
+        [userId, Math.min(100, Math.max(1, Number(limit) || 30)), Math.max(0, Number(offset) || 0)]
+    );
+    return rows;
 }
 
 function quoteMessageCost(opts) {
@@ -349,13 +334,18 @@ function quoteMessageCost(opts) {
 }
 
 module.exports = {
+    LEDGER,
     ensureWallet,
     getWallet,
-    applyDailyRefill,
+    applyDailyGrant,
     reserveCoins,
     finalizeCharge,
     refundReservation,
     chargeFlat,
+    creditPurchased,
+    listLedger,
     quoteMessageCost,
-    nextDailyBalance,
+    splitDebit,
+    // Legacy alias
+    applyDailyRefill: applyDailyGrant,
 };
