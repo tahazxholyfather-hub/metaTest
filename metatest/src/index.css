@@ -427,6 +427,16 @@
         opacity: 0.6;
         pointer-events: none;
     }
+
+    /* Met (AI tutor) uses fixed-size icon buttons; the generic button padding
+       above would squash their SVGs. Utilities still win over this reset. */
+    .ai-teacher-root button {
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        font-weight: inherit;
+        line-height: inherit;
+    }
 }
 
 /* ---------------------------
