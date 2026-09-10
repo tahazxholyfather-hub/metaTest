@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Met ships its theme helpers alongside the component */
 /**
  * Met — the AI's official identity in MetaTest.
  *

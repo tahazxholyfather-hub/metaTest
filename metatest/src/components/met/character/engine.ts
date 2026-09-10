@@ -280,6 +280,11 @@ export class CharacterEngine {
 
   // ---------------------------------------------------------------- inputs
 
+  /** Swap callbacks after construction (React re-renders pass new closures). */
+  setHooks(hooks: EngineHooks): void {
+    this.hooks = hooks
+  }
+
   setState(name: AICharacterState): void {
     if (name === this.stateName) return
     this.stateName = name

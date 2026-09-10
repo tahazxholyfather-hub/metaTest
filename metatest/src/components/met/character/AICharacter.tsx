@@ -3,6 +3,7 @@ import {
   useId,
   useImperativeHandle,
   useRef,
+  useState,
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
   type Ref,
@@ -82,14 +83,11 @@ export function AICharacter({
   const leftLid = useRef<SVGPathElement>(null)
   const rightLid = useRef<SVGPathElement>(null)
 
-  const onBlinkRef = useRef(onBlink)
-  onBlinkRef.current = onBlink
-
-  const engineRef = useRef<CharacterEngine | null>(null)
-  if (!engineRef.current) {
-    engineRef.current = new CharacterEngine({}, { onBlink: () => onBlinkRef.current?.() })
-  }
-  const engine = engineRef.current
+  // One engine per mounted character; created lazily and never replaced.
+  const [engine] = useState(() => new CharacterEngine())
+  useEffect(() => {
+    engine.setHooks({ onBlink })
+  }, [engine, onBlink])
 
   useImperativeHandle(ref, () => ({ blink: () => engine.blink(), poke: () => engine.poke() }), [engine])
 
