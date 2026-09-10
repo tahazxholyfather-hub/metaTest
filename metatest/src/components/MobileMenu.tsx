@@ -2,11 +2,12 @@ import React, {useState} from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     X, Home, BookOpen, FileText, User, LogOut, ChevronLeft,
-    Trophy, Crown, Star, Shield, Diamond, Files, GraduationCap
+    Trophy, Crown, Star, Shield, Diamond, Files
 } from 'lucide-react';
 import { ThemeSwitch } from './ThemeSwitch';
 import { useUser } from '../context/UserContext';
 import PlanSelectionModal from "./PlanSelectionModal";
+import { MetNavIcon } from './met';
 
 type MobileMenuProps = {
     isOpen: boolean;
@@ -18,11 +19,12 @@ type MobileMenuProps = {
     onLogout: () => void;
 };
 
-const menuItems = [
+const menuItems: { id: string; label: string; icon: React.ElementType | null }[] = [
     { id: 'dashboard', label: 'داشبورد', icon: Home },
     { id: 'practice', label: 'تمرین', icon: BookOpen },
     { id: 'tests', label: 'آزمون‌ها', icon: FileText },
-    { id: 'met', label: 'مِت', icon: GraduationCap },
+    // Met (the AI) is represented by its own face, not a generic glyph.
+    { id: 'met', label: 'مِت', icon: null },
     { id: 'documents', label: 'نمونه سوالات آماده', icon: Files },
     { id: 'profile', label: 'پروفایل', icon: User },
 ];
@@ -242,7 +244,11 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
                                                     }`}
                                                 >
                                                     <div className="flex items-center gap-3">
-                                                        <item.icon size={18} className={isActive ? 'animate-pulse' : ''} />
+                                                        {item.icon ? (
+                                                            <item.icon size={18} className={isActive ? 'animate-pulse' : ''} />
+                                                        ) : (
+                                                            <MetNavIcon size={20} active={isActive} />
+                                                        )}
                                                         <span className="font-medium text-sm">{item.label}</span>
                                                     </div>
                                                     {isActive && <ChevronLeft size={16} />}

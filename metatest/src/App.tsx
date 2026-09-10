@@ -43,7 +43,7 @@ import ResultDashboard from "./views/testworld/QuizResultView";
 import {PdfLibraryView} from "./views/documents";
 import {PlanSelectorView} from "./views/f";
 import PaymentResultPage from "./views/paymentResult";
-import { AiTeacherView } from "./views/AiTeacherView";
+import { MetView } from "./views/met";
 
 
 
@@ -529,23 +529,18 @@ function MainApp() {
             case "met":
             case "ai_teacher":
             case "chat":
-                return (
-                    <AiTeacherView
-                        key="met"
-                        onStateChange={handleViewStateChange}
-                        onNavigateHome={() => handleNavigation("dashboard")}
-                    />
-                );
+                return <MetView key="met" onNavigate={handleNavigation} />;
             case "dashboard":
             default:
                 return <DashboardView key="dashboard" onNavigateToQuizHistory={() => handleNavigation("History")} onNavigateToFavorites={() => handleNavigation("favorites")} onNavigateToReports={() => handleNavigation("reports")} onNavigateToReview={() => handleNavigation("reviewbox")} onNavigateToNotes={() => handleNavigation("notes")}/>;
         }
     }, [activeView, handleBack, handleNavigation, handleStartQuiz, handleViewStateChange, isCollapsed]);
 
-    // AI Teacher uses its own header / mobile chrome — hide global TopHeader + BottomNav
+    // Met (AI tutor) draws its own header; the global TopHeader is hidden but the
+    // mobile BottomNav stays so the student can leave without an exit button.
     const isAiTeacherChrome = activeView === "met" || activeView === "ai_teacher" || activeView === "chat";
     const showGlobalHeader = !isHeaderHiddenByChild && !isQuizActive && !isAiTeacherChrome && activeView !== "profile" && activeView !== "tests";
-    const showGlobalBottomNav = !isQuizActive && !isAiTeacherChrome && !isHeaderHiddenByChild;
+    const showGlobalBottomNav = !isQuizActive && !isHeaderHiddenByChild;
     const mainClassName = useMemo(
         () =>
             `flex-1 flex flex-col relative w-full min-h-0 ${

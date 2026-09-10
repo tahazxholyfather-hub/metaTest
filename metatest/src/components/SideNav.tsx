@@ -19,13 +19,13 @@ import {
     Files,
     History,
     Sparkles,
-    Rocket,
-    GraduationCap
+    Rocket
 } from 'lucide-react';
 import type { View } from '../types';
 import { useUser } from '../context/UserContext';
 import { ThemeSwitch } from './ThemeSwitch';
 import PlanSelectionModal from './PlanSelectionModal';
+import { MetNavIcon } from './met';
 
 type SideNavProps = {
     activeView: View;
@@ -75,11 +75,12 @@ const CircularProgress = ({ progress, days, colorClass }: { progress: number, da
 };
 
 export const SideNav = ({ activeView, onNavigate, theme, onToggleTheme, isCollapsed, onLogout, onToggleCollapse }: SideNavProps) => {
-    const navItems: { id: View; label: string; icon: React.ElementType; selectorClass: string }[] = [
+    const navItems: { id: View; label: string; icon: React.ElementType | null; selectorClass: string }[] = [
         { id: 'dashboard', label: 'داشبورد', icon: Home, selectorClass: 'sidenav-tour-dashboard' },
         { id: 'practice', label: 'تمرین', icon: BookOpen, selectorClass: 'sidenav-tour-practice' },
         { id: 'tests', label: 'دنیای آزمون', icon: ClipboardCheck, selectorClass: 'sidenav-tour-tests' },
-        { id: 'met', label: 'مِت', icon: GraduationCap, selectorClass: 'sidenav-tour-ai-teacher' },
+        // Met (the AI) is represented by its own face, not a generic glyph.
+        { id: 'met', label: 'مِت', icon: null, selectorClass: 'sidenav-tour-ai-teacher' },
         { id: 'documents', label: 'نمونه سوالات آماده', icon: Files, selectorClass: 'sidenav-tour-documents' },
         { id: 'History', label: 'سوابق آزمون‌ها', icon: History, selectorClass: 'sidenav-tour-history' },
         { id: 'profile', label: 'پروفایل کاربری', icon: User, selectorClass: 'sidenav-tour-profile' }
@@ -224,7 +225,11 @@ export const SideNav = ({ activeView, onNavigate, theme, onToggleTheme, isCollap
                                     transition={{ type: "spring", stiffness: 300, damping: 30 }}
                                 />
                             )}
-                            <Icon className={`w-[20px] h-[20px] shrink-0 z-10 transition-colors ${isActive ? 'text-[var(--color-primary-500)]' : ''}`} strokeWidth={1.85} />
+                            {Icon ? (
+                                <Icon className={`w-[20px] h-[20px] shrink-0 z-10 transition-colors ${isActive ? 'text-[var(--color-primary-500)]' : ''}`} strokeWidth={1.85} />
+                            ) : (
+                                <MetNavIcon size={22} active={isActive} className="z-10" />
+                            )}
 
                             {!isCollapsed && (
                                 <span className="z-10 whitespace-nowrap text-right overflow-hidden text-[13px] transition-opacity duration-300">

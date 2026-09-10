@@ -1,6 +1,7 @@
 // src/components/BottomNav.tsx
-import { Home, BookOpen, ClipboardCheck, User, GraduationCap } from 'lucide-react';
+import { Home, BookOpen, ClipboardCheck, User } from 'lucide-react';
 import type { View } from '../types';
+import { MetNavIcon } from './met';
 
 type BottomNavProps = {
     activeView: View;
@@ -9,11 +10,12 @@ type BottomNavProps = {
 
 export const BottomNav = ({ activeView, onNavigate }: BottomNavProps) => {
     // Keep labels short for mobile
-    const navItems: { id: View; label: string; icon: React.ElementType; className: string }[] = [
+    const navItems: { id: View; label: string; icon: React.ElementType | null; className: string }[] = [
         { id: 'dashboard', label: 'خانه', icon: Home, className: 'nav-home' },
         { id: 'practice', label: 'تمرین', icon: BookOpen, className: 'nav-practice' },
         { id: 'tests', label: 'آزمون', icon: ClipboardCheck, className: 'nav-tests' },
-        { id: 'met', label: 'مِت', icon: GraduationCap, className: 'nav-ai-teacher' },
+        // Met (the AI) is represented by its own face, not a generic glyph.
+        { id: 'met', label: 'مِت', icon: null, className: 'nav-ai-teacher' },
         { id: 'profile', label: 'پروفایل', icon: User, className: 'nav-profile' },
     ];
 
@@ -30,13 +32,17 @@ export const BottomNav = ({ activeView, onNavigate }: BottomNavProps) => {
                             onClick={() => onNavigate(item.id)}
                             className={`${item.className} flex-1 flex flex-col items-center justify-center gap-1 h-full relative`}
                         >
-                            <Icon
-                                className={`w-6 h-6 transition-all duration-300 ${
-                                    isActive
-                                        ? 'text-[var(--color-primary-500)] scale-110'
-                                        : 'text-[var(--text-muted)] scale-100'
-                                }`}
-                            />
+                            {Icon ? (
+                                <Icon
+                                    className={`w-6 h-6 transition-all duration-300 ${
+                                        isActive
+                                            ? 'text-[var(--color-primary-500)] scale-110'
+                                            : 'text-[var(--text-muted)] scale-100'
+                                    }`}
+                                />
+                            ) : (
+                                <MetNavIcon size={24} active={isActive} className={`transition-transform duration-300 ${isActive ? 'scale-110' : ''}`} />
+                            )}
                             <span
                                 className={`text-[10px] font-medium transition-colors duration-300 ${
                                     isActive ? 'text-[var(--color-primary-500)]' : 'text-[var(--text-muted)]'
