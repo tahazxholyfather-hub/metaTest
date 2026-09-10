@@ -48,7 +48,7 @@ type Block =
     | { kind: 'code'; lang: string; body: string }
     | { kind: 'math'; body: string };
 
-function parseBlocks(raw: string): Block[] {
+function parseBlocks(raw: string, streaming = false): Block[] {
     const lines = String(raw || '').replace(/\r\n/g, '\n').split('\n');
     const blocks: Block[] = [];
     let i = 0;
@@ -71,11 +71,19 @@ function parseBlocks(raw: string): Block[] {
             continue;
         }
         if (/^\s*\$\$\s*$/.test(line)) {
-            flushPara(para);
             const body: string[] = [];
-            i++;
-            while (i < lines.length && !/^\s*\$\$\s*$/.test(lines[i])) body.push(lines[i++]);
-            i++;
+            let j = i + 1;
+            while (j < lines.length && !/^\s*\$\$\s*$/.test(lines[j])) body.push(lines[j++]);
+            const closed = j < lines.length;
+            if (!closed && streaming) {
+                // Still receiving the block: keep it as plain text until the
+                // closing fence arrives so MathJax never typesets half a formula.
+                para.push(line);
+                i++;
+                continue;
+            }
+            flushPara(para);
+            i = j + 1;
             blocks.push({ kind: 'math', body: `$$${body.join('\n')}$$` });
             continue;
         }
@@ -106,24 +114,51 @@ function parseBlocks(raw: string): Block[] {
     return blocks;
 }
 
-export function RichText({ text, className = '' }: { text: string; className?: string }) {
-    const blocks = useMemo(() => parseBlocks(text), [text]);
+export function RichText({
+    text,
+    className = '',
+    streaming = false,
+    trailing = null,
+}: {
+    text: string;
+    className?: string;
+    /** While streaming, only fully delimited math is typeset; open `$$` blocks stay raw. */
+    streaming?: boolean;
+    /** Node appended after the last block (e.g. a typing caret). */
+    trailing?: React.ReactNode;
+}) {
+    const blocks = useMemo(() => parseBlocks(text, streaming), [text, streaming]);
+    const lastIdx = blocks.length - 1;
     return (
         <div className={`met-rich text-[14.5px] leading-[1.75] text-[var(--text-primary)] break-words ${className}`} dir="auto">
+            {blocks.length === 0 && trailing}
             {blocks.map((b, bi) => {
+                const tail = bi === lastIdx ? trailing : null;
                 if (b.kind === 'code')
                     return (
-                        <pre key={bi} dir="ltr" className="my-2 p-3 rounded-[12px] bg-[color-mix(in_srgb,var(--text-primary)_5%,var(--bg-app))] border border-[var(--border)]/60 overflow-x-auto text-[12.5px] leading-relaxed font-mono text-left">
-                            <code>{b.body}</code>
-                        </pre>
+                        <React.Fragment key={bi}>
+                            <pre dir="ltr" className="my-2 p-3 rounded-[12px] bg-[color-mix(in_srgb,var(--text-primary)_5%,var(--bg-app))] border border-[var(--border)]/60 overflow-x-auto text-[12.5px] leading-relaxed font-mono text-left">
+                                <code>{b.body}</code>
+                            </pre>
+                            {tail}
+                        </React.Fragment>
                     );
-                if (b.kind === 'math') return <MathRenderer key={bi} text={b.body} className="my-2 overflow-x-auto" />;
+                if (b.kind === 'math')
+                    return (
+                        <React.Fragment key={bi}>
+                            <MathRenderer text={b.body} className="my-2 overflow-x-auto" />
+                            {tail}
+                        </React.Fragment>
+                    );
                 if (b.kind === 'ul' || b.kind === 'ol') {
                     const Tag = b.kind;
                     return (
                         <Tag key={bi} className={`my-1.5 pr-5 space-y-1 ${b.kind === 'ul' ? 'list-disc' : 'list-decimal'} marker:text-[var(--text-muted)]`}>
                             {b.items.map((it, ii) => (
-                                <li key={ii}>{inlineNodes(it, `${bi}-${ii}`)}</li>
+                                <li key={ii}>
+                                    {inlineNodes(it, `${bi}-${ii}`)}
+                                    {ii === b.items.length - 1 && tail}
+                                </li>
                             ))}
                         </Tag>
                     );
@@ -136,6 +171,7 @@ export function RichText({ text, className = '' }: { text: string; className?: s
                                 {li < b.lines.length - 1 && <br />}
                             </React.Fragment>
                         ))}
+                        {tail}
                     </p>
                 );
             })}

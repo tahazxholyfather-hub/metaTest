@@ -197,10 +197,11 @@ export function Message({
                             </div>
                         </div>
                     ) : message.streaming ? (
-                        <div className="text-[14.5px] leading-[1.75] text-[var(--text-primary)] whitespace-pre-wrap break-words" dir="auto">
-                            {message.content}
-                            <span className="inline-block w-[2px] h-[1em] align-[-0.15em] mr-0.5 bg-[var(--color-primary-400)] animate-pulse" />
-                        </div>
+                        <RichText
+                            text={message.content}
+                            streaming
+                            trailing={<span className="inline-block w-[2px] h-[1em] align-[-0.15em] mr-0.5 bg-[var(--color-primary-400)] animate-pulse" />}
+                        />
                     ) : (
                         <>
                             {!!message.content && <RichText text={message.content} />}
