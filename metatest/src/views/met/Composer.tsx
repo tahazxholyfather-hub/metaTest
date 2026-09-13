@@ -71,11 +71,32 @@ export function Composer({
     const resize = useCallback(() => {
         const el = textareaRef.current;
         if (!el) return;
-        el.style.height = '0px';
-        el.style.height = `${Math.min(el.scrollHeight, isMobile ? 140 : 220)}px`;
+        const max = isMobile ? 140 : 220;
+        const min = 40;
+        // Never measure from height:0 — on mobile Safari/Chrome a flex-grown
+        // empty textarea then reports the leftover viewport as scrollHeight
+        // and becomes a giant blank rectangle.
+        el.style.height = 'auto';
+        if (!el.value) {
+            el.style.height = `${min}px`;
+            return;
+        }
+        el.style.height = `${Math.min(Math.max(el.scrollHeight, min), max)}px`;
     }, [isMobile]);
 
     useEffect(resize, [text, resize]);
+
+    useEffect(() => {
+        const onViewport = () => {
+            if (!textareaRef.current?.value) resize();
+        };
+        window.visualViewport?.addEventListener('resize', onViewport);
+        window.addEventListener('resize', onViewport);
+        return () => {
+            window.visualViewport?.removeEventListener('resize', onViewport);
+            window.removeEventListener('resize', onViewport);
+        };
+    }, [resize]);
 
     useImperativeHandle(ref, () => ({
         focus: () => textareaRef.current?.focus(),
@@ -313,7 +334,7 @@ export function Composer({
                         disabled={disabled || recording}
                         placeholder={placeholder}
                         aria-label="پیام به مِت"
-                        className="flex-1 min-w-0 resize-none bg-transparent border-0 outline-none ring-0 shadow-none focus:outline-none focus:ring-0 text-[14.5px] leading-[1.6] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] py-2 px-1.5 max-h-[220px] chat-scrollbar disabled:cursor-not-allowed"
+                        className="flex-1 self-end min-w-0 min-h-10 h-10 resize-none overflow-y-auto bg-transparent border-0 outline-none ring-0 shadow-none focus:outline-none focus:ring-0 text-[14.5px] leading-[1.6] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] py-2 px-1.5 chat-scrollbar disabled:cursor-not-allowed"
                         dir="auto"
                     />
 

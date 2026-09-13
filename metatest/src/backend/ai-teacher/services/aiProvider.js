@@ -171,8 +171,14 @@ async function* stream({ messages, model, maxTokens, temperature = 0.6, signal =
     const usedModel = model || MODELS.text;
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), PROVIDER.timeoutMs);
-    // Caller-side cancellation (student pressed "stop") — partial text is still returned.
+    // Idle timeout: reset on every received chunk so a long but healthy
+    // stream is not killed by a wall-clock timer. User abort is separate.
+    const idleMs = PROVIDER.timeoutMs;
+    let timer = setTimeout(() => controller.abort(), idleMs);
+    const bumpIdle = () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => controller.abort(), idleMs);
+    };
     let stopped = false;
     const onExternalAbort = () => { stopped = true; controller.abort(); };
     if (signal) {
@@ -224,6 +230,7 @@ async function* stream({ messages, model, maxTokens, temperature = 0.6, signal =
     let buffer = '';
     let usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, cachedTokens: 0 };
     let fullText = '';
+    let finishReason = null;
 
     try {
         while (true) {
@@ -231,15 +238,16 @@ async function* stream({ messages, model, maxTokens, temperature = 0.6, signal =
             try {
                 chunk = await reader.read();
             } catch (err) {
-                if (stopped) break; // student stopped generation — keep what we have
+                if (stopped) break;
                 if (err.name === 'AbortError') throw new AiProviderError('زمان پاسخ‌گویی به پایان رسید.', 'AI_TIMEOUT', 504);
                 throw new AiProviderError(err.message || 'خطای شبکه هوش مصنوعی', 'AI_NETWORK', 502);
             }
             const { done, value } = chunk;
             if (done) break;
+            bumpIdle();
             buffer += decoder.decode(value, { stream: true });
 
-            const parts = buffer.split('\n');
+            const parts = buffer.split(/\r?\n/);
             buffer = parts.pop() || '';
 
             for (const line of parts) {
@@ -261,6 +269,9 @@ async function* stream({ messages, model, maxTokens, temperature = 0.6, signal =
                     yield { type: 'delta', text: delta };
                 }
 
+                const reason = json?.choices?.[0]?.finish_reason;
+                if (reason) finishReason = reason;
+
                 const parsedUsage = extractUsage(json);
                 if (parsedUsage) usage = parsedUsage;
             }
@@ -281,6 +292,7 @@ async function* stream({ messages, model, maxTokens, temperature = 0.6, signal =
         model: usedModel,
         usage,
         stopped,
+        finishReason,
     };
 }
 

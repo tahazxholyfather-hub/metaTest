@@ -63,6 +63,23 @@ export function GlassCard({ children, className = '', ...rest }: React.HTMLAttri
     );
 }
 
+/** Sequential three-dot typing indicator — shown until the first streamed token. */
+export function TypingDots({ className = '', label = 'مِت در حال نوشتن است' }: { className?: string; label?: string }) {
+    const reduce = useReducedMotion();
+    return (
+        <span className={`inline-flex items-center gap-1.5 ${className}`} role="status" aria-label={label}>
+            {[0, 1, 2].map((i) => (
+                <motion.span
+                    key={i}
+                    className="block w-1.5 h-1.5 rounded-full bg-[var(--color-primary-400)]"
+                    animate={reduce ? { opacity: 0.55 } : { y: [0, -4, 0], opacity: [0.35, 1, 0.35] }}
+                    transition={reduce ? { duration: 0 } : { duration: 0.9, repeat: Infinity, ease: 'easeInOut', delay: i * 0.16 }}
+                />
+            ))}
+        </span>
+    );
+}
+
 export function GraySpinner({ size = 20, className = '' }: { size?: number; className?: string }) {
     return (
         <span

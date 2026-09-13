@@ -11,7 +11,7 @@ import Message from './Message';
 import { SlugIcon, findSubject } from './subjectIcons';
 import { SubjectPicker } from './SubjectPicker';
 import type { RailPanel } from './MetRail';
-import { CoinChip, GraySpinner, IconButton, WorkingText, easeOut, usePrefersReducedMotion } from './ui';
+import { CoinChip, GraySpinner, IconButton, TypingDots, WorkingText, easeOut, usePrefersReducedMotion } from './ui';
 
 type Chat = ReturnType<typeof useMetChat>;
 
@@ -298,9 +298,9 @@ export function ChatScreen({
                                         onRetry={retry}
                                     />
                                 ))}
-                                {/* Thinking indicator before the first token arrives */}
+                                {/* Typing dots until the first streamed token — never pair with an empty bubble. */}
                                 <AnimatePresence>
-                                    {(chat.status === 'sending' || chat.status === 'thinking' || chat.status === 'processing') && (
+                                    {chat.busy && !chat.messages.some((m) => m.streaming && !!m.content) && (
                                         <motion.div
                                             initial={{ opacity: 0, y: 6 }}
                                             animate={{ opacity: 1, y: 0 }}
@@ -308,16 +308,9 @@ export function ChatScreen({
                                             transition={{ duration: 0.2, ease: easeOut }}
                                             className="flex w-full justify-end gap-2.5 mt-5"
                                         >
-                                            <div className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-[16px] rounded-tr-[6px] bg-[color-mix(in_srgb,var(--text-primary)_4.5%,var(--bg-card))] border border-[var(--border)]/50">
-                                                {[0, 1, 2].map((i) => (
-                                                    <motion.span
-                                                        key={i}
-                                                        className="block w-1.5 h-1.5 rounded-full bg-[var(--text-muted)]"
-                                                        animate={reduce ? { opacity: 0.7 } : { y: [0, -3.5, 0], opacity: [0.4, 1, 0.4] }}
-                                                        transition={reduce ? {} : { duration: 1.1, repeat: Infinity, ease: 'easeInOut', delay: i * 0.15 }}
-                                                    />
-                                                ))}
-                                                <span className="text-[11px] text-[var(--text-muted)] mr-1">{chat.toolLabel || WORKING[chat.status]}</span>
+                                            <div className="inline-flex items-center gap-2.5 px-3.5 py-2.5 rounded-[16px] rounded-tr-[6px] bg-[color-mix(in_srgb,var(--text-primary)_4.5%,var(--bg-card))] border border-[var(--border)]/50">
+                                                <TypingDots />
+                                                <span className="text-[11px] text-[var(--text-muted)]">{chat.toolLabel || WORKING[chat.status] || 'مِت می‌نویسد…'}</span>
                                             </div>
                                             <div className="w-7 shrink-0 mt-1">
                                                 <div className="w-7 h-7"><Met size="100%" state="thinking" color={metColor} /></div>
