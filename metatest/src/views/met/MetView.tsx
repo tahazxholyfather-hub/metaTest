@@ -238,7 +238,7 @@ export function MetView({ onNavigate }: Props) {
                         audioLevel={audioLevel}
                         ensureConversation={ensureConversation}
                         composerRef={composerRef}
-                        bottomInset={isMobile ? 'calc(4rem + env(safe-area-inset-bottom) + 0.5rem)' : undefined}
+                        bottomInset={isMobile ? 'var(--app-bottom-nav-space)' : undefined}
                     />
                 </div>
 

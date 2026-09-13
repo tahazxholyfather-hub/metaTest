@@ -79,6 +79,9 @@
     --error:         #B91C1C;
     --info:          #0369A1;
 
+    /* Floating mobile bottom nav (icon + label + dock inset + safe area) */
+    --app-bottom-nav-space: calc(4.85rem + env(safe-area-inset-bottom, 0px));
+
     /* Interactive overlays */
     --hover-overlay:  rgba(15, 23, 42, 0.05);
     --active-overlay: rgba(15, 23, 42, 0.10);
@@ -140,6 +143,12 @@
     /* shadows subtle in dark */
     --shadow-1: 0 6px 18px rgba(0,0,0,0.55);
     --shadow-2: 0 12px 32px rgba(0,0,0,0.65);
+}
+
+@media (min-width: 768px) {
+    :root, .dark {
+        --app-bottom-nav-space: 0px;
+    }
 }
 
 /* ---------------------------
