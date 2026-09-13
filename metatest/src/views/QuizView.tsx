@@ -29,6 +29,8 @@ import QuestionStatsDisplay, { type StatItem } from '../components/QuestionStats
 import { QuizCountdown } from '../components/QuizCountdown';
 import { MathRenderer } from '../components/ui/MathRenderer';
 import {GameRewardToast} from '../components/GameRewardToast';
+import { Met } from '../components/met';
+import { QuizMetPanel } from './met/QuizMetPanel';
 
 import React from 'react';
 
@@ -196,6 +198,11 @@ export function QuizView({
     // UI State
     const [showButtons, setShowButtons] = useState(true);
     const [resultState, setResultState] = useState<'correct' | 'wrong' | null>(null);
+    const [metOpen, setMetOpen] = useState(false);
+
+    useEffect(() => {
+        if (!isAnswered) setMetOpen(false);
+    }, [isAnswered]);
 
     // Modals State
     const [isExitModalOpen, setIsExitModalOpen] = useState(false);
@@ -1248,6 +1255,19 @@ export function QuizView({
                                             </motion.div>
                                         )}
                                     </AnimatePresence>
+
+                                    {isAnswered && (
+                                        <motion.button
+                                            type="button"
+                                            initial={{ opacity: 0, y: 8 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            onClick={() => setMetOpen(true)}
+                                            className="mt-6 w-full flex items-center justify-center gap-2.5 py-3 px-4 rounded-2xl border border-[var(--color-primary-500)]/30 bg-[color-mix(in_srgb,var(--color-primary-500)_10%,var(--bg-card))] text-[var(--color-primary-500)] font-extrabold text-[15px] active:scale-[0.99]"
+                                        >
+                                            <span className="w-8 h-8"><Met size="100%" state="idle" color="violet" /></span>
+                                            از مِت درباره‌ی این سوال بپرس
+                                        </motion.button>
+                                    )}
                                 </motion.div>
                             ) : (
                                 <div className="flex items-center justify-center h-full text-[var(--text-muted)] mt-20">خطا در دریافت سوال</div>
@@ -1349,6 +1369,12 @@ export function QuizView({
                         data={rewardData}
                         isOpen={isRewardToastOpen}
                         onClose={() => setIsRewardToastOpen(false)}
+                    />
+
+                    <QuizMetPanel
+                        open={metOpen}
+                        onClose={() => setMetOpen(false)}
+                        questionId={isAnswered && question ? question.id : null}
                     />
 
                 </>

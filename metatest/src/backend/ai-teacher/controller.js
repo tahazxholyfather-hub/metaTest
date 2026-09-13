@@ -21,6 +21,7 @@ const fileStorage = require('./services/fileStorage');
 const suggestionsService = require('./services/suggestionsService');
 const referencesService = require('./services/referencesService');
 const { logUsage } = require('./services/usageLogger');
+const questionContext = require('./services/questionContext');
 
 const fail = (res, status, code, message) => res.status(status).json({ success: false, code, message: message || userMessageForError(code) });
 const idParam = (v) => { const n = Number(v); return Number.isInteger(n) && n > 0 ? n : null; };
@@ -478,6 +479,43 @@ const voiceSpeak = async (req, res) => {
     }
 };
 
+const getQuestionSession = async (req, res) => {
+    try {
+        const questionId = idParam(req.params.questionId);
+        if (!questionId) return fail(res, 400, 'INVALID_QUESTION', 'شناسه سوال نامعتبر است.');
+        const userId = req.user.id;
+
+        const ctx = await questionContext.loadQuestionContext(db, { userId, questionId });
+        if (!ctx) return fail(res, 403, 'QUESTION_NOT_ANSWERED');
+
+        const conversation = await conversationService.getOrCreateQuizConversation(db, {
+            userId,
+            questionId,
+            subjectKey: ctx.subjectKey || 'general',
+            title: questionContext.conversationTitle(ctx),
+            snapshot: questionContext.publicContext(ctx),
+        });
+        const messages = await conversationService.getMessages(db, conversation.id, { limit: 80 });
+        const user = await loadUserRow(userId);
+        const wallet = await walletSnapshot(userId, user?.current_plan);
+
+        return res.json({
+            success: true,
+            data: {
+                conversation: publicConversation(conversation),
+                messages: messages.map(publicMessage),
+                hasMore: messages.hasMore,
+                context: questionContext.publicContext(ctx),
+                intents: Object.entries(questionContext.QUICK_INTENTS).map(([key, v]) => ({ key, label: v.label })),
+                wallet,
+            },
+        });
+    } catch (err) {
+        console.error('[met] getQuestionSession', err);
+        return fail(res, 500, 'SERVER_ERROR', 'خطا در باز کردن گفتگوی سوال.');
+    }
+};
+
 module.exports = {
     getBootstrap,
     listSubjects,
@@ -503,4 +541,5 @@ module.exports = {
     voiceTranscribe,
     voiceSpeak,
     sanitizeForSpeech,
+    getQuestionSession,
 };
