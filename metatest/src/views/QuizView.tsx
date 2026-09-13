@@ -1236,6 +1236,19 @@ export function QuizView({
 
                                     )}
 
+                                    {isAnswered && (
+                                        <motion.button
+                                            type="button"
+                                            initial={{ opacity: 0, y: 8 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            onClick={() => setMetOpen(true)}
+                                            className="mt-6 w-full flex items-center justify-center gap-2.5 py-3 px-4 rounded-2xl border border-[var(--color-primary-500)]/30 bg-[color-mix(in_srgb,var(--color-primary-500)_10%,var(--bg-card))] text-[var(--color-primary-500)] font-extrabold text-[15px] active:scale-[0.99]"
+                                        >
+                                            <span className="w-8 h-8"><Met size="100%" state="idle" color="violet" /></span>
+                                            از مِت درباره‌ی این سوال بپرس
+                                        </motion.button>
+                                    )}
+
                                     {/* Explanation */}
                                     <AnimatePresence>
                                         {isAnswered && descriptiveAnswer && (
@@ -1255,19 +1268,6 @@ export function QuizView({
                                             </motion.div>
                                         )}
                                     </AnimatePresence>
-
-                                    {isAnswered && (
-                                        <motion.button
-                                            type="button"
-                                            initial={{ opacity: 0, y: 8 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            onClick={() => setMetOpen(true)}
-                                            className="mt-6 w-full flex items-center justify-center gap-2.5 py-3 px-4 rounded-2xl border border-[var(--color-primary-500)]/30 bg-[color-mix(in_srgb,var(--color-primary-500)_10%,var(--bg-card))] text-[var(--color-primary-500)] font-extrabold text-[15px] active:scale-[0.99]"
-                                        >
-                                            <span className="w-8 h-8"><Met size="100%" state="idle" color="violet" /></span>
-                                            از مِت درباره‌ی این سوال بپرس
-                                        </motion.button>
-                                    )}
                                 </motion.div>
                             ) : (
                                 <div className="flex items-center justify-center h-full text-[var(--text-muted)] mt-20">خطا در دریافت سوال</div>
@@ -1311,13 +1311,23 @@ export function QuizView({
                                                         <span className="hidden md:inline text-sm font-medium">قبلی</span>
                                                     </button>
 
-                                                    <button
-                                                        onClick={handleCheckAnswer}
-                                                        disabled={!selectedOptionId || isChecking || isAnswered}
-                                                        className="action-btn flex-1 md:flex-none flex items-center justify-center py-3 md:py-2 text-base md:text-sm shadow-md disabled:opacity-50"
-                                                    >
-                                                        ثبت پاسخ
-                                                    </button>
+                                                    {isAnswered ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setMetOpen(true)}
+                                                            className="action-btn flex-1 md:flex-none flex items-center justify-center gap-2 py-3 md:py-2 text-base md:text-sm shadow-md"
+                                                        >
+                                                            از مِت بپرس
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            onClick={handleCheckAnswer}
+                                                            disabled={!selectedOptionId || isChecking}
+                                                            className="action-btn flex-1 md:flex-none flex items-center justify-center py-3 md:py-2 text-base md:text-sm shadow-md disabled:opacity-50"
+                                                        >
+                                                            ثبت پاسخ
+                                                        </button>
+                                                    )}
 
                                                     <button
                                                         onClick={handleNext}
@@ -1372,6 +1382,7 @@ export function QuizView({
                     />
 
                     <QuizMetPanel
+                        key={isAnswered && question ? `quiz-met-${question.id}` : 'quiz-met-idle'}
                         open={metOpen}
                         onClose={() => setMetOpen(false)}
                         questionId={isAnswered && question ? question.id : null}

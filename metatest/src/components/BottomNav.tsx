@@ -22,12 +22,12 @@ export const BottomNav = ({ activeView, onNavigate }: BottomNavProps) => {
 
     return (
         <nav
-            className="bottomnav-tour-container pointer-events-none fixed inset-x-0 bottom-0 z-50 px-3"
-            style={{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom, 0px))' }}
+            className="bottomnav-tour-container pointer-events-none fixed inset-x-0 bottom-0 z-50 px-3.5"
+            style={{ paddingBottom: 'calc(0.65rem + env(safe-area-inset-bottom, 0px))' }}
             aria-label="ناوبری اصلی"
         >
             <div className="pointer-events-auto mx-auto max-w-lg">
-                <div className="relative flex items-stretch justify-between gap-0.5 h-[3.65rem] px-1.5 rounded-[1.35rem] bg-[color-mix(in_srgb,var(--bg-card)_88%,transparent)] backdrop-blur-2xl border border-[var(--border)]/50 shadow-[0_8px_28px_-16px_rgba(15,23,42,0.45)]">
+                <div className="relative flex items-stretch justify-between gap-0.5 h-[3.65rem] px-1.5 rounded-[1.4rem] bg-[var(--bg-card)]/95 backdrop-blur-2xl border border-[var(--border)] shadow-[0_10px_28px_-16px_rgba(15,23,42,0.32)]">
                     {navItems.map((item) => {
                         const Icon = item.icon;
                         const isActive = activeView === item.id;

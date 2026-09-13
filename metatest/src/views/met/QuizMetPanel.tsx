@@ -82,6 +82,16 @@ export function QuizMetPanel({ open, onClose, questionId }: Props) {
     }, [features, settings]);
 
     useEffect(() => {
+        chat.stop();
+        chat.startNew();
+        setContext(null);
+        setBootError(null);
+        // Fresh thread when the practice question changes — never show Qn's
+        // messages on Qn+1 while the session request is in flight.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [questionId]);
+
+    useEffect(() => {
         if (!open || !questionId) return;
         void load(questionId);
     }, [open, questionId, load]);
