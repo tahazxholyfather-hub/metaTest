@@ -281,9 +281,11 @@ const handleGetChaptersBySubjects = async (req, res) => {
 
         const gradeIds = parseArrayParam(req.body.grade_ids || req.body.grades);
 
-        // Explicitly selecting q.grade_id so the frontend can associate chapters with their respective grades
+        // One row per topic (UI chapter). Do not GROUP BY question grade/subject:
+        // that duplicated cards with the same id and leaked a mis-tagged question
+        // into another grade (e.g. "فصل سه دهم" inside شیمی یازدهم).
         let sql = `
-            SELECT t.id, t.title, COUNT(q.id) AS question_count, q.subject_id, q.grade_id
+            SELECT t.id, t.title, COUNT(q.id) AS question_count, t.subject_id, MIN(q.grade_id) AS grade_id
             FROM questions_tam24 q
             JOIN topics_tam24 t ON q.topic_id = t.id
             WHERE q.subject_id IN (?)
@@ -297,11 +299,19 @@ const handleGetChaptersBySubjects = async (req, res) => {
         }
 
         sql += `
-            GROUP BY t.id, t.title, q.subject_id, q.grade_id
-            HAVING COUNT(q.id) >= ? 
-            ORDER BY q.subject_id ASC, t.id ASC
+            GROUP BY t.id, t.title, t.subject_id
+            HAVING COUNT(q.id) >= ?
+               AND COUNT(q.id) * 2 >= (
+                    SELECT COUNT(*)
+                    FROM questions_tam24 q2
+                    WHERE q2.topic_id = t.id
+                      AND q2.status = 'فعال'
+                      AND q2.edit_status = 'done'
+                      AND q2.subject_id IN (?)
+               )
+            ORDER BY t.subject_id ASC, t.id ASC
         `;
-        params.push(MIN_QUESTIONS);
+        params.push(MIN_QUESTIONS, subjectIds);
         const [rows] = await pool.query(sql, params);
         res.json({ success: true, chapters: rows });
     } catch (error) {
@@ -317,19 +327,31 @@ const handleGetMabahesByChapters = async (req, res) => {
             return res.json({ success: false, message: "Missing or invalid parameter: topic_ids array" });
         }
 
-        // Added q.grade_id and q.subject_id directly to the selection to enable direct filtering
-        const sql = `
-            SELECT c.id, c.title, COUNT(q.id) AS question_count, q.topic_id AS chapter_id, q.grade_id, q.subject_id
+        const gradeIds = parseArrayParam(req.body.grade_ids || req.body.grades);
+
+        // One row per mabhas. GROUP BY grade_id/subject_id duplicated the same
+        // chapter id (e.g. two "گفتار یک" cards that toggle together).
+        let sql = `
+            SELECT c.id, c.title, COUNT(q.id) AS question_count,
+                   MIN(q.topic_id) AS chapter_id, MIN(q.grade_id) AS grade_id, MIN(q.subject_id) AS subject_id
             FROM questions_tam24 q
             JOIN chapters_tam24 c ON q.chapter_id = c.id
             WHERE q.topic_id IN (?)
                AND q.status = 'فعال'
                AND q.edit_status = 'done'
-            GROUP BY c.id, c.title, q.topic_id, q.grade_id, q.subject_id
-            HAVING COUNT(q.id) >= ?
-            ORDER BY q.topic_id ASC, c.id ASC
         `;
-        const [rows] = await pool.query(sql, [topicIds, MIN_QUESTIONS]);
+        const params = [topicIds];
+        if (gradeIds.length > 0) {
+            sql += " AND q.grade_id IN (?)";
+            params.push(gradeIds);
+        }
+        sql += `
+            GROUP BY c.id, c.title
+            HAVING COUNT(q.id) >= ?
+            ORDER BY MIN(q.topic_id) ASC, c.id ASC
+        `;
+        params.push(MIN_QUESTIONS);
+        const [rows] = await pool.query(sql, params);
         res.json({ success: true, mabahes: rows });
     } catch (error) {
         console.error("❌ SQL Error in handleGetMabahesByChapters:", error);

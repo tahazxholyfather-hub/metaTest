@@ -102,6 +102,22 @@ const getGradeId = (item: any): string | null => {
     return gid != null ? String(gid) : null;
 };
 
+const lookupCache = (cache: Record<string, any>, id: string | number) => cache[String(id)] || null;
+
+const hasId = (ids: Array<string | number>, id: string | number) =>
+    ids.some(value => String(value) === String(id));
+
+/** Keep one card per entity id so a SQL join cannot render the same mabhas twice. */
+const uniqueById = (items: any[]) => {
+    const seen = new Map<string, any>();
+    for (const item of items) {
+        if (item == null || item.id == null) continue;
+        const key = String(item.id);
+        if (!seen.has(key)) seen.set(key, item);
+    }
+    return Array.from(seen.values());
+};
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 const FilterTabs = ({ items, activeTab, setActiveTab, cache, uniqueId, emptyLabel }: any) => {
@@ -298,11 +314,11 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
             if (step === 1) {
                 const res = await flowApi.dispatch('get_subjects');
                 const raw = res.subjects || res.data || [];
-                formattedItems = raw.map((s: any) => ({
+                formattedItems = uniqueById(raw.map((s: any) => ({
                     ...s,
                     imageSrc: LESSON_IMAGES[s.id] || DEFAULT_LESSON_ICON,
                     // subtitle: s.question_count ? `${s.question_count} سوال` : undefined,
-                }));
+                })));
 
                 setSubjectsCache(prev => {
                     const next = { ...prev };
@@ -312,10 +328,10 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
             } else if (step === 2) {
                 const res = await flowApi.dispatch('get_grades_by_subjects_multi', { subjects: flowData.lessons });
                 const raw = res.grades || res.data || [];
-                formattedItems = raw.map((g: any) => ({
+                formattedItems = uniqueById(raw.map((g: any) => ({
                     ...g,
                     // desc: g.question_count ? `${g.question_count} سوال` : undefined
-                }));
+                })));
 
                 setGradesCache(prev => {
                     const next = { ...prev };
@@ -328,10 +344,10 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
                     grades: flowData.grades
                 });
                 const raw = res.chapters || res.data || [];
-                formattedItems = raw.map((c: any) => ({
+                formattedItems = uniqueById(raw.map((c: any) => ({
                     ...c,
                     // desc: c.question_count ? `${c.question_count} سوال` : undefined
-                }));
+                })));
 
                 setChaptersCache(prev => {
                     const next = { ...prev };
@@ -339,12 +355,15 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
                     return next;
                 });
             } else if (step === 5) {
-                const res = await flowApi.dispatch('get_mabahes_by_chapters_multi', { chapters: flowData.chapters });
+                const res = await flowApi.dispatch('get_mabahes_by_chapters_multi', {
+                    chapters: flowData.chapters,
+                    grades: flowData.grades,
+                });
                 const raw = res.mabahes || res.data || [];
-                formattedItems = raw.map((m: any) => ({
+                formattedItems = uniqueById(raw.map((m: any) => ({
                     ...m,
                     // desc: m.question_count ? `${m.question_count} سوال` : undefined
-                }));
+                })));
 
                 setMabhasCache(prev => {
                     const next = { ...prev };
@@ -424,7 +443,8 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
 
         selectedItems.forEach(id => {
             if (newCounts[id] === undefined) {
-                const item = getCachedItem(id) || {};
+                const cache = flowData.quizType === 'chapter' ? chaptersCache : mabhasCache;
+                const item = lookupCache(cache, id) || {};
                 const avail = item.question_count || 30;
                 const cap = Math.min(perItemBudget, avail);
                 newCounts[id] = Math.min(10, cap);
@@ -440,16 +460,7 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
         flowData.quizType
     ]);
 
-    const getCachedItem = (id: string | number) => {
-        const key = String(id);
-        return (
-            subjectsCache[key] ||
-            gradesCache[key] ||
-            chaptersCache[key] ||
-            mabhasCache[key] ||
-            null
-        );
-    };
+    const getCachedItem = (id: string | number, cache: Record<string, any>) => lookupCache(cache, id);
 
     // ─── Filter logic for Steps 4 & 5 ─────────────────────────────────────────
 
@@ -513,12 +524,12 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
 
     const toggleLesson = (item: any) => {
         setFlowData(prev => {
-            const exists = prev.lessons.includes(item.id);
+            const exists = hasId(prev.lessons, item.id);
 
             return {
                 ...prev,
                 lessons: exists
-                    ? prev.lessons.filter(id => id !== item.id)
+                    ? prev.lessons.filter(id => String(id) !== String(item.id))
                     : [...prev.lessons, item.id],
                 grades: [],
                 chapters: [],
@@ -534,12 +545,12 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
     ) => {
         setFlowData(prev => {
             const arr = prev[key];
-            const exists = arr.includes(item.id);
+            const exists = hasId(arr, item.id);
 
             const next = {
                 ...prev,
                 [key]: exists
-                    ? arr.filter(id => id !== item.id)
+                    ? arr.filter(id => String(id) !== String(item.id))
                     : [...arr, item.id],
             };
 
@@ -566,8 +577,8 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
         setIsCreatingQuiz(true);
         const loadingToastId = toast.loading('درحال ساخت آزمون...');
         try {
-            const nameMap = (ids: string[]) => ids.reduce((acc, id) => {
-                const match = getCachedItem(id);
+            const nameMap = (ids: string[], cache: Record<string, any>) => ids.reduce((acc, id) => {
+                const match = getCachedItem(id, cache);
 
                 return {
                     ...acc,
@@ -581,8 +592,10 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
                 lessons: flowData.lessons, grades: flowData.grades,
                 quizType: flowData.quizType, chapters: flowData.chapters, mabhas: flowData.mabhas,
                 settings: flowData.settings, shareCode,
-                lessonNames: nameMap(flowData.lessons), gradeNames: nameMap(flowData.grades),
-                chapterNames: nameMap(flowData.chapters), mabhasNames: nameMap(flowData.mabhas),
+                lessonNames: nameMap(flowData.lessons, subjectsCache),
+                gradeNames: nameMap(flowData.grades, gradesCache),
+                chapterNames: nameMap(flowData.chapters, chaptersCache),
+                mabhasNames: nameMap(flowData.mabhas, mabhasCache),
             };
 
             const res = await flowApi.dispatch('create_quiz', payload);
@@ -659,23 +672,22 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
 
         const selectedIds = flowData[listKey];
         const filteredIds = filteredStepItems.map(i => i.id);
-        const selectedFilteredCount = filteredIds.filter(id => selectedIds.includes(id)).length;
+        const selectedFilteredCount = filteredIds.filter(id => hasId(selectedIds, id)).length;
         const allFilteredSelected = selectedFilteredCount === filteredIds.length && filteredIds.length > 0;
 
         const handleSelectAllFiltered = () => {
             if (allFilteredSelected) {
-                setFlowData(prev => ({ ...prev, [listKey]: prev[listKey].filter((id: string) => !filteredIds.includes(id)) }));
+                setFlowData(prev => ({
+                    ...prev,
+                    [listKey]: prev[listKey].filter((id: string) => !hasId(filteredIds, id)),
+                }));
             } else {
                 setFlowData(prev => {
-                    const newSet = new Set(prev[listKey]);
-
-                    filteredIds.forEach(id => {
-                        newSet.add(id);
-                    });
-
+                    const nextIds = prev[listKey].filter((id: string) => !hasId(filteredIds, id));
+                    filteredIds.forEach(id => nextIds.push(id));
                     return {
                         ...prev,
-                        [listKey]: Array.from(newSet),
+                        [listKey]: nextIds,
                     };
                 });
 
@@ -731,7 +743,7 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
                         <AnimatePresence mode="popLayout">
                             {filteredStepItems.map(item => (
                                 <motion.div
-                                    key={item.id}
+                                    key={String(item.id)}
                                     layout
                                     initial={{ opacity: 0, scale: 0.95 }}
                                     animate={{ opacity: 1, scale: 1 }}
@@ -742,7 +754,7 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
                                         icon={icon}
                                         label={getDisplayLabel(item, item.id)}
                                         desc={item.desc}
-                                        checked={selectedIds.includes(item.id)}
+                                        checked={hasId(selectedIds, item.id)}
                                         onToggle={() => toggleArrayItem(listKey, item)}
                                     />
                                 </motion.div>
@@ -771,10 +783,10 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
                                     imageSrc={lesson.imageSrc}
                                     label={lesson.name || lesson.title}
                                     desc={lesson.desc || lesson.subtitle}
-                                    active={flowData.lessons.includes(lesson.id)}
+                                    active={hasId(flowData.lessons, lesson.id)}
                                     onClick={() => toggleLesson(lesson)}
                                 />
-                                {flowData.lessons.includes(lesson.id) && (
+                                {hasId(flowData.lessons, lesson.id) && (
                                     <div className="absolute top-2 left-2 bg-[var(--accent)] text-white p-1 rounded-full shadow-sm z-10">
                                         <Check size={12} strokeWidth={3} />
                                     </div>
@@ -795,7 +807,7 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
                                 icon={Layers}
                                 label={grade.title || grade.name}
                                 desc={grade.desc}
-                                checked={flowData.grades.includes(grade.id)}
+                                checked={hasId(flowData.grades, grade.id)}
                                 onToggle={() => toggleArrayItem('grades', grade)}
                             />
                         ))}
@@ -914,10 +926,10 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
                 const TOTAL_BUDGET = 50;
 
 
-                const selectedLessonsList = flowData.lessons.map(getCachedItem).filter(Boolean);
-                const selectedGradesList = flowData.grades.map(getCachedItem).filter(Boolean);
-                const selectedChaptersList = flowData.chapters.map(getCachedItem).filter(Boolean);
-                const selectedMabhasList = flowData.mabhas.map(getCachedItem).filter(Boolean);
+                const selectedLessonsList = flowData.lessons.map(id => getCachedItem(id, subjectsCache)).filter(Boolean);
+                const selectedGradesList = flowData.grades.map(id => getCachedItem(id, gradesCache)).filter(Boolean);
+                const selectedChaptersList = flowData.chapters.map(id => getCachedItem(id, chaptersCache)).filter(Boolean);
+                const selectedMabhasList = flowData.mabhas.map(id => getCachedItem(id, mabhasCache)).filter(Boolean);
                 const selectedItems = flowData.quizType === 'chapter' ? selectedChaptersList : selectedMabhasList;
 
                 const perItemBudget = selectedItems.length > 0 ? Math.floor(TOTAL_BUDGET / selectedItems.length) : TOTAL_BUDGET;
