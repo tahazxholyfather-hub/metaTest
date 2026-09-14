@@ -7,10 +7,7 @@ export class TouchControls {
   private root: HTMLDivElement
   private visible: boolean
 
-  constructor(
-    private readonly scene: Phaser.Scene,
-    private readonly input: InputManager,
-  ) {
+  constructor(private readonly input: InputManager) {
     this.visible = this.isTouch()
     this.root = document.createElement('div')
     this.root.id = 'luma-touch'
@@ -58,14 +55,16 @@ export class TouchControls {
     document.body.appendChild(this.root)
     this.bind()
     this.layout()
+    window.addEventListener('resize', this.layout)
   }
 
-  layout(): void {
-    const touch = this.isTouch() || this.scene.scale.width < 820
+  layout = (): void => {
+    const touch = this.isTouch() || window.innerWidth < 820
     this.root.style.display = touch ? 'block' : 'none'
   }
 
   destroy(): void {
+    window.removeEventListener('resize', this.layout)
     this.root.remove()
   }
 

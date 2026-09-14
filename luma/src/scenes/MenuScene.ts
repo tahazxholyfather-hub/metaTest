@@ -16,7 +16,8 @@ export class MenuScene extends Phaser.Scene {
     const gm = gameManager()
     const { width: w, height: h } = this.scale
     this.cameras.main.setBackgroundColor('#0b0d12')
-    this.add.image(w / 2, h / 2, 'cover').setDisplaySize(w, h).setAlpha(0.55)
+    this.add.image(w / 2, h / 2, 'cover').setDisplaySize(w, h).setAlpha(0.22)
+    this.add.circle(w / 2, h * 0.38, 130, 0x07080c, 0.55)
     this.add.rectangle(w / 2, h / 2, w, h, 0x07080c, 0.45)
 
     this.luma = new LumaCanvas({ size: 220 })

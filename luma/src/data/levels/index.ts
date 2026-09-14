@@ -22,7 +22,8 @@ export function allLevels(): LevelDef[] {
 }
 
 export function getLevel(id: string): LevelDef {
-  const l = BY_ID.get(id)
+  const aliased = id.replace(/-11$/, '-boss')
+  const l = BY_ID.get(id) ?? BY_ID.get(aliased)
   if (!l) throw new Error(`Unknown level ${id}`)
   return l
 }

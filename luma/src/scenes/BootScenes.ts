@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import { GAME_TITLE, STUDIO_NAME } from '../core/types'
-import { allLevels } from '../data/levels'
+import { allLevels, getLevel } from '../data/levels'
 import { gameManager } from '../systems/GameManager'
 
 export class BootScene extends Phaser.Scene {
@@ -134,8 +134,14 @@ export class LoadScene extends Phaser.Scene {
     }
     this.cameras.main.fadeOut(400, 7, 8, 12)
     this.time.delayedCall(420, () => {
-      if (level) this.scene.start('play', { levelId: level })
-      else this.scene.start('menu')
+      if (level) {
+        try {
+          getLevel(level)
+          this.scene.start('play', { levelId: level })
+        } catch {
+          this.scene.start('menu')
+        }
+      } else this.scene.start('menu')
     })
   }
 }

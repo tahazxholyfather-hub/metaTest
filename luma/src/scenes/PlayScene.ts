@@ -40,7 +40,12 @@ export class PlayScene extends Phaser.Scene {
   init(data: { levelId?: string }): void {
     const gm = gameManager()
     const id = data.levelId ?? gm.currentLevelId
-    this.def = getLevel(id)
+    try {
+      this.def = getLevel(id)
+    } catch {
+      this.scene.start('menu')
+      return
+    }
     gm.currentLevelId = this.def.id
     gm.currentSeasonId = this.def.seasonId
   }
@@ -101,7 +106,7 @@ export class PlayScene extends Phaser.Scene {
 
     this.hud = new Hud(this, this.def)
     this.overlay = new Overlay(this)
-    this.touch = new TouchControls(this, gm.input)
+    this.touch = new TouchControls(gm.input)
 
     this.scale.on('resize', this.layout, this)
     this.layout()

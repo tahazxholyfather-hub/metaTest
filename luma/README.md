@@ -10,7 +10,7 @@ npm install
 npm run dev
 ```
 
-Open the printed local URL. Keyboard: **A/D** or arrows to move, **Space / W / Z** to jump, **Esc** to pause. On a phone, on-screen pads appear automatically. A gamepad is supported if the browser exposes one.
+Debug query params after load: `?level=season-1-01` (boss ids are `season-1-boss` …) and `?unlock=1` to unlock every world.
 
 ```bash
 npm run build

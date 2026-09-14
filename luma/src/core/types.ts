@@ -3,7 +3,7 @@ export const STUDIO_NAME = 'Soft Orbit'
 export const GAME_WIDTH = 1280
 export const GAME_HEIGHT = 720
 export const TILE = 40
-export const PLAYER_RADIUS = 18
+export const PLAYER_RADIUS = 22
 export const BODY_COLOR = '#F5F1EA'
 export const EYE_COLOR = '#0E0E10'
 
