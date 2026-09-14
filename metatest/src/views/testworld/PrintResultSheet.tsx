@@ -1,5 +1,6 @@
 // PrintResultSheet.jsx
 import React from 'react';
+import MathRenderer from '../../components/ui/MathRenderer';
 
 const MOCK = {
     activeUser: {
@@ -87,11 +88,14 @@ export default function PrintResultSheet({ activeUser, questions, lessonsData, q
                     break-inside: avoid;
                 }
 
-                /* Math Container adjustments to avoid ugly text wraps */
-                .math-tex {
+                /* MathJax / formula layout in print */
+                .math-tex, .math-renderer, mjx-container {
                     direction: ltr;
                     display: inline-block;
-                    white-space: nowrap;
+                    unicode-bidi: isolate;
+                }
+                mjx-container[jax="CHTML"] {
+                    font-size: 103% !important;
                 }
             `}</style>
 
@@ -177,7 +181,9 @@ export default function PrintResultSheet({ activeUser, questions, lessonsData, q
                             </div>
 
                             {/* Question Body */}
-                            <div style={{ fontSize: '10.5pt', fontWeight: 500, marginBottom: 10, color: '#111827', wordWrap: 'break-word' }}>{q.text}</div>
+                            <div style={{ fontSize: '10.5pt', fontWeight: 500, marginBottom: 10, color: '#111827', wordWrap: 'break-word' }}>
+                                <MathRenderer text={String(q.text || '')} inline />
+                            </div>
 
                             {/* Options */}
                             {q.options.length > 0 && (
@@ -193,7 +199,9 @@ export default function PrintResultSheet({ activeUser, questions, lessonsData, q
                                         return (
                                             <div key={opt.id} style={{ background: bg, border: `1.5px solid ${border}`, borderRadius: 6, padding: '6px 10px', fontSize: '9.5pt', color, display: 'flex', alignItems: 'center', gap: 6 }}>
                                                 <span style={{ fontWeight: 700, opacity: 0.8 }}>{idx + 1})</span>
-                                                <span style={{ flex: 1 }}>{opt.text}</span>
+                                                <span style={{ flex: 1 }}>
+                                                    <MathRenderer text={String(opt.text || opt.option_text || '')} inline />
+                                                </span>
                                                 {isCorrect && <span style={{ fontWeight: 900, fontSize: '11pt' }}>✓</span>}
                                                 {isSelected && !isCorrect && <span style={{ fontWeight: 900, fontSize: '11pt' }}>✗</span>}
                                             </div>
@@ -205,7 +213,8 @@ export default function PrintResultSheet({ activeUser, questions, lessonsData, q
                             {/* Description */}
                             {q.description && (
                                 <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 6, padding: '8px 12px', fontSize: '9pt', color: '#1e40af', lineHeight: 1.6 }}>
-                                    <strong style={{ fontWeight: 700 }}>پاسخ تشریحی: </strong>{q.description}
+                                    <strong style={{ fontWeight: 700 }}>پاسخ تشریحی: </strong>
+                                    <MathRenderer text={String(q.description || '')} inline />
                                 </div>
                             )}
                         </div>

@@ -12,5 +12,10 @@ UPDATE questions_tam24 SET grade_id = 1 WHERE id = 651 AND topic_id = 14 AND gra
 UPDATE questions_tam24 SET grade_id = 2 WHERE id = 776 AND topic_id = 19 AND grade_id IS NULL;
 UPDATE questions_tam24 SET grade_id = 1 WHERE id = 786 AND topic_id = 13 AND grade_id IS NULL;
 
+-- ریاضی «قدر مطلق و جزء صحیح» (topic 62) is یازدهم; one question was tagged دهم.
+UPDATE questions_tam24
+SET grade_id = 2
+WHERE id = 4224 AND topic_id = 62 AND grade_id = 1;
+
 -- Note: topics 69 and 70 (شیمی فصل دو/سه یازدهم) have zero usable questions
 -- in the current dump, so those cards still will not appear until questions exist.

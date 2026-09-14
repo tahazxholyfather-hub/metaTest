@@ -45,7 +45,7 @@ declare global {
 // Singleton loader: the script is injected exactly once for the whole app
 let mathJaxPromise: Promise<boolean> | null = null;
 
-const loadMathJax = (): Promise<boolean> => {
+export const loadMathJax = (): Promise<boolean> => {
     if (mathJaxPromise) return mathJaxPromise;
 
     mathJaxPromise = new Promise<boolean>((resolve) => {

@@ -301,17 +301,32 @@ const handleGetChaptersBySubjects = async (req, res) => {
         sql += `
             GROUP BY t.id, t.title, t.subject_id
             HAVING COUNT(q.id) >= ?
-               AND COUNT(q.id) * 2 >= (
-                    SELECT COUNT(*)
+        `;
+        params.push(MIN_QUESTIONS);
+
+        // A chapter belongs to the grade that has most of its questions.
+        // Stops 11th topics (e.g. قدر مطلق) from appearing in 10th when a
+        // single mis-tagged row is the only grade-10 hit.
+        if (gradeIds.length > 0) {
+            sql += `
+               AND (
+                    SELECT q2.grade_id
                     FROM questions_tam24 q2
                     WHERE q2.topic_id = t.id
                       AND q2.status = 'فعال'
                       AND q2.edit_status = 'done'
-                      AND q2.subject_id IN (?)
-               )
+                      AND q2.grade_id IS NOT NULL
+                    GROUP BY q2.grade_id
+                    ORDER BY COUNT(*) DESC, q2.grade_id ASC
+                    LIMIT 1
+               ) IN (?)
+            `;
+            params.push(gradeIds);
+        }
+
+        sql += `
             ORDER BY t.subject_id ASC, t.id ASC
         `;
-        params.push(MIN_QUESTIONS, subjectIds);
         const [rows] = await pool.query(sql, params);
         res.json({ success: true, chapters: rows });
     } catch (error) {
