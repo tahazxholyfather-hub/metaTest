@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useReactToPrint } from 'react-to-print';
@@ -660,8 +661,8 @@ export default function ResultDashboard() {
     const showMemberError = memberError && memberError.memberId === activeMemberId;
 
     return (
-        <div className="min-h-full bg-[var(--bg-app)]" dir="rtl" style={{ overflowAnchor: 'none' }}>
-            <div className="min-h-full bg-[var(--bg-app)] text-[var(--text-primary)] transition-colors duration-300">
+        <div className="bg-[var(--bg-app)]" dir="rtl" style={{ overflowAnchor: 'none' }}>
+            <div className="bg-[var(--bg-app)] text-[var(--text-primary)] transition-colors duration-300">
 
                 <div className="mx-auto max-w-[1550px] p-0 sm:p-3 md:p-6 lg:p-8">
 
@@ -1222,26 +1223,30 @@ export default function ResultDashboard() {
                     )}
                 </ResponsiveModal>
 
-                <div
-                    aria-hidden="true"
-                    className="pointer-events-none"
-                    style={{
-                        position: 'absolute',
-                        left: '-12000px',
-                        top: 0,
-                        width: '210mm',
-                        visibility: 'hidden',
-                    }}
-                >
-                    <div ref={printRef}>
-                        <PrintResultSheet
-                            activeUser={activeUser}
-                            questions={questions}
-                            lessonsData={lessonsData}
-                            quizTitle="کارنامه آزمون"
-                        />
-                    </div>
-                </div>
+                {typeof document !== 'undefined' && createPortal(
+                    <div
+                        aria-hidden="true"
+                        className="pointer-events-none"
+                        style={{
+                            position: 'fixed',
+                            left: 0,
+                            top: 0,
+                            width: 0,
+                            height: 0,
+                            overflow: 'hidden',
+                        }}
+                    >
+                        <div ref={printRef} style={{ width: '210mm' }}>
+                            <PrintResultSheet
+                                activeUser={activeUser}
+                                questions={questions}
+                                lessonsData={lessonsData}
+                                quizTitle="کارنامه آزمون"
+                            />
+                        </div>
+                    </div>,
+                    document.body
+                )}
 
                 <style>{`
                   .math-renderer .mjx-chtml {
