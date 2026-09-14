@@ -31,7 +31,6 @@ import { MathRenderer } from '../components/ui/MathRenderer';
 import {GameRewardToast} from '../components/GameRewardToast';
 import { Met } from '../components/met';
 import { QuizMetPanel } from './met/QuizMetPanel';
-import { usePrefersReducedMotion } from './met/ui';
 
 import React from 'react';
 
@@ -159,89 +158,103 @@ const ASK_MET_PROMPTS = [
     'از من بپرس',
 ] as const;
 
-function useTypedPrompt(phrases: readonly string[], enabled: boolean) {
-    const [text, setText] = useState('');
-    const reduce = usePrefersReducedMotion();
-
+function useIsDarkTheme() {
+    const [isDark, setIsDark] = useState(() =>
+        typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
+    );
     useEffect(() => {
-        if (!enabled) return;
-        if (reduce) {
-            let i = 0;
-            setText(phrases[0] || '');
-            const id = window.setInterval(() => {
-                i = (i + 1) % phrases.length;
-                setText(phrases[i] || '');
-            }, 2800);
-            return () => window.clearInterval(id);
-        }
-
-        let phrase = 0;
-        let i = 0;
-        let deleting = false;
-        let timer = 0;
-        const step = () => {
-            const full = phrases[phrase] || '';
-            if (!deleting) {
-                i += 1;
-                setText(full.slice(0, i));
-                if (i >= full.length) {
-                    deleting = true;
-                    timer = window.setTimeout(step, 1700);
-                    return;
-                }
-                timer = window.setTimeout(step, 48);
-                return;
-            }
-            i -= 1;
-            setText(full.slice(0, Math.max(0, i)));
-            if (i <= 0) {
-                deleting = false;
-                phrase = (phrase + 1) % phrases.length;
-                timer = window.setTimeout(step, 320);
-                return;
-            }
-            timer = window.setTimeout(step, 24);
-        };
-        timer = window.setTimeout(step, 280);
-        return () => window.clearTimeout(timer);
-    }, [enabled, phrases, reduce]);
-
-    return text;
+        const observer = new MutationObserver(() => {
+            setIsDark(document.documentElement.classList.contains('dark'));
+        });
+        observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+        return () => observer.disconnect();
+    }, []);
+    return isDark;
 }
 
 function AskMetCta({ onClick }: { onClick: () => void }) {
-    const typed = useTypedPrompt(ASK_MET_PROMPTS, true);
+    const isDark = useIsDarkTheme();
+    const [line, setLine] = useState(0);
+    const metColor = isDark ? '#F4F1FA' : '#16121F';
+    const eyeColor = isDark ? '#16121F' : '#F4F1FA';
+
+    useEffect(() => {
+        const media = window.matchMedia('(min-width: 768px)');
+        let intervalId: number | undefined;
+
+        const start = () => {
+            if (intervalId != null) return;
+            intervalId = window.setInterval(() => {
+                setLine((n) => (n + 1) % ASK_MET_PROMPTS.length);
+            }, 3600);
+        };
+        const stop = () => {
+            if (intervalId == null) return;
+            window.clearInterval(intervalId);
+            intervalId = undefined;
+        };
+        const sync = () => {
+            if (media.matches) start();
+            else stop();
+        };
+
+        sync();
+        media.addEventListener('change', sync);
+        return () => {
+            stop();
+            media.removeEventListener('change', sync);
+        };
+    }, []);
+
+    const mascot = (sizeClass: string) => (
+        <span className={`${sizeClass} shrink-0 pointer-events-none`} aria-hidden="true">
+            <Met size="100%" state="idle" color={metColor} eyeColor={eyeColor} glow={false} />
+        </span>
+    );
+
     return (
-        <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mt-8 mb-2 md:mt-10 flex justify-center"
-        >
+        <>
             <button
                 type="button"
                 onClick={onClick}
-                className="relative w-full max-w-md flex flex-col items-center justify-center py-5 md:py-7 px-4 rounded-[28px] active:scale-[0.99] transition-transform"
+                className="action-btn md:hidden flex-1 py-3 text-base shadow-none"
                 aria-label="از مِت بپرس"
             >
-                <span
-                    aria-hidden
-                    className="pointer-events-none absolute left-1/2 top-[42%] -translate-x-1/2 -translate-y-1/2 w-40 h-28 md:w-52 md:h-36"
-                    style={{
-                        background: 'radial-gradient(circle, color-mix(in srgb, var(--color-secondary-400) 46%, transparent) 0%, transparent 72%)',
-                        filter: 'blur(10px)',
-                        WebkitMaskImage: 'radial-gradient(circle, black 42%, transparent 78%)',
-                        maskImage: 'radial-gradient(circle, black 42%, transparent 78%)',
-                    }}
-                />
-                <span className="relative w-[4.75rem] h-[4.75rem] md:w-24 md:h-24">
-                    <Met size="100%" state="idle" color="violet" glow />
-                </span>
-                <span className="relative mt-3 min-h-[1.7em] px-3 text-center text-[13px] md:text-[14.5px] font-bold text-[var(--text-secondary)]" dir="rtl">
-                    {typed}
-                    <span className="inline-block w-[1.5px] h-[0.95em] mr-0.5 align-[-2px] bg-[var(--text-muted)] animate-pulse" aria-hidden />
-                </span>
+                {mascot('w-7 h-7')}
+                از مِت بپرس
             </button>
-        </motion.div>
+
+            <motion.button
+                type="button"
+                onClick={onClick}
+                layout
+                initial={{ opacity: 0, scale: 0.84, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                transition={{
+                    layout: { type: 'spring', stiffness: 420, damping: 34, mass: 0.7 },
+                    opacity: { duration: 0.32, ease: [0.22, 1, 0.36, 1] },
+                    scale: { type: 'spring', stiffness: 380, damping: 24, mass: 0.7 },
+                    y: { type: 'spring', stiffness: 380, damping: 24, mass: 0.7 },
+                }}
+                className="hidden md:inline-flex items-center gap-2 h-10 max-w-[min(100%,22rem)] pl-1 pr-3.5 rounded-full border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-primary)] overflow-hidden hover:bg-[var(--bg-element)] active:scale-[0.98]"
+                aria-label="از مِت بپرس"
+            >
+                {mascot('w-7 h-7')}
+                <AnimatePresence mode="popLayout" initial={false}>
+                    <motion.span
+                        key={ASK_MET_PROMPTS[line]}
+                        layout
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -8 }}
+                        transition={{ duration: 0.36, ease: [0.22, 1, 0.36, 1] }}
+                        className="block text-[13px] font-bold whitespace-nowrap"
+                    >
+                        {ASK_MET_PROMPTS[line]}
+                    </motion.span>
+                </AnimatePresence>
+            </motion.button>
+        </>
     );
 }
 
@@ -1350,10 +1363,6 @@ export function QuizView({
                                             </motion.div>
                                         )}
                                     </AnimatePresence>
-
-                                    {isAnswered && (
-                                        <AskMetCta onClick={() => setMetOpen(true)} />
-                                    )}
                                 </motion.div>
                             ) : (
                                 <div className="flex items-center justify-center h-full text-[var(--text-muted)] mt-20">خطا در دریافت سوال</div>
@@ -1368,14 +1377,14 @@ export function QuizView({
                                 <div className="relative flex items-center justify-between min-h-[50px] w-full" dir="rtl">
 
                                     {/* RIGHT SIDE (Desktop Only): Dynamic Minimal Stats */}
-                                    <div className="hidden md:flex items-center justify-start flex-shrink-0 w-auto min-w-[200px]">
+                                    <div className="hidden md:flex items-center justify-start flex-shrink-0 w-auto min-w-[200px] z-10">
                                         {currentStats.length > 0 && (
                                             <QuestionStatsDisplay stats={currentStats} minimal={true} />
                                         )}
                                     </div>
 
-                                    {/* LEFT SIDE (Desktop) / CENTER (Mobile): Action Buttons & Result */}
-                                    <div className="flex flex-1 items-center justify-center md:justify-end transition-all duration-500 ease-out w-full">
+                                    {/* CENTER: Action Buttons & Result */}
+                                    <div className="flex flex-1 items-center justify-center w-full md:absolute md:inset-0 md:pointer-events-none">
                                         <AnimatePresence mode="wait">
                                             {showButtons && (
                                                 <motion.div
@@ -1385,19 +1394,21 @@ export function QuizView({
                                                     animate={{ opacity: 1, scale: 1, y: 0 }}
                                                     exit={{ opacity: 0, scale: 0.95, y: 10 }}
                                                     transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-                                                    className="flex w-full md:w-auto items-center justify-between md:justify-center gap-2 md:gap-3"
+                                                    className="flex w-full md:w-auto items-center justify-between md:justify-center gap-2 md:gap-3 md:pointer-events-auto"
                                                 >
                                                     <button
                                                         onClick={handlePrev}
                                                         disabled={historyIndex <= 0 || isLoading}
-                                                        className="flex items-center justify-center gap-2 p-3 md:px-4 md:py-2 rounded-xl bg-[var(--bg-element)] hover:bg-[var(--border)] text-[var(--text-primary)] transition-colors min-w-[48px] disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        className="flex items-center justify-center gap-2 p-3 md:px-4 md:py-2 rounded-xl bg-[var(--bg-element)] hover:bg-[var(--border)] text-[var(--text-primary)] transition-colors min-w-[48px] disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
                                                         aria-label="سوال قبلی"
                                                     >
                                                         <ArrowRight size={20} className="md:w-[18px] md:h-[18px]" />
                                                         <span className="hidden md:inline text-sm font-medium">قبلی</span>
                                                     </button>
 
-                                                    {isAnswered ? null : (
+                                                    {isAnswered ? (
+                                                        <AskMetCta onClick={() => setMetOpen(true)} />
+                                                    ) : (
                                                         <button
                                                             onClick={handleCheckAnswer}
                                                             disabled={!selectedOptionId || isChecking}
@@ -1410,7 +1421,7 @@ export function QuizView({
                                                     <button
                                                         onClick={handleNext}
                                                         disabled={isLoading}
-                                                        className="flex items-center justify-center gap-2 p-3 md:px-4 md:py-2 rounded-xl bg-[var(--bg-element)] hover:bg-[var(--border)] text-[var(--text-primary)] transition-colors min-w-[48px]"
+                                                        className="flex items-center justify-center gap-2 p-3 md:px-4 md:py-2 rounded-xl bg-[var(--bg-element)] hover:bg-[var(--border)] text-[var(--text-primary)] transition-colors min-w-[48px] shrink-0"
                                                         aria-label="سوال بعدی"
                                                     >
                                                         <span className="hidden md:inline text-sm font-medium">بعدی</span>
@@ -1427,7 +1438,7 @@ export function QuizView({
                                                     animate={{ opacity: 1, scale: 1, y: 0 }}
                                                     exit={{ opacity: 0, scale: 0.8, y: -15 }}
                                                     transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-                                                    className="result-pill shadow-lg w-full md:w-auto flex items-center justify-center py-3"
+                                                    className="result-pill shadow-lg w-full md:w-auto flex items-center justify-center py-3 md:pointer-events-auto"
                                                 >
                                                     {resultState === 'correct' ? (
                                                         <>
