@@ -175,76 +175,82 @@ function useIsDarkTheme() {
 function AskMetCta({ onClick }: { onClick: () => void }) {
     const isDark = useIsDarkTheme();
     const [line, setLine] = useState(0);
+    const [isDesktop, setIsDesktop] = useState(false);
+    const [expanded, setExpanded] = useState(false);
     const metColor = isDark ? '#F4F1FA' : '#16121F';
     const eyeColor = isDark ? '#16121F' : '#F4F1FA';
 
     useEffect(() => {
         const media = window.matchMedia('(min-width: 768px)');
         let intervalId: number | undefined;
+        let expandId: number | undefined;
 
-        const start = () => {
-            if (intervalId != null) return;
-            intervalId = window.setInterval(() => {
-                setLine((n) => (n + 1) % ASK_MET_PROMPTS.length);
-            }, 3600);
-        };
-        const stop = () => {
-            if (intervalId == null) return;
-            window.clearInterval(intervalId);
-            intervalId = undefined;
-        };
         const sync = () => {
-            if (media.matches) start();
-            else stop();
+            const desktop = media.matches;
+            setIsDesktop(desktop);
+            if (!desktop) {
+                setExpanded(true);
+                if (intervalId != null) {
+                    window.clearInterval(intervalId);
+                    intervalId = undefined;
+                }
+                return;
+            }
+            if (intervalId == null) {
+                intervalId = window.setInterval(() => {
+                    setLine((n) => (n + 1) % ASK_MET_PROMPTS.length);
+                }, 3600);
+            }
+            if (expandId == null) {
+                expandId = window.setTimeout(() => setExpanded(true), 70);
+            }
         };
 
         sync();
         media.addEventListener('change', sync);
         return () => {
-            stop();
+            if (intervalId != null) window.clearInterval(intervalId);
+            if (expandId != null) window.clearTimeout(expandId);
             media.removeEventListener('change', sync);
         };
     }, []);
-
-    const mascot = (sizeClass: string) => (
-        <span className={`${sizeClass} shrink-0 pointer-events-none`} aria-hidden="true">
-            <Met size="100%" state="idle" color={metColor} eyeColor={eyeColor} glow={false} />
-        </span>
-    );
 
     return (
         <motion.button
             type="button"
             onClick={onClick}
             layout
-            initial={{ opacity: 0, scale: 0.92, y: 8 }}
+            initial={{ opacity: 0, scale: 0.86, y: 8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             transition={{
-                layout: { type: 'spring', stiffness: 420, damping: 34, mass: 0.7 },
-                opacity: { duration: 0.32, ease: [0.22, 1, 0.36, 1] },
-                scale: { type: 'spring', stiffness: 380, damping: 26, mass: 0.7 },
-                y: { type: 'spring', stiffness: 380, damping: 26, mass: 0.7 },
+                layout: { type: 'spring', stiffness: 380, damping: 32, mass: 0.65 },
+                opacity: { duration: 0.28, ease: [0.22, 1, 0.36, 1] },
+                scale: { type: 'spring', stiffness: 420, damping: 26, mass: 0.65 },
+                y: { type: 'spring', stiffness: 420, damping: 26, mass: 0.65 },
             }}
-            className="inline-flex items-center justify-center gap-2 flex-1 py-3 px-3 rounded-[14px] border border-[var(--border)] bg-[var(--bg-element)] text-[var(--text-primary)] font-bold text-base md:flex-none md:h-10 md:max-w-[min(100%,22rem)] md:py-0 md:pl-1 md:pr-3.5 md:rounded-full md:bg-[var(--bg-card)] md:text-[13px] overflow-hidden hover:bg-[var(--bg-elevated)] active:scale-[0.98]"
+            className={`inline-flex items-center justify-center gap-2 flex-1 py-3 px-3 rounded-[14px] border border-[var(--border)] bg-[var(--bg-element)] text-[var(--text-primary)] font-bold text-base overflow-hidden md:flex-none md:h-10 md:py-0 md:pl-1 md:rounded-full md:bg-[var(--bg-card)] md:text-[13px] hover:bg-[var(--bg-elevated)] active:scale-[0.98] ${expanded ? 'md:pr-3.5' : 'md:pr-1'}`}
             aria-label="از مِت بپرس"
         >
-            {mascot('w-7 h-7')}
-            <span className="md:hidden">از مِت بپرس</span>
-            <span className="hidden md:inline-flex items-center overflow-hidden">
-                <AnimatePresence mode="popLayout" initial={false}>
+            <span className="w-7 h-7 shrink-0 pointer-events-none" aria-hidden="true">
+                <Met size="100%" state="idle" color={metColor} eyeColor={eyeColor} glow={false} />
+            </span>
+            <span className="md:hidden" aria-hidden="true">از مِت بپرس</span>
+            <AnimatePresence initial={false} mode="popLayout">
+                {isDesktop && expanded ? (
                     <motion.span
                         key={ASK_MET_PROMPTS[line]}
                         layout
-                        initial={{ opacity: 0, y: 8 }}
+                        initial={{ opacity: 0, y: 6 }}
                         animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -8 }}
-                        transition={{ duration: 0.36, ease: [0.22, 1, 0.36, 1] }}
-                        className="block font-bold whitespace-nowrap"
+                        exit={{ opacity: 0, y: -6 }}
+                        transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
+                        className="font-bold whitespace-nowrap"
+                        aria-hidden="true"
                     >
                         {ASK_MET_PROMPTS[line]}
                     </motion.span>
-                </AnimatePresence>
-            </span>
+                ) : null}
+            </AnimatePresence>
         </motion.button>
     );
 }
