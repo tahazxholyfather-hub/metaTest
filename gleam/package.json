@@ -1,0 +1,20 @@
+{
+  "name": "gleam",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Gleam — a polished 2D bounce-platform adventure through four seasons.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "assets": "python3 scripts/generate-assets.py"
+  },
+  "dependencies": {
+    "phaser": "^3.87.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.2",
+    "vite": "^6.2.2"
+  }
+}
