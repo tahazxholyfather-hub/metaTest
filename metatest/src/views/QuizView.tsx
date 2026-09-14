@@ -1374,14 +1374,22 @@ export function QuizView({
                                 <div className="relative flex items-center justify-between min-h-[50px] w-full" dir="rtl">
 
                                     {/* RIGHT SIDE (Desktop Only): Dynamic Minimal Stats */}
-                                    <div className="hidden md:flex items-center justify-start flex-shrink-0 w-auto min-w-[200px] z-10">
+                                    <div className="hidden md:flex items-center justify-start flex-shrink-0 w-auto min-w-[200px]">
                                         {currentStats.length > 0 && (
                                             <QuestionStatsDisplay stats={currentStats} minimal={true} />
                                         )}
                                     </div>
 
-                                    {/* CENTER: Action Buttons & Result */}
-                                    <div className="flex flex-1 items-center justify-center w-full md:absolute md:inset-0 md:pointer-events-none">
+                                    {isAnswered && showButtons && (
+                                        <div className="pointer-events-none absolute inset-0 hidden md:flex items-center justify-center">
+                                            <div className="pointer-events-auto">
+                                                <AskMetCta onClick={() => setMetOpen(true)} />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* LEFT SIDE (Desktop) / CENTER (Mobile): Action Buttons & Result */}
+                                    <div className="flex flex-1 items-center justify-center md:justify-end transition-all duration-500 ease-out w-full">
                                         <AnimatePresence mode="wait">
                                             {showButtons && (
                                                 <motion.div
@@ -1391,12 +1399,12 @@ export function QuizView({
                                                     animate={{ opacity: 1, scale: 1, y: 0 }}
                                                     exit={{ opacity: 0, scale: 0.95, y: 10 }}
                                                     transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-                                                    className="flex w-full md:w-auto items-center justify-between md:justify-center gap-2 md:gap-3 md:pointer-events-auto"
+                                                    className="flex w-full md:w-auto items-center justify-between md:justify-center gap-2 md:gap-3"
                                                 >
                                                     <button
                                                         onClick={handlePrev}
                                                         disabled={historyIndex <= 0 || isLoading}
-                                                        className="flex items-center justify-center gap-2 p-3 md:px-4 md:py-2 rounded-xl bg-[var(--bg-element)] hover:bg-[var(--border)] text-[var(--text-primary)] transition-colors min-w-[48px] disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                                                        className="flex items-center justify-center gap-2 p-3 md:px-4 md:py-2 rounded-xl bg-[var(--bg-element)] hover:bg-[var(--border)] text-[var(--text-primary)] transition-colors min-w-[48px] disabled:opacity-50 disabled:cursor-not-allowed"
                                                         aria-label="سوال قبلی"
                                                     >
                                                         <ArrowRight size={20} className="md:w-[18px] md:h-[18px]" />
@@ -1404,7 +1412,9 @@ export function QuizView({
                                                     </button>
 
                                                     {isAnswered ? (
-                                                        <AskMetCta onClick={() => setMetOpen(true)} />
+                                                        <div className="flex flex-1 md:hidden">
+                                                            <AskMetCta onClick={() => setMetOpen(true)} />
+                                                        </div>
                                                     ) : (
                                                         <button
                                                             onClick={handleCheckAnswer}
@@ -1418,7 +1428,7 @@ export function QuizView({
                                                     <button
                                                         onClick={handleNext}
                                                         disabled={isLoading}
-                                                        className="flex items-center justify-center gap-2 p-3 md:px-4 md:py-2 rounded-xl bg-[var(--bg-element)] hover:bg-[var(--border)] text-[var(--text-primary)] transition-colors min-w-[48px] shrink-0"
+                                                        className="flex items-center justify-center gap-2 p-3 md:px-4 md:py-2 rounded-xl bg-[var(--bg-element)] hover:bg-[var(--border)] text-[var(--text-primary)] transition-colors min-w-[48px]"
                                                         aria-label="سوال بعدی"
                                                     >
                                                         <span className="hidden md:inline text-sm font-medium">بعدی</span>
@@ -1435,7 +1445,7 @@ export function QuizView({
                                                     animate={{ opacity: 1, scale: 1, y: 0 }}
                                                     exit={{ opacity: 0, scale: 0.8, y: -15 }}
                                                     transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-                                                    className="result-pill shadow-lg w-full md:w-auto flex items-center justify-center py-3 md:pointer-events-auto"
+                                                    className="result-pill shadow-lg w-full md:w-auto flex items-center justify-center py-3"
                                                 >
                                                     {resultState === 'correct' ? (
                                                         <>
