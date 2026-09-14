@@ -1,19 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { X } from 'lucide-react';
+import { Sparkles, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Met, subjectToMetColor } from '../../components/met';
 import { errorCode, errorMessage, metApi } from './api';
 import { Composer, type ComposerHandle } from './Composer';
 import { Message } from './Message';
 import type { MetFeatures, MetSettings, MetWallet, QuizIntent, QuizQuestionContext, SubjectKey } from './types';
-import { CoinChip, EmptyHint, GraySpinner, TypingDots, springPanel, useIsMobile } from './ui';
+import { CoinChip, EmptyHint, GraySpinner, TypingDots, WorkingText, easeDrawer, easeOut, faNum, springDrawer, useIsMobile, workingStatusText } from './ui';
 import { useMetChat } from './useMetChat';
 
 type Props = {
     open: boolean;
     onClose: () => void;
     questionId: number | null;
+    onBuyCoins?: () => void;
 };
 
 const FALLBACK_INTENTS: QuizIntent[] = [
@@ -28,7 +29,7 @@ const FALLBACK_INTENTS: QuizIntent[] = [
     { key: 'exam_tip', label: 'نکته کنکوری / امتحانی' },
 ];
 
-export function QuizMetPanel({ open, onClose, questionId }: Props) {
+export function QuizMetPanel({ open, onClose, questionId, onBuyCoins }: Props) {
     const isMobile = useIsMobile();
     const [features, setFeatures] = useState<MetFeatures | null>(null);
     const [settings, setSettings] = useState<MetSettings | null>(null);
@@ -86,6 +87,7 @@ export function QuizMetPanel({ open, onClose, questionId }: Props) {
         chat.startNew();
         setContext(null);
         setBootError(null);
+        setShowCoins(false);
         // Fresh thread when the practice question changes — never show Qn's
         // messages on Qn+1 while the session request is in flight.
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -103,7 +105,14 @@ export function QuizMetPanel({ open, onClose, questionId }: Props) {
 
     const quizFeatures = useMemo<MetFeatures | null>(() => {
         if (!features) return null;
-        return { ...features, pdfReferences: false, suggestions: false };
+        return {
+            ...features,
+            vision: false,
+            stt: false,
+            pdfReferences: false,
+            suggestions: false,
+            imageGeneration: false,
+        };
     }, [features]);
 
     const applyIntent = (intent: QuizIntent) => {
@@ -119,27 +128,35 @@ export function QuizMetPanel({ open, onClose, questionId }: Props) {
         return session.conversation.id;
     };
 
+    const buyCoins = () => {
+        if (onBuyCoins) onBuyCoins();
+        else window.location.assign('/re');
+    };
+
     const showTyping = chat.busy && !chat.messages.some((m) => m.streaming && !!m.content);
     const empty = !chat.messages.length && !loading && !bootError;
+    const contextLabel = context?.topic || context?.lesson || context?.subject || 'همین سوال';
 
     return (
         <AnimatePresence>
             {open && (
                 <motion.div
-                    className="fixed inset-0 z-[80] flex"
+                    className="ai-teacher-root fixed inset-0 z-[80] flex"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
+                    transition={{ duration: 0.28, ease: easeOut }}
                     dir="rtl"
                 >
                     <motion.button
                         type="button"
                         aria-label="بستن مِت"
-                        className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+                        className="absolute inset-0 bg-black/40 backdrop-blur-[3px]"
                         onClick={onClose}
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
+                        transition={{ duration: 0.28, ease: easeOut }}
                     />
 
                     <motion.aside
@@ -148,25 +165,37 @@ export function QuizMetPanel({ open, onClose, questionId }: Props) {
                         initial={isMobile ? { y: '100%' } : { x: '-100%' }}
                         animate={isMobile ? { y: 0 } : { x: 0 }}
                         exit={isMobile ? { y: '100%' } : { x: '-100%' }}
-                        transition={springPanel}
+                        transition={isMobile ? springDrawer : easeDrawer}
                         className={
                             isMobile
-                                ? 'absolute inset-x-0 bottom-0 h-[min(92dvh,760px)] rounded-t-[28px] bg-[var(--bg-app)] border-t border-[var(--border)]/60 shadow-[0_-18px_50px_-24px_rgba(15,23,42,0.45)] flex flex-col'
-                                : 'absolute top-0 bottom-0 left-0 w-[min(440px,42vw)] bg-[var(--bg-app)] border-l border-[var(--border)]/60 shadow-[-18px_0_50px_-24px_rgba(15,23,42,0.35)] flex flex-col'
+                                ? 'absolute inset-x-0 bottom-0 h-[min(92dvh,760px)] rounded-t-[28px] bg-[var(--bg-app)] border-t border-[var(--border)]/60 shadow-[0_-18px_50px_-24px_rgba(15,23,42,0.45)] flex flex-col overflow-hidden'
+                                : 'absolute top-0 bottom-0 left-0 w-[min(400px,38vw)] bg-[var(--bg-app)] border-l border-[var(--border)]/60 shadow-[-18px_0_50px_-24px_rgba(15,23,42,0.35)] flex flex-col'
                         }
                     >
-                        <div className="shrink-0 flex items-center gap-2.5 px-4 pt-3.5 pb-2.5 border-b border-[var(--border)]/50">
+                        <div className="relative shrink-0 flex items-center gap-2.5 px-4 pt-3.5 pb-2.5 border-b border-[var(--border)]/50">
                             {isMobile && <span className="absolute top-2 left-1/2 -translate-x-1/2 w-10 h-1 rounded-full bg-[var(--border)]" />}
                             <div className="w-10 h-10 shrink-0">
                                 <Met size="100%" state={chat.busy ? 'thinking' : 'idle'} color={metColor} />
                             </div>
                             <div className="min-w-0 flex-1">
                                 <div className="text-[14px] font-extrabold text-[var(--text-primary)] leading-tight">از مِت بپرس</div>
-                                <div className="text-[11px] text-[var(--text-muted)] truncate">
-                                    {context?.topic || context?.lesson || context?.subject || 'همین سوال'}
+                                <div className="text-[11px] text-[var(--text-muted)] truncate min-h-[1.1em]">
+                                    {chat.busy ? (
+                                        <WorkingText text={workingStatusText(chat.status, chat.toolLabel)} className="max-w-full" />
+                                    ) : (
+                                        contextLabel
+                                    )}
                                 </div>
                             </div>
                             {wallet && <CoinChip total={wallet.total} onClick={() => setShowCoins((v) => !v)} compact />}
+                            <button
+                                type="button"
+                                onClick={buyCoins}
+                                className="h-8 px-2.5 rounded-full bg-[var(--color-primary-500)] text-white text-[11px] font-extrabold inline-flex items-center gap-1 shrink-0 active:scale-[0.98]"
+                                aria-label="خرید سکه"
+                            >
+                                <Sparkles size={12} /> خرید
+                            </button>
                             <button
                                 type="button"
                                 onClick={onClose}
@@ -179,13 +208,24 @@ export function QuizMetPanel({ open, onClose, questionId }: Props) {
 
                         {showCoins && wallet && (
                             <div className="shrink-0 mx-4 mt-3 rounded-[14px] border border-[var(--border)]/60 px-3 py-2.5 bg-[color-mix(in_srgb,var(--color-primary-500)_8%,var(--bg-card))]">
-                                <div className="text-[11px] font-bold text-[var(--text-secondary)]">موجودی سکه</div>
-                                <div className="text-[20px] font-black tabular-nums text-[var(--text-primary)]">{wallet.total}</div>
-                                <div className="text-[10px] text-[var(--text-muted)]">روزانه {wallet.daily} · خریداری‌شده {wallet.purchased}</div>
+                                <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                        <div className="text-[11px] font-bold text-[var(--text-secondary)]">موجودی سکه</div>
+                                        <div className="text-[20px] font-black tabular-nums text-[var(--text-primary)]">{faNum(wallet.total)}</div>
+                                        <div className="text-[10px] text-[var(--text-muted)]">روزانه {faNum(wallet.daily)} · خریداری‌شده {faNum(wallet.purchased)}</div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={buyCoins}
+                                        className="h-8 px-2.5 rounded-[10px] bg-[var(--color-primary-500)] text-white text-[11px] font-extrabold inline-flex items-center gap-1 shrink-0 active:scale-[0.98]"
+                                    >
+                                        <Sparkles size={12} /> خرید سکه
+                                    </button>
+                                </div>
                             </div>
                         )}
 
-                        <div className="flex-1 min-h-0 overflow-y-auto chat-scrollbar px-4 py-3">
+                        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain chat-scrollbar px-4 py-3">
                             {loading && (
                                 <div className="grid place-items-center py-16"><GraySpinner /></div>
                             )}
@@ -219,22 +259,24 @@ export function QuizMetPanel({ open, onClose, questionId }: Props) {
                                     onRetry={() => void chat.regenerate(chat.lastAssistantId || 0)}
                                 />
                             ))}
-                            {showTyping && (
-                                <motion.div
-                                    initial={{ opacity: 0, y: 6 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    className="flex w-full justify-end gap-2.5 mt-5"
-                                >
-                                    <div className="inline-flex items-center gap-2.5 px-3.5 py-2.5 rounded-[16px] rounded-tr-[6px] bg-[color-mix(in_srgb,var(--text-primary)_4.5%,var(--bg-card))] border border-[var(--border)]/50">
-                                        <TypingDots />
-                                        <span className="text-[11px] text-[var(--text-muted)]">{chat.toolLabel || 'مِت می‌نویسد…'}</span>
-                                    </div>
-                                </motion.div>
-                            )}
+                            <AnimatePresence>
+                                {showTyping && (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 6 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: 4 }}
+                                        className="flex w-full justify-end gap-2.5 mt-5"
+                                    >
+                                        <div className="inline-flex items-center justify-center min-w-[2.75rem] h-9 px-3 rounded-[16px] rounded-tr-[6px] bg-[color-mix(in_srgb,var(--text-primary)_4.5%,var(--bg-card))] border border-[var(--border)]/50">
+                                            <TypingDots />
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                         </div>
 
                         <div className="shrink-0 border-t border-[var(--border)]/40 px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-                            <div className="flex gap-1.5 overflow-x-auto chat-scrollbar pb-2 -mx-0.5">
+                            <div className="flex gap-1.5 overflow-x-auto overscroll-x-contain chat-scrollbar-x pb-2 -mx-0.5">
                                 {intents.map((intent) => (
                                     <button
                                         key={intent.key}
@@ -259,6 +301,7 @@ export function QuizMetPanel({ open, onClose, questionId }: Props) {
                                     busy={chat.busy}
                                     disabled={!features?.available}
                                     disabledReason={features?.unavailableReason || undefined}
+                                    textOnly
                                     onSend={(input) => void chat.send(input)}
                                     onStop={chat.stop}
                                     onListening={() => {}}

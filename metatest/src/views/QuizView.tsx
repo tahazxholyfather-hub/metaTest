@@ -3,7 +3,7 @@ import { flowApi } from '../lib/authApi';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Heart, Archive, AlertTriangle, Timer, Power, LogOut, Bookmark, ArrowRight, ArrowLeft,
-    MoreVertical, FileText, ChevronRight, ChevronLeft, CheckCircle2, XCircle, X, Check, Sparkles, Volume2, VolumeX
+    MoreVertical, FileText, ChevronRight, ChevronLeft, CheckCircle2, XCircle, X, Check, Volume2, VolumeX
 } from 'lucide-react';
 
 import { useAudio } from '../hooks/useAudio';
@@ -31,6 +31,7 @@ import { MathRenderer } from '../components/ui/MathRenderer';
 import {GameRewardToast} from '../components/GameRewardToast';
 import { Met } from '../components/met';
 import { QuizMetPanel } from './met/QuizMetPanel';
+import PlanSelectionModal from '../components/PlanSelectionModal';
 
 import React from 'react';
 
@@ -150,6 +151,54 @@ const QuizSkeleton = () => (
     </div>
 );
 
+function AskMetCta({ onClick, placement }: { onClick: () => void; placement: 'inline' | 'footer' }) {
+    const mascot = (
+        <span className={`shrink-0 ${placement === 'inline' ? 'w-8 h-8 md:w-6 md:h-6' : 'w-6 h-6 md:w-5 md:h-5'}`}>
+            <Met size="100%" state="idle" color="violet" />
+        </span>
+    );
+    if (placement === 'inline') {
+        return (
+            <div className="mt-6 md:mt-5 flex justify-center md:justify-start">
+                <motion.button
+                    type="button"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    onClick={onClick}
+                    className="w-full md:w-auto inline-flex items-center justify-center gap-2.5 md:gap-2 rounded-[18px] md:rounded-full py-3.5 md:py-1.5 px-4 md:pl-3.5 md:pr-3
+                        bg-gradient-to-l from-[var(--color-secondary-500)] to-[var(--color-primary-500)]
+                        md:bg-none md:bg-[color-mix(in_srgb,var(--color-secondary-500)_12%,var(--bg-card))]
+                        text-white md:text-[var(--color-secondary-600)]
+                        font-extrabold text-[15px] md:text-[12.5px]
+                        shadow-[0_14px_32px_-14px_rgba(124,58,237,0.85)] md:shadow-none
+                        border border-white/10 md:border-[var(--color-secondary-500)]/30
+                        hover:brightness-[1.03] active:scale-[0.98] transition"
+                >
+                    {mascot}
+                    از مِت بپرس
+                </motion.button>
+            </div>
+        );
+    }
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className="flex-1 md:flex-none inline-flex items-center justify-center gap-2 py-3 md:py-1.5 px-4 md:px-3 rounded-xl md:rounded-full
+                bg-gradient-to-l from-[var(--color-secondary-500)] to-[var(--color-primary-500)]
+                md:bg-[color-mix(in_srgb,var(--color-secondary-500)_12%,var(--bg-card))]
+                text-white md:text-[var(--color-secondary-600)]
+                font-extrabold text-base md:text-[12.5px]
+                shadow-md md:shadow-none
+                border border-transparent md:border-[var(--color-secondary-500)]/30
+                active:scale-[0.98] transition"
+        >
+            {mascot}
+            از مِت بپرس
+        </button>
+    );
+}
+
 export function QuizView({
                              config,
                              resumeId,
@@ -199,6 +248,7 @@ export function QuizView({
     const [showButtons, setShowButtons] = useState(true);
     const [resultState, setResultState] = useState<'correct' | 'wrong' | null>(null);
     const [metOpen, setMetOpen] = useState(false);
+    const [buyCoinsOpen, setBuyCoinsOpen] = useState(false);
 
     useEffect(() => {
         if (!isAnswered) setMetOpen(false);
@@ -1237,16 +1287,7 @@ export function QuizView({
                                     )}
 
                                     {isAnswered && (
-                                        <motion.button
-                                            type="button"
-                                            initial={{ opacity: 0, y: 8 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            onClick={() => setMetOpen(true)}
-                                            className="mt-6 w-full flex items-center justify-center gap-2.5 py-3 px-4 rounded-2xl border border-[var(--color-primary-500)]/30 bg-[color-mix(in_srgb,var(--color-primary-500)_10%,var(--bg-card))] text-[var(--color-primary-500)] font-extrabold text-[15px] active:scale-[0.99]"
-                                        >
-                                            <span className="w-8 h-8"><Met size="100%" state="idle" color="violet" /></span>
-                                            از مِت درباره‌ی این سوال بپرس
-                                        </motion.button>
+                                        <AskMetCta placement="inline" onClick={() => setMetOpen(true)} />
                                     )}
 
                                     {/* Explanation */}
@@ -1312,13 +1353,7 @@ export function QuizView({
                                                     </button>
 
                                                     {isAnswered ? (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setMetOpen(true)}
-                                                            className="action-btn flex-1 md:flex-none flex items-center justify-center gap-2 py-3 md:py-2 text-base md:text-sm shadow-md"
-                                                        >
-                                                            از مِت بپرس
-                                                        </button>
+                                                        <AskMetCta placement="footer" onClick={() => setMetOpen(true)} />
                                                     ) : (
                                                         <button
                                                             onClick={handleCheckAnswer}
@@ -1386,7 +1421,10 @@ export function QuizView({
                         open={metOpen}
                         onClose={() => setMetOpen(false)}
                         questionId={isAnswered && question ? question.id : null}
+                        onBuyCoins={() => setBuyCoinsOpen(true)}
                     />
+
+                    <PlanSelectionModal isOpen={buyCoinsOpen} onClose={() => setBuyCoinsOpen(false)} />
 
                 </>
             )}

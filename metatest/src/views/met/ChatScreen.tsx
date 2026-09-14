@@ -11,7 +11,7 @@ import Message from './Message';
 import { SlugIcon, findSubject } from './subjectIcons';
 import { SubjectPicker } from './SubjectPicker';
 import type { RailPanel } from './MetRail';
-import { CoinChip, GraySpinner, IconButton, TypingDots, WorkingText, easeOut, usePrefersReducedMotion } from './ui';
+import { CoinChip, GraySpinner, IconButton, TypingDots, WorkingText, easeOut, usePrefersReducedMotion, workingStatusText } from './ui';
 
 type Chat = ReturnType<typeof useMetChat>;
 
@@ -34,13 +34,6 @@ type Props = {
     composerRef: React.RefObject<ComposerHandle | null>;
     /** Extra bottom padding (mobile global bottom nav). */
     bottomInset?: string;
-};
-
-const WORKING: Record<string, string> = {
-    sending: 'در حال ارسال…',
-    thinking: 'مِت فکر می‌کند…',
-    processing: 'در حال بررسی منابع…',
-    generating: 'در حال نوشتن…',
 };
 
 function greeting(firstName?: string | null) {
@@ -179,11 +172,6 @@ export function ChatScreen({
                     <span className="flex items-center gap-1.5 text-[10.5px] leading-tight mt-0.5" style={{ color: subject.color }}>
                         <SlugIcon icon={subject.icon} size={10} />
                         <span className="font-bold">{subject.nameFa}</span>
-                        <AnimatePresence mode="wait" initial={false}>
-                            {working && (
-                                <WorkingText key={chat.status} text={chat.toolLabel || WORKING[chat.status] || '…'} className="max-w-[9rem]" />
-                            )}
-                        </AnimatePresence>
                     </span>
                 </span>
             </button>
@@ -267,6 +255,22 @@ export function ChatScreen({
         <div className="relative flex-1 flex flex-col min-h-0 h-full" dir="rtl">
             {header}
 
+            <AnimatePresence initial={false}>
+                {working && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.22, ease: easeOut }}
+                        className="shrink-0 overflow-hidden"
+                    >
+                        <div className="flex justify-center py-1.5 border-b border-[var(--border)]/35 bg-[color-mix(in_srgb,var(--color-primary-500)_7%,transparent)]">
+                            <WorkingText text={workingStatusText(chat.status, chat.toolLabel)} />
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             <div className="relative flex-1 min-h-0">
                 <div ref={scrollRef} onScroll={onScroll} className="h-full overflow-y-auto overscroll-contain chat-scrollbar">
                     <div className="mx-auto w-full max-w-[820px] px-3 sm:px-6 flex flex-col min-h-full">
@@ -308,9 +312,8 @@ export function ChatScreen({
                                             transition={{ duration: 0.2, ease: easeOut }}
                                             className="flex w-full justify-end gap-2.5 mt-5"
                                         >
-                                            <div className="inline-flex items-center gap-2.5 px-3.5 py-2.5 rounded-[16px] rounded-tr-[6px] bg-[color-mix(in_srgb,var(--text-primary)_4.5%,var(--bg-card))] border border-[var(--border)]/50">
+                                            <div className="inline-flex items-center justify-center min-w-[2.75rem] h-9 px-3 rounded-[16px] rounded-tr-[6px] bg-[color-mix(in_srgb,var(--text-primary)_4.5%,var(--bg-card))] border border-[var(--border)]/50">
                                                 <TypingDots />
-                                                <span className="text-[11px] text-[var(--text-muted)]">{chat.toolLabel || WORKING[chat.status] || 'مِت می‌نویسد…'}</span>
                                             </div>
                                             <div className="w-7 shrink-0 mt-1">
                                                 <div className="w-7 h-7"><Met size="100%" state="thinking" color={metColor} /></div>

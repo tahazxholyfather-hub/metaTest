@@ -40,10 +40,10 @@ type Options = {
 };
 
 const TOOL_LABELS: Record<string, string> = {
-    search_questions: 'جستجو در بانک سؤال…',
-    get_user_learning_profile: 'بررسی پروفایل یادگیری…',
-    get_recent_quiz_activity: 'مرور آزمون‌های اخیر…',
-    generate_image: 'ساخت تصویر…',
+    search_questions: 'در حال جستجو در بانک سؤال',
+    get_user_learning_profile: 'در حال بررسی پروفایل یادگیری',
+    get_recent_quiz_activity: 'در حال مرور آزمون‌های اخیر',
+    generate_image: 'در حال ساخت تصویر',
 };
 
 let tempSeq = 0;
@@ -217,7 +217,7 @@ export function useMetChat({ subjectKey, onWallet, onConversationChange, onStatu
                         break;
                     }
                     case 'tool':
-                        setToolLabel(ev.data.status === 'running' ? TOOL_LABELS[ev.data.name] || 'در حال بررسی…' : null);
+                        setToolLabel(ev.data.status === 'running' ? TOOL_LABELS[ev.data.name] || 'در حال بررسی' : null);
                         break;
                     case 'attachment':
                         patchStreaming((m) => ({ ...m, attachments: [...m.attachments, ev.data as MetAttachment] }));
