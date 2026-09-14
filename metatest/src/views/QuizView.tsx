@@ -213,33 +213,24 @@ function AskMetCta({ onClick }: { onClick: () => void }) {
     );
 
     return (
-        <>
-            <button
-                type="button"
-                onClick={onClick}
-                className="action-btn md:hidden flex-1 py-3 text-base shadow-none"
-                aria-label="از مِت بپرس"
-            >
-                {mascot('w-7 h-7')}
-                از مِت بپرس
-            </button>
-
-            <motion.button
-                type="button"
-                onClick={onClick}
-                layout
-                initial={{ opacity: 0, scale: 0.84, y: 10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                transition={{
-                    layout: { type: 'spring', stiffness: 420, damping: 34, mass: 0.7 },
-                    opacity: { duration: 0.32, ease: [0.22, 1, 0.36, 1] },
-                    scale: { type: 'spring', stiffness: 380, damping: 24, mass: 0.7 },
-                    y: { type: 'spring', stiffness: 380, damping: 24, mass: 0.7 },
-                }}
-                className="hidden md:inline-flex items-center gap-2 h-10 max-w-[min(100%,22rem)] pl-1 pr-3.5 rounded-full border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-primary)] overflow-hidden hover:bg-[var(--bg-element)] active:scale-[0.98]"
-                aria-label="از مِت بپرس"
-            >
-                {mascot('w-7 h-7')}
+        <motion.button
+            type="button"
+            onClick={onClick}
+            layout
+            initial={{ opacity: 0, scale: 0.92, y: 8 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{
+                layout: { type: 'spring', stiffness: 420, damping: 34, mass: 0.7 },
+                opacity: { duration: 0.32, ease: [0.22, 1, 0.36, 1] },
+                scale: { type: 'spring', stiffness: 380, damping: 26, mass: 0.7 },
+                y: { type: 'spring', stiffness: 380, damping: 26, mass: 0.7 },
+            }}
+            className="inline-flex items-center justify-center gap-2 flex-1 py-3 px-3 rounded-[14px] border border-[var(--border)] bg-[var(--bg-element)] text-[var(--text-primary)] font-bold text-base md:flex-none md:h-10 md:max-w-[min(100%,22rem)] md:py-0 md:pl-1 md:pr-3.5 md:rounded-full md:bg-[var(--bg-card)] md:text-[13px] overflow-hidden hover:bg-[var(--bg-elevated)] active:scale-[0.98]"
+            aria-label="از مِت بپرس"
+        >
+            {mascot('w-7 h-7')}
+            <span className="md:hidden">از مِت بپرس</span>
+            <span className="hidden md:inline-flex items-center overflow-hidden">
                 <AnimatePresence mode="popLayout" initial={false}>
                     <motion.span
                         key={ASK_MET_PROMPTS[line]}
@@ -248,13 +239,13 @@ function AskMetCta({ onClick }: { onClick: () => void }) {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -8 }}
                         transition={{ duration: 0.36, ease: [0.22, 1, 0.36, 1] }}
-                        className="block text-[13px] font-bold whitespace-nowrap"
+                        className="block font-bold whitespace-nowrap"
                     >
                         {ASK_MET_PROMPTS[line]}
                     </motion.span>
                 </AnimatePresence>
-            </motion.button>
-        </>
+            </span>
+        </motion.button>
     );
 }
 
