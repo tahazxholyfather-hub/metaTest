@@ -31,7 +31,7 @@ import { MathRenderer } from '../components/ui/MathRenderer';
 import {GameRewardToast} from '../components/GameRewardToast';
 import { Met } from '../components/met';
 import { QuizMetPanel } from './met/QuizMetPanel';
-import PlanSelectionModal from '../components/PlanSelectionModal';
+import { usePrefersReducedMotion } from './met/ui';
 
 import React from 'react';
 
@@ -151,51 +151,97 @@ const QuizSkeleton = () => (
     </div>
 );
 
-function AskMetCta({ onClick, placement }: { onClick: () => void; placement: 'inline' | 'footer' }) {
-    const mascot = (
-        <span className={`shrink-0 ${placement === 'inline' ? 'w-8 h-8 md:w-6 md:h-6' : 'w-6 h-6 md:w-5 md:h-5'}`}>
-            <Met size="100%" state="idle" color="violet" />
-        </span>
-    );
-    if (placement === 'inline') {
-        return (
-            <div className="mt-6 md:mt-5 flex justify-center md:justify-start">
-                <motion.button
-                    type="button"
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    onClick={onClick}
-                    className="w-full md:w-auto inline-flex items-center justify-center gap-2.5 md:gap-2 rounded-[18px] md:rounded-full py-3.5 md:py-1.5 px-4 md:pl-3.5 md:pr-3
-                        bg-gradient-to-l from-[var(--color-secondary-500)] to-[var(--color-primary-500)]
-                        md:bg-none md:bg-[color-mix(in_srgb,var(--color-secondary-500)_12%,var(--bg-card))]
-                        text-white md:text-[var(--color-secondary-600)]
-                        font-extrabold text-[15px] md:text-[12.5px]
-                        shadow-[0_14px_32px_-14px_rgba(124,58,237,0.85)] md:shadow-none
-                        border border-white/10 md:border-[var(--color-secondary-500)]/30
-                        hover:brightness-[1.03] active:scale-[0.98] transition"
-                >
-                    {mascot}
-                    از مِت بپرس
-                </motion.button>
-            </div>
-        );
-    }
+const ASK_MET_PROMPTS = [
+    'از من بپرس اگه متوجه جواب نشدی',
+    'میخوای بیشتر توضیح بدم؟',
+    'جواب ساده میخوای؟',
+    'مثال بیشتر ...؟',
+    'از من بپرس',
+] as const;
+
+function useTypedPrompt(phrases: readonly string[], enabled: boolean) {
+    const [text, setText] = useState('');
+    const reduce = usePrefersReducedMotion();
+
+    useEffect(() => {
+        if (!enabled) return;
+        if (reduce) {
+            let i = 0;
+            setText(phrases[0] || '');
+            const id = window.setInterval(() => {
+                i = (i + 1) % phrases.length;
+                setText(phrases[i] || '');
+            }, 2800);
+            return () => window.clearInterval(id);
+        }
+
+        let phrase = 0;
+        let i = 0;
+        let deleting = false;
+        let timer = 0;
+        const step = () => {
+            const full = phrases[phrase] || '';
+            if (!deleting) {
+                i += 1;
+                setText(full.slice(0, i));
+                if (i >= full.length) {
+                    deleting = true;
+                    timer = window.setTimeout(step, 1700);
+                    return;
+                }
+                timer = window.setTimeout(step, 48);
+                return;
+            }
+            i -= 1;
+            setText(full.slice(0, Math.max(0, i)));
+            if (i <= 0) {
+                deleting = false;
+                phrase = (phrase + 1) % phrases.length;
+                timer = window.setTimeout(step, 320);
+                return;
+            }
+            timer = window.setTimeout(step, 24);
+        };
+        timer = window.setTimeout(step, 280);
+        return () => window.clearTimeout(timer);
+    }, [enabled, phrases, reduce]);
+
+    return text;
+}
+
+function AskMetCta({ onClick }: { onClick: () => void }) {
+    const typed = useTypedPrompt(ASK_MET_PROMPTS, true);
     return (
-        <button
-            type="button"
-            onClick={onClick}
-            className="flex-1 md:flex-none inline-flex items-center justify-center gap-2 py-3 md:py-1.5 px-4 md:px-3 rounded-xl md:rounded-full
-                bg-gradient-to-l from-[var(--color-secondary-500)] to-[var(--color-primary-500)]
-                md:bg-[color-mix(in_srgb,var(--color-secondary-500)_12%,var(--bg-card))]
-                text-white md:text-[var(--color-secondary-600)]
-                font-extrabold text-base md:text-[12.5px]
-                shadow-md md:shadow-none
-                border border-transparent md:border-[var(--color-secondary-500)]/30
-                active:scale-[0.98] transition"
+        <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-8 mb-2 md:mt-10 flex justify-center"
         >
-            {mascot}
-            از مِت بپرس
-        </button>
+            <button
+                type="button"
+                onClick={onClick}
+                className="relative w-full max-w-md flex flex-col items-center justify-center py-5 md:py-7 px-4 rounded-[28px] active:scale-[0.99] transition-transform"
+                aria-label="از مِت بپرس"
+            >
+                <span
+                    aria-hidden
+                    className="pointer-events-none absolute left-1/2 top-[42%] -translate-x-1/2 -translate-y-1/2 w-40 h-28 md:w-52 md:h-36"
+                    style={{
+                        background: 'radial-gradient(circle, color-mix(in srgb, var(--color-secondary-400) 46%, transparent) 0%, transparent 72%)',
+                        filter: 'blur(10px)',
+                        WebkitMaskImage: 'radial-gradient(circle, black 42%, transparent 78%)',
+                        maskImage: 'radial-gradient(circle, black 42%, transparent 78%)',
+                    }}
+                />
+                <span className="relative w-[4.75rem] h-[4.75rem] md:w-24 md:h-24">
+                    <Met size="100%" state="idle" color="violet" glow />
+                </span>
+                <span className="relative mt-3 min-h-[1.7em] px-3 text-center text-[13px] md:text-[14.5px] font-bold text-[var(--text-secondary)]" dir="rtl">
+                    {typed}
+                    <span className="inline-block w-[1.5px] h-[0.95em] mr-0.5 align-[-2px] bg-[var(--text-muted)] animate-pulse" aria-hidden />
+                </span>
+            </button>
+        </motion.div>
     );
 }
 
@@ -248,7 +294,6 @@ export function QuizView({
     const [showButtons, setShowButtons] = useState(true);
     const [resultState, setResultState] = useState<'correct' | 'wrong' | null>(null);
     const [metOpen, setMetOpen] = useState(false);
-    const [buyCoinsOpen, setBuyCoinsOpen] = useState(false);
 
     useEffect(() => {
         if (!isAnswered) setMetOpen(false);
@@ -1286,10 +1331,6 @@ export function QuizView({
 
                                     )}
 
-                                    {isAnswered && (
-                                        <AskMetCta placement="inline" onClick={() => setMetOpen(true)} />
-                                    )}
-
                                     {/* Explanation */}
                                     <AnimatePresence>
                                         {isAnswered && descriptiveAnswer && (
@@ -1309,6 +1350,10 @@ export function QuizView({
                                             </motion.div>
                                         )}
                                     </AnimatePresence>
+
+                                    {isAnswered && (
+                                        <AskMetCta onClick={() => setMetOpen(true)} />
+                                    )}
                                 </motion.div>
                             ) : (
                                 <div className="flex items-center justify-center h-full text-[var(--text-muted)] mt-20">خطا در دریافت سوال</div>
@@ -1352,9 +1397,7 @@ export function QuizView({
                                                         <span className="hidden md:inline text-sm font-medium">قبلی</span>
                                                     </button>
 
-                                                    {isAnswered ? (
-                                                        <AskMetCta placement="footer" onClick={() => setMetOpen(true)} />
-                                                    ) : (
+                                                    {isAnswered ? null : (
                                                         <button
                                                             onClick={handleCheckAnswer}
                                                             disabled={!selectedOptionId || isChecking}
@@ -1421,10 +1464,7 @@ export function QuizView({
                         open={metOpen}
                         onClose={() => setMetOpen(false)}
                         questionId={isAnswered && question ? question.id : null}
-                        onBuyCoins={() => setBuyCoinsOpen(true)}
                     />
-
-                    <PlanSelectionModal isOpen={buyCoinsOpen} onClose={() => setBuyCoinsOpen(false)} />
 
                 </>
             )}
