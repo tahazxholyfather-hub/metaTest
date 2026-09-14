@@ -5,7 +5,7 @@ import { GameManager } from '../core/GameManager'
 import { InputManager } from '../core/InputManager'
 import { ProgressManager } from '../core/ProgressManager'
 import { createSaveManager } from '../core/SaveManager'
-import { bus } from '../core/events'
+import { bus, gameplay } from '../core/events'
 import type { LevelCompletePayload, LevelDef, SeasonDef } from '../core/types'
 import { LEVEL_COUNT, SEASONS, nextLevel } from '../data/seasons'
 import { CharacterEngine, drawCharacter, subscribeTicker } from '../character'
@@ -291,7 +291,7 @@ export class App {
       const bg = new Image()
       bg.src = season.cover
       const paint = () => {
-        ctx.globalAlpha = 0.35
+        ctx.globalAlpha = 0.18
         ctx.drawImage(bg, 0, 0, w, h)
         ctx.globalAlpha = 1
         const grd = ctx.createLinearGradient(0, 0, 0, h)
@@ -396,15 +396,23 @@ export class App {
     const hud = el('div', 'hud')
     const left = el('div', 'pill', '0')
     left.id = 'hud-left'
-    const pause = btn('II', '', () => bus.emit('pause', { paused: true }))
+    const pause = btn('II', '', () => {
+      gameplay.paused = true
+      bus.emit('pause', { paused: true })
+    })
     hud.append(left, pause)
     const touch = this.buildTouch()
     const overlays = el('div')
     overlays.id = 'overlays'
     root.append(phaser, hud, touch, overlays)
     this.root.append(root)
-    this.touchVisible = window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 900
-    touch.style.display = this.touchVisible ? 'flex' : 'none'
+    this.touchVisible = true
+    const syncTouch = () => {
+      touch.classList.toggle('force-on', window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 900)
+    }
+    syncTouch()
+    window.addEventListener('resize', syncTouch)
+    this.unsubs.push(() => window.removeEventListener('resize', syncTouch))
 
     this.game = createPhaserGame(phaser, {
       level,
@@ -488,7 +496,10 @@ export class App {
     sheet.append(el('h2', '', 'Paused'), el('p', '', level.name))
     const actions = el('div', 'actions')
     actions.append(
-      btn('Resume', 'btn', () => bus.emit('pause', { paused: false })),
+      btn('Resume', 'btn', () => {
+        gameplay.paused = false
+        bus.emit('pause', { paused: false })
+      }),
       btn('Restart', 'btn ghost', () => {
         bus.emit('pause', { paused: false })
         bus.emit('restart', undefined)

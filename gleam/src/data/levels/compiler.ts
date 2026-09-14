@@ -6,6 +6,7 @@ export interface MapExtras {
   subtitle?: string
   intro?: string
   easterEgg?: string
+  sky?: number
   movers?: Record<string, { dx: number; dy: number; period: number; phase?: number; type?: PlatformType }>
   lasers?: Record<string, { w: number; h: number; onMs?: number; offMs?: number; delay?: number }>
   crushers?: Record<string, { dx: number; dy: number; period: number; phase?: number; w?: number; h?: number }>
@@ -75,8 +76,11 @@ export function compileLevel(
   extras: MapExtras = {},
 ): LevelDef {
   const tile = extras.tile ?? TILE
-  const rows = trimMap(mapRaw)
-  const cols = rows[0]?.length ?? 0
+  const sky = extras.sky ?? (archetype === 'vertical' ? 2 : 10)
+  const trimmed = trimMap(mapRaw)
+  const cols = trimmed[0]?.length ?? 0
+  const pad = Array.from({ length: sky }, () => '.'.repeat(cols))
+  const rows = [...pad, ...trimmed]
   const height = rows.length
   const platforms: PlatformDef[] = []
   const hazards: HazardDef[] = []
@@ -143,7 +147,7 @@ export function compileLevel(
         continue
       }
       if (ch === 'G') {
-        goal = { x: x * tile, y: y * tile - tile, w: tile * 1.6, h: tile * 2 }
+        goal = { x: x * tile - tile, y: y * tile - tile * 1.5, w: tile * 3, h: tile * 3 }
         continue
       }
       if (ch === 'o') {
@@ -281,7 +285,9 @@ export function compileLevel(
     zones,
     secrets: extras.secrets ?? (secretCollects ? [{ id: 'hidden', x: 0, y: 0, w: 0, h: 0 }] : []),
     decorations: extras.decorations ?? [],
-    boss: extras.boss,
+    boss: extras.boss
+      ? { ...extras.boss, y: extras.boss.y + sky * tile }
+      : extras.boss,
     intro: extras.intro,
     easterEgg: extras.easterEgg,
   }

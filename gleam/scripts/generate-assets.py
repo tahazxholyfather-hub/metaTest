@@ -86,8 +86,6 @@ def hills(buf, w, h, color, baseline, amp, freq, phase=0):
 def studio_logo():
     w, h = 1024, 1024
     buf = bytearray(w * h * 4)
-    for i in range(0, len(buf), 4):
-        buf[i : i + 4] = b"\x00\x00\x00\xff"
     cx, cy, r = w // 2, h // 2, 210
     disc(buf, w, cx, cy, r + 18, (245, 241, 234, 255))
     disc(buf, w, cx, cy, r, (12, 11, 10, 255))

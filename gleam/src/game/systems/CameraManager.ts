@@ -32,7 +32,7 @@ export class CameraManager {
   update(dt: number, vx: number, vy: number): void {
     this.lookX += (Phaser.Math.Clamp(vx / 80, -90, 90) - this.lookX) * Math.min(1, dt * 3)
     this.lookY += (Phaser.Math.Clamp(vy / 140, -40, 50) - this.lookY) * Math.min(1, dt * 2.5)
-    this.cam.setFollowOffset(-this.lookX, -this.lookY + 12)
+    this.cam.setFollowOffset(-this.lookX, -this.lookY - 48)
 
     if (this.shakeTime > 0) {
       this.shakeTime -= dt
@@ -41,12 +41,11 @@ export class CameraManager {
     }
   }
 
-  introZoom(): void {
-    this.cam.zoom = 1.18
-    this.cam.pan
+  introZoom(target = 1): void {
+    this.cam.zoom = target * 1.12
     this.cam.scene.tweens.add({
       targets: this.cam,
-      zoom: 1,
+      zoom: target,
       duration: 700,
       ease: 'Cubic.easeOut',
     })

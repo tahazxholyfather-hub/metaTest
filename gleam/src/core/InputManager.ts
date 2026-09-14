@@ -17,6 +17,7 @@ export class InputManager {
   jump = false
   private jumpWas = false
   private pauseWas = false
+  private pauseQueued = false
   pausePressed = false
   jumpPressed = false
   private keys = new Set<string>()
@@ -27,6 +28,7 @@ export class InputManager {
   attach(target: Window | HTMLElement = window): void {
     const down = (e: KeyboardEvent) => {
       this.keys.add(e.code)
+      if (e.code === 'Escape' || e.code === 'KeyP') this.pauseQueued = true
       if (['ArrowUp', 'Space', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(e.code)) {
         e.preventDefault()
       }
@@ -74,7 +76,8 @@ export class InputManager {
     this.jumpPressed = jump && !this.jumpWas
     this.jumpWas = jump
     const pauseHeld = kbPause || padPause
-    this.pausePressed = pauseHeld && !this.pauseWas
+    this.pausePressed = this.pauseQueued || (pauseHeld && !this.pauseWas)
+    this.pauseQueued = false
     this.pauseWas = pauseHeld
 
     const axis = left && !right ? -1 : right && !left ? 1 : 0

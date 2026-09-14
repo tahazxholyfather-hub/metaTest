@@ -60,3 +60,7 @@ export interface GameEvents {
 }
 
 export const bus = new Emitter<GameEvents>()
+
+export const gameplay = {
+  paused: false,
+}

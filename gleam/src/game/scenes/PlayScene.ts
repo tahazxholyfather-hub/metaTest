@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import type { AudioManager } from '../../core/AudioManager'
-import { bus } from '../../core/events'
+import { bus, gameplay } from '../../core/events'
 import type { InputManager } from '../../core/InputManager'
 import type { ProgressManager } from '../../core/ProgressManager'
 import type { SaveManager } from '../../core/SaveManager'
@@ -73,6 +73,7 @@ export class PlayScene extends Phaser.Scene {
   private paused = false
   private finished = false
   private hitstop = 0
+  private pauseCool = 0
   private unsubs: Array<() => void> = []
   private goal?: Phaser.Physics.Arcade.Image
   private theme!: ThemePalette
@@ -154,8 +155,9 @@ export class PlayScene extends Phaser.Scene {
 
     this.cam = new CameraManager(this.cameras.main, settings)
     this.cam.bounds(level.width, level.height)
+    const zoom = Phaser.Math.Clamp(this.scale.height / Math.max(level.height, 420), 0.85, 1.65)
     this.cam.follow(this.player.sprite)
-    this.cam.introZoom()
+    this.cam.introZoom(zoom)
 
     this.unsubs.push(
       bus.on('shake', (p) => this.cam.shake(p.mag, p.dur)),
@@ -185,14 +187,20 @@ export class PlayScene extends Phaser.Scene {
       if (!this.textures.exists(key)) {
         const gg = this.make.graphics({ x: 0, y: 0 })
         gg.fillStyle(tint, alpha)
-        for (let i = 0; i < 8; i++) {
-          const bx = i * 90 + 20
-          gg.fillEllipse(bx, 40, 80 + (i % 3) * 20, 50)
+        gg.beginPath()
+        gg.moveTo(0, 80)
+        for (let i = 0; i <= 12; i++) {
+          const x = i * 60
+          const yy = 28 + Math.sin(i * 1.1) * 16 + (i % 2) * 8
+          gg.lineTo(x, yy)
         }
+        gg.lineTo(720, 80)
+        gg.closePath()
+        gg.fillPath()
         gg.generateTexture(key, 720, 80)
         gg.destroy()
       }
-      const spr = this.add.tileSprite(0, y, level.width, h, key).setOrigin(0, 1).setScrollFactor(factor, 1).setDepth(-10)
+      const spr = this.add.tileSprite(0, y, level.width, h, key).setOrigin(0, 1).setScrollFactor(factor, 0.2).setDepth(-10)
       this.bgLayers.push(spr)
     }
     const mid = Phaser.Display.Color.HexStringToColor(t.mid).color
@@ -554,21 +562,26 @@ export class PlayScene extends Phaser.Scene {
 
   private setPaused(paused: boolean): void {
     this.paused = paused
-    this.physics.world.isPaused = paused
+    gameplay.paused = paused
+    if (paused) this.physics.pause()
+    else this.physics.resume()
+    this.pauseCool = 0.3
     this.hud()
   }
 
   update(_t: number, delta: number): void {
-    if (this.paused || this.finished) return
+    const input = this.initData.input.update()
+    this.pauseCool = Math.max(0, this.pauseCool - Math.min(delta / 1000, 0.1))
+    if (input.pausePressed && this.pauseCool <= 0) {
+      bus.emit('pause', { paused: !gameplay.paused })
+      return
+    }
+    if (this.paused !== gameplay.paused) this.setPaused(gameplay.paused)
+    if (this.paused || this.finished || gameplay.paused) return
     let dt = Math.min(delta / 1000, 1 / 20)
     if (this.hitstop > 0) {
       this.hitstop -= dt
       dt *= 0.12
-    }
-    const input = this.initData.input.update()
-    if (input.pausePressed) {
-      bus.emit('pause', { paused: !this.paused })
-      return
     }
     this.elapsed += dt
     this.stats.time = this.elapsed
