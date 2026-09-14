@@ -27,30 +27,69 @@ function parseAttachments(raw) {
     }
 }
 
-async function createConversation(db, { userId, subjectKey }) {
+async function createConversation(db, { userId, subjectKey, sourceType = 'chat', questionId = null, title = NEW_TITLE, snapshot = null }) {
     const subject = getSubject(subjectKey);
     if (!subject) throw new Error('INVALID_SUBJECT');
+    const source = sourceType === 'quiz_question' ? 'quiz_question' : 'chat';
 
     const [result] = await db.query(
-        `INSERT INTO tam24_ai_conversations (user_id, subject_key, title, message_count, last_message_at)
-         VALUES (?, ?, ?, 0, NOW())`,
-        [userId, subjectKey, NEW_TITLE]
+        `INSERT INTO tam24_ai_conversations
+            (user_id, subject_key, title, message_count, last_message_at, source_type, question_id, question_snapshot)
+         VALUES (?, ?, ?, 0, NOW(), ?, ?, ?)`,
+        [userId, subjectKey, title || NEW_TITLE, source, source === 'quiz_question' ? questionId : null, snapshot ? JSON.stringify(snapshot) : null]
     );
-    await db.query(`UPDATE tam24_users SET ai_last_subject = ? WHERE id = ?`, [subjectKey, userId]);
+    if (source === 'chat') {
+        await db.query(`UPDATE tam24_users SET ai_last_subject = ? WHERE id = ?`, [subjectKey, userId]);
+    }
 
-    return { id: result.insertId, user_id: userId, subject_key: subjectKey, title: NEW_TITLE, message_count: 0, title_generated: 0 };
+    return {
+        id: result.insertId, user_id: userId, subject_key: subjectKey, title: title || NEW_TITLE,
+        message_count: 0, title_generated: source === 'quiz_question' ? 1 : 0,
+        source_type: source, question_id: source === 'quiz_question' ? questionId : null,
+    };
 }
 
 const CONVERSATION_COLUMNS = `id, user_id, subject_key, title, summary, summary_updated_at, title_generated,
-        message_count, total_tokens, last_message_at, created_at, updated_at`;
+        message_count, total_tokens, last_message_at, created_at, updated_at, source_type, question_id`;
 
 async function getLatestConversation(db, userId, subjectKey = null) {
     const params = [userId];
-    let sql = `SELECT ${CONVERSATION_COLUMNS} FROM tam24_ai_conversations WHERE user_id = ? AND archived_at IS NULL`;
+    let sql = `SELECT ${CONVERSATION_COLUMNS} FROM tam24_ai_conversations
+               WHERE user_id = ? AND archived_at IS NULL AND COALESCE(source_type, 'chat') = 'chat'`;
     if (subjectKey) { sql += ' AND subject_key = ?'; params.push(subjectKey); }
     sql += ' ORDER BY COALESCE(last_message_at, created_at) DESC LIMIT 1';
     const [rows] = await db.query(sql, params);
     return rows[0] || null;
+}
+
+async function getQuizConversation(db, userId, questionId) {
+    const [rows] = await db.query(
+        `SELECT ${CONVERSATION_COLUMNS} FROM tam24_ai_conversations
+         WHERE user_id = ? AND question_id = ? AND source_type = 'quiz_question'
+         ORDER BY id DESC LIMIT 1`,
+        [userId, questionId]
+    );
+    return rows[0] || null;
+}
+
+async function getOrCreateQuizConversation(db, { userId, questionId, subjectKey, title, snapshot }) {
+    const existing = await getQuizConversation(db, userId, questionId);
+    if (existing) {
+        if (existing.archived_at) {
+            await db.query(`UPDATE tam24_ai_conversations SET archived_at = NULL WHERE id = ?`, [existing.id]);
+            existing.archived_at = null;
+        }
+        return existing;
+    }
+    try {
+        return await createConversation(db, {
+            userId, subjectKey, sourceType: 'quiz_question', questionId, title, snapshot,
+        });
+    } catch (err) {
+        const again = await getQuizConversation(db, userId, questionId);
+        if (again) return again;
+        throw err;
+    }
 }
 
 async function getConversationForUser(db, conversationId, userId) {
@@ -67,8 +106,8 @@ async function setConversationSubject(db, conversationId, subjectKey) {
 
 async function listConversations(db, userId, { limit = 30, offset = 0, subjectKey = null, search = null } = {}) {
     const params = [userId];
-    let sql = `SELECT id, subject_key, title, last_message_at, created_at, message_count
-               FROM tam24_ai_conversations WHERE user_id = ? AND archived_at IS NULL`;
+    let sql = `SELECT id, subject_key, title, last_message_at, created_at, message_count, source_type, question_id
+               FROM tam24_ai_conversations WHERE user_id = ? AND archived_at IS NULL AND COALESCE(source_type, 'chat') = 'chat'`;
     if (subjectKey) { sql += ' AND subject_key = ?'; params.push(subjectKey); }
     const q = String(search || '').trim();
     if (q) { sql += ' AND title LIKE ?'; params.push(`%${q.replace(/[%_\\]/g, (m) => `\\${m}`)}%`); }
@@ -210,6 +249,8 @@ module.exports = {
     parseAttachments,
     createConversation,
     getLatestConversation,
+    getQuizConversation,
+    getOrCreateQuizConversation,
     getConversationForUser,
     setConversationSubject,
     listConversations,

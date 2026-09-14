@@ -174,6 +174,7 @@ export function Message({
                     <div className="flex items-center gap-2 mb-1 justify-end pr-1" dir="rtl">
                         <span className="text-[11px] font-extrabold text-[var(--text-secondary)]">مِت</span>
                         {message.status === 'stopped' && <span className="text-[10px] text-[var(--text-muted)]">· متوقف شد</span>}
+                        {message.truncated && message.status !== 'stopped' && <span className="text-[10px] text-[var(--text-muted)]">· پاسخ طولانی بود و ادامه داده شد</span>}
                     </div>
                 )}
 

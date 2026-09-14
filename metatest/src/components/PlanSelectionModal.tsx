@@ -441,7 +441,9 @@ export default function PlanSelectionModal({
                             </div>
 
                             <button
+                                type="button"
                                 onClick={handleClose}
+                                aria-label="بستن"
                                 className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] p-0 text-[var(--text-secondary)]"
                             >
                                 <X size={18} />

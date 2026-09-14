@@ -37,6 +37,8 @@ function publicConversation(row) {
         lastMessageAt: row.last_message_at ?? null,
         createdAt: row.created_at ?? null,
         titleGenerated: !!row.title_generated,
+        sourceType: row.source_type || 'chat',
+        questionId: row.question_id ?? null,
     };
 }
 
@@ -171,6 +173,7 @@ function userMessageForError(code, fallback = 'در پردازش درخواست 
         case 'REFERENCE_LIMIT': return 'حداکثر تعداد منبع برای این گفتگو پر شده است.';
         case 'PDF_NO_TEXT': return 'متنی از این PDF استخراج نشد (احتمالاً اسکن تصویری است).';
         case 'NOT_FOUND': return 'موردی یافت نشد.';
+        case 'QUESTION_NOT_ANSWERED': return 'اول پاسخ این سوال را ثبت کن، بعد از مِت بپرس.';
         default: return fallback;
     }
 }
