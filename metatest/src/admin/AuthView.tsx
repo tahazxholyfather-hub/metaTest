@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { flowApi } from '../lib/authApi';
+import { adminApi } from '../lib/adminApi';
 import {
     ArrowRight, Lock, Mail, Hexagon, Eye, EyeOff, AlertCircle, Loader2
 } from 'lucide-react';
@@ -8,6 +8,11 @@ export interface User {
     id: number;
     username: string;
     role: string;
+    fullName?: string;
+    isSuper?: boolean;
+    status?: string;
+    lastLogin?: string | null;
+    createdAt?: string | null;
 }
 
 interface AuthViewProps {
@@ -27,14 +32,8 @@ const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
         setIsLoading(true);
 
         try {
-            const res = await flowApi.dispatch('admin_login', {
-                username: email,
-                password: password,
-            });
+            const res = await adminApi.login(email, password);
 
-            console.log("API RESPONSE:", res);
-
-            // Expecting success and the full user object from the backend
             if (res?.success && res?.user) {
                 // Note: We no longer set localStorage here, as we are relying on HttpOnly cookies
                 // set by the backend for security.
@@ -64,7 +63,7 @@ const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
                             Admin Panel
                         </h1>
                         <p className="text-sm font-medium text-[#86868b] mt-1">
-                            Sign in to manage tam24.app
+                            Separate admin sign-in — not your student account
                         </p>
                     </div>
                 </div>
@@ -87,6 +86,7 @@ const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
                                     onChange={(e) => setEmail(e.target.value)}
                                     className="w-full bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] text-gray-800 dark:text-gray-200 rounded-xl pl-12 pr-4 py-3.5 text-sm outline-none focus:border-[#1a73e8] focus:ring-4 focus:ring-[#1a73e8]/10 transition-all"
                                     placeholder="username"
+                                    autoComplete="username"
                                     disabled={isLoading}
                                 />
                             </div>
@@ -104,6 +104,7 @@ const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
                                     onChange={(e) => setPassword(e.target.value)}
                                     className="w-full bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] text-gray-800 dark:text-gray-200 rounded-xl pl-12 pr-12 py-3.5 text-sm outline-none focus:border-[#1a73e8] focus:ring-4 focus:ring-[#1a73e8]/10 transition-all"
                                     placeholder="••••••••"
+                                    autoComplete="current-password"
                                     disabled={isLoading}
                                 />
                                 <button

@@ -1,7 +1,7 @@
 'use strict';
 
 const { CONTEXT_LIMITS, MODELS, featureStatus } = require('../config');
-const { getSubject, CORE_SUBJECT_KEYS } = require('../subjects');
+const { getSubject, CORE_SUBJECT_KEYS, sharedIdentity } = require('../subjects');
 
 function safeText(value, max = 800) {
     if (!value) return '';
@@ -11,13 +11,30 @@ function safeText(value, max = 800) {
 /** DB row (tam24_ai_subjects) can override the code-authored prompt text. */
 function resolveSubjectPrompts(subjectKey, subjectRow) {
     const base = getSubject(subjectKey);
-    if (!base) return null;
+    const nameFa = subjectRow?.name_fa || base?.nameFa || String(subjectKey);
+    const fallback = {
+        key: String(subjectKey || '').toLowerCase(),
+        nameFa,
+        nameEn: subjectRow?.name_en || base?.nameEn || String(subjectKey),
+        icon: subjectRow?.icon || base?.icon || 'sparkles',
+        color: subjectRow?.color || base?.color || '#A78BFA',
+        sortOrder: subjectRow?.sort_order || base?.sortOrder || 100,
+        generalPrompt: base?.generalPrompt || sharedIdentity(nameFa),
+        referenceInstructions: base?.referenceInstructions || '',
+        model: base?.model || null,
+        maxOutputTokens: base?.maxOutputTokens || 700,
+    };
+    const src = base || fallback;
     return {
-        ...base,
-        generalPrompt: safeText(subjectRow?.general_prompt, 20000) || base.generalPrompt,
-        referenceInstructions: safeText(subjectRow?.reference_instructions, 20000) || base.referenceInstructions,
-        model: subjectRow?.model || base.model,
-        maxOutputTokens: subjectRow?.max_output_tokens || base.maxOutputTokens || 700,
+        ...src,
+        nameFa,
+        nameEn: subjectRow?.name_en || src.nameEn,
+        icon: subjectRow?.icon || src.icon,
+        color: subjectRow?.color || src.color,
+        generalPrompt: safeText(subjectRow?.general_prompt, 20000) || src.generalPrompt || fallback.generalPrompt,
+        referenceInstructions: safeText(subjectRow?.reference_instructions, 20000) || src.referenceInstructions,
+        model: subjectRow?.model || src.model,
+        maxOutputTokens: subjectRow?.max_output_tokens || src.maxOutputTokens || 700,
     };
 }
 

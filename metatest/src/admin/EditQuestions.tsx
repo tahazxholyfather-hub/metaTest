@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
     Save, Maximize2, Minimize2, Edit2, ChevronLeft, ChevronRight,
     Filter, CheckCircle2, Circle, X, ChevronDown, Search, Loader2, Image as ImageIcon, AlertCircle
@@ -11,34 +11,44 @@ import { flowApi } from '../lib/authApi';
 import { MathRenderer } from '../components/ui/MathRenderer';
 
 
-// --- CUSTOM DROPDOWN COMPONENT (FIXED) ---
-// This component now dynamically renders its dropdown above or below to avoid viewport overflow.
+// --- CUSTOM DROPDOWN COMPONENT ---
+// Renders above or below to avoid viewport overflow. Includes a live search
+// bar that filters the option list (used for subjects, chapters, mabahes, …).
 export interface SelectOption { id: number | string; title: string; }
 
-export const CustomSelect = ({ label, value, options, onChange, placeholder = "Select...", disabled = false }: {
-    label?: string, value: number | string | null, options: SelectOption[], onChange: (id: number | string | null) => void, placeholder?: string, disabled?: boolean
+export const CustomSelect = ({ label, value, options, onChange, placeholder = "Select...", disabled = false, searchable = true }: {
+    label?: string, value: number | string | null, options: SelectOption[], onChange: (id: number | string | null) => void, placeholder?: string, disabled?: boolean, searchable?: boolean
 }) => {
     const [isOpen, setIsOpen] = useState(false);
-    const [positionUp, setPositionUp] = useState(false); // State to control dropdown position
+    const [positionUp, setPositionUp] = useState(false);
+    const [query, setQuery] = useState('');
     const selectRef = useRef<HTMLDivElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const searchRef = useRef<HTMLInputElement>(null);
 
-    // FIX: Check position and render dropdown above if it would overflow
+    const filtered = useMemo(() => {
+        const q = query.trim().toLowerCase();
+        if (!q) return options;
+        return options.filter((opt) => {
+            const title = String(opt.title || '').toLowerCase();
+            const id = String(opt.id).toLowerCase();
+            return title.includes(q) || id.includes(q);
+        });
+    }, [options, query]);
+
     useEffect(() => {
         if (isOpen && selectRef.current && dropdownRef.current) {
             const selectRect = selectRef.current.getBoundingClientRect();
             const dropdownHeight = dropdownRef.current.offsetHeight;
             const spaceBelow = window.innerHeight - selectRect.bottom;
-            // If there's not enough space below, render it above
             if (spaceBelow < dropdownHeight && selectRect.top > dropdownHeight) {
                 setPositionUp(true);
             } else {
                 setPositionUp(false);
             }
         }
-    }, [isOpen, options]); // re-check when options change as height might change
+    }, [isOpen, filtered.length, query]);
 
-    // Close dropdown on click outside
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (selectRef.current && !selectRef.current.contains(event.target as Node)) setIsOpen(false);
@@ -47,7 +57,20 @@ export const CustomSelect = ({ label, value, options, onChange, placeholder = "S
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    useEffect(() => {
+        if (isOpen) {
+            setQuery('');
+            requestAnimationFrame(() => searchRef.current?.focus());
+        }
+    }, [isOpen]);
+
     const selectedTitle = options.find(o => o.id === value)?.title || placeholder;
+
+    const pick = (id: number | string | null) => {
+        onChange(id);
+        setIsOpen(false);
+        setQuery('');
+    };
 
     return (
         <div className="space-y-1.5 relative w-full" ref={selectRef}>
@@ -55,7 +78,7 @@ export const CustomSelect = ({ label, value, options, onChange, placeholder = "S
                 <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider px-1 flex justify-between">
                     <span>{label}</span>
                     {value !== null && !disabled && (
-                        <button onClick={(e) => { e.stopPropagation(); onChange(null); }} className="text-red-500 hover:underline">Clear</button>
+                        <button type="button" onClick={(e) => { e.stopPropagation(); onChange(null); }} className="text-red-500 hover:underline">Clear</button>
                     )}
                 </label>
             )}
@@ -72,17 +95,41 @@ export const CustomSelect = ({ label, value, options, onChange, placeholder = "S
             {isOpen && !disabled && (
                 <div
                     ref={dropdownRef}
-                    className={`absolute left-0 right-0 bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-xl shadow-xl z-[9999] animate-in fade-in zoom-in-95 duration-100
+                    className={`absolute left-0 right-0 bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-xl shadow-xl z-[9999] animate-in fade-in zoom-in-95 duration-100 overflow-hidden
                     ${positionUp ? 'bottom-[calc(100%+4px)]' : 'top-[calc(100%+4px)]'}`}
                 >
+                    {searchable && (
+                        <div className="p-2 border-b border-[#dadce0] dark:border-[#333537]">
+                            <div className="relative">
+                                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#86868b] pointer-events-none" />
+                                <input
+                                    ref={searchRef}
+                                    type="text"
+                                    value={query}
+                                    onChange={(e) => setQuery(e.target.value)}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    autoComplete="off"
+                                    onKeyDown={(e) => {
+                                        e.stopPropagation();
+                                        if (e.key === 'Escape') setIsOpen(false);
+                                        if (e.key === 'Enter' && filtered[0]) pick(filtered[0].id);
+                                    }}
+                                    placeholder="Search options..."
+                                    className="w-full bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-lg pl-9 pr-3 py-2 text-xs outline-none focus:border-[#1a73e8]"
+                                    dir="auto"
+                                />
+                            </div>
+                        </div>
+                    )}
                     <div className="max-h-60 overflow-y-auto custom-scrollbar py-1">
-                        <div onClick={() => { onChange(null); setIsOpen(false); }} className="px-4 py-3 text-xs cursor-pointer text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 border-b border-gray-100 dark:border-gray-800">
+                        <div onClick={() => pick(null)} className="px-4 py-3 text-xs cursor-pointer text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 border-b border-gray-100 dark:border-gray-800">
                             Clear selection
                         </div>
-                        {options.map(opt => (
+                        {filtered.map(opt => (
                             <div
                                 key={opt.id}
-                                onClick={() => { onChange(opt.id); setIsOpen(false); }}
+                                onClick={() => pick(opt.id)}
                                 className={`px-4 py-3 text-xs cursor-pointer hover:bg-[#f8f9fa] dark:hover:bg-[#2b2d2f] transition-colors ${
                                     value === opt.id ? 'bg-[#e8f0fe] text-[#1a73e8] font-bold dark:bg-[#1a73e8]/10' : 'text-gray-700 dark:text-gray-300'
                                 }`}
@@ -90,8 +137,10 @@ export const CustomSelect = ({ label, value, options, onChange, placeholder = "S
                                 {opt.title}
                             </div>
                         ))}
-                        {options.length === 0 && (
-                            <div className="px-4 py-3 text-xs text-gray-400 text-center">No items available</div>
+                        {filtered.length === 0 && (
+                            <div className="px-4 py-3 text-xs text-gray-400 text-center">
+                                {options.length === 0 ? 'No items available' : 'No matching options'}
+                            </div>
                         )}
                     </div>
                 </div>

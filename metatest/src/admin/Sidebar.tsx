@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Layers, LogOut, Hexagon, ChevronLeft, ListTree, FileText, FilePlus2 } from 'lucide-react';
+import { LayoutDashboard, Layers, LogOut, Hexagon, ListTree, FileText, FilePlus2, Bot, Shield } from 'lucide-react';
 import type { User } from './AuthView';
 
 interface SidebarProps {
@@ -12,12 +12,17 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpen, setIsOpen, user, onLogout }) => {
+    const isSuper = user.isSuper || user.id === 1;
     const navItems = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { id: 'edit-questions', label: 'Edit Questions', icon: Layers },
         { id: 'insert-questions', label: 'Insert Questions', icon: FilePlus2 },
         { id: 'curriculum', label: 'Curriculum', icon: ListTree },
         { id: 'pdf-library', label: 'PDF Library', icon: FileText },
+        ...(isSuper ? [
+            { id: 'ai-manager', label: 'AI Manager', icon: Bot },
+            { id: 'admins', label: 'Admins', icon: Shield },
+        ] : []),
     ];
 
     return (
@@ -66,8 +71,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpen, setI
                             {user.username.split(' ').map(n => n[0]).join('')}
                         </div>
                         <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold truncate uppercase tracking-tighter">{user.username}</p>
-                            <p className="text-[10px] text-[#86868b] truncate">{user.role}</p>
+                            <p className="text-xs font-semibold truncate uppercase tracking-tighter">{user.fullName || user.username}</p>
+                            <p className="text-[10px] text-[#86868b] truncate">{isSuper ? 'super admin' : user.role}</p>
                         </div>
                         <button onClick={onLogout} className="p-2 text-[#86868b] hover:text-red-500 transition-colors">
                             <LogOut size={14} />

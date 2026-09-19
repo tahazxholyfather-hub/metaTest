@@ -69,7 +69,8 @@ function fakeDb(initial = { daily: 0, purchased: 0, grantedOn: null }) {
     await test('four curriculum subjects + general fallback', () => {
         assert.deepStrictEqual([...CORE_SUBJECT_KEYS].sort(), ['biology', 'chemistry', 'math', 'physics']);
         assert.ok(SUBJECT_KEYS.includes('general'));
-        assert.ok(isValidSubject('general') && isValidSubject('math') && !isValidSubject('history'));
+        assert.ok(isValidSubject('general') && isValidSubject('math') && isValidSubject('geology'));
+        assert.ok(!isValidSubject('') && !isValidSubject('1math') && !isValidSubject('bad key'));
         for (const key of SUBJECT_KEYS) {
             const s = getSubject(key);
             assert.ok(s.generalPrompt.includes('Met'), `${key} general prompt should name Met`);
