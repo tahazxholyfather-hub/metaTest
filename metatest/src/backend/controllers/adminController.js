@@ -188,34 +188,27 @@ const handleGetQuestionForEdit = async (req, res) => {
 const handleAdminGetSubjects = async (req, res) => {
     try {
         const sql = `
-            SELECT DISTINCT s.id, s.title
-            FROM questions_tam24 q
-            JOIN subjects_tam24 s ON q.subject_id = s.id
-            ORDER BY s.id ASC
+            SELECT id, title
+            FROM subjects_tam24
+            ORDER BY id ASC
         `;
         const [rows] = await pool.query(sql);
         res.json({ success: true, subjects: rows });
     } catch (error) {
-        console.error("Error in handleAdminGetAllSubjects:", error);
+        console.error("Error in handleAdminGetSubjects:", error);
         res.json({ success: false, message: error.message });
     }
 };
 
 const handleAdminGetGradesBySubject = async (req, res) => {
     try {
-        const { subject_id } = req.body;
-        if (!subject_id || subject_id === 'null') {
-            return res.json({ success: true, grades: [] });
-        }
-
+        // grades_tam24 has no subject_id, so we return all grades
         const sql = `
-            SELECT DISTINCT g.id, g.title
-            FROM questions_tam24 q
-            JOIN grades_tam24 g ON q.grade_id = g.id
-            WHERE q.subject_id = ? AND q.grade_id IS NOT NULL
-            ORDER BY g.id ASC
+            SELECT id, title
+            FROM grades_tam24
+            ORDER BY id ASC
         `;
-        const [rows] = await pool.query(sql, [subject_id]);
+        const [rows] = await pool.query(sql);
         res.json({ success: true, grades: rows });
     } catch (error) {
         console.error("Error in handleAdminGetGradesBySubject:", error);
@@ -225,20 +218,18 @@ const handleAdminGetGradesBySubject = async (req, res) => {
 
 const handleAdminGetChaptersBySubject = async (req, res) => {
     try {
-        const { subject_id, grade_id } = req.body;
-
-        if (!subject_id || subject_id === 'null' || !grade_id || grade_id === 'null') {
+        const { subject_id } = req.body; // grade_id is ignored because topics_tam24 has no grade_id
+        if (!subject_id || subject_id === 'null') {
             return res.json({ success: true, chapters: [] });
         }
 
         const sql = `
-            SELECT DISTINCT t.id, t.title
-            FROM questions_tam24 q
-            JOIN topics_tam24 t ON q.topic_id = t.id
-            WHERE q.subject_id = ? AND q.grade_id = ? AND q.topic_id IS NOT NULL
-            ORDER BY t.id ASC
+            SELECT id, title
+            FROM topics_tam24
+            WHERE subject_id = ?
+            ORDER BY id ASC
         `;
-        const [rows] = await pool.query(sql, [subject_id, grade_id]);
+        const [rows] = await pool.query(sql, [subject_id]);
         res.json({ success: true, chapters: rows });
     } catch (error) {
         console.error("Error in handleAdminGetChaptersBySubject:", error);
@@ -248,17 +239,16 @@ const handleAdminGetChaptersBySubject = async (req, res) => {
 
 const handleAdminGetMabahesByChapter = async (req, res) => {
     try {
-        const { topic_id } = req.body; // Frontend sends topic_id mapped to chapter dropdown
+        const { topic_id } = req.body;
         if (!topic_id || topic_id === 'null') {
             return res.json({ success: true, mabahes: [] });
         }
 
         const sql = `
-            SELECT DISTINCT c.id, c.title
-            FROM questions_tam24 q
-            JOIN chapters_tam24 c ON q.chapter_id = c.id
-            WHERE q.topic_id = ? AND q.chapter_id IS NOT NULL
-            ORDER BY c.id ASC
+            SELECT id, title
+            FROM chapters_tam24
+            WHERE topic_id = ?
+            ORDER BY id ASC
         `;
         const [rows] = await pool.query(sql, [topic_id]);
         res.json({ success: true, mabahes: rows });
@@ -267,7 +257,6 @@ const handleAdminGetMabahesByChapter = async (req, res) => {
         res.json({ success: false, message: error.message });
     }
 };
-
 
 // ===============================================
 // UPDATE QUESTION (Set Correct Option + Activate)
