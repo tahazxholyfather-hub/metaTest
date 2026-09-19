@@ -1,0 +1,33 @@
+-- Admin panel: separate auth, super-admin bootstrap columns, AI runtime settings.
+-- Safe to re-run (IF NOT EXISTS). The Node bootstrap in middleware/adminAuth.js
+-- also applies these changes on server start.
+
+SET NAMES utf8mb4;
+
+CREATE TABLE IF NOT EXISTS tam24_admins (
+  id INT NOT NULL AUTO_INCREMENT,
+  username VARCHAR(50) NOT NULL,
+  password VARCHAR(255) NOT NULL,
+  full_name VARCHAR(100) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  role VARCHAR(50) NOT NULL DEFAULT 'admin',
+  PRIMARY KEY (id),
+  UNIQUE KEY username (username)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_persian_ci;
+
+ALTER TABLE tam24_admins
+  ADD COLUMN IF NOT EXISTS status ENUM('active','disabled') NOT NULL DEFAULT 'active',
+  ADD COLUMN IF NOT EXISTS last_login TIMESTAMP NULL DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS last_login_ip VARCHAR(45) NULL DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS failed_attempts INT NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS locked_until TIMESTAMP NULL DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  ADD COLUMN IF NOT EXISTS created_by INT NULL DEFAULT NULL;
+
+CREATE TABLE IF NOT EXISTS tam24_ai_admin_settings (
+  id TINYINT NOT NULL DEFAULT 1,
+  settings_json JSON NOT NULL,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  updated_by INT NULL DEFAULT NULL,
+  PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;

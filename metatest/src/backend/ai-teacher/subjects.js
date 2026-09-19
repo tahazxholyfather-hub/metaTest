@@ -128,7 +128,10 @@ function getSubject(key) {
 }
 
 function isValidSubject(key) {
-    return !!getSubject(key);
+    const k = String(key || '').toLowerCase();
+    if (!k) return false;
+    if (SUBJECTS[k]) return true;
+    return /^[a-z][a-z0-9_-]{0,19}$/.test(k);
 }
 
 /** Map a Persian/English free-text subject name to a key (for tools + question search). */
@@ -151,4 +154,5 @@ module.exports = {
     getSubject,
     isValidSubject,
     subjectKeyFromText,
+    sharedIdentity,
 };
