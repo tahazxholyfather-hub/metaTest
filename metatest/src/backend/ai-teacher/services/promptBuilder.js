@@ -167,6 +167,11 @@ function buildGlobalSafetyRules() {
     ].join('\n');
 }
 
+function buildQuestionContextBlock(questionContext) {
+    if (!questionContext?.promptText && !questionContext?.questionId) return '';
+    return questionContext.promptText || '';
+}
+
 function buildMetPrompt({
     subjectKey,
     subjectRow,
@@ -177,6 +182,7 @@ function buildMetPrompt({
     ragContext,
     knowledgeContext,
     referenceContext,
+    questionContext = null,
     hasImageAttachment = false,
     hasAudioTranscript = false,
     lowBalance = false,
@@ -188,7 +194,8 @@ function buildMetPrompt({
     const parts = [
         subject.generalPrompt,
         subject.referenceInstructions,
-        buildScopeBlock(subject),
+        questionContext ? '' : buildScopeBlock(subject),
+        buildQuestionContextBlock(questionContext),
         buildStudentContextBlock({ user, memories, settings: s }),
         s.knowledgeEnabled ? buildKnowledgeBlock(knowledgeContext) : '',
         buildTextbookBlock(ragContext),
@@ -243,13 +250,14 @@ function toProviderMessages({ systemPrompt, recentMessages, currentUserMessage, 
     return messages;
 }
 
-function resolveMaxOutputTokens(subject, settings, { lowBalance = false } = {}) {
+function resolveMaxOutputTokens(subject, settings, { lowBalance = false, quizQuestion = false } = {}) {
     const s = settings && 'reasoningLevel' in settings ? settings : normalizeSettings(settings);
     let max = Number(subject?.maxOutputTokens) || 700;
+    if (quizQuestion) max = Math.max(max, 1100);
     if (s.verbosity === 'detailed') max = Math.round(max * 1.5);
     if (s.verbosity === 'short' || s.conciseMode) max = Math.min(max, 480);
     if (s.efficientMode || lowBalance) max = Math.min(max, 320);
-    return Math.max(160, Math.min(2000, max));
+    return Math.max(160, Math.min(2400, max));
 }
 
 function resolveModel(settings, subject, { hasImageAttachment = false, lowBalance = false } = {}) {

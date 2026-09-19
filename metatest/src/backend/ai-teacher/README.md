@@ -11,12 +11,15 @@ biology — plus a general study chat. Everything a student pays is in
 1. Run the SQL migrations in order (all idempotent on MariaDB ≥ 10.5):
 
 ```bash
-for f in 001_ai_teacher 002_ai_books 005_usage_costs 006_met_subjects 007_met_voice 008_met_ai_subsystem; do
+for f in 001_ai_teacher 002_ai_books 005_usage_costs 006_met_subjects 007_met_voice 008_met_ai_subsystem 009_quiz_question_conversations; do
   mysql -u USER -p DATABASE < ai-teacher/sql/$f.sql
 done
 ```
 
-`008_met_ai_subsystem.sql` is the current schema: coin buckets + ledger
+`009_quiz_question_conversations.sql` adds `source_type` / `question_id` on
+conversations so each practice question has its own Met thread.
+
+`008_met_ai_subsystem.sql` is the coin/wallet schema: coin buckets + ledger
 types, detailed usage logs, `tam24_ai_model_pricing`, knowledge base
 (`tam24_ai_knowledge*`), `tam24_ai_suggestions`, `tam24_ai_files`,
 conversation PDF references + chunks, `tam24_ai_tool_calls`, new AI

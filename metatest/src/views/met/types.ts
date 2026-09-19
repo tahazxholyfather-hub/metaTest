@@ -71,6 +71,36 @@ export interface MetConversation {
     lastMessageAt: string | null;
     createdAt: string | null;
     titleGenerated: boolean;
+    sourceType?: 'chat' | 'quiz_question' | string;
+    questionId?: number | null;
+}
+
+export interface QuizQuestionContext {
+    questionId: number;
+    questionText: string;
+    subjectKey: SubjectKey;
+    subject: string | null;
+    lesson: string | null;
+    topic: string | null;
+    category: string | null;
+    grade: string | null;
+    questionType: string | null;
+    difficulty: string | null;
+    academicYear: string | null;
+    book: string | null;
+    source: string | null;
+    chapter: string | null;
+    choices: { id: number; index: number; text: string; isCorrect: boolean; isSelected: boolean }[];
+    selectedChoice: { id: number; index: number; text: string } | null;
+    correctChoice: { id: number; index: number; text: string } | null;
+    isCorrect: boolean;
+    explanation: string;
+    tags: string[];
+}
+
+export interface QuizIntent {
+    key: string;
+    label: string;
 }
 
 export type AttachmentType = 'image' | 'audio' | 'generated_image' | 'file';
@@ -105,6 +135,7 @@ export interface MetMessage {
     streaming?: boolean;
     /** Client-only: local error text for a failed turn. */
     error?: string;
+    truncated?: boolean;
 }
 
 export interface MetBootstrap {
@@ -222,6 +253,8 @@ export type ChatStreamEvent =
               subjectKey: SubjectKey;
               durationMs: number;
               stopped: boolean;
+              truncated?: boolean;
+              finishReason?: string | null;
           };
       }
     | { event: 'title'; data: { conversationId: number; title: string } }

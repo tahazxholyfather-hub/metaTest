@@ -18,6 +18,7 @@ import { SubjectPicker } from './SubjectPicker';
 import { SUBJECT_FALLBACKS, sortSubjects } from './subjectIcons';
 import { subscribeSharedAudio } from './audio';
 import { GraySpinner, easeOut, useIsMobile } from './ui';
+import PlanSelectionModal from '../../components/PlanSelectionModal';
 
 type Props = {
     onNavigate: (view: View) => void;
@@ -42,6 +43,7 @@ export function MetView({ onNavigate }: Props) {
     const [historyKey, setHistoryKey] = useState(0);
     const [listeningLevel, setListeningLevel] = useState<number | null>(null);
     const [speaking, setSpeaking] = useState<{ on: boolean; level: number }>({ on: false, level: 0 });
+    const [buyOpen, setBuyOpen] = useState(false);
     const composerRef = useRef<ComposerHandle | null>(null);
     const openedInitial = useRef(false);
 
@@ -197,7 +199,7 @@ export function MetView({ onNavigate }: Props) {
             case 'settings':
                 return <SettingsPanel settings={settings} features={features} onChange={setSettings} className="flex-1" />;
             case 'coins':
-                return <CoinsPanel wallet={wallet} onRefresh={refreshWallet} className="flex-1" />;
+                return <CoinsPanel wallet={wallet} onRefresh={refreshWallet} onBuy={() => setBuyOpen(true)} className="flex-1" />;
             case 'subjects':
                 return <SubjectPicker subjects={subjects} value={subjectKey} onChange={changeSubject} />;
             default:
@@ -238,7 +240,7 @@ export function MetView({ onNavigate }: Props) {
                         audioLevel={audioLevel}
                         ensureConversation={ensureConversation}
                         composerRef={composerRef}
-                        bottomInset={isMobile ? 'calc(4rem + env(safe-area-inset-bottom) + 0.5rem)' : undefined}
+                        bottomInset={isMobile ? 'var(--app-bottom-nav-space)' : undefined}
                     />
                 </div>
 
@@ -285,6 +287,8 @@ export function MetView({ onNavigate }: Props) {
                     <div className="ai-teacher-root flex flex-col min-h-[40vh] max-h-[70vh]">{panelContent(panel)}</div>
                 </ResponsiveModal>
             )}
+
+            <PlanSelectionModal isOpen={buyOpen} onClose={() => setBuyOpen(false)} />
         </div>
     );
 }

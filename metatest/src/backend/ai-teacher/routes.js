@@ -87,6 +87,9 @@ router.post(
 );
 router.post('/voice/speak', requireFeature('tts', 'پاسخ صوتی فعلاً غیرفعال است.'), voiceLimiter, controller.voiceSpeak);
 
+// Per-question practice / quiz conversations
+router.get('/questions/:questionId/conversation', requireAi, controller.getQuestionSession);
+
 // Chat (SSE)
 router.post('/chat/stream', requireAi, chatLimiter, streamChat);
 
