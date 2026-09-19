@@ -32,6 +32,8 @@ export interface Lobby {
     startedAt?: number | string;
     resultsAt?: string | null;
     expiresAt?: string | null;
+    questionCount?: number;
+    seq?: number;
 }
 
 export interface LobbyMember {
@@ -46,6 +48,8 @@ export interface LobbyMember {
     onlineState: OnlineState;
     joinedAt: string;
     isReady: boolean;
+    connected?: boolean;
+    ready?: boolean;
     disconnectedAt?: string | null;
 }
 
@@ -69,18 +73,20 @@ export interface LobbyNotification {
 
 
 export interface MemberProgress {
-    lobbyCode: LobbyCode;
+    lobbyCode?: LobbyCode;
     userId: string;
     answeredCount: number;
     totalQuestions?: number;
     finished: boolean;
-    submitted: boolean;
+    submitted?: boolean;
     score?: number | null;
     maxScore?: number | null;
     percentage?: number | null;
     resultId?: string | null;
-    updatedAt: string;
+    updatedAt?: string;
     finishedAt?: string | null;
+    submittedAt?: number;
+    serverNow?: number;
 }
 
 export interface LobbyState {
@@ -89,6 +95,8 @@ export interface LobbyState {
     members: LobbyMember[];
     progress: MemberProgress[];
     currentUserId?: string;
+    seq?: number;
+    serverNow?: number;
 }
 
 export interface SocketAckSuccess<T> {
@@ -128,7 +136,17 @@ export interface LeaveLobbyPayload {
 
 export interface KickMemberPayload {
     code: string;
-    userId: string;
+    targetUserId: string;
+    userId?: string;
+}
+
+export interface SetReadyRequestPayload {
+    code: string;
+    isReady: boolean;
+}
+
+export interface RejoinLobbyPayload {
+    code: string;
 }
 
 export interface DestroyLobbyPayload {
@@ -144,17 +162,31 @@ export interface UpdateProgressPayload {
 
 export interface SubmitQuizPayload {
     code: string;
-    quizId: string | number;
-    answers: unknown[];
+    quizId?: string | number;
+    userId?: string | number;
+    answers: Record<string, number> | unknown[];
+    questionIds?: number[];
+    timeSpent?: number;
+    questionTimes?: Record<string, number>;
+    selectionLog?: Array<{
+        questionId: number;
+        optionId: number;
+        timeSpentMs: number;
+        timestamp: number;
+    }>;
 }
 
 export interface QuizResult {
-    userId: string;
-    lobbyCode: string;
+    userId?: string;
+    lobbyCode?: string;
     score: number;
-    maxScore: number;
-    percentage: number;
-    resultId?: string | null;
+    total?: number;
+    correctCount?: number;
+    wrongCount?: number;
+    maxScore?: number;
+    percentage?: number;
+    resultId?: string | number | null;
+    id?: string | number | null;
     details?: unknown;
 }
 
