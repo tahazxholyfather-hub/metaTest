@@ -149,13 +149,11 @@ export function LudoScreen({ setup, onExit }: LudoScreenProps) {
         </div>
       </header>
 
-      <div className="ludo-seats">
-        {state.players.map((player) => (
-          <div key={player.id} className={`ludo-seat is-${player.color}`}>
-            <PlayerCard player={player} active={player.id === current.id} />
-          </div>
-        ))}
-      </div>
+      {state.players.map((player) => (
+        <div key={player.id} className={`ludo-seat is-${player.color}`}>
+          <PlayerCard player={player} active={player.id === current.id} />
+        </div>
+      ))}
 
       <Board state={state} hoppingId={hoppingId} reducedMotion={reduced} onSelectToken={onSelect} />
 

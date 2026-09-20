@@ -67,9 +67,9 @@ export function InventoryDock({
     <div className="ludo-inventory">
       <div className="ludo-inventory-head">
         <span>Items</span>
-        <small>
-          {player.coins}c · {player.xp} xp
-        </small>
+      </div>
+      <div className="ludo-inventory-stats">
+        {player.coins} coins · {player.xp} xp
       </div>
       <div className="ludo-inventory-row">
         {stacks.length === 0 && <em>Empty</em>}
@@ -99,15 +99,19 @@ export function TurnRibbon({ state, humanId }: { state: GameState; humanId: stri
   const player = currentPlayer(state)
   if (state.winnerId) return null
   const yours = player.id === humanId
+  const label =
+    state.turnPhase === 'animating'
+      ? yours
+        ? "You're moving…"
+        : `${player.name} is moving…`
+      : yours && state.turnPhase === 'waiting_roll'
+        ? 'Your turn'
+        : yours && state.turnPhase === 'waiting_select'
+          ? 'Choose a Nuts'
+          : `${player.name} is playing…`
   return (
     <div className="ludo-turn" style={{ ['--turn-accent' as string]: PLAYER_THEME[player.color].accent }}>
-      {state.turnPhase === 'animating'
-        ? `${player.name} is moving…`
-        : yours && state.turnPhase === 'waiting_roll'
-          ? 'Your turn'
-          : yours && state.turnPhase === 'waiting_select'
-            ? 'Choose a Nuts'
-            : `${player.name} is playing…`}
+      {label}
     </div>
   )
 }
