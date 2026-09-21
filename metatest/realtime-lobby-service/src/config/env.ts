@@ -26,7 +26,9 @@ const envSchema = z.object({
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
     PORT: z.coerce.number().default(4001),
 
-    CORS_ORIGIN: z.string().default('http://localhost:5173'),
+    CORS_ORIGIN: z
+        .string()
+        .default('http://localhost:5173,http://127.0.0.1:5173,https://metatest.app'),
 
     JWT_SECRET: z.string().min(16),
     JWT_AUDIENCE: z.preprocess(emptyToUndefined, z.string().min(1).optional()),

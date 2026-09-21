@@ -57,15 +57,34 @@ export class LobbyService {
         return code.trim();
     }
 
-    private decodeIncomingQuizId(encodedQuizId: unknown): number {
-        if (typeof encodedQuizId !== 'string' || !encodedQuizId.trim()) {
+    private parseIncomingQuizId(rawQuizId: unknown): { numeric: number; encoded: string } {
+        if (typeof rawQuizId === 'number' && Number.isInteger(rawQuizId) && rawQuizId > 0) {
+            const encoded = encodeQuizId(rawQuizId);
+            if (!encoded) {
+                throw new CustomError('Invalid quiz id', 400, 'INVALID_QUIZ_ID');
+            }
+            return { numeric: rawQuizId, encoded };
+        }
+
+        if (typeof rawQuizId !== 'string' || !rawQuizId.trim()) {
             throw new CustomError('Invalid quiz id', 400, 'INVALID_QUIZ_ID');
         }
-        const quizId = decodeQuizId(encodedQuizId);
-        if (!quizId || !Number.isInteger(quizId) || quizId <= 0) {
+
+        const value = rawQuizId.trim();
+        const numeric = decodeQuizId(value);
+        if (!numeric) {
             throw new CustomError('Invalid quiz id', 400, 'INVALID_QUIZ_ID');
         }
-        return quizId;
+
+        if (/^\d+$/.test(value)) {
+            const encoded = encodeQuizId(numeric);
+            if (!encoded) {
+                throw new CustomError('Invalid quiz id', 400, 'INVALID_QUIZ_ID');
+            }
+            return { numeric, encoded };
+        }
+
+        return { numeric, encoded: value };
     }
 
     private encodeStoredQuizId(quizId: string | number): string {
@@ -471,8 +490,7 @@ export class LobbyService {
         const code = this.normalizeCode(dto.code);
 
         return withLock(lobbyLockKey(code), async () => {
-            const rawQuizId = this.decodeIncomingQuizId(dto.quizId);
-            const encodedQuizId = this.encodeStoredQuizId(rawQuizId);
+            const { numeric: rawQuizId, encoded: encodedQuizId } = this.parseIncomingQuizId(dto.quizId);
             const quiz = await mainBackendService.getQuizMetadata(
                 encodedQuizId,
                 socket.data.accessToken,

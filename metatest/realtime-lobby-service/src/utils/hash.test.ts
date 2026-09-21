@@ -9,7 +9,9 @@ describe('hash ids', () => {
         assert.equal(decodeQuizId(encoded), 81);
     });
 
-    it('rejects invalid quiz ids', () => {
+    it('decodes numeric strings and frontend hashes', () => {
+        assert.equal(decodeQuizId('276'), 276);
+        assert.equal(decodeQuizId('Q92mMnEjAq3y'), 276);
         assert.equal(encodeQuizId(0), null);
         assert.equal(decodeQuizId('not-a-hash'), null);
     });

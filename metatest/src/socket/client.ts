@@ -11,10 +11,17 @@ export interface CreateSocketOptions {
 function getRealtimeUrl(): string {
     const fromEnv =
         import.meta.env.VITE_REALTIME_URL ||
-        import.meta.env.VITE_REALTIME_API_URL ||
-        'https://socket.metatest.app/';
+        import.meta.env.VITE_REALTIME_API_URL;
 
-    return String(fromEnv).replace(/\/?$/, '/');
+    if (fromEnv) {
+        return String(fromEnv).replace(/\/?$/, '/');
+    }
+
+    if (import.meta.env.DEV) {
+        return 'http://localhost:4003/';
+    }
+
+    return 'https://socket.metatest.app/';
 }
 
 export function createSocket(options: CreateSocketOptions = {}): Socket {

@@ -4,7 +4,7 @@ const codeSchema = z.string().trim().min(4).max(16);
 const userIdSchema = z.union([z.string().min(1), z.number()]);
 
 export const createLobbySchema = z.object({
-    quizId: z.string().min(1).max(100),
+    quizId: z.union([z.string().min(1).max(100), z.number().int().positive()]),
     code: codeSchema,
     maxMembers: z.number().int().min(2).max(200).optional(),
 });
