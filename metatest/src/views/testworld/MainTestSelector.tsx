@@ -51,13 +51,23 @@ interface LobbyQuizInfo {
 }
 
 const TEST_TYPES: TestType[] = [
-    {
+        {
         id: 'needs',
         label: 'سفارشی',
         title: 'تمرین بر اساس نیاز',
         description: 'با انتخاب دروس ، فصل ، موضوعات و پایه‌های دلخواه خود آزمون خود سفارشی بسازید',
         image: 'images/compressed_Background%20(3).webp',
         color: '#8b5cf6',
+        hasOnlineLobby: true,
+        locked: false,
+    },
+    {
+        id: 'selector',
+        label: 'بانک سوال',
+        title: 'انتخاب سوال از بانک',
+        description: 'با فیلترهای کناری درس، پایه، فصل، مبحث و سطح سختی، سوال‌ها را ببین، سریع عوض کن و آزمون بساز.',
+        image: 'images/compressed_Background%20(3).webp',
+        color: '#6366f1',
         hasOnlineLobby: true,
         locked: false,
     },
@@ -130,7 +140,7 @@ export default function MainTestSelector({
     }, []);
 
     // محاسبه رنگ با توجه به تم واقعی اکتیو
-    const currentColor = index === 0 ? (isDark ? '#8b5cf6' : '#1C4070') : current.color;
+    const currentColor = (index === 0 || index === 1) ? (isDark ? '#8b5cf6' : '#1C4070') : current.color;
 
     const [isLobbyModalOpen, setIsLobbyModalOpen] = useState(false);
     const [otp, setOtp] = useState(['', '', '', '', '', '']);

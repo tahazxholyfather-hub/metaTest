@@ -432,11 +432,104 @@ const fetchQuestionImages = async (questionId) => {
     return rows.map(img => img.image_name);
 };
 
+const handleSearchBankQuestions = async (req, res) => {
+    try {
+        const subjectIds = parseArrayParam(req.body.subject_ids || req.body.subjects);
+        const gradeIds = parseArrayParam(req.body.grade_ids || req.body.grades);
+        const topicIds = parseArrayParam(req.body.topic_ids || req.body.chapters);
+        const chapterIds = parseArrayParam(req.body.chapter_ids || req.body.mabhas);
+        const difficulties = (Array.isArray(req.body.difficulties) ? req.body.difficulties : [])
+            .map((d) => String(d).trim())
+            .filter((d) => ['آسان', 'متوسط', 'سخت'].includes(d));
+        const search = typeof req.body.search === 'string' ? req.body.search.trim() : '';
+        const includeOptions = Boolean(req.body.includeOptions);
+        const sample = Boolean(req.body.sample);
+        const page = Math.max(1, parseInt(req.body.page, 10) || 1);
+        const pageSize = Math.min(40, Math.max(5, parseInt(req.body.pageSize, 10) || 12));
+        const sampleSize = Math.min(50, Math.max(1, parseInt(req.body.sampleSize, 10) || 10));
+
+        let whereSql = `
+            FROM questions_tam24 q
+            LEFT JOIN subjects_tam24 s ON q.subject_id = s.id
+            LEFT JOIN grades_tam24 g ON q.grade_id = g.id
+            LEFT JOIN topics_tam24 t ON q.topic_id = t.id
+            LEFT JOIN chapters_tam24 c ON q.chapter_id = c.id
+            WHERE q.status = 'فعال' AND q.edit_status = 'done'
+        `;
+        const params = [];
+        if (subjectIds.length) { whereSql += ' AND q.subject_id IN (?)'; params.push(subjectIds); }
+        if (gradeIds.length) { whereSql += ' AND q.grade_id IN (?)'; params.push(gradeIds); }
+        if (topicIds.length) { whereSql += ' AND q.topic_id IN (?)'; params.push(topicIds); }
+        if (chapterIds.length) { whereSql += ' AND q.chapter_id IN (?)'; params.push(chapterIds); }
+        if (difficulties.length) { whereSql += ' AND q.difficulty_level IN (?)'; params.push(difficulties); }
+        if (search) { whereSql += ' AND q.question_text LIKE ?'; params.push(`%${search}%`); }
+
+        const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total ${whereSql}`, params);
+
+        const limit = sample ? sampleSize : pageSize;
+        const offset = sample ? 0 : (page - 1) * pageSize;
+        const orderSql = sample ? 'ORDER BY RAND()' : 'ORDER BY q.id DESC';
+
+        const listSql = `
+            SELECT q.id, q.question_text, q.difficulty_level, q.subject_id, q.grade_id, q.topic_id, q.chapter_id,
+                   s.title AS subject_title, g.title AS grade_title, t.title AS topic_title, c.title AS chapter_title,
+                   (SELECT qi.image_name FROM question_images_tam24 qi WHERE qi.question_id = q.id ORDER BY qi.id ASC LIMIT 1) AS image_name
+            ${whereSql}
+            ${orderSql}
+            LIMIT ? OFFSET ?
+        `;
+        const [rows] = await pool.query(listSql, [...params, limit, offset]);
+
+        let optionsByQuestion = {};
+        if (includeOptions && rows.length > 0) {
+            const ids = rows.map((r) => r.id);
+            const [optRows] = await pool.query(
+                'SELECT id, question_id, option_text FROM options_tam24 WHERE question_id IN (?) ORDER BY id ASC',
+                [ids]
+            );
+            for (const opt of optRows) {
+                if (!optionsByQuestion[opt.question_id]) optionsByQuestion[opt.question_id] = [];
+                optionsByQuestion[opt.question_id].push({ id: Number(opt.id), text: opt.option_text });
+            }
+        }
+
+        const questions = rows.map((q) => ({
+            id: Number(q.id),
+            text: q.question_text,
+            difficulty: q.difficulty_level || 'متوسط',
+            subject_id: q.subject_id,
+            grade_id: q.grade_id,
+            topic_id: q.topic_id,
+            chapter_id: q.chapter_id,
+            subject_title: q.subject_title || '',
+            grade_title: q.grade_title || '',
+            topic_title: q.topic_title || '',
+            chapter_title: q.chapter_title || '',
+            image: q.image_name || null,
+            options: optionsByQuestion[q.id] || [],
+        }));
+
+        res.json({
+            success: true,
+            questions,
+            pagination: {
+                total: Number(total) || 0,
+                page: sample ? 1 : page,
+                pageSize: limit,
+                sample,
+            },
+        });
+    } catch (error) {
+        console.error('❌ SQL Error in handleSearchBankQuestions:', error);
+        res.json({ success: false, message: 'خطا در دریافت سوالات بانک' });
+    }
+};
+
 const handleCreateQuiz = async (req, res) => {
     const creatorId = req.user?.id || 1;
 
     const {
-        quizType, // 'chapter' or 'mabhas'
+        quizType, // 'chapter' or 'mabhas' or 'selector'
         settings,
         lessonNames,
         gradeNames,
@@ -448,22 +541,37 @@ const handleCreateQuiz = async (req, res) => {
     const grades = parseArrayParam(req.body.grades);
     const chapters = parseArrayParam(req.body.chapters);
     const mabhas = parseArrayParam(req.body.mabhas);
+    const explicitQuestionIds = parseArrayParam(req.body.question_ids || req.body.questionIds);
     const shareCode = decodeShareCode(req.body.shareCode);
+    const isSelectorQuiz = quizType === 'selector' || explicitQuestionIds.length > 0;
 
-    if (!quizType || !settings || !settings.questionCounts) {
+    if (!settings || (!isSelectorQuiz && (!quizType || !settings.questionCounts))) {
         return res.json({ success: false, message: "اطلاعات ارسالی ناقص است." });
     }
 
     let allSelectedQuestionIds = [];
-    const questionCounts = settings.questionCounts;
+    const questionCounts = settings.questionCounts || {};
     const targetItems = quizType === 'chapter' ? chapters : mabhas;
     const targetColumn = quizType === 'chapter' ? 'topic_id' : 'chapter_id';
 
-    if (lessons.length === 0 || grades.length === 0) {
+    if (!isSelectorQuiz && (lessons.length === 0 || grades.length === 0)) {
         return res.json({ success: false, message: "پایه یا درس انتخاب نشده است." });
     }
 
     try {
+        if (isSelectorQuiz) {
+            const uniqueIds = [...new Set(explicitQuestionIds)].slice(0, 50);
+            if (uniqueIds.length === 0) {
+                return res.json({ success: false, message: "هیچ سوالی انتخاب نشده است." });
+            }
+            const [foundRows] = await pool.query(
+                `SELECT id FROM questions_tam24
+                 WHERE id IN (?) AND status = 'فعال' AND edit_status = 'done'`,
+                [uniqueIds]
+            );
+            const found = new Set(foundRows.map((r) => Number(r.id)));
+            allSelectedQuestionIds = uniqueIds.filter((id) => found.has(id));
+        } else {
         for (const itemId of targetItems) {
             const limit = parseInt(questionCounts[itemId]) || 0;
             if (limit <= 0) continue;
@@ -480,12 +588,15 @@ const handleCreateQuiz = async (req, res) => {
 
             allSelectedQuestionIds.push(...fetchedIds);
         }
+        }
 
         if (allSelectedQuestionIds.length === 0) {
             return res.json({ success: false, message: "هیچ سوالی با این مشخصات یافت نشد." });
         }
 
-        allSelectedQuestionIds = allSelectedQuestionIds.sort(() => Math.random() - 0.5);
+        if (!isSelectorQuiz) {
+            allSelectedQuestionIds = allSelectedQuestionIds.sort(() => Math.random() - 0.5);
+        }
 
         const title =
             settings.quizName && settings.quizName.trim() !== ''
@@ -532,11 +643,11 @@ const handleCreateQuiz = async (req, res) => {
             shareCode,
             creatorId,
             title,
-            quizType,
-            settings.difficulty,
-            settings.time,
-            settings.visibility,
-            settings.memberLimit,
+            isSelectorQuiz ? 'selector' : quizType,
+            Number(settings.difficulty) || 2,
+            Number(settings.time) || 30,
+            settings.visibility === 'public' ? 'public' : 'private',
+            Number(settings.memberLimit) || 10,
             quizStatus,
             JSON.stringify(allSelectedQuestionIds),
             JSON.stringify(enrichedSettings)
@@ -2772,6 +2883,7 @@ module.exports = {
     handleGetGradesBySubjects,     // به روز شده
     handleGetChaptersBySubjects,   // به روز شده
     handleGetMabahesByChapters,    // به روز شده
+    handleSearchBankQuestions,
     handleCreateQuiz,
     handleGetQuizByShareCode,
     handleGetQuizMetadata,

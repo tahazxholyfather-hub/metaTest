@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 
 import MainTestSelector from './testworld/MainTestSelector';
 import { NeedsView } from './testworld/NeedsView';
+import { QuestionSelectorView } from './testworld/QuestionSelectorView';
 import { NotFoundView } from './testworld/NotFoundView';
 import { useUser } from '../context/UserContext';
 import { useSocket } from '../socket/useSocket';
@@ -17,7 +18,7 @@ export interface TestWorldProps {
     theme: string;
 }
 
-const VALID_VIEWS = ['main', 'needs'];
+const VALID_VIEWS = ['main', 'needs', 'selector'];
 
 
 export const TestWorldView = ({
@@ -52,7 +53,7 @@ export const TestWorldView = ({
         window.history.back();
     }, []);
 
-    const handleStartNeeds = useCallback(async () => {
+    const handleStartNeeds = useCallback(async (viewId: 'needs' | 'selector' = 'needs') => {
         try {
             const response = await flowApi.dispatch('generate_code');
 
@@ -61,7 +62,7 @@ export const TestWorldView = ({
             }
 
             setShareCode(response.data.code);
-            navigateTo('needs');
+            navigateTo(viewId);
         } catch (error) {
             console.error('Error requesting share code:', error);
         }
@@ -114,8 +115,8 @@ export const TestWorldView = ({
                         key="main"
                         theme={theme}
                         onStart={(id) => {
-                            if (id === 'needs') {
-                                handleStartNeeds();
+                            if (id === 'needs' || id === 'selector') {
+                                handleStartNeeds(id);
                             } else {
                                 navigateTo(id);
                             }
@@ -128,6 +129,14 @@ export const TestWorldView = ({
                             setShareCode(code);
                             navigate(`/lobby/${code}`);
                         }}
+                    />
+                )}
+
+                {activeView === 'selector' && (
+                    <QuestionSelectorView
+                        key="selector"
+                        shareCode={shareCode}
+                        onBack={handleBack}
                     />
                 )}
 

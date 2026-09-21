@@ -288,6 +288,9 @@ app.post('/api/flow', requireToken, async (req, res) => {
             case 'get_mabahes_by_chapters_multi':
                 await quizWorldController.handleGetMabahesByChapters(req, res);
                 break;
+            case 'search_bank_questions':
+                await quizWorldController.handleSearchBankQuestions(req, res);
+                break;
             case 'generate_code':
                 await quizWorldController.generateCode(req, res);
                 break;

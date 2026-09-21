@@ -403,6 +403,9 @@ export const flowApi = {
     getMabahesByChaptersMulti: (chapterIds: number[]) =>
         flowApi.dispatch("get_mabahes_by_chapters_multi", { chapterIds }),
 
+    searchBankQuestions: (payload: Json) =>
+        flowApi.dispatch("search_bank_questions", payload),
+
     generateCode: () => flowApi.dispatch("generate_code"),
 
     createQuiz: (payload: Json) => flowApi.dispatch("create_quiz", payload),
