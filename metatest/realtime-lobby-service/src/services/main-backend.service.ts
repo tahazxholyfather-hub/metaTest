@@ -511,7 +511,7 @@ export class MainBackendService {
             if (!response.ok) {
                 const message = this.extractErrorMessage(
                     responseBody,
-                    'Main backend request failed',
+                    `Main backend request failed (HTTP ${response.status})`,
                 );
 
                 logger.warn(
@@ -519,7 +519,10 @@ export class MainBackendService {
                         url,
                         method: options.method,
                         status: response.status,
-                        responseBody,
+                        responseBody:
+                            typeof responseBody === 'string'
+                                ? responseBody.slice(0, 300)
+                                : responseBody,
                     },
                     'Main backend request failed',
                 );
@@ -528,7 +531,9 @@ export class MainBackendService {
                     message,
                     response.status >= 500 ? 502 : response.status,
                     'MAIN_BACKEND_REQUEST_FAILED',
-                    responseBody,
+                    {
+                        status: response.status,
+                    },
                 );
             }
 
@@ -696,9 +701,11 @@ export class MainBackendService {
         }
 
         if (typeof responseBody === 'string') {
-            /**
-             * Avoid sending huge HTML pages to the frontend.
-             */
+            const cannotMatch = responseBody.match(/Cannot (GET|POST|PUT|PATCH|DELETE) ([^<]+)/i);
+            if (cannotMatch) {
+                return `Main backend route not found: ${cannotMatch[1]} ${cannotMatch[2].trim()}`;
+            }
+
             if (responseBody.includes('<!DOCTYPE html>')) {
                 return fallback;
             }
