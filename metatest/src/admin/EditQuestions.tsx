@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
     Save, Maximize2, Minimize2, Edit2, ChevronLeft, ChevronRight,
     Filter, CheckCircle2, Circle, X, ChevronDown, Search, Loader2, Image as ImageIcon, AlertCircle
@@ -101,6 +101,122 @@ export const CustomSelect = ({ label, value, options, onChange, placeholder = "S
 };
 
 
+export const CustomMultiSelect = ({ label, values, options, onChange, placeholder = "Select...", disabled = false }: {
+    label?: string;
+    values: Array<number | string>;
+    options: SelectOption[];
+    onChange: (ids: Array<number | string>) => void;
+    placeholder?: string;
+    disabled?: boolean;
+}) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [positionUp, setPositionUp] = useState(false);
+    const selectRef = useRef<HTMLDivElement>(null);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const selected = values.map(String);
+
+    useEffect(() => {
+        if (isOpen && selectRef.current && dropdownRef.current) {
+            const selectRect = selectRef.current.getBoundingClientRect();
+            const dropdownHeight = dropdownRef.current.offsetHeight;
+            const spaceBelow = window.innerHeight - selectRect.bottom;
+            if (spaceBelow < dropdownHeight && selectRect.top > dropdownHeight) {
+                setPositionUp(true);
+            } else {
+                setPositionUp(false);
+            }
+        }
+    }, [isOpen, options, values]);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (selectRef.current && !selectRef.current.contains(event.target as Node)) setIsOpen(false);
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const toggle = (id: number | string) => {
+        const key = String(id);
+        if (selected.includes(key)) onChange(values.filter((v) => String(v) !== key));
+        else onChange([...values, id]);
+    };
+
+    const selectedOptions = options.filter((o) => selected.includes(String(o.id)));
+
+    return (
+        <div className="space-y-1.5 relative w-full" ref={selectRef}>
+            {label && (
+                <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider px-1 flex justify-between">
+                    <span>{label}</span>
+                    {values.length > 0 && !disabled && (
+                        <button type="button" onClick={(e) => { e.stopPropagation(); onChange([]); }} className="text-red-500 hover:underline">Clear</button>
+                    )}
+                </label>
+            )}
+            <div
+                onClick={() => !disabled && setIsOpen(!isOpen)}
+                className={`w-full min-h-[46px] flex items-center justify-between bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-xl px-4 py-2 text-xs font-medium transition-all ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:border-[#1a73e8]'}`}
+            >
+                <div className="flex flex-wrap gap-1.5 pr-4 flex-1 min-w-0">
+                    {selectedOptions.length === 0 ? (
+                        <span className="text-gray-400 py-1">{placeholder}</span>
+                    ) : selectedOptions.map((opt) => (
+                        <span
+                            key={String(opt.id)}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[#e8f0fe] text-[#1a73e8] dark:bg-[#1a73e8]/10 font-bold max-w-full"
+                            dir="auto"
+                        >
+                            <span className="truncate">{opt.title}</span>
+                            {!disabled && (
+                                <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); toggle(opt.id); }}
+                                    className="hover:text-red-500"
+                                >
+                                    <X size={10} />
+                                </button>
+                            )}
+                        </span>
+                    ))}
+                </div>
+                <ChevronDown size={14} className={`text-gray-400 shrink-0 transition-transform duration-300 ${isOpen ? 'rotate-180 text-[#1a73e8]' : ''}`} />
+            </div>
+
+            {isOpen && !disabled && (
+                <div
+                    ref={dropdownRef}
+                    className={`absolute left-0 right-0 bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-xl shadow-xl z-[9999] animate-in fade-in zoom-in-95 duration-100
+                    ${positionUp ? 'bottom-[calc(100%+4px)]' : 'top-[calc(100%+4px)]'}`}
+                >
+                    <div className="max-h-60 overflow-y-auto custom-scrollbar py-1">
+                        {options.map((opt) => {
+                            const active = selected.includes(String(opt.id));
+                            return (
+                                <div
+                                    key={opt.id}
+                                    onClick={() => toggle(opt.id)}
+                                    className={`px-4 py-3 text-xs cursor-pointer hover:bg-[#f8f9fa] dark:hover:bg-[#2b2d2f] transition-colors flex items-center justify-between gap-2 ${
+                                        active ? 'bg-[#e8f0fe] text-[#1a73e8] font-bold dark:bg-[#1a73e8]/10' : 'text-gray-700 dark:text-gray-300'
+                                    }`}
+                                    dir="auto"
+                                >
+                                    <span className="truncate">{opt.title}</span>
+                                    {active ? <CheckCircle2 size={14} className="shrink-0" /> : <Circle size={14} className="shrink-0 text-gray-300" />}
+                                </div>
+                            );
+                        })}
+                        {options.length === 0 && (
+                            <div className="px-4 py-3 text-xs text-gray-400 text-center">No items available</div>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+
 // --- FILTER SWITCH COMPONENT ---
 // Segmented pill switch used for the quick filters (Status / Images).
 const FilterSwitch = ({ label, value, options, onChange, disabled = false }: {
@@ -140,6 +256,9 @@ interface QuestionData {
     grade: number | null; grade_title: string;
     chapter: number | null; chapter_title: string;
     mabhas: number | null; mabhas_title: string;
+    grade_ids: number[]; grade_titles: string[];
+    chapter_ids: number[]; chapter_titles: string[];
+    mabhas_ids: number[]; mabhas_titles: string[];
     level: string; status: string;
 }
 
@@ -162,6 +281,12 @@ export default function EditQuestions() {
         search_text: string;
     }>({ subject_id: null, grade_id: null, topic_id: null, chapter_id: null, status: null, has_image: null, search_text: '' });
     const [lists, setLists] = useState<{ subjects: SelectOption[], grades: SelectOption[], chapters: SelectOption[], mabahes: SelectOption[] }>({ subjects: [], grades: [], chapters: [], mabahes: [] });
+    const [curriculum, setCurriculum] = useState<{
+        subjects: { id: number; title: string }[];
+        grades: { id: number; title: string }[];
+        topics: { id: number; subject_id: number; title: string }[];
+        chapters: { id: number; topic_id: number; title: string }[];
+    }>({ subjects: [], grades: [], topics: [], chapters: [] });
 
     // Navigation History
     const [history, setHistory] = useState<number[]>([]);
@@ -248,8 +373,40 @@ export default function EditQuestions() {
     };
 
     useEffect(() => { fetchSubjects(); }, []);
+    useEffect(() => {
+        (async () => {
+            try {
+                const response: any = await flowApi.dispatch('Admin_get_curriculum');
+                const res = response.data || response;
+                if (res.success) {
+                    setCurriculum({
+                        subjects: res.subjects || [],
+                        grades: res.grades || [],
+                        topics: res.topics || [],
+                        chapters: res.chapters || [],
+                    });
+                }
+            } catch (e) { console.error('Failed to fetch curriculum', e); }
+        })();
+    }, []);
     useEffect(() => { fetchGradesAndChapters(filters.subject_id, filters.grade_id); }, [filters.subject_id, filters.grade_id]);
     useEffect(() => { fetchMabahes(filters.topic_id); }, [filters.topic_id]);
+
+    const editTopicOptions: SelectOption[] = useMemo(
+        () => curriculum.topics
+            .filter((t) => !question?.subject || Number(t.subject_id) === Number(question.subject))
+            .map((t) => ({ id: t.id, title: t.title })),
+        [curriculum.topics, question?.subject]
+    );
+    const editMabhasOptions: SelectOption[] = useMemo(() => {
+        const topicIds = (question?.chapter_ids?.length
+            ? question.chapter_ids
+            : curriculum.topics.filter((t) => Number(t.subject_id) === Number(question?.subject)).map((t) => t.id));
+        const allowed = new Set(topicIds.map(String));
+        return curriculum.chapters
+            .filter((c) => allowed.has(String(c.topic_id)))
+            .map((c) => ({ id: c.id, title: c.title }));
+    }, [curriculum.chapters, curriculum.topics, question?.chapter_ids, question?.subject]);
 
     // Fetch lists needed when editing a specific question's metadata
     useEffect(() => {
@@ -264,8 +421,6 @@ export default function EditQuestions() {
         setFilters(prev => {
             const newFilters = { ...prev, [key]: value };
             if (key === 'subject_id') { newFilters.grade_id = null; newFilters.topic_id = null; newFilters.chapter_id = null; }
-            if (key === 'grade_id') { newFilters.topic_id = null; newFilters.chapter_id = null; }
-            if (key === 'topic_id') { newFilters.chapter_id = null; }
             return newFilters;
         });
     };
@@ -274,11 +429,27 @@ export default function EditQuestions() {
         if (!question) return;
         let updatedQuestion: Partial<QuestionData> = { ...question, [field]: value };
         if (field === 'subject') {
-            updatedQuestion = { ...updatedQuestion, grade: null, grade_title: '----', chapter: null, chapter_title: '----', mabhas: null, mabhas_title: '----' };
-        } else if (field === 'grade') {
-            updatedQuestion = { ...updatedQuestion, chapter: null, chapter_title: '----', mabhas: null, mabhas_title: '----' };
-        } else if (field === 'chapter') {
-            updatedQuestion = { ...updatedQuestion, mabhas: null, mabhas_title: '----' };
+            updatedQuestion = {
+                ...updatedQuestion,
+                chapter: null, chapter_title: '----', chapter_ids: [], chapter_titles: [],
+                mabhas: null, mabhas_title: '----', mabhas_ids: [], mabhas_titles: [],
+            };
+        } else if (field === 'chapter_ids') {
+            const allowed = new Set((value || []).map(String));
+            const nextMabhas = (question.mabhas_ids || []).filter((id) => {
+                const ch = curriculum.chapters.find((c) => String(c.id) === String(id));
+                return ch && (allowed.size === 0 || allowed.has(String(ch.topic_id)));
+            });
+            updatedQuestion = {
+                ...updatedQuestion,
+                chapter: value?.[0] ?? null,
+                mabhas_ids: nextMabhas,
+                mabhas: nextMabhas[0] ?? null,
+            };
+        } else if (field === 'grade_ids') {
+            updatedQuestion = { ...updatedQuestion, grade: value?.[0] ?? null };
+        } else if (field === 'mabhas_ids') {
+            updatedQuestion = { ...updatedQuestion, mabhas: value?.[0] ?? null };
         }
         setQuestion(updatedQuestion as QuestionData);
     };
@@ -292,12 +463,18 @@ export default function EditQuestions() {
         images: q.images || [],
         subject: q.subject || q.subject_id || null,
         subject_title: q.subject_title || '----',
-        grade: q.grade || q.grade_id || null,
-        grade_title: q.grade_title || '----',
-        chapter: q.chapter || q.topic_id || null, // UI "Chapter" is DB "topic_id"
-        chapter_title: q.chapter_title || '----',
-        mabhas: q.mabhas || q.chapter_id || null, // UI "Mabhas" is DB "chapter_id"
-        mabhas_title: q.mabhas_title || '----',
+        grade: q.grade || q.grade_id || (q.grade_ids?.[0] ?? null),
+        grade_title: q.grade_title || q.grade_titles?.[0] || '----',
+        chapter: q.chapter || q.topic_id || (q.chapter_ids?.[0] ?? null),
+        chapter_title: q.chapter_title || q.chapter_titles?.[0] || '----',
+        mabhas: q.mabhas || q.chapter_id || (q.mabhas_ids?.[0] ?? null),
+        mabhas_title: q.mabhas_title || q.mabhas_titles?.[0] || '----',
+        grade_ids: (q.grade_ids || (q.grade || q.grade_id ? [q.grade || q.grade_id] : [])).map(Number).filter((n: number) => n > 0),
+        grade_titles: q.grade_titles || (q.grade_title ? [q.grade_title] : []),
+        chapter_ids: (q.chapter_ids || (q.chapter || q.topic_id ? [q.chapter || q.topic_id] : [])).map(Number).filter((n: number) => n > 0),
+        chapter_titles: q.chapter_titles || (q.chapter_title ? [q.chapter_title] : []),
+        mabhas_ids: (q.mabhas_ids || (q.mabhas || q.chapter_id ? [q.mabhas || q.chapter_id] : [])).map(Number).filter((n: number) => n > 0),
+        mabhas_titles: q.mabhas_titles || (q.mabhas_title ? [q.mabhas_title] : []),
         level: q.level || 'متوسط',
         status: q.status || 'غیرفعال'
     });
@@ -442,9 +619,13 @@ export default function EditQuestions() {
                 correct_option_id: question.correctOptionId,
                 options: question.options.map(o => ({ id: o.id, text: o.text })),
                 subject_id: question.subject,
-                grade_id: question.grade,
-                topic_id: question.chapter, // UI Chapter -> DB topic
-                chapter_id: question.mabhas,  // UI Mabhas -> DB chapter
+                grade_id: question.grade_ids[0] ?? question.grade,
+                topic_id: question.chapter_ids[0] ?? question.chapter,
+                chapter_id: question.mabhas_ids[0] ?? question.mabhas,
+                grade_ids: question.grade_ids,
+                topic_ids: question.chapter_ids,
+                chapter_ids: question.mabhas_ids,
+                mabhas_ids: question.mabhas_ids,
                 level: question.level,
                 status: question.status
             };
@@ -669,23 +850,49 @@ export default function EditQuestions() {
                                 </label>
                                 {isEditing ? (
                                     <div className="flex flex-col gap-4">
-                                        <CustomSelect label="Subject" value={question.subject} options={lists.subjects} onChange={(v) => handleMetaChange('subject', v)} placeholder="Select Subject..." />
-                                        <CustomSelect label="Grade" value={question.grade} options={lists.grades} onChange={(v) => handleMetaChange('grade', v)} placeholder="Select Grade..." disabled={!question.subject} />
-                                        <CustomSelect label="Chapter (Topic)" value={question.chapter} options={lists.chapters} onChange={(v) => handleMetaChange('chapter', v)} placeholder="Select Chapter..." disabled={!question.grade} />
-                                        <CustomSelect label="Mabhas (Chapter)" value={question.mabhas} options={lists.mabahes} onChange={(v) => handleMetaChange('mabhas', v)} placeholder="Select Mabhas..." disabled={!question.chapter} />
+                                        <CustomSelect label="Subject" value={question.subject} options={curriculum.subjects.length ? curriculum.subjects : lists.subjects} onChange={(v) => handleMetaChange('subject', v)} placeholder="Select Subject..." />
+                                        <CustomMultiSelect
+                                            label="Grades"
+                                            values={question.grade_ids}
+                                            options={curriculum.grades.length ? curriculum.grades : lists.grades}
+                                            onChange={(ids) => handleMetaChange('grade_ids', ids.map(Number))}
+                                            placeholder="Select one or more grades..."
+                                        />
+                                        <CustomMultiSelect
+                                            label="Chapters (Topics)"
+                                            values={question.chapter_ids}
+                                            options={editTopicOptions}
+                                            onChange={(ids) => handleMetaChange('chapter_ids', ids.map(Number))}
+                                            placeholder="Select one or more chapters..."
+                                            disabled={!question.subject}
+                                        />
+                                        <CustomMultiSelect
+                                            label="Mabhas"
+                                            values={question.mabhas_ids}
+                                            options={editMabhasOptions}
+                                            onChange={(ids) => handleMetaChange('mabhas_ids', ids.map(Number))}
+                                            placeholder="Select one or more mabhas..."
+                                            disabled={!question.subject}
+                                        />
                                         <CustomSelect label="Level" value={question.level} options={levelOptions} onChange={(v) => handleUpdate('level', v)} placeholder="Select Level..." />
                                         <CustomSelect label="Status" value={question.status} options={statusOptions} onChange={(v) => handleUpdate('status', v)} placeholder="Select Status..." />
+                                        <p className="text-[10px] text-[#86868b] leading-relaxed">
+                                            A question can belong to several grades, chapters, and mabhas. Subject stays single.
+                                        </p>
                                     </div>
                                 ) : (
                                     <div className="space-y-3 text-xs font-medium">
                                         {[
-                                            { label: 'Subject', value: question.subject_title }, { label: 'Grade', value: question.grade_title },
-                                            { label: 'Chapter', value: question.chapter_title }, { label: 'Mabhas', value: question.mabhas_title },
-                                            { label: 'Level', value: question.level }, { label: 'Status', value: question.status }
+                                            { label: 'Subject', value: question.subject_title },
+                                            { label: 'Grades', value: (question.grade_titles.length ? question.grade_titles : [question.grade_title]).filter(Boolean).join('، ') },
+                                            { label: 'Chapters', value: (question.chapter_titles.length ? question.chapter_titles : [question.chapter_title]).filter(Boolean).join('، ') },
+                                            { label: 'Mabhas', value: (question.mabhas_titles.length ? question.mabhas_titles : [question.mabhas_title]).filter(Boolean).join('، ') },
+                                            { label: 'Level', value: question.level },
+                                            { label: 'Status', value: question.status }
                                         ].map(item => (
-                                            <div key={item.label} className="flex justify-between items-center bg-[#f8f9fa] dark:bg-[#131314] p-3 rounded-lg">
-                                                <span className="text-gray-500 dark:text-gray-400">{item.label}:</span>
-                                                <span className="font-semibold text-gray-800 dark:text-gray-200">{item.value || '----'}</span>
+                                            <div key={item.label} className="flex justify-between items-start gap-3 bg-[#f8f9fa] dark:bg-[#131314] p-3 rounded-lg">
+                                                <span className="text-gray-500 dark:text-gray-400 shrink-0">{item.label}:</span>
+                                                <span className="font-semibold text-gray-800 dark:text-gray-200 text-left" dir="auto">{item.value || '----'}</span>
                                             </div>
                                         ))}
                                     </div>

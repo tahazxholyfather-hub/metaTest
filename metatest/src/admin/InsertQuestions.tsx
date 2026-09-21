@@ -4,7 +4,7 @@ import {
     PenLine, FileText, CheckSquare, Square, Send, Trash2
 } from 'lucide-react';
 import { flowApi } from '../lib/authApi';
-import { CustomSelect, type SelectOption } from './EditQuestions';
+import { CustomSelect, CustomMultiSelect, type SelectOption } from './EditQuestions';
 import { MathRenderer } from '../components/ui/MathRenderer';
 
 
@@ -50,8 +50,14 @@ export default function InsertQuestions() {
 
     // Manual mode state
     const [manual, setManual] = useState<ManualForm>(EMPTY_MANUAL);
-    const [meta, setMeta] = useState<{ subject_id: number | null; grade_id: number | null; topic_id: number | null; chapter_id: number | null; level: string }>({
-        subject_id: null, grade_id: null, topic_id: null, chapter_id: null, level: 'متوسط'
+    const [meta, setMeta] = useState<{
+        subject_id: number | null;
+        grade_ids: number[];
+        topic_ids: number[];
+        chapter_ids: number[];
+        level: string;
+    }>({
+        subject_id: null, grade_ids: [], topic_ids: [], chapter_ids: [], level: 'متوسط'
     });
     const [isSavingManual, setIsSavingManual] = useState(false);
 
@@ -93,16 +99,28 @@ export default function InsertQuestions() {
         () => curriculum.topics.filter(t => t.subject_id === meta.subject_id).map(t => ({ id: t.id, title: t.title })),
         [curriculum.topics, meta.subject_id]
     );
-    const chapterOptions: SelectOption[] = useMemo(
-        () => curriculum.chapters.filter(c => c.topic_id === meta.topic_id).map(c => ({ id: c.id, title: c.title })),
-        [curriculum.chapters, meta.topic_id]
-    );
+    const chapterOptions: SelectOption[] = useMemo(() => {
+        const topicSet = new Set(meta.topic_ids.map(String));
+        const source = meta.topic_ids.length
+            ? curriculum.chapters.filter(c => topicSet.has(String(c.topic_id)))
+            : curriculum.chapters.filter(c => topicOptions.some(t => Number(t.id) === Number(c.topic_id)));
+        return source.map(c => ({ id: c.id, title: c.title }));
+    }, [curriculum.chapters, meta.topic_ids, topicOptions]);
 
     const handleMetaChange = (key: string, value: any) => {
         setMeta(prev => {
             const next = { ...prev, [key]: value };
-            if (key === 'subject_id') { next.topic_id = null; next.chapter_id = null; }
-            if (key === 'topic_id') { next.chapter_id = null; }
+            if (key === 'subject_id') {
+                next.topic_ids = [];
+                next.chapter_ids = [];
+            }
+            if (key === 'topic_ids') {
+                const allowed = new Set((value || []).map(String));
+                next.chapter_ids = prev.chapter_ids.filter(id => {
+                    const ch = curriculum.chapters.find(c => String(c.id) === String(id));
+                    return ch && (allowed.size === 0 || allowed.has(String(ch.topic_id)));
+                });
+            }
             return next;
         });
     };
@@ -123,9 +141,12 @@ export default function InsertQuestions() {
                 insert_type: 'دستی',
                 meta: {
                     subject_id: meta.subject_id,
-                    grade_id: meta.grade_id,
-                    topic_id: meta.topic_id,
-                    chapter_id: meta.chapter_id,
+                    grade_id: meta.grade_ids[0] ?? null,
+                    topic_id: meta.topic_ids[0] ?? null,
+                    chapter_id: meta.chapter_ids[0] ?? null,
+                    grade_ids: meta.grade_ids,
+                    topic_ids: meta.topic_ids,
+                    chapter_ids: meta.chapter_ids,
                     level: meta.level,
                 },
                 questions: [{
@@ -224,9 +245,12 @@ export default function InsertQuestions() {
                 // Optional metadata applied to ALL extracted questions in this batch
                 meta: {
                     subject_id: meta.subject_id,
-                    grade_id: meta.grade_id,
-                    topic_id: meta.topic_id,
-                    chapter_id: meta.chapter_id,
+                    grade_id: meta.grade_ids[0] ?? null,
+                    topic_id: meta.topic_ids[0] ?? null,
+                    chapter_id: meta.chapter_ids[0] ?? null,
+                    grade_ids: meta.grade_ids,
+                    topic_ids: meta.topic_ids,
+                    chapter_ids: meta.chapter_ids,
                     level: meta.level,
                 },
                 questions: selected.map(q => ({
@@ -376,16 +400,16 @@ export default function InsertQuestions() {
                     {/* RIGHT COLUMN: metadata */}
                     <div className="lg:col-span-1 flex flex-col gap-6 lg:sticky lg:top-28 self-start w-full">
                         <div className="bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl p-6">
-                            <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider mb-4 block">Question Metadata (optional)</label>
+                            <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider mb-4 block">Question Metadata</label>
                             <div className="flex flex-col gap-4">
                                 <CustomSelect label="Subject" value={meta.subject_id} options={curriculum.subjects.map(s => ({ id: s.id, title: s.title }))} onChange={(v) => handleMetaChange('subject_id', v)} placeholder="Select Subject..." />
-                                <CustomSelect label="Grade" value={meta.grade_id} options={curriculum.grades.map(g => ({ id: g.id, title: g.title }))} onChange={(v) => handleMetaChange('grade_id', v)} placeholder="Select Grade..." />
-                                <CustomSelect label="Chapter (Topic)" value={meta.topic_id} options={topicOptions} onChange={(v) => handleMetaChange('topic_id', v)} placeholder="Select Chapter..." disabled={!meta.subject_id} />
-                                <CustomSelect label="Mabhas (Chapter)" value={meta.chapter_id} options={chapterOptions} onChange={(v) => handleMetaChange('chapter_id', v)} placeholder="Select Mabhas..." disabled={!meta.topic_id} />
+                                <CustomMultiSelect label="Grades" values={meta.grade_ids} options={curriculum.grades.map(g => ({ id: g.id, title: g.title }))} onChange={(ids) => handleMetaChange('grade_ids', ids.map(Number))} placeholder="Select one or more grades..." />
+                                <CustomMultiSelect label="Chapters (Topics)" values={meta.topic_ids} options={topicOptions} onChange={(ids) => handleMetaChange('topic_ids', ids.map(Number))} placeholder="Select one or more chapters..." disabled={!meta.subject_id} />
+                                <CustomMultiSelect label="Mabhas" values={meta.chapter_ids} options={chapterOptions} onChange={(ids) => handleMetaChange('chapter_ids', ids.map(Number))} placeholder="Select one or more mabhas..." disabled={!meta.subject_id} />
                                 <CustomSelect label="Level" value={meta.level} options={LEVEL_OPTIONS} onChange={(v) => handleMetaChange('level', v || 'متوسط')} placeholder="Select Level..." />
                             </div>
                             <p className="text-[10px] text-[#86868b] mt-4 leading-relaxed">
-                                New questions are always inserted as <span className="font-bold">غیرفعال (inactive)</span> and must be activated from Edit Questions.
+                                Tag a question with several grades, chapters, and mabhas. Subject stays single (a math question cannot also be physics). New questions are inserted as <span className="font-bold">غیرفعال (inactive)</span>.
                             </p>
                         </div>
                     </div>
@@ -427,9 +451,9 @@ export default function InsertQuestions() {
                             <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider">
                                 Batch Metadata (optional — applied to all extracted questions)
                             </label>
-                            {(meta.subject_id || meta.grade_id || meta.topic_id || meta.chapter_id) && (
+                            {(meta.subject_id || meta.grade_ids.length || meta.topic_ids.length || meta.chapter_ids.length) && (
                                 <button
-                                    onClick={() => setMeta(prev => ({ ...prev, subject_id: null, grade_id: null, topic_id: null, chapter_id: null }))}
+                                    onClick={() => setMeta(prev => ({ ...prev, subject_id: null, grade_ids: [], topic_ids: [], chapter_ids: [] }))}
                                     className="text-[10px] font-bold text-red-500 hover:underline"
                                 >
                                     Clear All
@@ -438,9 +462,9 @@ export default function InsertQuestions() {
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                             <CustomSelect label="Subject" value={meta.subject_id} options={curriculum.subjects.map(s => ({ id: s.id, title: s.title }))} onChange={(v) => handleMetaChange('subject_id', v)} placeholder="Select Subject..." />
-                            <CustomSelect label="Grade" value={meta.grade_id} options={curriculum.grades.map(g => ({ id: g.id, title: g.title }))} onChange={(v) => handleMetaChange('grade_id', v)} placeholder="Select Grade..." />
-                            <CustomSelect label="Chapter (Topic)" value={meta.topic_id} options={topicOptions} onChange={(v) => handleMetaChange('topic_id', v)} placeholder="Select Chapter..." disabled={!meta.subject_id} />
-                            <CustomSelect label="Mabhas (Chapter)" value={meta.chapter_id} options={chapterOptions} onChange={(v) => handleMetaChange('chapter_id', v)} placeholder="Select Mabhas..." disabled={!meta.topic_id} />
+                            <CustomMultiSelect label="Grades" values={meta.grade_ids} options={curriculum.grades.map(g => ({ id: g.id, title: g.title }))} onChange={(ids) => handleMetaChange('grade_ids', ids.map(Number))} placeholder="One or more grades..." />
+                            <CustomMultiSelect label="Chapters" values={meta.topic_ids} options={topicOptions} onChange={(ids) => handleMetaChange('topic_ids', ids.map(Number))} placeholder="One or more chapters..." disabled={!meta.subject_id} />
+                            <CustomMultiSelect label="Mabhas" values={meta.chapter_ids} options={chapterOptions} onChange={(ids) => handleMetaChange('chapter_ids', ids.map(Number))} placeholder="One or more mabhas..." disabled={!meta.subject_id} />
                         </div>
                     </div>
 
@@ -465,14 +489,14 @@ export default function InsertQuestions() {
                                     <span className="text-[11px] font-bold text-[#86868b] uppercase tracking-wider">
                                         Review Extracted Questions — {checkedCount} of {parsed.length} selected
                                     </span>
-                                    {(meta.subject_id || meta.grade_id || meta.topic_id || meta.chapter_id) && (
+                                    {(meta.subject_id || meta.grade_ids.length || meta.topic_ids.length || meta.chapter_ids.length) && (
                                         <div className="flex flex-wrap items-center gap-1.5">
                                             <span className="text-[10px] font-bold text-[#86868b]">Will be applied to all:</span>
                                             {[
                                                 curriculum.subjects.find(s => s.id === meta.subject_id)?.title,
-                                                curriculum.grades.find(g => g.id === meta.grade_id)?.title,
-                                                curriculum.topics.find(t => t.id === meta.topic_id)?.title,
-                                                curriculum.chapters.find(c => c.id === meta.chapter_id)?.title,
+                                                ...meta.grade_ids.map(id => curriculum.grades.find(g => g.id === id)?.title),
+                                                ...meta.topic_ids.map(id => curriculum.topics.find(t => t.id === id)?.title),
+                                                ...meta.chapter_ids.map(id => curriculum.chapters.find(c => c.id === id)?.title),
                                             ].filter(Boolean).map((title, i) => (
                                                 <span key={i} className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-[#e8f0fe] text-[#1a73e8] dark:bg-[#1a73e8]/10" dir="auto">
                                                     {title}

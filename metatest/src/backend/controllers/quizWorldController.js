@@ -9,6 +9,12 @@ const {
     encodeResultId,
     decodeResultId
 } = require('../utils/hash');
+const {
+    ensureQuestionTagTables,
+    joinOnTag,
+    matchTagIn,
+    addTagFilter,
+} = require('../utils/questionTags');
 
 
 // ==========================================
@@ -140,35 +146,41 @@ async function fetchQuestionIdsByDifficulty({
                                                 limit,
                                                 difficultySetting
                                             }) {
+    await ensureQuestionTagTables();
     const distribution = getDifficultyDistribution(difficultySetting, limit);
 
     const selectedIds = [];
     const selectedSet = new Set();
 
+    const gradeMatch = matchTagIn('q', 'grade', grades);
+    const itemMatch = targetColumn === 'topic_id'
+        ? matchTagIn('q', 'topic', [itemId])
+        : matchTagIn('q', 'mabhas', [itemId]);
+    const subjectPlaceholders = lessons.map(() => '?').join(',');
+
     const baseWhere = `
-        FROM questions_tam24
-        WHERE status = 'فعال'
-          AND edit_status = 'done'
-          AND subject_id IN (?)
-          AND grade_id IN (?)
-          AND ${targetColumn} = ?
+        FROM questions_tam24 q
+        WHERE q.status = 'فعال'
+          AND q.edit_status = 'done'
+          AND q.subject_id IN (${subjectPlaceholders})
+          ${gradeMatch.sql ? `AND ${gradeMatch.sql}` : ''}
+          ${itemMatch.sql ? `AND ${itemMatch.sql}` : ''}
     `;
+    const baseParams = [...lessons, ...gradeMatch.params, ...itemMatch.params];
 
     async function fetchBucket(difficultyLevel, bucketLimit) {
         if (bucketLimit <= 0) return [];
 
         const sql = `
-            SELECT id
+            SELECT q.id
             ${baseWhere}
-              AND difficulty_level = ?
+              AND q.difficulty_level = ?
             ORDER BY RAND()
             LIMIT ?
         `;
 
         const [rows] = await pool.query(sql, [
-            lessons,
-            grades,
-            itemId,
+            ...baseParams,
             difficultyLevel,
             bucketLimit
         ]);
@@ -180,15 +192,15 @@ async function fetchQuestionIdsByDifficulty({
         if (needed <= 0) return [];
 
         let sql = `
-            SELECT id
+            SELECT q.id
             ${baseWhere}
         `;
 
-        const params = [lessons, grades, itemId];
+        const params = [...baseParams];
 
         if (excludeIds.length > 0) {
-            sql += ` AND id NOT IN (?) `;
-            params.push(excludeIds);
+            sql += ` AND q.id NOT IN (${excludeIds.map(() => '?').join(',')}) `;
+            params.push(...excludeIds);
         }
 
         sql += `
@@ -280,21 +292,21 @@ const handleGetSubjects = async (req, res) => {
 
 const handleGetGradesBySubjects = async (req, res) => {
     try {
+        await ensureQuestionTagTables();
         const subjectIds = parseArrayParam(pickBodyValue(req.body, ['subject_ids', 'subjects', 'lessons']));
         if (subjectIds.length === 0) {
             return res.json({ success: false, message: "Missing or invalid parameter: subject_ids array" });
         }
 
         const sql = `
-            SELECT g.id, g.title, COUNT(q.id) AS question_count
+            SELECT g.id, g.title, COUNT(DISTINCT q.id) AS question_count
             FROM questions_tam24 q
-            INNER JOIN grades_tam24 g ON q.grade_id = g.id
+            INNER JOIN grades_tam24 g ON ${joinOnTag('q', 'g', 'grade')}
             WHERE q.subject_id IN (?)
                AND q.status = 'فعال'
                AND q.edit_status = 'done'
-               AND q.grade_id IS NOT NULL
             GROUP BY g.id, g.title
-            HAVING COUNT(q.id) >= ?
+            HAVING COUNT(DISTINCT q.id) >= ?
             ORDER BY g.id ASC
         `;
         const [rows] = await pool.query(sql, [subjectIds, MIN_QUESTIONS]);
@@ -307,59 +319,35 @@ const handleGetGradesBySubjects = async (req, res) => {
 
 const handleGetChaptersBySubjects = async (req, res) => {
     try {
+        await ensureQuestionTagTables();
         const subjectIds = parseArrayParam(pickBodyValue(req.body, ['subject_ids', 'subjects', 'lessons']));
         if (subjectIds.length === 0) {
             return res.json({ success: false, message: "Missing or invalid parameter: subject_ids array" });
         }
 
         const gradeIds = parseArrayParam(pickBodyValue(req.body, ['grade_ids', 'grades']));
+        const gradeMatch = matchTagIn('q', 'grade', gradeIds);
 
-        // One row per topic (UI chapter). Do not GROUP BY question grade/subject:
-        // that duplicated cards with the same id and leaked a mis-tagged question
-        // into another grade (e.g. "فصل سه دهم" inside شیمی یازدهم).
         let sql = `
-            SELECT t.id, t.title, COUNT(q.id) AS question_count, t.subject_id, MIN(q.grade_id) AS grade_id
+            SELECT t.id, t.title, COUNT(DISTINCT q.id) AS question_count, t.subject_id, MIN(q.grade_id) AS grade_id
             FROM questions_tam24 q
-            JOIN topics_tam24 t ON q.topic_id = t.id
+            JOIN topics_tam24 t ON ${joinOnTag('q', 't', 'topic')}
             WHERE q.subject_id IN (?)
                AND q.status = 'فعال'
                AND q.edit_status = 'done'
         `;
         const params = [subjectIds];
-        if (gradeIds.length > 0) {
-            sql += " AND q.grade_id IN (?)";
-            params.push(gradeIds);
+        if (gradeMatch.sql) {
+            sql += ` AND ${gradeMatch.sql}`;
+            params.push(...gradeMatch.params);
         }
 
         sql += `
             GROUP BY t.id, t.title, t.subject_id
-            HAVING COUNT(q.id) >= ?
-        `;
-        params.push(MIN_QUESTIONS);
-
-        // A chapter belongs to the grade that has most of its questions.
-        // Stops 11th topics (e.g. قدر مطلق) from appearing in 10th when a
-        // single mis-tagged row is the only grade-10 hit.
-        if (gradeIds.length > 0) {
-            sql += `
-               AND (
-                    SELECT q2.grade_id
-                    FROM questions_tam24 q2
-                    WHERE q2.topic_id = t.id
-                      AND q2.status = 'فعال'
-                      AND q2.edit_status = 'done'
-                      AND q2.grade_id IS NOT NULL
-                    GROUP BY q2.grade_id
-                    ORDER BY COUNT(*) DESC, q2.grade_id ASC
-                    LIMIT 1
-               ) IN (?)
-            `;
-            params.push(gradeIds);
-        }
-
-        sql += `
+            HAVING COUNT(DISTINCT q.id) >= ?
             ORDER BY t.subject_id ASC, t.id ASC
         `;
+        params.push(MIN_QUESTIONS);
         const [rows] = await pool.query(sql, params);
         res.json({ success: true, chapters: rows });
     } catch (error) {
@@ -370,32 +358,33 @@ const handleGetChaptersBySubjects = async (req, res) => {
 
 const handleGetMabahesByChapters = async (req, res) => {
     try {
+        await ensureQuestionTagTables();
         const topicIds = parseArrayParam(pickBodyValue(req.body, ['topic_ids', 'chapters']));
         if (topicIds.length === 0) {
             return res.json({ success: false, message: "Missing or invalid parameter: topic_ids array" });
         }
 
         const gradeIds = parseArrayParam(pickBodyValue(req.body, ['grade_ids', 'grades']));
+        const topicMatch = matchTagIn('q', 'topic', topicIds);
+        const gradeMatch = matchTagIn('q', 'grade', gradeIds);
 
-        // One row per mabhas. GROUP BY grade_id/subject_id duplicated the same
-        // chapter id (e.g. two "گفتار یک" cards that toggle together).
         let sql = `
-            SELECT c.id, c.title, COUNT(q.id) AS question_count,
+            SELECT c.id, c.title, COUNT(DISTINCT q.id) AS question_count,
                    MIN(q.topic_id) AS chapter_id, MIN(q.grade_id) AS grade_id, MIN(q.subject_id) AS subject_id
             FROM questions_tam24 q
-            JOIN chapters_tam24 c ON q.chapter_id = c.id
-            WHERE q.topic_id IN (?)
-               AND q.status = 'فعال'
+            JOIN chapters_tam24 c ON ${joinOnTag('q', 'c', 'mabhas')}
+            WHERE q.status = 'فعال'
                AND q.edit_status = 'done'
+               AND ${topicMatch.sql || '1=1'}
         `;
-        const params = [topicIds];
-        if (gradeIds.length > 0) {
-            sql += " AND q.grade_id IN (?)";
-            params.push(gradeIds);
+        const params = [...topicMatch.params];
+        if (gradeMatch.sql) {
+            sql += ` AND ${gradeMatch.sql}`;
+            params.push(...gradeMatch.params);
         }
         sql += `
             GROUP BY c.id, c.title
-            HAVING COUNT(q.id) >= ?
+            HAVING COUNT(DISTINCT q.id) >= ?
             ORDER BY MIN(q.topic_id) ASC, c.id ASC
         `;
         params.push(MIN_QUESTIONS);
@@ -483,13 +472,14 @@ const handleSearchBankQuestions = async (req, res) => {
         const sampleSize = Math.min(50, Math.max(1, parseInt(body.sampleSize, 10) || 10));
 
         const runFilteredCount = async (requireEditDone) => {
+            await ensureQuestionTagTables();
             const parts = ["q.status = 'فعال'"];
             const params = [];
             if (requireEditDone) parts.push("q.edit_status = 'done'");
             addInFilter(parts, params, 'q.subject_id', subjectIds);
-            addInFilter(parts, params, 'q.grade_id', gradeIds);
-            addInFilter(parts, params, 'q.topic_id', topicIds);
-            addInFilter(parts, params, 'q.chapter_id', chapterIds);
+            addTagFilter(parts, params, 'q', 'grade', gradeIds);
+            addTagFilter(parts, params, 'q', 'topic', topicIds);
+            addTagFilter(parts, params, 'q', 'mabhas', chapterIds);
             addInFilter(parts, params, 'q.difficulty_level', difficultyList);
             if (search) {
                 parts.push('q.question_text LIKE ?');

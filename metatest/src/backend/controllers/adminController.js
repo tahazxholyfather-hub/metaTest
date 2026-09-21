@@ -3,6 +3,14 @@ const cookie = require('cookie');
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
+const {
+    ensureQuestionTagTables,
+    saveQuestionTags,
+    getQuestionTags,
+    joinOnTag,
+    matchTagIn,
+    toPositiveIds,
+} = require('../utils/questionTags');
 
 // --- PDF Library upload configuration ---
 // Defaults to the same web root used for avatar uploads in server.js
@@ -47,6 +55,7 @@ const requirePost = (req, res, key) => {
 // ===============================================
 const handleGetQuestionForEdit = async (req, res) => {
     try {
+        await ensureQuestionTagTables();
         const { question_id, direction, current_id, filters } = req.body;
 
         // Base SQL query
@@ -67,19 +76,16 @@ const handleGetQuestionForEdit = async (req, res) => {
         // --- Dynamically add filter conditions (skipped for direct ID lookups) ---
         if (filters && !question_id) {
             // Note the mapping from frontend filters to DB columns
-            const filterMap = {
-                subject_id: 'q.subject_id',
-                grade_id: 'q.grade_id',
-                topic_id: 'q.topic_id',     // UI "Chapter" is DB "topic_id"
-                chapter_id: 'q.chapter_id'  // UI "Mabhas" is DB "chapter_id"
-            };
-
-            for (const key in filters) {
-                if (filters[key] !== null && filters[key] !== undefined && filterMap[key]) {
-                    sql += ` AND ${filterMap[key]} = ?`;
-                    params.push(filters[key]);
-                }
+            if (filters.subject_id) {
+                sql += ` AND q.subject_id = ?`;
+                params.push(filters.subject_id);
             }
+            const gradeMatch = matchTagIn('q', 'grade', filters.grade_id);
+            if (gradeMatch.sql) { sql += ` AND ${gradeMatch.sql}`; params.push(...gradeMatch.params); }
+            const topicMatch = matchTagIn('q', 'topic', filters.topic_id);
+            if (topicMatch.sql) { sql += ` AND ${topicMatch.sql}`; params.push(...topicMatch.params); }
+            const mabhasMatch = matchTagIn('q', 'mabhas', filters.chapter_id);
+            if (mabhasMatch.sql) { sql += ` AND ${mabhasMatch.sql}`; params.push(...mabhasMatch.params); }
 
             // Filter by status (فعال / غیرفعال)
             if (filters.status) {
@@ -127,6 +133,13 @@ const handleGetQuestionForEdit = async (req, res) => {
         }
 
         const q = questions[0];
+        const tags = await getQuestionTags(q.id);
+        const gradeIds = tags.grade_ids.length ? tags.grade_ids : (q.grade_id ? [Number(q.grade_id)] : []);
+        const topicIds = tags.topic_ids.length ? tags.topic_ids : (q.topic_id ? [Number(q.topic_id)] : []);
+        const chapterIds = tags.chapter_ids.length ? tags.chapter_ids : (q.chapter_id ? [Number(q.chapter_id)] : []);
+        const gradeTitles = tags.grade_titles.length ? tags.grade_titles : (q.grade_title ? [q.grade_title] : []);
+        const topicTitles = tags.topic_titles.length ? tags.topic_titles : (q.topic_title ? [q.topic_title] : []);
+        const chapterTitles = tags.chapter_titles.length ? tags.chapter_titles : (q.chapter_title ? [q.chapter_title] : []);
 
         // Fetch Options
         const [options] = await pool.query(
@@ -158,14 +171,20 @@ const handleGetQuestionForEdit = async (req, res) => {
                 subject: q.subject_id,
                 subject_title: q.subject_title || '----',
 
-                grade: q.grade_id,
-                grade_title: q.grade_title || '----',
+                grade: gradeIds[0] || q.grade_id,
+                grade_title: gradeTitles[0] || q.grade_title || '----',
+                grade_ids: gradeIds,
+                grade_titles: gradeTitles,
 
-                chapter: q.topic_id, // topic in DB = chapter in UI
-                chapter_title: q.topic_title || '----',
+                chapter: topicIds[0] || q.topic_id, // topic in DB = chapter in UI
+                chapter_title: topicTitles[0] || q.topic_title || '----',
+                chapter_ids: topicIds,
+                chapter_titles: topicTitles,
 
-                mabhas: q.chapter_id, // chapter in DB = mabhas in UI
-                mabhas_title: q.chapter_title || '----',
+                mabhas: chapterIds[0] || q.chapter_id, // chapter in DB = mabhas in UI
+                mabhas_title: chapterTitles[0] || q.chapter_title || '----',
+                mabhas_ids: chapterIds,
+                mabhas_titles: chapterTitles,
 
                 level: q.difficulty_level || 'متوسط',
                 status: q.status || 'غیرفعال'
@@ -208,11 +227,12 @@ const handleAdminGetGradesBySubject = async (req, res) => {
             return res.json({ success: true, grades: [] });
         }
 
+        await ensureQuestionTagTables();
         const sql = `
             SELECT DISTINCT g.id, g.title
             FROM questions_tam24 q
-            JOIN grades_tam24 g ON q.grade_id = g.id
-            WHERE q.subject_id = ? AND q.grade_id IS NOT NULL
+            JOIN grades_tam24 g ON ${joinOnTag('q', 'g', 'grade')}
+            WHERE q.subject_id = ?
             ORDER BY g.id ASC
         `;
         const [rows] = await pool.query(sql, [subject_id]);
@@ -227,18 +247,20 @@ const handleAdminGetChaptersBySubject = async (req, res) => {
     try {
         const { subject_id, grade_id } = req.body;
 
-        if (!subject_id || subject_id === 'null' || !grade_id || grade_id === 'null') {
+        if (!subject_id || subject_id === 'null') {
             return res.json({ success: true, chapters: [] });
         }
 
+        await ensureQuestionTagTables();
+        const gradeMatch = matchTagIn('q', 'grade', grade_id);
         const sql = `
             SELECT DISTINCT t.id, t.title
             FROM questions_tam24 q
-            JOIN topics_tam24 t ON q.topic_id = t.id
-            WHERE q.subject_id = ? AND q.grade_id = ? AND q.topic_id IS NOT NULL
+            JOIN topics_tam24 t ON ${joinOnTag('q', 't', 'topic')}
+            WHERE q.subject_id = ? ${gradeMatch.sql ? `AND ${gradeMatch.sql}` : ''}
             ORDER BY t.id ASC
         `;
-        const [rows] = await pool.query(sql, [subject_id, grade_id]);
+        const [rows] = await pool.query(sql, [subject_id, ...gradeMatch.params]);
         res.json({ success: true, chapters: rows });
     } catch (error) {
         console.error("Error in handleAdminGetChaptersBySubject:", error);
@@ -253,14 +275,16 @@ const handleAdminGetMabahesByChapter = async (req, res) => {
             return res.json({ success: true, mabahes: [] });
         }
 
+        await ensureQuestionTagTables();
+        const topicMatch = matchTagIn('q', 'topic', topic_id);
         const sql = `
             SELECT DISTINCT c.id, c.title
             FROM questions_tam24 q
-            JOIN chapters_tam24 c ON q.chapter_id = c.id
-            WHERE q.topic_id = ? AND q.chapter_id IS NOT NULL
+            JOIN chapters_tam24 c ON ${joinOnTag('q', 'c', 'mabhas')}
+            WHERE ${topicMatch.sql || '1=1'}
             ORDER BY c.id ASC
         `;
-        const [rows] = await pool.query(sql, [topic_id]);
+        const [rows] = await pool.query(sql, topicMatch.params);
         res.json({ success: true, mabahes: rows });
     } catch (error) {
         console.error("Error in handleAdminGetMabahesByChapter:", error);
@@ -395,6 +419,9 @@ const handleFullUpdateQuestion = async (req, res) => {
         if (!questionId) return;
 
         const { text, options, descriptiveAnswer, correct_option_id, subject_id, grade_id, chapter_id, topic_id, level, status } = req.body;
+        const gradeIds = toPositiveIds(req.body.grade_ids || grade_id);
+        const topicIds = toPositiveIds(req.body.topic_ids || topic_id);
+        const chapterIds = toPositiveIds(req.body.chapter_ids || req.body.mabhas_ids || chapter_id);
 
         // 1. Update Question Text & Meta Info
         let updateFields = [];
@@ -402,10 +429,19 @@ const handleFullUpdateQuestion = async (req, res) => {
 
         if (text !== undefined) { updateFields.push("question_text = ?"); updateParams.push(text); }
         if (subject_id !== undefined) { updateFields.push("subject_id = ?"); updateParams.push(subject_id); }
-        if (grade_id !== undefined) { updateFields.push("grade_id = ?"); updateParams.push(grade_id); }
+        if (gradeIds.length || grade_id !== undefined) {
+            updateFields.push("grade_id = ?");
+            updateParams.push(gradeIds[0] || grade_id || null);
+        }
 
-        if (chapter_id !== undefined) { updateFields.push("chapter_id = ?"); updateParams.push(chapter_id); }
-        if (topic_id !== undefined) { updateFields.push("topic_id = ?"); updateParams.push(topic_id); }
+        if (chapterIds.length || chapter_id !== undefined) {
+            updateFields.push("chapter_id = ?");
+            updateParams.push(chapterIds[0] || chapter_id || null);
+        }
+        if (topicIds.length || topic_id !== undefined) {
+            updateFields.push("topic_id = ?");
+            updateParams.push(topicIds[0] || topic_id || null);
+        }
         if (level !== undefined) { updateFields.push("difficulty_level = ?"); updateParams.push(level); }
         if (status !== undefined) { updateFields.push("status = ?"); updateParams.push(status); }
 
@@ -416,6 +452,10 @@ const handleFullUpdateQuestion = async (req, res) => {
 
         updateParams.push(questionId);
         await pool.query(`UPDATE questions_tam24 SET ${updateFields.join(', ')} WHERE id = ?`, updateParams);
+
+        if (grade_id !== undefined || topic_id !== undefined || chapter_id !== undefined || req.body.grade_ids || req.body.topic_ids || req.body.chapter_ids || req.body.mabhas_ids) {
+            await saveQuestionTags(questionId, { gradeIds, topicIds, chapterIds });
+        }
 
         // 2. Update Descriptive Answer
         if (descriptiveAnswer !== undefined) {
@@ -482,18 +522,12 @@ const getQuestionsByFilters = async (req, res) => {
             sql += ` AND q.subject_id = ?`;
             params.push(subject_id);
         }
-        if (grade_id) {
-            sql += ` AND q.grade_id = ?`;
-            params.push(grade_id);
-        }
-        if (chapter_id) {
-            sql += ` AND q.chapter_id = ?`;
-            params.push(chapter_id);
-        }
-        if (topic_id) {
-            sql += ` AND q.topic_id = ?`;
-            params.push(topic_id);
-        }
+        const gradeMatch = matchTagIn('q', 'grade', grade_id);
+        if (gradeMatch.sql) { sql += ` AND ${gradeMatch.sql}`; params.push(...gradeMatch.params); }
+        const mabhasMatch = matchTagIn('q', 'mabhas', chapter_id);
+        if (mabhasMatch.sql) { sql += ` AND ${mabhasMatch.sql}`; params.push(...mabhasMatch.params); }
+        const topicMatch = matchTagIn('q', 'topic', topic_id);
+        if (topicMatch.sql) { sql += ` AND ${topicMatch.sql}`; params.push(...topicMatch.params); }
         if (difficulty_level) {
             sql += ` AND q.difficulty_level = ?`;
             params.push(difficulty_level);
@@ -518,9 +552,9 @@ const getQuestionsByFilters = async (req, res) => {
 
         // Re-apply same filters for the count query
         if (subject_id) { countSql += ` AND q.subject_id = ?`; countParams.push(subject_id); }
-        if (grade_id) { countSql += ` AND q.grade_id = ?`; countParams.push(grade_id); }
-        if (chapter_id) { countSql += ` AND q.chapter_id = ?`; countParams.push(chapter_id); }
-        if (topic_id) { countSql += ` AND q.topic_id = ?`; countParams.push(topic_id); }
+        if (gradeMatch.sql) { countSql += ` AND ${gradeMatch.sql}`; countParams.push(...gradeMatch.params); }
+        if (mabhasMatch.sql) { countSql += ` AND ${mabhasMatch.sql}`; countParams.push(...mabhasMatch.params); }
+        if (topicMatch.sql) { countSql += ` AND ${topicMatch.sql}`; countParams.push(...topicMatch.params); }
         if (difficulty_level) { countSql += ` AND q.difficulty_level = ?`; countParams.push(difficulty_level); }
         if (status) { countSql += ` AND q.status = ?`; countParams.push(status); }
 
@@ -1015,6 +1049,9 @@ const handleAdminInsertQuestions = async (req, res) => {
         const m = meta || {};
         const validLevels = ['آسان', 'متوسط', 'سخت'];
         const level = validLevels.includes(m.level) ? m.level : 'متوسط';
+        const gradeIds = toPositiveIds(m.grade_ids || m.grade_id);
+        const topicIds = toPositiveIds(m.topic_ids || m.topic_id);
+        const chapterIds = toPositiveIds(m.chapter_ids || m.chapter_id || m.mabhas_ids);
 
         const insertedIds = [];
         const failed = [];
@@ -1029,9 +1066,9 @@ const handleAdminInsertQuestions = async (req, res) => {
                     [
                         String(q.text).trim(),
                         m.subject_id || null,
-                        m.grade_id || null,
-                        m.topic_id || null,   // UI "Chapter" is DB "topic_id"
-                        m.chapter_id || null, // UI "Mabhas" is DB "chapter_id"
+                        gradeIds[0] || null,
+                        topicIds[0] || null,   // UI "Chapter" is DB "topic_id"
+                        chapterIds[0] || null, // UI "Mabhas" is DB "chapter_id"
                         level,
                         m.source || null,
                         m.book || null,
@@ -1040,6 +1077,7 @@ const handleAdminInsertQuestions = async (req, res) => {
                     ]
                 );
                 const questionId = qResult.insertId;
+                await saveQuestionTags(questionId, { gradeIds, topicIds, chapterIds });
 
                 const correctIndex = parseInt(q.correct_index, 10);
                 for (let optIdx = 0; optIdx < 4; optIdx++) {

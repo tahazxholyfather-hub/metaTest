@@ -1,4 +1,5 @@
 const pool = require('../db');
+const { ensureQuestionTagTables, joinOnTag, matchTagIn } = require('../utils/questionTags');
 
 
 
@@ -214,6 +215,7 @@ const handleGetSubjects = async (req, res) => {
 
 const handleGetGradesBySubject = async (req, res) => {
     try {
+        await ensureQuestionTagTables();
         const subjectId = requirePost(req, res, 'subject_id');
         if (subjectId === null) return;
 
@@ -241,7 +243,7 @@ const handleGetGradesBySubject = async (req, res) => {
 
             FROM questions_tam24 q
             INNER JOIN grades_tam24 g 
-                ON q.grade_id = g.id
+                ON ${joinOnTag('q', 'g', 'grade')}
 
             LEFT JOIN tam24_user_answers ua
                 ON ua.question_id = q.id
@@ -249,7 +251,6 @@ const handleGetGradesBySubject = async (req, res) => {
 
             WHERE q.subject_id = ?
               AND q.status = 'فعال'
-              AND q.grade_id IS NOT NULL
 
             GROUP BY g.id, g.title
 
@@ -275,6 +276,7 @@ const handleGetGradesBySubject = async (req, res) => {
 
 const handleGetChaptersBySubject = async (req, res) => {
     try {
+        await ensureQuestionTagTables();
         const subjectId = requirePost(req, res, 'subject_id');
         if (subjectId === null) return;
 
@@ -303,7 +305,7 @@ const handleGetChaptersBySubject = async (req, res) => {
 
             FROM questions_tam24 q
             JOIN topics_tam24 t 
-                ON q.topic_id = t.id
+                ON ${joinOnTag('q', 't', 'topic')}
 
             LEFT JOIN tam24_user_answers ua
                 ON ua.question_id = q.id
@@ -324,8 +326,9 @@ const handleGetChaptersBySubject = async (req, res) => {
             gradeId !== 'undefined' &&
             String(gradeId).trim() !== ''
         ) {
-            sql += ` AND q.grade_id = ?`;
-            params.push(Number(gradeId));
+            const gradeMatch = matchTagIn('q', 'grade', gradeId);
+            sql += ` AND ${gradeMatch.sql}`;
+            params.push(...gradeMatch.params);
         }
 
         sql += `
@@ -351,10 +354,13 @@ const handleGetChaptersBySubject = async (req, res) => {
 
 const handleGetMabahesByChapter = async (req, res) => {
     try {
+        await ensureQuestionTagTables();
         const topicId = requirePost(req, res, 'topic_id');
         if (topicId === null) return;
 
         const userId = req.user?.id || req.body.user_id || null;
+
+        const topicMatch = matchTagIn('q', 'topic', topicId);
 
         const sql = `
             SELECT 
@@ -378,13 +384,13 @@ const handleGetMabahesByChapter = async (req, res) => {
 
             FROM questions_tam24 q
             JOIN chapters_tam24 c 
-                ON q.chapter_id = c.id
+                ON ${joinOnTag('q', 'c', 'mabhas')}
 
             LEFT JOIN tam24_user_answers ua
                 ON ua.question_id = q.id
                AND ua.user_id = ?
 
-            WHERE q.topic_id = ?
+            WHERE ${topicMatch.sql || '1=1'}
               AND q.status = 'فعال'
 
             GROUP BY c.id, c.title
@@ -396,7 +402,7 @@ const handleGetMabahesByChapter = async (req, res) => {
 
         const [rows] = await pool.query(sql, [
             userId ? Number(userId) : null,
-            Number(topicId),
+            ...topicMatch.params,
             MIN_QUESTIONS
         ]);
 
@@ -446,8 +452,19 @@ const buildQuestionFilters = (body) => {
     for (const [postKey, column] of Object.entries(mapping)) {
         const value = body[postKey];
         if (value !== undefined && value !== null && value !== 'null' && value !== 'undefined' && String(value).trim() !== '') {
-            filters.push(`${column} = ?`);
-            params.push(value);
+            if (postKey === 'grade_id') {
+                const matched = matchTagIn('q', 'grade', value);
+                if (matched.sql) { filters.push(matched.sql); params.push(...matched.params); }
+            } else if (postKey === 'topic_id') {
+                const matched = matchTagIn('q', 'topic', value);
+                if (matched.sql) { filters.push(matched.sql); params.push(...matched.params); }
+            } else if (postKey === 'chapter_id') {
+                const matched = matchTagIn('q', 'mabhas', value);
+                if (matched.sql) { filters.push(matched.sql); params.push(...matched.params); }
+            } else {
+                filters.push(`${column} = ?`);
+                params.push(value);
+            }
         }
     }
 
@@ -486,6 +503,7 @@ const handleGetPracticeQuestion = async (req, res) => {
         }
 
         const { filters, params } = buildQuestionFilters(req.body);
+        await ensureQuestionTagTables();
         const whereClause = filters.length > 0 ? ' AND ' + filters.join(' AND ') : '';
 
         // 1. Get TOTAL questions count matching the active filters
