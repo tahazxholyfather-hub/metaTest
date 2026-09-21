@@ -16,26 +16,59 @@ const {
 // ==========================================
 const MIN_QUESTIONS = 1;
 
+const isPresent = (val) => {
+    if (val === undefined || val === null || val === '' || val === 'null' || val === 'undefined') return false;
+    if (Array.isArray(val) && val.length === 0) return false;
+    return true;
+};
+
+const pickBodyValue = (body, keys) => {
+    for (const key of keys) {
+        if (isPresent(body?.[key])) return body[key];
+    }
+    return undefined;
+};
+
+const toPositiveInt = (n) => {
+    const num = Number(n);
+    return Number.isInteger(num) && num > 0 ? num : null;
+};
+
 // Helper to ensure we always get an array of IDs from the request
 const parseArrayParam = (val) => {
-    if (!val || val === 'null' || val === 'undefined' || String(val).trim() === '') {
-        return [];
-    }
+    if (!isPresent(val)) return [];
     if (Array.isArray(val)) {
-        return val.map(Number).filter(n => !isNaN(n));
+        // String([]) === '' so empty arrays must be handled before any String() check
+        return val.flatMap((item) => {
+            if (item && typeof item === 'object' && item.id != null) {
+                return parseArrayParam(item.id);
+            }
+            const num = toPositiveInt(item);
+            return num == null ? [] : [num];
+        });
+    }
+    if (typeof val === 'object' && val.id != null) {
+        return parseArrayParam(val.id);
     }
     if (typeof val === 'string') {
+        const trimmed = val.trim();
+        if (!trimmed || trimmed === '[]') return [];
         try {
-            // In case it's a JSON array string "[1, 2]"
-            const parsed = JSON.parse(val);
-            if (Array.isArray(parsed)) return parsed.map(Number).filter(n => !isNaN(n));
+            const parsed = JSON.parse(trimmed);
+            if (parsed !== trimmed) return parseArrayParam(parsed);
         } catch (e) {
-            // In case it's comma separated "1,2,3"
-            return val.split(',').map(v => Number(v.trim())).filter(n => !isNaN(n));
+            // comma-separated "1,2,3"
         }
+        return trimmed.split(',').map((v) => toPositiveInt(v.trim())).filter((n) => n != null);
     }
-    const num = Number(val);
-    return isNaN(num) ? [] : [num];
+    const num = toPositiveInt(val);
+    return num == null ? [] : [num];
+};
+
+const addInFilter = (parts, params, column, ids) => {
+    if (!ids.length) return;
+    parts.push(`${column} IN (${ids.map(() => '?').join(',')})`);
+    params.push(...ids);
 };
 
 function getDifficultyDistribution(level, total) {
@@ -247,7 +280,7 @@ const handleGetSubjects = async (req, res) => {
 
 const handleGetGradesBySubjects = async (req, res) => {
     try {
-        const subjectIds = parseArrayParam(req.body.subject_ids || req.body.subjects);
+        const subjectIds = parseArrayParam(pickBodyValue(req.body, ['subject_ids', 'subjects', 'lessons']));
         if (subjectIds.length === 0) {
             return res.json({ success: false, message: "Missing or invalid parameter: subject_ids array" });
         }
@@ -274,12 +307,12 @@ const handleGetGradesBySubjects = async (req, res) => {
 
 const handleGetChaptersBySubjects = async (req, res) => {
     try {
-        const subjectIds = parseArrayParam(req.body.subject_ids || req.body.subjects);
+        const subjectIds = parseArrayParam(pickBodyValue(req.body, ['subject_ids', 'subjects', 'lessons']));
         if (subjectIds.length === 0) {
             return res.json({ success: false, message: "Missing or invalid parameter: subject_ids array" });
         }
 
-        const gradeIds = parseArrayParam(req.body.grade_ids || req.body.grades);
+        const gradeIds = parseArrayParam(pickBodyValue(req.body, ['grade_ids', 'grades']));
 
         // One row per topic (UI chapter). Do not GROUP BY question grade/subject:
         // that duplicated cards with the same id and leaked a mis-tagged question
@@ -337,12 +370,12 @@ const handleGetChaptersBySubjects = async (req, res) => {
 
 const handleGetMabahesByChapters = async (req, res) => {
     try {
-        const topicIds = parseArrayParam(req.body.topic_ids || req.body.chapters);
+        const topicIds = parseArrayParam(pickBodyValue(req.body, ['topic_ids', 'chapters']));
         if (topicIds.length === 0) {
             return res.json({ success: false, message: "Missing or invalid parameter: topic_ids array" });
         }
 
-        const gradeIds = parseArrayParam(req.body.grade_ids || req.body.grades);
+        const gradeIds = parseArrayParam(pickBodyValue(req.body, ['grade_ids', 'grades']));
 
         // One row per mabhas. GROUP BY grade_id/subject_id duplicated the same
         // chapter id (e.g. two "گفتار یک" cards that toggle together).
@@ -434,62 +467,100 @@ const fetchQuestionImages = async (questionId) => {
 
 const handleSearchBankQuestions = async (req, res) => {
     try {
-        const subjectIds = parseArrayParam(req.body.subject_ids || req.body.subjects);
-        const gradeIds = parseArrayParam(req.body.grade_ids || req.body.grades);
-        const topicIds = parseArrayParam(req.body.topic_ids || req.body.chapters);
-        const chapterIds = parseArrayParam(req.body.chapter_ids || req.body.mabhas);
-        const difficulties = (Array.isArray(req.body.difficulties) ? req.body.difficulties : [])
+        const body = req.body || {};
+        const subjectIds = parseArrayParam(pickBodyValue(body, ['subject_ids', 'subjects', 'lessons']));
+        const gradeIds = parseArrayParam(pickBodyValue(body, ['grade_ids', 'grades']));
+        const topicIds = parseArrayParam(pickBodyValue(body, ['topic_ids', 'chapters']));
+        const chapterIds = parseArrayParam(pickBodyValue(body, ['chapter_ids', 'mabhas']));
+        const difficultyList = (Array.isArray(body.difficulties) ? body.difficulties : [])
             .map((d) => String(d).trim())
             .filter((d) => ['آسان', 'متوسط', 'سخت'].includes(d));
-        const search = typeof req.body.search === 'string' ? req.body.search.trim() : '';
-        const includeOptions = Boolean(req.body.includeOptions);
-        const sample = Boolean(req.body.sample);
-        const page = Math.max(1, parseInt(req.body.page, 10) || 1);
-        const pageSize = Math.min(40, Math.max(5, parseInt(req.body.pageSize, 10) || 12));
-        const sampleSize = Math.min(50, Math.max(1, parseInt(req.body.sampleSize, 10) || 10));
+        const search = typeof body.search === 'string' ? body.search.trim() : '';
+        const includeOptions = Boolean(body.includeOptions);
+        const sample = Boolean(body.sample);
+        const page = Math.max(1, parseInt(body.page, 10) || 1);
+        const pageSize = Math.min(40, Math.max(5, parseInt(body.pageSize, 10) || 12));
+        const sampleSize = Math.min(50, Math.max(1, parseInt(body.sampleSize, 10) || 10));
 
-        let whereSql = `
+        const runFilteredCount = async (requireEditDone) => {
+            const parts = ["q.status = 'فعال'"];
+            const params = [];
+            if (requireEditDone) parts.push("q.edit_status = 'done'");
+            addInFilter(parts, params, 'q.subject_id', subjectIds);
+            addInFilter(parts, params, 'q.grade_id', gradeIds);
+            addInFilter(parts, params, 'q.topic_id', topicIds);
+            addInFilter(parts, params, 'q.chapter_id', chapterIds);
+            addInFilter(parts, params, 'q.difficulty_level', difficultyList);
+            if (search) {
+                parts.push('q.question_text LIKE ?');
+                params.push(`%${search}%`);
+            }
+            const whereSql = parts.join(' AND ');
+            const [[{ total }]] = await pool.query(
+                `SELECT COUNT(*) AS total FROM questions_tam24 q WHERE ${whereSql}`,
+                params
+            );
+            return { total: Number(total) || 0, whereSql, params };
+        };
+
+        // Prefer curated (done) rows like the wizard, but don't hide the bank
+        // if live data is still marked free/pending — practice uses status only.
+        let filtered = await runFilteredCount(true);
+        let usedEditDone = true;
+        if (filtered.total === 0) {
+            const relaxed = await runFilteredCount(false);
+            if (relaxed.total > 0) {
+                filtered = relaxed;
+                usedEditDone = false;
+            }
+        }
+
+        const limit = sample ? sampleSize : pageSize;
+        const offset = sample ? 0 : (page - 1) * pageSize;
+        const orderSql = sample ? 'ORDER BY RAND()' : 'ORDER BY q.id DESC';
+        const safeLimit = Number.parseInt(limit, 10) || 12;
+        const safeOffset = Math.max(0, Number.parseInt(offset, 10) || 0);
+
+        const listSql = `
+            SELECT q.id, q.question_text, q.difficulty_level, q.subject_id, q.grade_id, q.topic_id, q.chapter_id,
+                   s.title AS subject_title, g.title AS grade_title, t.title AS topic_title, c.title AS chapter_title
             FROM questions_tam24 q
             LEFT JOIN subjects_tam24 s ON q.subject_id = s.id
             LEFT JOIN grades_tam24 g ON q.grade_id = g.id
             LEFT JOIN topics_tam24 t ON q.topic_id = t.id
             LEFT JOIN chapters_tam24 c ON q.chapter_id = c.id
-            WHERE q.status = 'فعال' AND q.edit_status = 'done'
-        `;
-        const params = [];
-        if (subjectIds.length) { whereSql += ' AND q.subject_id IN (?)'; params.push(subjectIds); }
-        if (gradeIds.length) { whereSql += ' AND q.grade_id IN (?)'; params.push(gradeIds); }
-        if (topicIds.length) { whereSql += ' AND q.topic_id IN (?)'; params.push(topicIds); }
-        if (chapterIds.length) { whereSql += ' AND q.chapter_id IN (?)'; params.push(chapterIds); }
-        if (difficulties.length) { whereSql += ' AND q.difficulty_level IN (?)'; params.push(difficulties); }
-        if (search) { whereSql += ' AND q.question_text LIKE ?'; params.push(`%${search}%`); }
-
-        const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total ${whereSql}`, params);
-
-        const limit = sample ? sampleSize : pageSize;
-        const offset = sample ? 0 : (page - 1) * pageSize;
-        const orderSql = sample ? 'ORDER BY RAND()' : 'ORDER BY q.id DESC';
-
-        const listSql = `
-            SELECT q.id, q.question_text, q.difficulty_level, q.subject_id, q.grade_id, q.topic_id, q.chapter_id,
-                   s.title AS subject_title, g.title AS grade_title, t.title AS topic_title, c.title AS chapter_title,
-                   (SELECT qi.image_name FROM question_images_tam24 qi WHERE qi.question_id = q.id ORDER BY qi.id ASC LIMIT 1) AS image_name
-            ${whereSql}
+            WHERE ${filtered.whereSql}
             ${orderSql}
-            LIMIT ? OFFSET ?
+            LIMIT ${safeLimit} OFFSET ${safeOffset}
         `;
-        const [rows] = await pool.query(listSql, [...params, limit, offset]);
+        const [rows] = await pool.query(listSql, filtered.params);
 
         let optionsByQuestion = {};
         if (includeOptions && rows.length > 0) {
-            const ids = rows.map((r) => r.id);
-            const [optRows] = await pool.query(
-                'SELECT id, question_id, option_text FROM options_tam24 WHERE question_id IN (?) ORDER BY id ASC',
-                [ids]
-            );
-            for (const opt of optRows) {
-                if (!optionsByQuestion[opt.question_id]) optionsByQuestion[opt.question_id] = [];
-                optionsByQuestion[opt.question_id].push({ id: Number(opt.id), text: opt.option_text });
+            const ids = rows.map((r) => Number(r.id)).filter((n) => n > 0);
+            if (ids.length) {
+                const [optRows] = await pool.query(
+                    `SELECT id, question_id, option_text FROM options_tam24 WHERE question_id IN (${ids.map(() => '?').join(',')}) ORDER BY id ASC`,
+                    ids
+                );
+                for (const opt of optRows) {
+                    if (!optionsByQuestion[opt.question_id]) optionsByQuestion[opt.question_id] = [];
+                    optionsByQuestion[opt.question_id].push({ id: Number(opt.id), text: opt.option_text });
+                }
+            }
+        }
+
+        let imagesByQuestion = {};
+        if (rows.length > 0) {
+            const ids = rows.map((r) => Number(r.id)).filter((n) => n > 0);
+            if (ids.length) {
+                const [imgRows] = await pool.query(
+                    `SELECT question_id, image_name FROM question_images_tam24 WHERE question_id IN (${ids.map(() => '?').join(',')}) ORDER BY id ASC`,
+                    ids
+                );
+                for (const img of imgRows) {
+                    if (!imagesByQuestion[img.question_id]) imagesByQuestion[img.question_id] = img.image_name;
+                }
             }
         }
 
@@ -505,7 +576,7 @@ const handleSearchBankQuestions = async (req, res) => {
             grade_title: q.grade_title || '',
             topic_title: q.topic_title || '',
             chapter_title: q.chapter_title || '',
-            image: q.image_name || null,
+            image: imagesByQuestion[q.id] || null,
             options: optionsByQuestion[q.id] || [],
         }));
 
@@ -513,10 +584,11 @@ const handleSearchBankQuestions = async (req, res) => {
             success: true,
             questions,
             pagination: {
-                total: Number(total) || 0,
+                total: filtered.total,
                 page: sample ? 1 : page,
-                pageSize: limit,
+                pageSize: safeLimit,
                 sample,
+                editStatusFilter: usedEditDone ? 'done' : 'any',
             },
         });
     } catch (error) {
@@ -566,8 +638,8 @@ const handleCreateQuiz = async (req, res) => {
             }
             const [foundRows] = await pool.query(
                 `SELECT id FROM questions_tam24
-                 WHERE id IN (?) AND status = 'فعال' AND edit_status = 'done'`,
-                [uniqueIds]
+                 WHERE id IN (${uniqueIds.map(() => '?').join(',')}) AND status = 'فعال'`,
+                uniqueIds
             );
             const found = new Set(foundRows.map((r) => Number(r.id)));
             allSelectedQuestionIds = uniqueIds.filter((id) => found.has(id));

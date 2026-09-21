@@ -36,6 +36,9 @@ const PAGE_SIZE = 12;
 const MAX_SELECTED = 50;
 const IMAGE_BASE = '/images/questions/';
 
+const toIds = (list: Array<string | number>) =>
+    list.map(Number).filter((n) => Number.isInteger(n) && n > 0);
+
 function waitForSocketConnection(socket: any, timeout = 7000) {
     return new Promise<void>((resolve, reject) => {
         if (socket.connected) { resolve(); return; }
@@ -170,7 +173,7 @@ export function QuestionSelectorView({
             try {
                 const res = await flowApi.dispatch('get_subjects');
                 const raw = res.subjects || res.data || [];
-                setSubjects(raw.map((s: any) => ({ id: s.id, title: s.title || s.name })));
+                setSubjects(raw.map((s: any) => ({ id: Number(s.id), title: s.title || s.name })).filter((s: FilterOption) => Number(s.id) > 0));
             } catch {
                 toast.error('دریافت درس‌ها ناموفق بود.');
             }
@@ -184,9 +187,12 @@ export function QuestionSelectorView({
             return;
         }
         (async () => {
-            const res = await flowApi.dispatch('get_grades_by_subjects_multi', { subjects: selectedSubjects });
+            const res = await flowApi.dispatch('get_grades_by_subjects_multi', {
+                subjects: selectedSubjects,
+                subject_ids: toIds(selectedSubjects),
+            });
             const raw = res.grades || [];
-            setGrades(raw.map((g: any) => ({ id: g.id, title: g.title })));
+            setGrades(raw.map((g: any) => ({ id: Number(g.id), title: g.title })).filter((g: FilterOption) => Number(g.id) > 0));
             setSelectedGrades((prev) => prev.filter((id) => raw.some((g: any) => String(g.id) === String(id))));
         })();
     }, [selectedSubjects]);
@@ -200,10 +206,12 @@ export function QuestionSelectorView({
         (async () => {
             const res = await flowApi.dispatch('get_chapters_by_subjects_multi', {
                 subjects: selectedSubjects,
+                subject_ids: toIds(selectedSubjects),
                 grades: selectedGrades,
+                grade_ids: toIds(selectedGrades),
             });
             const raw = res.chapters || [];
-            setChapters(raw.map((c: any) => ({ id: c.id, title: c.title })));
+            setChapters(raw.map((c: any) => ({ id: Number(c.id), title: c.title })).filter((c: FilterOption) => Number(c.id) > 0));
             setSelectedChapters((prev) => prev.filter((id) => raw.some((c: any) => String(c.id) === String(id))));
         })();
     }, [selectedSubjects, selectedGrades]);
@@ -217,24 +225,36 @@ export function QuestionSelectorView({
         (async () => {
             const res = await flowApi.dispatch('get_mabahes_by_chapters_multi', {
                 chapters: selectedChapters,
+                topic_ids: toIds(selectedChapters),
                 grades: selectedGrades,
+                grade_ids: toIds(selectedGrades),
             });
             const raw = res.mabahes || [];
-            setMabhas(raw.map((m: any) => ({ id: m.id, title: m.title })));
+            setMabhas(raw.map((m: any) => ({ id: Number(m.id), title: m.title })).filter((m: FilterOption) => Number(m.id) > 0));
             setSelectedMabhas((prev) => prev.filter((id) => raw.some((m: any) => String(m.id) === String(id))));
         })();
     }, [selectedChapters, selectedGrades]);
 
     const fetchQuestions = useCallback(async (nextPage = 1, opts?: { includeOptions?: boolean; keepSelection?: boolean }) => {
+        if (toIds(selectedSubjects).length === 0) {
+            setQuestions([]);
+            setTotal(0);
+            setHasApplied(false);
+            return;
+        }
         setLoading(true);
         try {
             const payload: any = {
-                subjects: selectedSubjects,
-                grades: selectedGrades,
-                chapters: selectedChapters,
-                mabhas: selectedMabhas,
+                subject_ids: toIds(selectedSubjects),
+                grade_ids: toIds(selectedGrades),
+                topic_ids: toIds(selectedChapters),
+                chapter_ids: toIds(selectedMabhas),
+                subjects: toIds(selectedSubjects),
+                grades: toIds(selectedGrades),
+                chapters: toIds(selectedChapters),
+                mabhas: toIds(selectedMabhas),
                 difficulties,
-                search,
+                search: search.trim(),
                 includeOptions: opts?.includeOptions ?? showAnswers,
             };
             if (mode === 'auto') {
@@ -249,9 +269,14 @@ export function QuestionSelectorView({
                 toast.error(res?.message || 'دریافت سوالات ناموفق بود.');
                 return;
             }
-            const list: BankQuestion[] = res.questions || [];
+            const list: BankQuestion[] = Array.isArray(res.questions)
+                ? res.questions
+                : Array.isArray(res.data?.questions)
+                    ? res.data.questions
+                    : [];
+            const rawTotal = res.pagination?.total ?? res.data?.pagination?.total;
             setQuestions(list);
-            setTotal(res.pagination?.total || list.length);
+            setTotal(rawTotal == null ? list.length : Number(rawTotal) || 0);
             setPage(nextPage);
             setHasApplied(true);
             if (mode === 'auto' && !opts?.keepSelection) {
@@ -264,6 +289,19 @@ export function QuestionSelectorView({
             setLoading(false);
         }
     }, [selectedSubjects, selectedGrades, selectedChapters, selectedMabhas, difficulties, search, mode, autoCount, showAnswers]);
+
+    useEffect(() => {
+        if (selectedSubjects.length === 0) {
+            setQuestions([]);
+            setTotal(0);
+            setHasApplied(false);
+            return;
+        }
+        const timer = window.setTimeout(() => {
+            fetchQuestions(1, { keepSelection: true });
+        }, 250);
+        return () => window.clearTimeout(timer);
+    }, [fetchQuestions, selectedSubjects.length]);
 
     const applyFilters = () => {
         if (selectedSubjects.length === 0) {
@@ -393,9 +431,9 @@ export function QuestionSelectorView({
                     </div>
                 </div>
 
-                <div className="flex flex-col lg:flex-row gap-4 items-start">
+                <div className="flex flex-col lg:flex-row gap-4 items-start pb-36 lg:pb-28">
                     <aside className={`w-full lg:w-[300px] shrink-0 ${filtersOpen ? 'block' : 'hidden lg:block'}`}>
-                        <div className="lg:sticky lg:top-4 bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-4 shadow-sm">
+                        <div className="lg:sticky lg:top-4 bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-4 shadow-sm flex flex-col max-h-[min(70vh,calc(100vh-10rem))]">
                             <div className="flex items-center justify-between mb-1">
                                 <div className="flex items-center gap-2 text-sm font-bold text-[var(--text-primary)]">
                                     <Filter size={16} className="text-[var(--accent)]" />
@@ -417,7 +455,8 @@ export function QuestionSelectorView({
                                 </button>
                             </div>
 
-                            <div className="flex bg-[var(--bg-element)] p-1 rounded-xl mb-3 mt-3">
+                            <div className="flex-1 min-h-0 overflow-y-auto [&::-webkit-scrollbar]:hidden mt-3">
+                            <div className="flex bg-[var(--bg-element)] p-1 rounded-xl mb-3">
                                 {[
                                     { id: 'manual', label: 'انتخاب دستی', icon: ListFilter },
                                     { id: 'auto', label: 'انتخاب خودکار', icon: Activity },
@@ -494,12 +533,13 @@ export function QuestionSelectorView({
                                     />
                                 </div>
                             )}
+                            </div>
 
                             <button
                                 type="button"
                                 onClick={applyFilters}
                                 disabled={loading}
-                                className="mt-4 w-full py-2.5 rounded-xl bg-[var(--accent)] text-white text-[13px] font-bold flex items-center justify-center gap-2 disabled:opacity-60"
+                                className="mt-3 w-full py-2.5 rounded-xl bg-[var(--accent)] text-white text-[13px] font-bold flex items-center justify-center gap-2 disabled:opacity-60 shrink-0"
                             >
                                 {loading ? <Loader2 size={16} className="animate-spin" /> : <Filter size={16} />}
                                 اعمال فیلتر
@@ -545,7 +585,7 @@ export function QuestionSelectorView({
 
                         {!loading && !hasApplied && (
                             <div className="text-center py-16 bg-[var(--bg-card)] border border-dashed border-[var(--border)] rounded-2xl text-[var(--text-muted)] text-sm">
-                                درس و فیلترها را از ستون کناری انتخاب کن و «اعمال فیلتر» را بزن.
+                                درس و فیلترها را از ستون کناری انتخاب کن. سوال‌ها بلافاصله نمایش داده می‌شوند.
                             </div>
                         )}
 
