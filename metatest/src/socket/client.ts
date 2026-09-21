@@ -1,4 +1,3 @@
-//clients.ts
 import { io, Socket } from 'socket.io-client';
 import { getAccessToken } from './token';
 
@@ -9,13 +8,24 @@ export interface CreateSocketOptions {
     forceNew?: boolean;
 }
 
-export function createSocket(options: CreateSocketOptions = {}): Socket {
-    const realtimeUrl = 'https://socket.metatest.app/';
+function getRealtimeUrl(): string {
+    const fromEnv =
+        import.meta.env.VITE_REALTIME_URL ||
+        import.meta.env.VITE_REALTIME_API_URL;
 
-    if (!realtimeUrl) {
-        throw new Error('Missing VITE_REALTIME_URL environment variable');
+    if (fromEnv) {
+        return String(fromEnv).replace(/\/?$/, '/');
     }
 
+    if (import.meta.env.DEV) {
+        return 'http://localhost:4003/';
+    }
+
+    return 'https://socket.metatest.app/';
+}
+
+export function createSocket(options: CreateSocketOptions = {}): Socket {
+    const realtimeUrl = getRealtimeUrl();
     const token = options.token ?? getAccessToken();
 
     if (!token) {
@@ -28,7 +38,7 @@ export function createSocket(options: CreateSocketOptions = {}): Socket {
 
     socketInstance = io(realtimeUrl, {
         autoConnect: true,
-        transports: ['polling'],
+        transports: ['websocket', 'polling'],
         auth: {
             token,
         },
@@ -37,9 +47,10 @@ export function createSocket(options: CreateSocketOptions = {}): Socket {
         },
         reconnection: true,
         reconnectionAttempts: 10,
-        reconnectionDelay: 500,
-        reconnectionDelayMax: 5000,
-        timeout: 10000,
+        reconnectionDelay: 400,
+        reconnectionDelayMax: 4000,
+        timeout: 8000,
+        upgrade: true,
     });
 
     return socketInstance;

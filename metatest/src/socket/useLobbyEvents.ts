@@ -3,6 +3,7 @@ import { Socket } from 'socket.io-client';
 import { LOBBY_EVENTS } from './events';
 import type {
     LobbyErrorEvent,
+    LobbyNotification,
     LobbyState,
     MemberProgress,
     QuizResult,
@@ -11,127 +12,94 @@ import type {
 interface UseLobbyEventsParams {
     socket: Socket | null;
     onLobbyState?: (state: LobbyState) => void;
-    onLobbyStarted?: (state: LobbyState) => void;
+    onLobbyStarted?: (state: any) => void;
+    onLobbyStarting?: (state: any) => void;
+    onLobbyCancelled?: (payload?: { code?: string; serverNow?: number }) => void;
     onLobbyDestroyed?: (payload: { code: string; reason?: string }) => void;
     onKicked?: (payload: { code: string; userId?: string; reason?: string }) => void;
     onMemberJoined?: (state: LobbyState) => void;
     onMemberLeft?: (state: LobbyState) => void;
     onMemberUpdated?: (state: LobbyState) => void;
+    onMemberOnline?: (payload: { code: string; userId: string }) => void;
+    onMemberOffline?: (payload: { code: string; userId: string }) => void;
     onMemberProgress?: (payload: MemberProgress | LobbyState) => void;
     onQuizResult?: (payload: QuizResult) => void;
     onLobbyError?: (error: LobbyErrorEvent) => void;
+    onNotification?: (payload: LobbyNotification) => void;
 }
 
 export function useLobbyEvents({
-                                   socket,
-                                   onLobbyState,
-                                   onLobbyStarted,
-                                   onLobbyDestroyed,
-                                   onKicked,
-                                   onMemberJoined,
-                                   onMemberLeft,
-                                   onMemberUpdated,
-                                   onMemberProgress,
-                                   onQuizResult,
-                                   onLobbyError,
-                               }: UseLobbyEventsParams) {
+    socket,
+    onLobbyState,
+    onLobbyStarted,
+    onLobbyStarting,
+    onLobbyCancelled,
+    onLobbyDestroyed,
+    onKicked,
+    onMemberJoined,
+    onMemberLeft,
+    onMemberUpdated,
+    onMemberOnline,
+    onMemberOffline,
+    onMemberProgress,
+    onQuizResult,
+    onLobbyError,
+    onNotification,
+}: UseLobbyEventsParams) {
     useEffect(() => {
         if (!socket) {
             return;
         }
 
-        if (onLobbyState) {
-            socket.on(LOBBY_EVENTS.STATE, onLobbyState);
-        }
+        const bindings: Array<[string, (...args: never[]) => void]> = [];
 
-        if (onLobbyStarted) {
-            socket.on(LOBBY_EVENTS.STARTED, onLobbyStarted);
-        }
+        const bind = (event: string, handler: ((...args: never[]) => void) | undefined) => {
+            if (!handler) return;
+            socket.on(event, handler);
+            bindings.push([event, handler]);
+        };
 
-        if (onLobbyDestroyed) {
-            socket.on(LOBBY_EVENTS.DESTROYED, onLobbyDestroyed);
-        }
-
-        if (onKicked) {
-            socket.on(LOBBY_EVENTS.KICKED, onKicked);
-        }
-
-        if (onMemberJoined) {
-            socket.on(LOBBY_EVENTS.MEMBER_JOINED, onMemberJoined);
-        }
-
-        if (onMemberLeft) {
-            socket.on(LOBBY_EVENTS.MEMBER_LEFT, onMemberLeft);
-        }
-
-        if (onMemberUpdated) {
-            socket.on(LOBBY_EVENTS.MEMBER_UPDATED, onMemberUpdated);
-        }
-
-        if (onMemberProgress) {
-            socket.on(LOBBY_EVENTS.MEMBER_PROGRESS, onMemberProgress);
-        }
-
-        if (onQuizResult) {
-            socket.on(LOBBY_EVENTS.QUIZ_RESULT, onQuizResult);
-        }
-
-        if (onLobbyError) {
-            socket.on(LOBBY_EVENTS.ERROR, onLobbyError);
-        }
+        bind(LOBBY_EVENTS.STATE, onLobbyState as never);
+        bind(LOBBY_EVENTS.STARTED, onLobbyStarted as never);
+        bind(LOBBY_EVENTS.STARTING, onLobbyStarting as never);
+        bind('lobby_starting', onLobbyStarting as never);
+        bind(LOBBY_EVENTS.CANCELLED, onLobbyCancelled as never);
+        bind('lobby_cancelled', onLobbyCancelled as never);
+        bind(LOBBY_EVENTS.DESTROYED, onLobbyDestroyed as never);
+        bind(LOBBY_EVENTS.KICKED, onKicked as never);
+        bind('lobby:member-kicked', onKicked as never);
+        bind(LOBBY_EVENTS.MEMBER_JOINED, onMemberJoined as never);
+        bind(LOBBY_EVENTS.MEMBER_LEFT, onMemberLeft as never);
+        bind(LOBBY_EVENTS.MEMBER_UPDATED, onMemberUpdated as never);
+        bind(LOBBY_EVENTS.MEMBER_ONLINE, onMemberOnline as never);
+        bind(LOBBY_EVENTS.MEMBER_OFFLINE, onMemberOffline as never);
+        bind(LOBBY_EVENTS.MEMBER_PROGRESS, onMemberProgress as never);
+        bind(LOBBY_EVENTS.QUIZ_RESULT, onQuizResult as never);
+        bind(LOBBY_EVENTS.ERROR, onLobbyError as never);
+        bind(LOBBY_EVENTS.NOTIFICATION, onNotification as never);
+        bind('lobby_notification', onNotification as never);
 
         return () => {
-            if (onLobbyState) {
-                socket.off(LOBBY_EVENTS.STATE, onLobbyState);
-            }
-
-            if (onLobbyStarted) {
-                socket.off(LOBBY_EVENTS.STARTED, onLobbyStarted);
-            }
-
-            if (onLobbyDestroyed) {
-                socket.off(LOBBY_EVENTS.DESTROYED, onLobbyDestroyed);
-            }
-
-            if (onKicked) {
-                socket.off(LOBBY_EVENTS.KICKED, onKicked);
-            }
-
-            if (onMemberJoined) {
-                socket.off(LOBBY_EVENTS.MEMBER_JOINED, onMemberJoined);
-            }
-
-            if (onMemberLeft) {
-                socket.off(LOBBY_EVENTS.MEMBER_LEFT, onMemberLeft);
-            }
-
-            if (onMemberUpdated) {
-                socket.off(LOBBY_EVENTS.MEMBER_UPDATED, onMemberUpdated);
-            }
-
-            if (onMemberProgress) {
-                socket.off(LOBBY_EVENTS.MEMBER_PROGRESS, onMemberProgress);
-            }
-
-            if (onQuizResult) {
-                socket.off(LOBBY_EVENTS.QUIZ_RESULT, onQuizResult);
-            }
-
-            if (onLobbyError) {
-                socket.off(LOBBY_EVENTS.ERROR, onLobbyError);
+            for (const [event, handler] of bindings) {
+                socket.off(event, handler);
             }
         };
     }, [
         socket,
         onLobbyState,
         onLobbyStarted,
+        onLobbyStarting,
+        onLobbyCancelled,
         onLobbyDestroyed,
         onKicked,
         onMemberJoined,
         onMemberLeft,
         onMemberUpdated,
+        onMemberOnline,
+        onMemberOffline,
         onMemberProgress,
         onQuizResult,
         onLobbyError,
+        onNotification,
     ]);
 }

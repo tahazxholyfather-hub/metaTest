@@ -25,7 +25,8 @@ import {
     rejoinLobby,
     startLobby,
     leaveLobby,
-    kickMember
+    kickMember,
+    setReady,
 } from '../socket/lobby.socket';
 
 import type {
@@ -198,7 +199,12 @@ export const LobbyView: React.FC = () => {
         setIsLoading(false);
 
         // Handle server-side status for reconnects:
-        // If we reconnect and lobby is already in 'starting', show countdown
+        if (state.lobby.status === 'waiting') {
+            setIsStarting(false);
+            setCurrentScreen('lobby');
+            setCountdownStartedAt(null);
+        }
+
         if (state.lobby.status === 'starting') {
             const startedAt = state.lobby.startedAt || null;
             setIsStarting(true);
@@ -272,6 +278,11 @@ export const LobbyView: React.FC = () => {
             setIsStarting(false);
             setCountdownStartedAt(startedAt);
             setCurrentScreen('countdown');
+            redirectToQuiz({
+                ...updated,
+                startedAt,
+                status: 'started',
+            });
         },
 
         // Fix #2: Handle LOBBY_CANCELLED — host disconnected during countdown
@@ -318,6 +329,12 @@ export const LobbyView: React.FC = () => {
 
         onQuizResult: () => {},
         onLobbyError: handleLobbyError,
+        onNotification: (data) => {
+            if (data.type === 'warning') toast.warning(data.message);
+            else if (data.type === 'error') toast.error(data.message);
+            else if (data.type === 'success') toast.success(data.message);
+            else toast.info(data.message);
+        },
     });
 
     // Fix #5: Use rejoinLobby on reconnect, joinLobby only on first mount.
@@ -378,20 +395,8 @@ export const LobbyView: React.FC = () => {
 
         return () => {
             mounted = false;
-            // Only send leave if this is not a reconnect scenario (socket drop)
-            // leaveLobby is intentional only when the component truly unmounts (navigation)
         };
     }, [socket, isConnected, shareCode]);  // intentionally excludes applyLobbyState to avoid re-runs
-
-    // Separate cleanup: send leave only on true unmount (navigation away)
-    useEffect(() => {
-        return () => {
-            if (socket && shareCode) {
-                leaveLobby(socket, { code: shareCode }).catch(() => {});
-            }
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
 
     useEffect(() => {
         if (fetchedData || !shareCode) {
@@ -418,29 +423,17 @@ export const LobbyView: React.FC = () => {
         fetchMissingQuizData();
     }, [shareCode, fetchedData]);
 
-    useEffect(() => {
-        if (!socket) return;
-
-        socket.on('lobby_notification', (data: { message: string; type: string }) => {
-            if (data.type === 'warning') toast.warning(data.message);
-            else if (data.type === 'error') toast.error(data.message);
-            else if (data.type === 'success') toast.success(data.message);
-            else toast.info(data.message);
-        });
-
-        return () => {
-            socket.off('lobby_notification');
-        };
-    }, [socket]);
-
     const handleToggleReady = () => {
         const newReadyState = !isMeReady;
         setIsMeReady(newReadyState);
 
-        if (socket) {
-            socket.emit('set_ready', {
+        if (socket && shareCode) {
+            void setReady(socket, {
                 code: shareCode,
                 isReady: newReadyState,
+            }).catch((err: { message?: string }) => {
+                setIsMeReady(!newReadyState);
+                toast.error(err?.message || 'خطا در تغییر وضعیت آماده');
             });
         }
     };
@@ -460,6 +453,7 @@ export const LobbyView: React.FC = () => {
         try {
             await kickMember(socket, {
                 code: shareCode,
+                targetUserId: String(userId),
                 userId: String(userId),
             });
             toast.success('کاربر با موفقیت اخراج شد');
