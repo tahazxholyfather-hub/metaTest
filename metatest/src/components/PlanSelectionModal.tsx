@@ -376,13 +376,13 @@ export default function PlanSelectionModal({
         <ResponsiveModal
             isOpen={isOpen}
             onClose={handleClose}
-            title="ارتقای حساب کاربری"
+            title="اشتراک ویژه"
             maxWidthClass="md:w-[min(880px,94vw)] md:max-w-[94vw]"
             footer={
                 <button
                     onClick={handlePay}
                     disabled={isPaying || !selectedPlan || isLoadingPlans}
-                    className="flex w-full items-center justify-center gap-3 rounded-xl bg-[var(--accent)] py-4 text-sm font-black text-[var(--text-inverse)] shadow-[0_10px_24px_-12px_color-mix(in_srgb,var(--accent)_70%,transparent)] disabled:opacity-60"
+                    className="flex w-full items-center justify-center gap-3 rounded-xl bg-[var(--accent)] py-4 text-sm font-black text-white shadow-[0_10px_24px_-12px_color-mix(in_srgb,var(--accent)_70%,transparent)] disabled:opacity-60"
                 >
                     {isPaying ? (
                         <>
@@ -436,7 +436,7 @@ export default function PlanSelectionModal({
                         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
                     `}</style>
                     <p className="mb-4 text-xs text-[var(--text-muted)]">
-                        پلن مناسب خود را برای دسترسی نامحدود انتخاب کنید
+                        دسترسی کامل را انتخاب کنید
                     </p>
                     <div className="space-y-3">
                             {plansError && (
@@ -610,7 +610,7 @@ export default function PlanSelectionModal({
                                         <button
                                             onClick={handleApplyDiscount}
                                             disabled={!discountCode.trim() || isApplyingDiscount || !selectedPlan}
-                                            className="absolute bottom-1.5 left-1.5 top-1.5 px-4 text-[10px] font-bold text-[var(--text-inverse)] rounded-lg bg-[var(--accent)] disabled:opacity-50"
+                                            className="absolute bottom-1.5 left-1.5 top-1.5 px-4 text-[10px] font-bold text-white rounded-lg bg-[var(--accent)] disabled:opacity-50"
                                         >
                                             {isApplyingDiscount ? (
                                                 <Loader2 size={14} className="animate-spin" />

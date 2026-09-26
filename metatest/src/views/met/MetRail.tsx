@@ -115,7 +115,7 @@ export function MetRail({ status, metColor, audioLevel, coins, activePanel, onTo
                     activePanel === 'coins' ? 'bg-[var(--color-primary-500)]/14 border border-[var(--color-primary-500)]/30' : 'hover:bg-[var(--hover-overlay)]'
                 }`}
             >
-                <Coins size={16} className={coins <= 0 ? 'text-rose-400' : 'text-amber-400'} strokeWidth={2.2} />
+                <Coins size={16} className={coins <= 0 ? 'text-rose-400' : 'text-[var(--coin)]'} strokeWidth={2.2} />
                 <motion.span key={coins} initial={{ opacity: 0.4, y: -2 }} animate={{ opacity: 1, y: 0 }} className={`text-[10.5px] font-extrabold tabular-nums ${coins <= 0 ? 'text-rose-400' : 'text-[var(--text-primary)]'}`}>
                     {faNum(coins)}
                 </motion.span>

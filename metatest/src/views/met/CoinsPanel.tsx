@@ -76,7 +76,7 @@ export function CoinsPanel({ wallet, onRefresh, onBuy, className = '' }: Props) 
                             {faNum(wallet.total)}
                         </motion.div>
                     </div>
-                    <span className="w-10 h-10 rounded-[14px] grid place-items-center bg-amber-400/15 text-amber-400">
+                    <span className="w-10 h-10 rounded-[14px] grid place-items-center bg-[color-mix(in_srgb,var(--coin)_16%,transparent)] text-[var(--coin)]">
                         <Coins size={20} />
                     </span>
                 </div>
@@ -99,14 +99,14 @@ export function CoinsPanel({ wallet, onRefresh, onBuy, className = '' }: Props) 
                 </div>
 
                 <div className="relative mt-4 flex items-center gap-2">
-                    <button type="button" onClick={() => (onBuy ? onBuy() : window.location.assign('/re'))} className="flex-1 h-9 rounded-[12px] bg-[var(--accent)] text-[var(--text-inverse)] text-[12px] font-extrabold inline-flex items-center justify-center gap-1.5 shadow-[0_8px_20px_-8px_color-mix(in_srgb,var(--accent)_70%,transparent)] active:scale-[0.98] transition-transform">
+                    <button type="button" onClick={() => (onBuy ? onBuy() : window.location.assign('/re'))} className="flex-1 h-9 rounded-[12px] bg-[var(--accent)] text-white text-[12px] font-extrabold inline-flex items-center justify-center gap-1.5 shadow-[0_8px_20px_-8px_color-mix(in_srgb,var(--accent)_70%,transparent)] active:scale-[0.98] transition-transform">
                         <Sparkles size={14} /> خرید سکه
                     </button>
                     <button type="button" onClick={() => { onRefresh(); void load(true); }} className="h-9 px-3 rounded-[12px] border border-[var(--border)]/70 text-[12px] font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] inline-flex items-center gap-1.5">
                         <RotateCcw size={13} /> به‌روزرسانی
                     </button>
                 </div>
-                <p className="relative mt-2 text-[10px] leading-relaxed text-[var(--text-muted)]">با ارتقای اشتراک، سکهٔ روزانه بیشتری می‌گیری.</p>
+                <p className="relative mt-2 text-[10px] leading-relaxed text-[var(--text-muted)]">با اشتراک ویژه، سکه روزانه بیشتری دریافت می‌کنید.</p>
             </div>
 
             <div className="flex-1 min-h-0 overflow-y-auto chat-scrollbar px-1 mt-4">

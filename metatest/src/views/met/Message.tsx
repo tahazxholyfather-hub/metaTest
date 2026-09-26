@@ -64,7 +64,7 @@ function VoiceNote({ url, seconds }: { url: string; seconds?: number | null }) {
                 setPlaying(true);
                 playSharedAudio(url, () => setPlaying(false));
             }}
-            className="inline-flex items-center gap-2 mb-1.5 px-2.5 h-8 rounded-full bg-[color-mix(in_srgb,var(--text-inverse)_16%,transparent)] text-[var(--text-inverse)] text-[11.5px] font-bold"
+            className="inline-flex items-center gap-2 mb-1.5 px-2.5 h-8 rounded-full bg-white/15 text-white text-[11.5px] font-bold"
             aria-label={playing ? 'توقف' : 'پخش پیام صوتی'}
         >
             {playing ? <Square size={12} /> : <Mic size={12} />}
@@ -136,7 +136,7 @@ export function Message({
             >
                 <div className="max-w-[82%] sm:max-w-[64%] group">
                     <div
-                        className="px-3.5 py-2.5 text-[14.5px] leading-[1.6] text-[var(--text-inverse)] break-words rounded-[18px] rounded-br-[6px] shadow-[0_8px_24px_-12px_color-mix(in_srgb,var(--accent)_55%,transparent)]"
+                        className="px-3.5 py-2.5 text-[14.5px] leading-[1.6] text-white break-words rounded-[18px] rounded-br-[6px] shadow-[0_8px_24px_-12px_color-mix(in_srgb,var(--accent)_55%,transparent)]"
                         style={{ background: 'linear-gradient(145deg, var(--color-primary-400), var(--accent))' }}
                         dir="auto"
                     >
@@ -215,7 +215,7 @@ export function Message({
                                             key={action.id}
                                             type="button"
                                             onClick={() => onChatAction?.(action.action)}
-                                            className={`h-8 rounded-full px-3 text-[12px] font-extrabold ${action.action === 'open_plans' ? 'bg-[var(--accent)] text-[var(--text-inverse)] shadow-[0_8px_18px_-10px_color-mix(in_srgb,var(--accent)_80%,transparent)]' : 'border border-[color-mix(in_srgb,var(--accent)_40%,var(--border))] bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] text-[var(--accent)]'}`}
+                                            className={`h-8 rounded-full px-3 text-[12px] font-extrabold ${action.action === 'open_plans' ? 'bg-[var(--accent)] text-white shadow-[0_8px_18px_-10px_color-mix(in_srgb,var(--accent)_80%,transparent)]' : 'border border-[color-mix(in_srgb,var(--accent)_40%,var(--border))] bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] text-[var(--accent)]'}`}
                                         >
                                             {action.label}
                                         </button>
@@ -236,7 +236,7 @@ export function Message({
                     <div className="flex items-center justify-end gap-1 mt-1 pr-1 opacity-60 group-hover:opacity-100 focus-within:opacity-100 transition-opacity" dir="rtl">
                         <span className="text-[10px] text-[var(--text-muted)] tabular-nums ml-1">{time}</span>
                         {!!message.coinCost && (
-                            <span className="text-[10px] text-[var(--text-muted)] tabular-nums ml-1" title="سکه‌ی مصرف‌شده">
+                            <span className="text-[10px] text-[var(--coin)] tabular-nums ml-1" title="سکه‌ی مصرف‌شده">
                                 {faNum(message.coinCost)} سکه
                             </span>
                         )}

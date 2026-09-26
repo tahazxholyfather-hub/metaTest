@@ -612,7 +612,7 @@ const handleAddQuizMember = async (req, res) => {
                 return res.status(403).json({
                     success: false,
                     code: 'MULTIPLAYER_LOCKED',
-                    message: 'شرکت در آزمون آنلاین برای طرح رایگان بسته است. برای ورود به لابی پلن را ارتقا بده.',
+                    message: 'ورود به آزمون آنلاین با اشتراک ویژه ممکن است.',
                 });
             }
         } finally {

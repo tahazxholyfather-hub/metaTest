@@ -165,7 +165,7 @@ export function CoinChip({
     };
     const inner = (
         <>
-            <Coins size={14} className={low ? 'text-rose-400' : 'text-amber-400'} strokeWidth={2.2} />
+            <Coins size={14} className={low ? 'text-rose-400' : 'text-[var(--coin)]'} strokeWidth={2.2} />
             <motion.span
                 key={total}
                 initial={{ opacity: 0.4, y: -3 }}
