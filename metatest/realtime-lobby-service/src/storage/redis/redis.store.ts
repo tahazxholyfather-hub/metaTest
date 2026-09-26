@@ -1,6 +1,7 @@
 import Redis from 'ioredis';
 import { env } from '../../config/env';
 import { logger } from '../../config/logger';
+import { CustomError } from '../../core/exceptions/custom-error';
 import { IStorage } from '../../core/interfaces/storage.interface';
 import {
     Lobby,
@@ -29,6 +30,10 @@ export class RedisStore implements IStorage {
         this.redis.on('error', (err) => {
             logger.error({ err }, 'Redis error');
         });
+    }
+
+    getClient(): Redis {
+        return this.redis;
     }
 
     private key(...parts: string[]) {
@@ -122,7 +127,7 @@ export class RedisStore implements IStorage {
         }
 
         logger.warn({ code }, 'Redis optimistic lobby update failed after retries');
-        return this.getLobbyByCode(code);
+        throw new CustomError('Lobby update conflict, retry shortly', 409, 'LOBBY_UPDATE_CONFLICT');
     }
 
     async deleteLobby(code: LobbyCode): Promise<void> {
@@ -138,10 +143,18 @@ export class RedisStore implements IStorage {
         pipeline.zrem(this.expiriesKey(), code);
 
         for (const member of members) {
-            pipeline.del(this.bindingUserKey(member.userId));
-
-            if (member.socketId) {
-                pipeline.del(this.bindingSocketKey(member.socketId));
+            const uid = this.uid(member.userId);
+            const binding = await this.getUserBinding(uid);
+            if (binding?.lobbyCode === code) {
+                const updatedBinding: UserSessionBinding = {
+                    ...binding,
+                    lobbyCode: undefined,
+                };
+                pipeline.set(this.bindingUserKey(uid), JSON.stringify(updatedBinding));
+                pipeline.set(
+                    this.bindingSocketKey(binding.socketId),
+                    JSON.stringify(updatedBinding),
+                );
             }
         }
 
@@ -163,7 +176,9 @@ export class RedisStore implements IStorage {
     }
 
     async bindSocketToUser(binding: UserSessionBinding): Promise<void> {
-        const existing = await this.getUserBinding(binding.userId);
+        const userId = this.uid(binding.userId);
+        const normalized: UserSessionBinding = { ...binding, userId };
+        const existing = await this.getUserBinding(userId);
 
         const pipeline = this.redis.pipeline();
 
@@ -171,8 +186,8 @@ export class RedisStore implements IStorage {
             pipeline.del(this.bindingSocketKey(existing.socketId));
         }
 
-        pipeline.set(this.bindingUserKey(binding.userId), JSON.stringify(binding));
-        pipeline.set(this.bindingSocketKey(binding.socketId), JSON.stringify(binding));
+        pipeline.set(this.bindingUserKey(userId), JSON.stringify(normalized));
+        pipeline.set(this.bindingSocketKey(normalized.socketId), JSON.stringify(normalized));
 
         await pipeline.exec();
     }
@@ -212,7 +227,11 @@ export class RedisStore implements IStorage {
     async setMember(code: LobbyCode, member: LobbyMember): Promise<void> {
         const pipeline = this.redis.pipeline();
 
-        pipeline.hset(this.membersKey(code), member.userId, JSON.stringify(member));
+        pipeline.hset(
+            this.membersKey(code),
+            this.uid(member.userId),
+            JSON.stringify({ ...member, userId: this.uid(member.userId) }),
+        );
 
         const binding = await this.getUserBinding(member.userId);
 
@@ -283,8 +302,8 @@ export class RedisStore implements IStorage {
     ): Promise<void> {
         await this.redis.hset(
             this.progressKey(code),
-            progress.userId,
-            JSON.stringify(progress),
+            this.uid(progress.userId),
+            JSON.stringify({ ...progress, userId: this.uid(progress.userId) }),
         );
     }
 
@@ -347,5 +366,23 @@ export class RedisStore implements IStorage {
         }
 
         return expiredCodes;
+    }
+
+    async healthCheck(): Promise<boolean> {
+        try {
+            const pong = await this.redis.ping();
+            return pong === 'PONG';
+        } catch (err) {
+            logger.error({ err }, 'Redis health check failed');
+            return false;
+        }
+    }
+
+    async close(): Promise<void> {
+        try {
+            this.redis.disconnect();
+        } catch {
+            // ignore
+        }
     }
 }

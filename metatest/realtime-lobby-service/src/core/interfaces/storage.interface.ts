@@ -31,6 +31,8 @@ export interface IStorage {
     getLobbyExpiry(code: LobbyCode): Promise<number | null>;
     clearLobbyExpiry(code: LobbyCode): Promise<void>;
     listExpiredLobbyCodes(now: number): Promise<LobbyCode[]>;
-
     cleanupExpiredLobbies(now: number): Promise<LobbyCode[]>;
+
+    healthCheck(): Promise<boolean>;
+    close(): Promise<void>;
 }
