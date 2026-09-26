@@ -285,13 +285,13 @@ export const SideNav = ({ activeView, onNavigate, theme, onToggleTheme, isCollap
                     p-0
                     bg-[var(--accent)]
                     hover:brightness-110
-                    text-[var(--text-inverse)]
+                    text-white
                     shadow-[0_3px_14px_color-mix(in_srgb,var(--accent)_35%,transparent)]
                     hover:shadow-[0_4px_18px_color-mix(in_srgb,var(--accent)_45%,transparent)]
                     hover:-translate-y-0.5
                     transition-all duration-200
                 "
-                                title="ارتقا پلن"
+                                title="اشتراک ویژه"
                             >
                                 <Rocket
                                     size={14}
@@ -349,19 +349,19 @@ export const SideNav = ({ activeView, onNavigate, theme, onToggleTheme, isCollap
                                         </div>
 
                                         <p className="text-[9.5px] text-[var(--text-muted)] mt-0.5 leading-snug">
-                                            امکانات محدود — با ارتقا، امکانات بیشتری در دسترس شماست.
+                                            برای دسترسی کامل، اشتراک ویژه را فعال کنید.
                                         </p>
                                     </div>
                                 </div>
 
                                 <button
                                     onClick={() => setIsPlanModalOpen(true)}
-                                    className="relative overflow-hidden group w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-[var(--accent)] hover:brightness-110 text-[var(--text-inverse)] shadow-[0_4px_20px_color-mix(in_srgb,var(--accent)_28%,transparent)] hover:shadow-[0_6px_24px_color-mix(in_srgb,var(--accent)_38%,transparent)] hover:-translate-y-0.5 transition-all duration-200"
+                                    className="relative overflow-hidden group w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-[var(--accent)] hover:brightness-110 text-white shadow-[0_4px_20px_color-mix(in_srgb,var(--accent)_28%,transparent)] hover:shadow-[0_6px_24px_color-mix(in_srgb,var(--accent)_38%,transparent)] hover:-translate-y-0.5 transition-all duration-200"
                                 >
                                     <Rocket size={14} className="relative z-10" />
 
                                     <span className="relative z-10 text-xs font-extrabold tracking-wide">
-                ارتقا پلن
+                اشتراک ویژه
             </span>
 
                                     <div className="btn-shimmer-effect" />

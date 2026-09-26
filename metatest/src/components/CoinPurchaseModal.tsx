@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
-import { Coins, Loader2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { motion } from 'framer-motion';
+import { Check, Loader2 } from 'lucide-react';
+import { Player } from '@lordicon/react';
 import { toast } from 'sonner';
+import ICON_DATA from '../assets/wired-gradient-290-coin.json';
 import { flowApi } from '../lib/authApi';
-import { PremiumUpgrade } from './PremiumUpgrade';
 import { ResponsiveModal } from './ResponsiveModal';
 
 type CoinPackage = {
@@ -21,8 +23,57 @@ type Props = {
     onRequirePlan: () => void;
 };
 
-function toman(value: number) {
-    return new Intl.NumberFormat('fa-IR').format(value);
+type PackLook = {
+    colors: string;
+    border: string;
+    shadow: string;
+};
+
+const PACK_LOOK: Record<string, PackLook> = {
+    'coins-40': {
+        colors: 'primary:#F3D36B,secondary:#C4922A',
+        border: 'border-[#E8B923]/55',
+        shadow: 'shadow-[0_0_24px_rgba(232,185,35,0.16)]',
+    },
+    'coins-120': {
+        colors: 'primary:#FFE08A,secondary:#D4A017',
+        border: 'border-[#F5C542]/70',
+        shadow: 'shadow-[0_0_28px_rgba(245,197,66,0.22)]',
+    },
+    'coins-300': {
+        colors: 'primary:#F6C445,secondary:#A16207',
+        border: 'border-[#E8B923]/60',
+        shadow: 'shadow-[0_0_24px_rgba(212,160,23,0.18)]',
+    },
+};
+
+const FALLBACK_LOOK = PACK_LOOK['coins-120'];
+
+function lookFor(id: string) {
+    return PACK_LOOK[id] || FALLBACK_LOOK;
+}
+
+function CoinIcon({ colors, size }: { colors: string; size: number }) {
+    const playerRef = useRef<Player>(null);
+
+    useEffect(() => {
+        const timeout = setTimeout(() => {
+            playerRef.current?.playFromBeginning();
+        }, 280);
+        return () => clearTimeout(timeout);
+    }, []);
+
+    return (
+        <div className="flex items-center justify-center">
+            <Player
+                ref={playerRef}
+                icon={ICON_DATA}
+                size={size}
+                state="in-reveal"
+                colors={colors}
+            />
+        </div>
+    );
 }
 
 export default function CoinPurchaseModal({ isOpen, onClose, onRequirePlan }: Props) {
@@ -46,7 +97,7 @@ export default function CoinPurchaseModal({ isOpen, onClose, onRequirePlan }: Pr
                 setSelectedId(popular?.id || null);
             })
             .catch(() => {
-                if (alive) toast.error('دریافت بسته‌های سکه ناموفق بود.');
+                if (alive) toast.error('بسته‌های سکه دریافت نشد.');
             })
             .finally(() => {
                 if (alive) setLoading(false);
@@ -68,7 +119,7 @@ export default function CoinPurchaseModal({ isOpen, onClose, onRequirePlan }: Pr
                     onRequirePlan();
                     return;
                 }
-                toast.error(res.message || 'پرداخت سکه شروع نشد.');
+                toast.error(res.message || 'پرداخت شروع نشد.');
                 return;
             }
             window.location.href = res.data.paymentUrl;
@@ -84,51 +135,126 @@ export default function CoinPurchaseModal({ isOpen, onClose, onRequirePlan }: Pr
             isOpen={isOpen}
             onClose={onClose}
             title="خرید سکه"
-            maxWidthClass="md:w-[440px] md:max-w-[92vw]"
-            footer={canPurchase && !loading ? (
+            maxWidthClass="md:w-[min(760px,94vw)] md:max-w-[94vw]"
+            footer={!loading && packages.length > 0 ? (
                 <button
                     type="button"
-                    disabled={!selectedId || paying}
-                    onClick={() => void buy()}
-                    className="flex h-11 w-full items-center justify-center rounded-xl bg-[var(--accent)] text-sm font-extrabold text-[var(--text-inverse)] shadow-[0_10px_24px_-12px_color-mix(in_srgb,var(--accent)_70%,transparent)] disabled:opacity-50"
+                    disabled={paying || (canPurchase && !selectedId)}
+                    onClick={() => { if (!canPurchase) onRequirePlan(); else void buy(); }}
+                    className="flex w-full items-center justify-center gap-3 rounded-xl bg-[var(--accent)] py-4 text-sm font-black text-white shadow-[0_10px_24px_-12px_color-mix(in_srgb,var(--accent)_70%,transparent)] disabled:opacity-60"
                 >
-                    {paying ? <Loader2 className="animate-spin" size={18} /> : 'پرداخت و دریافت سکه'}
+                    {paying ? (
+                        <>
+                            <Loader2 size={18} className="animate-spin" />
+                            در حال اتصال...
+                        </>
+                    ) : canPurchase ? (
+                        <>
+                            <Check size={18} />
+                            تایید و پرداخت
+                        </>
+                    ) : (
+                        'اشتراک ویژه'
+                    )}
                 </button>
             ) : undefined}
         >
             <div dir="rtl">
-                <p className="mb-4 text-xs text-[var(--text-muted)]">برای ادامه گفتگو با مِت</p>
+                <style>{`
+                    @keyframes coinShimmer {
+                        0% { background-position: 100% 0; }
+                        100% { background-position: -100% 0; }
+                    }
+                    .coin-shimmer {
+                        background: linear-gradient(90deg, #a16207 0%, #f5c542 25%, #fff6d4 50%, #f5c542 75%, #a16207 100%);
+                        background-size: 200% auto;
+                        -webkit-background-clip: text;
+                        -webkit-text-fill-color: transparent;
+                        animation: coinShimmer 4s linear infinite;
+                    }
+                `}</style>
+                <p className="mb-4 text-xs text-[var(--text-muted)]">
+                    {canPurchase ? 'بسته سکه را انتخاب کنید' : 'خرید سکه با اشتراک ویژه فعال می‌شود'}
+                </p>
+
                 {loading ? (
-                    <div className="flex justify-center py-10 text-[var(--text-muted)]"><Loader2 className="animate-spin" size={22} /></div>
-                ) : !canPurchase ? (
-                    <PremiumUpgrade
-                        icon={Coins}
-                        title="خرید سکه با پلن پولی"
-                        description="سکه‌های خریدنی برای طرح‌های پولی است. اول پلن را ارتقا بده، بعد هر بسته‌ای که خواستی را بردار."
-                        actionLabel="ارتقا پلن"
-                        onAction={onRequirePlan}
-                        bare
-                    />
-                ) : (
-                    <div className="space-y-3">
-                        {packages.map((pack) => {
-                            const active = pack.id === selectedId;
-                            return (
-                                <button
-                                    key={pack.id}
-                                    type="button"
-                                    onClick={() => setSelectedId(pack.id)}
-                                    className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-right transition-colors ${active ? 'border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_10%,var(--bg-card))]' : 'border-[var(--border)] bg-[var(--bg-elevated)]'}`}
-                                >
-                                    <span>
-                                        <span className="block text-sm font-extrabold text-[var(--text-primary)]">{pack.title}</span>
-                                        {pack.subtitle && <span className="mt-0.5 block text-xs text-[var(--text-muted)]">{pack.subtitle}</span>}
-                                    </span>
-                                    <span className="text-sm font-black text-[var(--accent)]">{toman(pack.priceToman)} تومان</span>
-                                </button>
-                            );
-                        })}
+                    <div className="flex min-h-[220px] flex-col items-center justify-center gap-3">
+                        <Loader2 size={32} className="animate-spin text-[var(--accent)]" />
+                        <span className="text-xs text-[var(--text-muted)]">در حال بارگذاری بسته‌ها...</span>
                     </div>
+                ) : (
+                    <>
+                        <div className="hidden gap-4 sm:grid sm:grid-cols-3">
+                            {packages.map((pack) => {
+                                const active = pack.id === selectedId;
+                                const look = lookFor(pack.id);
+                                return (
+                                    <motion.button
+                                        key={pack.id}
+                                        type="button"
+                                        onClick={() => setSelectedId(pack.id)}
+                                        whileHover={{ y: -4 }}
+                                        className={`relative flex h-48 flex-col items-center rounded-2xl border p-5 transition-all duration-300 ${
+                                            active
+                                                ? `${look.shadow} ${look.border} bg-[var(--bg-elevated)]`
+                                                : 'border-[var(--border)]/50 bg-[var(--bg-elevated)]/20 hover:bg-[var(--bg-elevated)]/40'
+                                        }`}
+                                    >
+                                        {pack.popular && (
+                                            <span className="absolute -top-2 rounded-full bg-gradient-to-r from-[#E8B923] to-[#B8860B] px-3 py-0.5 text-[10px] font-black text-white shadow-lg">
+                                                محبوب‌ترین
+                                            </span>
+                                        )}
+                                        <div className="mb-2">
+                                            <CoinIcon colors={look.colors} size={64} />
+                                        </div>
+                                        <h3 className="coin-shimmer mb-1 text-sm font-black">{pack.title}</h3>
+                                        <p className="mb-auto text-[10px] text-[var(--text-muted)]">{pack.subtitle}</p>
+                                        <span className="mt-3 text-sm font-black">
+                                            {pack.priceToman.toLocaleString('fa-IR')}
+                                            <small className="text-[9px] font-normal text-[var(--text-muted)]"> تومان</small>
+                                        </span>
+                                    </motion.button>
+                                );
+                            })}
+                        </div>
+
+                        <div className="flex flex-col gap-3 sm:hidden">
+                            {packages.map((pack) => {
+                                const active = pack.id === selectedId;
+                                const look = lookFor(pack.id);
+                                return (
+                                    <button
+                                        key={pack.id}
+                                        type="button"
+                                        onClick={() => setSelectedId(pack.id)}
+                                        className={`relative flex items-center justify-between rounded-xl border p-4 transition-all ${
+                                            active
+                                                ? `${look.border} bg-[var(--bg-elevated)] shadow-lg`
+                                                : 'border-[var(--border)]/40 bg-[var(--bg-elevated)]/20'
+                                        }`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <CoinIcon colors={look.colors} size={40} />
+                                            <div className="text-right">
+                                                <h3 className="coin-shimmer text-sm font-bold">{pack.title}</h3>
+                                                <p className="text-[10px] text-[var(--text-muted)]">{pack.subtitle}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col items-end">
+                                            {pack.popular && (
+                                                <span className="mb-1 rounded-full bg-gradient-to-r from-[#E8B923] to-[#B8860B] px-2 py-0.5 text-[9px] font-black text-white">
+                                                    محبوب‌ترین
+                                                </span>
+                                            )}
+                                            <span className="text-sm font-black">{pack.priceToman.toLocaleString('fa-IR')}</span>
+                                            <span className="text-[9px] text-[var(--text-muted)]">تومان</span>
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </>
                 )}
             </div>
         </ResponsiveModal>

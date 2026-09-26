@@ -1378,8 +1378,8 @@ export function QuizView({
                                             <PremiumUpgrade
                                                 icon={Lock}
                                                 title="پاسخ تشریحی این درس قفل شد"
-                                                description="در طرح رایگان برای هر درس فقط یک پاسخ تشریحی باز می‌شود. سوال‌ها را همچنان می‌توانی جواب بدهی؛ برای دیدن بقیه‌ی حل‌ها پلن را ارتقا بده."
-                                                actionLabel="ارتقا پلن"
+                                                description="با اشتراک رایگان، برای هر درس یک پاسخ تشریحی باز می‌شود."
+                                                actionLabel="اشتراک ویژه"
                                                 onAction={() => setPlansOpen(true)}
                                             />
                                         </div>

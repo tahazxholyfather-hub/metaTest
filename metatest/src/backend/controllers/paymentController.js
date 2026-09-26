@@ -904,7 +904,7 @@ exports.createCoinPayment = async (req, res) => {
             return res.status(403).json({
                 success: false,
                 code: 'PLAN_REQUIRED',
-                message: 'خرید سکه برای طرح‌های پولی است. اول پلن را ارتقا بده.',
+                message: 'خرید سکه با اشتراک ویژه ممکن است.',
             });
         }
         const pack = coinPackageById(req.body?.packageId);

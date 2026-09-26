@@ -40,9 +40,9 @@ const FREE_LIMITS = Object.freeze({
 
 /** Coin packs. Add a row to extend the shop — the modal and checkout read this list. */
 const COIN_PACKAGES = Object.freeze([
-    { id: 'coins-40', coins: 40, priceToman: 39000, title: '۴۰ سکه', subtitle: 'چند گفتگوی کوتاه' },
-    { id: 'coins-120', coins: 120, priceToman: 99000, title: '۱۲۰ سکه', subtitle: 'برای تمرین بیشتر با مِت', popular: true },
-    { id: 'coins-300', coins: 300, priceToman: 219000, title: '۳۰۰ سکه', subtitle: 'به‌صرفه‌ترین بسته' },
+    { id: 'coins-40', coins: 40, priceToman: 39000, title: '۴۰ سکه', subtitle: 'گفتگوی کوتاه' },
+    { id: 'coins-120', coins: 120, priceToman: 99000, title: '۱۲۰ سکه', subtitle: 'تمرین بیشتر', popular: true },
+    { id: 'coins-300', coins: 300, priceToman: 219000, title: '۳۰۰ سکه', subtitle: 'به‌صرفه‌ترین' },
 ]);
 
 const NAMED_PAID_PLANS = new Set(['bronze', 'silver', 'golden', 'gold', 'diamond', 'epic', 'premium', 'pro']);

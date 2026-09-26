@@ -91,6 +91,7 @@
     --accent:         var(--color-primary-600);
     --icon-color:     var(--color-primary-700);
     --icon-bg:        var(--color-primary-50);
+    --coin:           #C8960C;
 
     /* Misc */
     --shadow-1: 0 6px 18px rgba(16,24,40,0.08);
@@ -139,6 +140,7 @@
     --accent:         var(--color-primary-500);
     --icon-color:     var(--color-primary-400);
     --icon-bg:        var(--bg-elevated);
+    --coin:           #F5C542;
 
     /* shadows subtle in dark */
     --shadow-1: 0 6px 18px rgba(0,0,0,0.55);
@@ -270,7 +272,7 @@
 
     ::selection {
         background: var(--accent);
-        color: var(--text-inverse);
+        color: #fff;
     }
 
     .card {
@@ -399,7 +401,7 @@
 
     .btn-primary {
         background: var(--accent);
-        color: var(--text-inverse);
+        color: #fff;
         box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 35%, transparent);
         border-color: color-mix(in srgb, var(--accent) 70%, #000 30%);
     }

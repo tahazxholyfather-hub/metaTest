@@ -443,7 +443,7 @@ const ShortcutBtn = ({ icon: Icon, label, onClick }: any) => (
     >
         <div className="absolute top-1/2 right-0 -translate-y-1/2 w-1 h-0 group-hover:h-3/4 bg-[var(--accent)] transition-all duration-300 hidden sm:block rounded-l-full opacity-0 group-hover:opacity-100" />
         <div className="relative flex items-center justify-center shrink-0 w-11 h-11 sm:w-10 sm:h-10 rounded-[16px] sm:rounded-xl bg-[var(--bg-card)] sm:bg-[var(--bg-app)] shadow-[var(--shadow-1)] sm:shadow-none border border-[var(--border)] sm:border-transparent group-hover:bg-[var(--accent)] group-hover:border-[var(--accent)] transition-all duration-300 z-10">
-            <Icon className="w-5 h-5 sm:w-[22px] sm:h-[22px] text-[var(--icon-color)] sm:text-[var(--text-secondary)] group-hover:text-[var(--text-inverse)] transition-colors duration-300" strokeWidth={1.5} />
+            <Icon className="w-5 h-5 sm:w-[22px] sm:h-[22px] text-[var(--icon-color)] sm:text-[var(--text-secondary)] group-hover:text-white transition-colors duration-300" strokeWidth={1.5} />
         </div>
         <span className="text-[8.5px] sm:text-[13px] whitespace-nowrap font-bold text-[var(--text-muted)] sm:text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors duration-300 text-center sm:text-right z-10">{label}</span>
     </motion.button>

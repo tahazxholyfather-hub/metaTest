@@ -153,7 +153,7 @@ async function prepareExamCreate(userId, visibility) {
         return {
             ok: false,
             code: 'MULTIPLAYER_LOCKED',
-            message: 'آزمون آنلاین برای طرح رایگان بسته است. آزمون شخصی هنوز باز است؛ برای رقابت با بقیه پلن را ارتقا بده.',
+            message: 'آزمون آنلاین با اشتراک ویژه فعال می‌شود.',
         };
     }
     await usage.ensureReady();
@@ -170,7 +170,7 @@ async function prepareExamCreate(userId, visibility) {
             return {
                 ok: false,
                 code: 'PERSONAL_EXAM_COOLDOWN',
-                message: 'در طرح رایگان هر ۲۴ ساعت یک آزمون شخصی می‌توانی بسازی. برای ساخت آزمون بیشتر پلن را ارتقا بده.',
+                message: 'با اشتراک رایگان، هر ۲۴ ساعت یک آزمون شخصی می‌سازید.',
                 nextAllowedAt: slot.nextAllowedAt,
             };
         }

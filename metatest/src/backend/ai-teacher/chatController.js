@@ -122,7 +122,7 @@ function upgradeActions(kind) {
         return [{ id: 'buy-coins', label: 'خرید سکه', action: 'open_coins' }];
     }
     return [
-        { id: 'upgrade-plan', label: 'ارتقا پلن', action: 'open_plans' },
+        { id: 'upgrade-plan', label: 'اشتراک ویژه', action: 'open_plans' },
         { id: 'buy-coins', label: 'خرید سکه', action: 'open_coins' },
     ];
 }
@@ -246,8 +246,8 @@ const streamChat = async (req, res) => {
 
         if (wallet.total < typical.coins) {
             const text = paid
-                ? 'سکه‌هات تموم شده. می‌تونی یک بسته سکه بگیری تا همین گفتگو رو ادامه بدیم، یا تا شارژ فردا صبر کنی — هر جور راحت‌تری.'
-                : 'سکه‌های امروزت تموم شد. با طرح رایگان تقریباً یکی‌دو تا سوال در روز با هم حرف می‌زنیم و فردا دوباره شارژ می‌شی. اگه همین الان می‌خوای ادامه بدیم، پلن رو ارتقا بده.';
+                ? 'موجودی سکه کافی نیست. یک بسته سکه بگیرید، یا تا شارژ فردا صبر کنید.'
+                : 'سکه امروز تمام شد. با اشتراک رایگان، گفتگو تا شارژ فردا محدود است. برای ادامه، اشتراک ویژه را فعال کنید.';
             await sendScriptedReply({
                 out, userId, conversationId, subjectKey, message, attachments, regenerateMessageId,
                 text,
@@ -269,8 +269,8 @@ const streamChat = async (req, res) => {
                 const label = askGate.subjectLabel || 'این درس';
                 await sendScriptedReply({
                     out, userId, conversationId, subjectKey, message, attachments, regenerateMessageId,
-                    text: `برای ${label} یک بار تونستم رایگان کنارت باشم و اون سهم تموم شد. اگه پلن رو ارتقا بدی، هر سوال ${label} رو همین‌جا با هم باز می‌کنیم و وسطش قطع نمی‌شم.`,
-                    actions: [{ id: 'upgrade-plan', label: 'ارتقا پلن', action: 'open_plans' }],
+                    text: `سهم رایگان ${label} استفاده شد. با اشتراک ویژه، سؤال‌های ${label} را بدون محدودیت ادامه می‌دهید.`,
+                    actions: [{ id: 'upgrade-plan', label: 'اشتراک ویژه', action: 'open_plans' }],
                     wallet: walletView,
                 });
                 return out.end();

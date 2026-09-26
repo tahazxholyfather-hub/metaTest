@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    Play, ChevronLeft, Book, Clock, Activity, Users, Globe, ShieldCheck,
+    Play, ChevronLeft, Book, Clock, Activity, Users, Radio, ShieldCheck,
     CheckCircle2, List, Image as ImageIcon, Check,
     Target, PenTool, Zap, Edit3, Layers, Lock
 } from 'lucide-react';
@@ -916,22 +916,22 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
                         {/* Privacy & Member Capacity block */}
                         <div className="bg-[var(--bg-card)] rounded-[16px] overflow-hidden border border-[var(--border)] shadow-sm">
                             <SettingRow
-                                icon={flowData.settings.visibility === 'public' ? Globe : ShieldCheck}
-                                label="حریم خصوصی آزمون"
+                                icon={flowData.settings.visibility === 'public' ? Radio : ShieldCheck}
+                                label="نوع آزمون"
                                 desc={flowData.settings.visibility === 'public'
                                     ? (multiplayerLocked
-                                        ? 'آزمون آنلاین برای طرح رایگان بسته است. آزمون شخصی همچنان باز است.'
-                                        : 'دیگران می‌توانند از طریق کد دعوت وارد لابی شوند و با شما رقابت کنند.')
+                                        ? 'آزمون آنلاین با اشتراک ویژه فعال می‌شود.'
+                                        : 'با کد دعوت، دیگران وارد لابی می‌شوند.')
                                     : (personalExamLocked
-                                        ? 'سهم رایگان این ۲۴ ساعت استفاده شده است.'
-                                        : 'فقط شما این آزمون را می‌بینید. بدون لابی، مستقیم وارد آزمون می‌شوید.')
+                                        ? 'سهم امروز تمام شده است.'
+                                        : 'فقط شما این آزمون را می‌بینید.')
                                 }
                             >
                                 <SmoothSegmentedControl
                                     uniqueId="visibility"
                                     options={[
                                         { label: 'شخصی', value: 'private', icon: ShieldCheck },
-                                        { label: 'عمومی', value: 'public', icon: Users },
+                                        { label: 'آنلاین', value: 'public', icon: Radio },
                                     ]}
                                     value={flowData.settings.visibility}
                                     onChange={(v: any) => updateSetting('visibility', v)}
@@ -949,9 +949,9 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
                                     >
                                         <PremiumUpgrade
                                             icon={Lock}
-                                            title="آزمون آنلاین قفل است"
-                                            description="رقابت آنلاین و لابی چندنفره برای طرح رایگان بسته است. آزمون شخصی هنوز باز است؛ برای ساخت آزمون عمومی پلن را ارتقا بده."
-                                            actionLabel="ارتقا پلن"
+                                            title="آزمون آنلاین"
+                                            description="رقابت و لابی با اشتراک ویژه فعال می‌شود."
+                                            actionLabel="اشتراک ویژه"
                                             onAction={() => setPlansOpen(true)}
                                         />
                                     </motion.div>
@@ -988,9 +988,9 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
                                     >
                                         <PremiumUpgrade
                                             icon={Lock}
-                                            title="سهم آزمون شخصی امروز تمام شد"
-                                            description="در طرح رایگان هر ۲۴ ساعت یک آزمون شخصی می‌توانی بسازی. برای ساخت آزمون بیشتر پلن را ارتقا بده."
-                                            actionLabel="ارتقا پلن"
+                                            title="سهم امروز تمام شد"
+                                            description="با اشتراک رایگان، هر ۲۴ ساعت یک آزمون شخصی می‌سازید."
+                                            actionLabel="اشتراک ویژه"
                                             onAction={() => setPlansOpen(true)}
                                         />
                                     </motion.div>
@@ -1136,7 +1136,7 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
                                         {[
                                             { icon: Clock, label: 'زمان', value: `${flowData.settings.time} دقیقه` },
                                             { icon: Activity, label: 'سطح', value: ['آسان', 'متوسط', 'سخت'][flowData.settings.difficulty - 1] },
-                                            { icon: flowData.settings.visibility === 'public' ? Users : ShieldCheck, label: 'نوع', value: flowData.settings.visibility === 'public' ? 'عمومی' : 'شخصی' },
+                                            { icon: flowData.settings.visibility === 'public' ? Radio : ShieldCheck, label: 'نوع', value: flowData.settings.visibility === 'public' ? 'آنلاین' : 'شخصی' },
                                         ].map(({ icon: Icon, label, value }, i) => (
                                             <div key={i} className="flex flex-col items-center justify-center gap-2 p-3 rounded-xl bg-[var(--bg-element)]/60 border border-[var(--border)]/50">
                                                 <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
@@ -1181,11 +1181,11 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
                                     {createBlocked ? (
                                         <PremiumUpgrade
                                             icon={Lock}
-                                            title={flowData.settings.visibility === 'public' ? 'آزمون آنلاین قفل است' : 'سهم آزمون شخصی امروز تمام شد'}
+                                            title={flowData.settings.visibility === 'public' ? 'آزمون آنلاین' : 'سهم امروز تمام شد'}
                                             description={flowData.settings.visibility === 'public'
-                                                ? 'رقابت آنلاین برای طرح رایگان بسته است. آزمون شخصی هنوز باز است.'
-                                                : 'در طرح رایگان هر ۲۴ ساعت یک آزمون شخصی می‌توانی بسازی.'}
-                                            actionLabel="ارتقا پلن"
+                                                ? 'رقابت و لابی با اشتراک ویژه فعال می‌شود.'
+                                                : 'با اشتراک رایگان، هر ۲۴ ساعت یک آزمون شخصی می‌سازید.'}
+                                            actionLabel="اشتراک ویژه"
                                             onAction={() => setPlansOpen(true)}
                                         />
                                     ) : (
