@@ -30,6 +30,7 @@ export interface IStorage {
     scheduleLobbyExpiry(code: LobbyCode, expiresAt: number): Promise<void>;
     getLobbyExpiry(code: LobbyCode): Promise<number | null>;
     clearLobbyExpiry(code: LobbyCode): Promise<void>;
+    listExpiredLobbyCodes(now: number): Promise<LobbyCode[]>;
 
     cleanupExpiredLobbies(now: number): Promise<LobbyCode[]>;
 }

@@ -335,12 +335,12 @@ export class RedisStore implements IStorage {
         await pipeline.exec();
     }
 
+    async listExpiredLobbyCodes(now: number): Promise<LobbyCode[]> {
+        return this.redis.zrangebyscore(this.expiriesKey(), '-inf', now);
+    }
+
     async cleanupExpiredLobbies(now: number): Promise<LobbyCode[]> {
-        const expiredCodes = await this.redis.zrangebyscore(
-            this.expiriesKey(),
-            '-inf',
-            now,
-        );
+        const expiredCodes = await this.listExpiredLobbyCodes(now);
 
         for (const code of expiredCodes) {
             await this.deleteLobby(code);

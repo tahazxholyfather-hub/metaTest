@@ -168,12 +168,16 @@ export class MemoryStore implements IStorage {
         this.expiries.delete(code);
     }
 
-    async cleanupExpiredLobbies(now: number): Promise<LobbyCode[]> {
+    async listExpiredLobbyCodes(now: number): Promise<LobbyCode[]> {
         const expiredCodes: LobbyCode[] = [];
-
         for (const [code, expiresAt] of this.expiries.entries()) {
             if (expiresAt <= now) expiredCodes.push(code);
         }
+        return expiredCodes;
+    }
+
+    async cleanupExpiredLobbies(now: number): Promise<LobbyCode[]> {
+        const expiredCodes = await this.listExpiredLobbyCodes(now);
 
         for (const code of expiredCodes) {
             await this.deleteLobby(code);

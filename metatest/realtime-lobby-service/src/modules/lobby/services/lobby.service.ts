@@ -1,178 +1,131 @@
 import { Server, Socket } from 'socket.io';
 import { env } from '../../../config/env';
+import { logger } from '../../../config/logger';
 import { getStorage } from '../../../storage/storage.factory';
 import { mainBackendService } from '../../../services/main-backend.service';
-import { LobbyEvents } from '../events/lobby.events';
+import { LobbyEventAliases, LobbyEvents } from '../events/lobby.events';
 import { CustomError } from '../../../core/exceptions/custom-error';
+import { withLock } from '../../../core/lock';
 import {
     Lobby,
     LobbyMember,
     LobbyMemberProgress,
-    NotifyLobbyPayload,
-    SetReadyPayload,
+    SerializedLobby,
 } from '../../../core/types/lobby.types';
-
 import {
-    encodeQuizId,
-    decodeQuizId,
-    encodeResultId,
-    decodeResultId,
-} from '../../../../../src/backend/utils/hash';
+    CreateLobbyDto,
+    DestroyLobbyDto,
+    JoinLobbyDto,
+    KickMemberDto,
+    LeaveLobbyDto,
+    NotifyLobbyDto,
+    RejoinLobbyDto,
+    SetReadyDto,
+    StartLobbyDto,
+    SubmitQuizDto,
+    UpdateProgressDto,
+} from '../dtos/lobby.schema';
+import { encodeQuizId, decodeQuizId, encodeResultId } from '../../../utils/hash';
 
 const COUNTDOWN_MS = 3000;
 const EMPTY_LOBBY_TTL_MS = 60_000;
 
-// ─── In-process mutex map ──────────────────────────────────────────────────────
-// Prevents TOCTOU races on join/start/submit when multiple sockets hit the
-// same lobby concurrently.  Key = lobby code (or "code:userId" for per-user
-// critical sections).
-//
-// NOTE: This is in-process only. If you scale to multiple Node processes /
-// socket.io nodes behind a load balancer, replace with a distributed lock
-// (e.g. Redlock / Redis SET NX PX).
-const _locks = new Map<string, Promise<void>>();
-
-async function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
-    const previous = _locks.get(key) ?? Promise.resolve();
-    let releaseLock!: () => void;
-    const next = new Promise<void>((resolve) => {
-        releaseLock = resolve;
-    });
-    _locks.set(key, previous.then(() => next));
-
-    await previous;
-    try {
-        return await fn();
-    } finally {
-        releaseLock();
-        if (_locks.get(key) === next) {
-            _locks.delete(key);
-        }
-    }
+function lobbyLockKey(code: string): string {
+    return `lobby:${code}`;
 }
-
-type CreateLobbyDto = {
-    quizId: string;
-    code: string;
-    maxMembers?: number;
-};
-
-type JoinLobbyDto = { code: string };
-type RejoinLobbyDto = { code: string };
-type StartLobbyDto = { code: string };
-type LeaveLobbyDto = { code: string };
-type KickMemberDto = { code: string; targetUserId: string | number };
-type DestroyLobbyDto = { code: string };
-
-type UpdateProgressDto = {
-    code: string;
-    answeredCount: number;
-    finished?: boolean;
-};
-
-type SubmitQuizDto = {
-    code: string;
-    quizId: string;
-    userId: string;
-    answers: Record<string, number>;
-    questionIds: number[];
-    timeSpent: number;
-    questionTimes: Record<string, number>;
-    selectionLog: {
-        questionId: number;
-        optionId: number;
-        timeSpentMs: number;
-        timestamp: number;
-    }[];
-};
-
 
 export class LobbyService {
     constructor(private io: Server) {}
 
     private storage = getStorage();
     private emptyLobbyTimers = new Map<string, NodeJS.Timeout>();
-    // Tracks pending countdown timers so we can cancel them on host disconnect.
     private countdownTimers = new Map<string, NodeJS.Timeout>();
+    private graceDisconnectTimers = new Map<string, NodeJS.Timeout>();
 
-    // ─── Normalisation helpers ────────────────────────────────────────────────
+    attachIo(io: Server): void {
+        this.io = io;
+    }
 
-    /**
-     * Single canonical userId normaliser.  Always call this before comparing
-     * or storing a userId so that string "1" and number 1 are treated as equal.
-     * Storage reads/writes go through setMember / getMember which also
-     * normalise, so handler logic never needs to call this directly unless it
-     * is doing a comparison outside of storage.
-     */
     private normalizeUserId(userId: string | number): string {
         return String(userId);
     }
 
     private normalizeCode(code: unknown): string {
         if (typeof code !== 'string' || !code.trim()) {
-            throw new CustomError('Invalid lobby code');
+            throw new CustomError('Invalid lobby code', 400, 'INVALID_LOBBY_CODE');
         }
         return code.trim();
     }
 
-    // ─── Quiz-id encode / decode helpers ─────────────────────────────────────
+    private parseIncomingQuizId(rawQuizId: unknown): { numeric: number; encoded: string } {
+        if (typeof rawQuizId === 'number' && Number.isInteger(rawQuizId) && rawQuizId > 0) {
+            const encoded = encodeQuizId(rawQuizId);
+            if (!encoded) {
+                throw new CustomError('Invalid quiz id', 400, 'INVALID_QUIZ_ID');
+            }
+            return { numeric: rawQuizId, encoded };
+        }
 
-    private decodeIncomingQuizId(encodedQuizId: unknown): number {
-        if (typeof encodedQuizId !== 'string' || !encodedQuizId.trim()) {
-            throw new CustomError('Invalid quiz id');
+        if (typeof rawQuizId !== 'string' || !rawQuizId.trim()) {
+            throw new CustomError('Invalid quiz id', 400, 'INVALID_QUIZ_ID');
         }
-        const quizId = decodeQuizId(encodedQuizId);
-        if (!quizId || !Number.isInteger(quizId) || quizId <= 0) {
-            throw new CustomError('Invalid quiz id');
+
+        const value = rawQuizId.trim();
+        const numeric = decodeQuizId(value);
+        if (!numeric) {
+            throw new CustomError('Invalid quiz id', 400, 'INVALID_QUIZ_ID');
         }
-        return quizId;
+
+        if (/^\d+$/.test(value)) {
+            const encoded = encodeQuizId(numeric);
+            if (!encoded) {
+                throw new CustomError('Invalid quiz id', 400, 'INVALID_QUIZ_ID');
+            }
+            return { numeric, encoded };
+        }
+
+        return { numeric, encoded: value };
     }
 
     private encodeStoredQuizId(quizId: string | number): string {
         const numericQuizId = Number(quizId);
         if (!Number.isInteger(numericQuizId) || numericQuizId <= 0) {
-            throw new CustomError('Invalid stored quiz id');
+            throw new CustomError('Invalid stored quiz id', 500, 'INVALID_STORED_QUIZ_ID');
         }
         const encoded = encodeQuizId(numericQuizId);
         if (!encoded) {
-            throw new CustomError('Failed to encode quiz id');
+            throw new CustomError('Failed to encode quiz id', 500, 'QUIZ_ID_ENCODE_FAILED');
         }
         return encoded;
     }
 
-    // ─── Client serialisation ─────────────────────────────────────────────────
-
-    /** Never expose raw quizId to socket clients. */
-    private serializeLobbyForClient(lobby: Lobby | null): any {
+    private serializeLobbyForClient(lobby: Lobby | null): SerializedLobby | null {
         if (!lobby) return null;
         return {
             ...lobby,
             quizId: this.encodeStoredQuizId(lobby.quizId),
+            seq: lobby.seq ?? 0,
         };
     }
 
-    private serializeLobbyStateForClient(state: {
-        lobby: Lobby | null;
-        members: LobbyMember[];
-        progress: LobbyMemberProgress[];
-    }) {
-        return {
-            ...state,
-            lobby: this.serializeLobbyForClient(state.lobby),
-        };
+    private connectedCount(members: LobbyMember[]): number {
+        return members.filter((member) => member.connected).length;
     }
 
-    // ─── Storage helpers ──────────────────────────────────────────────────────
+    private isActivePlayStatus(status: Lobby['status']): boolean {
+        return status === 'starting' || status === 'started' || status === 'results';
+    }
 
-    private async getLobbyOrThrow(code: string): Promise<Lobby> {
-        const lobby = await this.storage.getLobbyByCode(code);
-        if (!lobby) {
-            throw new CustomError('Lobby not found');
-        }
-        if (lobby.status === 'closed') {
-            throw new CustomError('Lobby no longer exists');
-        }
-        return lobby;
+    private shouldFinishQuiz(lobby: Lobby | null): boolean {
+        return Boolean(lobby && (lobby.status === 'started' || lobby.status === 'results'));
+    }
+
+    private graceKey(code: string, userId: string): string {
+        return `${code}:${userId}`;
+    }
+
+    private nextSeq(lobby: Lobby): number {
+        return (lobby.seq ?? 0) + 1;
     }
 
     async getLobbyState(code: string) {
@@ -184,12 +137,89 @@ export class LobbyService {
 
     private async emitLobbyState(code: string) {
         const state = await this.getLobbyState(code);
-        const clientState = this.serializeLobbyStateForClient(state);
+        const clientState = {
+            lobby: this.serializeLobbyForClient(state.lobby),
+            members: state.members,
+            progress: state.progress,
+            seq: state.lobby?.seq ?? 0,
+            serverNow: Date.now(),
+        };
         this.io.to(code).emit(LobbyEvents.LOBBY_STATE, clientState);
         return clientState;
     }
 
-    // ─── Empty-lobby destruction timer ───────────────────────────────────────
+    private async getLobbyOrThrow(code: string): Promise<Lobby> {
+        const lobby = await this.storage.getLobbyByCode(code);
+        if (!lobby) {
+            throw new CustomError('Lobby not found', 404, 'LOBBY_NOT_FOUND');
+        }
+        if (lobby.status === 'closed') {
+            throw new CustomError('Lobby no longer exists', 404, 'LOBBY_CLOSED');
+        }
+        return lobby;
+    }
+
+    private async requireMember(code: string, userId: string | number): Promise<LobbyMember> {
+        const member = await this.storage.getMember(code, userId);
+        if (!member) {
+            throw new CustomError('Member not found', 403, 'NOT_A_MEMBER');
+        }
+        return member;
+    }
+
+    private emitNotification(
+        code: string,
+        payload: { message: string; type: 'info' | 'warning' | 'error' | 'success' },
+        socketId?: string,
+    ) {
+        const target = socketId ? this.io.to(socketId) : this.io.to(code);
+        target.emit(LobbyEvents.NOTIFICATION, payload);
+        target.emit(LobbyEventAliases.NOTIFICATION, payload);
+    }
+
+    private emitStarting(code: string, payload: Record<string, unknown>) {
+        this.io.to(code).emit(LobbyEvents.LOBBY_STARTING, payload);
+        this.io.to(code).emit(LobbyEventAliases.STARTING, payload);
+    }
+
+    private emitStarted(code: string, payload: Record<string, unknown>) {
+        this.io.to(code).emit(LobbyEvents.LOBBY_STARTED, payload);
+    }
+
+    private emitCancelled(code: string) {
+        const payload = { code, serverNow: Date.now() };
+        this.io.to(code).emit(LobbyEvents.LOBBY_CANCELLED, payload);
+        this.io.to(code).emit(LobbyEventAliases.CANCELLED, payload);
+    }
+
+    private emitDestroyed(code: string, reason: string) {
+        const payload = { code, reason, serverNow: Date.now() };
+        this.io.to(code).emit(LobbyEvents.LOBBY_DESTROYED, payload);
+    }
+
+    private emitKicked(code: string, userId: string) {
+        const payload = { code, userId, serverNow: Date.now() };
+        this.io.to(code).emit(LobbyEvents.LOBBY_KICKED, payload);
+        this.io.to(code).emit(LobbyEventAliases.KICKED, payload);
+    }
+
+    private emitPresence(code: string, userId: string, online: boolean) {
+        const payload = { code, userId, serverNow: Date.now() };
+        this.io.to(code).emit(
+            online ? LobbyEvents.MEMBER_ONLINE : LobbyEvents.MEMBER_OFFLINE,
+            payload,
+        );
+    }
+
+    private async finishQuizIfNeeded(lobby: Lobby | null): Promise<void> {
+        if (!this.shouldFinishQuiz(lobby)) return;
+        try {
+            const encodedQuizId = this.encodeStoredQuizId(lobby!.quizId);
+            await mainBackendService.setQuizFinished(encodedQuizId);
+        } catch (err) {
+            logger.warn({ err, code: lobby?.code }, 'Failed to mark quiz finished');
+        }
+    }
 
     private clearEmptyLobbyTimer(code: string) {
         const timer = this.emptyLobbyTimers.get(code);
@@ -199,50 +229,6 @@ export class LobbyService {
         }
     }
 
-// ─── scheduleEmptyLobbyDestroy ────────────────────────────────────────────────
-    private scheduleEmptyLobbyDestroy(code: string) {
-        this.clearEmptyLobbyTimer(code);
-
-        const timer = setTimeout(async () => {
-            try {
-                const lobby = await this.storage.getLobbyByCode(code);
-                if (!lobby) return;
-
-                const members = await this.storage.listMembers(code);
-                if (members.length > 0) return;
-
-                await this.storage.updateLobby(code, (l) => ({
-                    ...l,
-                    status: 'closed',
-                    updatedAt: Date.now(),
-                }));
-
-                await this.storage.deleteLobby(code);
-
-                // Notify main backend that the quiz session is finished
-                try {
-                    const encodedQuizId = this.encodeStoredQuizId(lobby.quizId);
-                    await mainBackendService.setQuizFinished(encodedQuizId);
-                } catch {
-                    // Don't let backend call failure block cleanup
-                }
-
-                this.io.to(code).emit(LobbyEvents.LOBBY_DESTROYED);
-                this.io.in(code).socketsLeave(code);
-            } catch {
-                // Ignore cleanup errors
-            } finally {
-                this.emptyLobbyTimers.delete(code);
-            }
-        }, EMPTY_LOBBY_TTL_MS);
-
-        (timer as any).unref?.();
-        this.emptyLobbyTimers.set(code, timer);
-    }
-
-
-    // ─── Countdown timer management ───────────────────────────────────────────
-
     private clearCountdownTimer(code: string) {
         const timer = this.countdownTimers.get(code);
         if (timer) {
@@ -251,245 +237,328 @@ export class LobbyService {
         }
     }
 
-    /**
-     * Schedules the transition from 'starting' → 'started' after COUNTDOWN_MS.
-     * If the host disconnects before the timer fires, cancelCountdown() reverts
-     * the lobby to 'waiting' and emits LOBBY_CANCELLED instead.
-     */
-    private scheduleCountdownTransition(code: string) {
-        this.clearCountdownTimer(code);
-
-        const timer = setTimeout(async () => {
-            this.countdownTimers.delete(code);
-            try {
-                await this.storage.updateLobby(code, (l) => {
-                    // Only advance if still in 'starting' (not already cancelled)
-                    if (l.status !== 'starting') return l;
-                    return { ...l, status: 'started', updatedAt: Date.now() };
-                });
-                await this.emitLobbyState(code);
-            } catch {
-                // Ignore — lobby may have been destroyed
-            }
-        }, COUNTDOWN_MS);
-
-        (timer as any).unref?.();
-        this.countdownTimers.set(code, timer);
-    }
-
-    /**
-     * Cancels an in-progress countdown (e.g. host disconnected mid-countdown).
-     * Reverts lobby to 'waiting', clears joinLocked, and emits LOBBY_CANCELLED.
-     */
-    private async cancelCountdown(code: string) {
-        this.clearCountdownTimer(code);
-
-        try {
-            const lobby = await this.storage.getLobbyByCode(code);
-            if (!lobby || lobby.status !== 'starting') return;
-
-            await this.storage.updateLobby(code, (l) => ({
-                ...l,
-                status: 'waiting',
-                joinLocked: false,
-                startedAt: undefined,
-                updatedAt: Date.now(),
-            }));
-
-            this.io.to(code).emit(LobbyEvents.LOBBY_CANCELLED);
-            await this.emitLobbyState(code);
-        } catch {
-            // Ignore cleanup errors
+    private clearGraceDisconnect(code: string, userId: string) {
+        const key = this.graceKey(code, userId);
+        const timer = this.graceDisconnectTimers.get(key);
+        if (timer) {
+            clearTimeout(timer);
+            this.graceDisconnectTimers.delete(key);
         }
     }
 
-    // ─── Host reassignment ────────────────────────────────────────────────────
+    private scheduleEmptyLobbyDestroy(code: string) {
+        this.clearEmptyLobbyTimer(code);
 
-    private async reassignHostIfNeeded(
-        code: string,
-        leavingUserId: string | number,
-    ) {
+        const timer = setTimeout(() => {
+            void this.destroyEmptyLobby(code);
+        }, EMPTY_LOBBY_TTL_MS);
+
+        timer.unref?.();
+        this.emptyLobbyTimers.set(code, timer);
+    }
+
+    private async destroyEmptyLobby(code: string) {
+        this.emptyLobbyTimers.delete(code);
+
+        await withLock(lobbyLockKey(code), async () => {
+            const lobby = await this.storage.getLobbyByCode(code);
+            if (!lobby) return;
+
+            const members = await this.storage.listMembers(code);
+            if (this.connectedCount(members) > 0) return;
+
+            this.clearCountdownTimer(code);
+            await this.storage.deleteLobby(code);
+            await this.finishQuizIfNeeded(lobby);
+            this.emitDestroyed(code, 'empty');
+            this.io.in(code).socketsLeave(code);
+        });
+    }
+
+    private scheduleCountdownTransition(code: string) {
+        this.clearCountdownTimer(code);
+
+        const timer = setTimeout(() => {
+            this.countdownTimers.delete(code);
+            void this.completeCountdown(code);
+        }, COUNTDOWN_MS);
+
+        timer.unref?.();
+        this.countdownTimers.set(code, timer);
+    }
+
+    private async completeCountdown(code: string) {
+        await withLock(lobbyLockKey(code), async () => {
+            const lobby = await this.storage.getLobbyByCode(code);
+            if (!lobby || lobby.status !== 'starting') return;
+
+            await this.storage.updateLobby(code, (current) => ({
+                ...current,
+                status: 'started',
+                seq: this.nextSeq(current),
+                updatedAt: Date.now(),
+            }));
+
+            const serialized = this.serializeLobbyForClient(
+                await this.storage.getLobbyByCode(code),
+            );
+            await this.emitLobbyState(code);
+            this.emitStarted(code, {
+                ...serialized,
+                startedAt: lobby.startedAt,
+                serverNow: Date.now(),
+            });
+        });
+    }
+
+    private async cancelCountdown(code: string) {
+        this.clearCountdownTimer(code);
+
+        const lobby = await this.storage.getLobbyByCode(code);
+        if (!lobby || lobby.status !== 'starting') return;
+
+        await this.storage.updateLobby(code, (current) => ({
+            ...current,
+            status: 'waiting',
+            joinLocked: false,
+            startedAt: undefined,
+            seq: this.nextSeq(current),
+            updatedAt: Date.now(),
+        }));
+
+        this.emitCancelled(code);
+        await this.emitLobbyState(code);
+    }
+
+    private async syncHostFlags(code: string, hostUserId: string) {
+        const hostId = this.normalizeUserId(hostUserId);
+        const members = await this.storage.listMembers(code);
+
+        for (const member of members) {
+            const shouldBeHost = this.normalizeUserId(member.userId) === hostId;
+            if (member.isHost !== shouldBeHost) {
+                await this.storage.setMember(code, { ...member, isHost: shouldBeHost });
+            }
+        }
+
+        await this.storage.updateLobby(code, (lobby) => ({
+            ...lobby,
+            hostUserId: hostId,
+            seq: this.nextSeq(lobby),
+            updatedAt: Date.now(),
+        }));
+    }
+
+    private async reassignHostIfNeeded(code: string, leavingUserId: string | number) {
         const lobby = await this.storage.getLobbyByCode(code);
         if (!lobby) return;
 
         const leavingId = this.normalizeUserId(leavingUserId);
-
         if (this.normalizeUserId(lobby.hostUserId) !== leavingId) {
             return;
         }
 
         const members = await this.storage.listMembers(code);
         const remaining = members.filter(
-            (m) => this.normalizeUserId(m.userId) !== leavingId,
+            (member) => this.normalizeUserId(member.userId) !== leavingId,
         );
-
         if (remaining.length === 0) return;
 
-        const connected = remaining.filter((m) => m.connected);
+        const connected = remaining.filter((member) => member.connected);
         const nextHost =
             connected.sort((a, b) => a.joinedAt - b.joinedAt)[0] ??
             remaining.sort((a, b) => a.joinedAt - b.joinedAt)[0];
 
-        await this.storage.setMember(code, { ...nextHost, isHost: true });
-
-        await this.storage.updateLobby(code, (l) => ({
-            ...l,
-            hostUserId: nextHost.userId,
-            updatedAt: Date.now(),
-        }));
+        await this.syncHostFlags(code, nextHost.userId);
     }
 
-    // ─── Disconnect handler ───────────────────────────────────────────────────
+    private scheduleGraceDisconnect(code: string, userId: string, socketId: string) {
+        this.clearGraceDisconnect(code, userId);
+
+        const apply = () => {
+            this.graceDisconnectTimers.delete(this.graceKey(code, userId));
+            void this.applyGraceDisconnect(code, userId, socketId);
+        };
+
+        if (env.DISCONNECT_GRACE_MS <= 0) {
+            apply();
+            return;
+        }
+
+        const timer = setTimeout(apply, env.DISCONNECT_GRACE_MS);
+        timer.unref?.();
+        this.graceDisconnectTimers.set(this.graceKey(code, userId), timer);
+    }
+
+    private async applyGraceDisconnect(code: string, userId: string, socketId: string) {
+        await withLock(lobbyLockKey(code), async () => {
+            const member = await this.storage.getMember(code, userId);
+            if (!member) return;
+            if (member.socketId && member.socketId !== socketId) return;
+
+            await this.storage.setMember(code, {
+                ...member,
+                connected: false,
+                socketId: undefined,
+            });
+
+            this.emitPresence(code, userId, false);
+
+            const lobby = await this.storage.getLobbyByCode(code);
+            if (
+                lobby &&
+                lobby.status === 'starting' &&
+                this.normalizeUserId(lobby.hostUserId) === userId
+            ) {
+                await this.cancelCountdown(code);
+            }
+
+            const members = await this.storage.listMembers(code);
+            if (this.connectedCount(members) === 0) {
+                this.scheduleEmptyLobbyDestroy(code);
+                return;
+            }
+
+            await this.reassignHostIfNeeded(code, userId);
+            await this.emitLobbyState(code);
+        });
+    }
 
     async handleDisconnect(socket: Socket) {
         const user = socket.data.user;
         if (!user?.id) return;
 
-        const rooms = Array.from(socket.rooms).filter((r) => r !== socket.id);
+        const userId = this.normalizeUserId(user.id);
+        const binding = await this.storage.getUserBinding(userId);
+        if (binding && binding.socketId !== socket.id) {
+            return;
+        }
+
+        const rooms = new Set<string>();
+        for (const room of socket.rooms) {
+            if (room !== socket.id) rooms.add(room);
+        }
+        if (binding?.lobbyCode) rooms.add(binding.lobbyCode);
 
         for (const code of rooms) {
-            try {
-                const member = await this.storage.getMember(code, user.id);
-                if (!member) continue;
-
-                await this.storage.setMember(code, {
-                    ...member,
-                    connected: false,
-                    socketId: undefined as any,
-                });
-
-                const lobby = await this.storage.getLobbyByCode(code);
-
-                // If host disconnects during countdown, cancel it and revert.
-                if (
-                    lobby &&
-                    lobby.status === 'starting' &&
-                    this.normalizeUserId(lobby.hostUserId) ===
-                    this.normalizeUserId(user.id)
-                ) {
-                    await this.cancelCountdown(code);
-                    continue;
-                }
-
-                const members = await this.storage.listMembers(code);
-                const connectedCount = members.filter((m) => m.connected).length;
-
-                if (connectedCount === 0) {
-                    this.scheduleEmptyLobbyDestroy(code);
-                } else {
-                    await this.reassignHostIfNeeded(code, user.id);
-                    await this.emitLobbyState(code);
-                }
-            } catch {
-                // Ignore per-lobby errors; try other rooms
-            }
+            const member = await this.storage.getMember(code, userId);
+            if (!member) continue;
+            if (member.socketId && member.socketId !== socket.id) continue;
+            this.scheduleGraceDisconnect(code, userId, socket.id);
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // Public handlers
-    // ═══════════════════════════════════════════════════════════════════════════
+    async setReady(socket: Socket, payload: SetReadyDto) {
+        const code = this.normalizeCode(payload.code);
+        const userId = this.normalizeUserId(socket.data.user?.id);
 
-    async setReady(socket: Socket, payload: SetReadyPayload) {
-        const { code, isReady } = payload;
-        const userId = socket.data.user?.id;
+        return withLock(lobbyLockKey(code), async () => {
+            const lobby = await this.getLobbyOrThrow(code);
+            if (lobby.status !== 'waiting') {
+                throw new CustomError('Ready state is locked', 409, 'LOBBY_NOT_WAITING');
+            }
 
-        if (!code) throw new Error('Lobby code is required');
-        if (typeof isReady !== 'boolean') throw new Error('isReady must be boolean');
-        if (!userId) throw new Error('Unauthorized');
+            const member = await this.requireMember(code, userId);
+            if (member.isHost || this.normalizeUserId(lobby.hostUserId) === userId) {
+                throw new CustomError('Host does not need to be ready', 400, 'HOST_READY_NOT_REQUIRED');
+            }
 
-        const member = await this.storage.getMember(code, userId);
-        if (!member) throw new Error('Member not found');
-        if (member.isHost) throw new Error('Host does not need to be ready');
+            await this.storage.setMember(code, { ...member, isReady: payload.isReady });
+            await this.storage.updateLobby(code, (current) => ({
+                ...current,
+                seq: this.nextSeq(current),
+                updatedAt: Date.now(),
+            }));
 
-        await this.storage.setMember(code, { ...member, isReady });
-
-        const lobby = await this.getLobbyOrThrow(code);
-        const members = await this.storage.listMembers(code);
-        const progress = await this.storage.listMemberProgress(code);
-
-        this.io.to(code).emit(LobbyEvents.LOBBY_STATE, {
-            lobby: this.serializeLobbyForClient(lobby),
-            members,
-            progress,
+            return this.emitLobbyState(code);
         });
-
-        return { lobby, members, progress };
     }
 
-    async notifyLobby(socket: Socket, payload: NotifyLobbyPayload) {
-        const { code, message, type } = payload;
-        this.io.to(code).emit('lobby_notification', { message, type });
+    async notifyLobby(socket: Socket, payload: NotifyLobbyDto) {
+        const code = this.normalizeCode(payload.code);
+        const userId = this.normalizeUserId(socket.data.user?.id);
+        await this.requireMember(code, userId);
+        this.emitNotification(code, {
+            message: payload.message,
+            type: payload.type,
+        });
+        return { ok: true };
     }
-
-    // ─── createLobby ──────────────────────────────────────────────────────────
 
     async createLobby(socket: Socket, dto: CreateLobbyDto) {
         const user = socket.data.user;
         const code = this.normalizeCode(dto.code);
 
-        return withLock(`lobby:${code}`, async () => {
-            const rawQuizId = this.decodeIncomingQuizId(dto.quizId);
-            const encodedQuizId = this.encodeStoredQuizId(rawQuizId);
-
+        return withLock(lobbyLockKey(code), async () => {
+            const { numeric: rawQuizId, encoded: encodedQuizId } = this.parseIncomingQuizId(dto.quizId);
             const quiz = await mainBackendService.getQuizMetadata(
                 encodedQuizId,
                 socket.data.accessToken,
             );
 
-            const LOBBY_MAX_MEMBERS = dto.maxMembers ?? 10;
+            const requestedMax = dto.maxMembers ?? env.LOBBY_MAX_MEMBERS;
+            const maxMembers = Math.min(
+                Math.max(2, requestedMax),
+                env.LOBBY_MAX_MEMBERS,
+            );
 
             const existingLobby = await this.storage.getLobbyByCode(code);
-            if (existingLobby) {
-                throw new CustomError('Lobby code already exists');
+            if (existingLobby && existingLobby.status !== 'closed') {
+                throw new CustomError('Lobby code already exists', 409, 'LOBBY_EXISTS');
             }
 
+            const now = Date.now();
             const lobby: Lobby = {
                 code,
                 quizId: rawQuizId,
-                hostUserId: user.id,
+                hostUserId: this.normalizeUserId(user.id),
                 status: 'waiting',
-                createdAt: Date.now(),
-                updatedAt: Date.now(),
+                createdAt: now,
+                updatedAt: now,
                 questionCount: quiz.questionCount,
-                maxMembers: LOBBY_MAX_MEMBERS,
-                // joinLocked is for manual pre-start locking by the host.
-                // It is independent of status: 'starting'/'started' which are
-                // the post-start gates.  A locked-but-waiting lobby rejects new
-                // members while still allowing the host to start.
+                maxMembers,
                 joinLocked: false,
+                seq: 1,
             };
 
             await this.storage.createLobby(lobby);
 
             const member: LobbyMember = {
-                userId: user.id,
+                userId: this.normalizeUserId(user.id),
                 username: user.username,
                 displayName: user.displayName,
-                avatarUrl: user.avatarUrl,
+                avatarUrl: user.avatarUrl ?? undefined,
                 trophies: user.trophies ?? 0,
                 isHost: true,
                 isReady: true,
-                joinedAt: Date.now(),
+                joinedAt: now,
                 connected: true,
                 socketId: socket.id,
             };
 
             await this.storage.setMember(code, member);
 
-            await mainBackendService.addQuizMember({
-                quizId: encodedQuizId,
-                userId: user.id,
-                role: 'creator',
-                accessToken: socket.data.accessToken,
-            });
+            try {
+                await mainBackendService.addQuizMember({
+                    quizId: encodedQuizId,
+                    userId: user.id,
+                    role: 'creator',
+                    accessToken: socket.data.accessToken,
+                });
+            } catch (err) {
+                await this.storage.deleteLobby(code);
+                throw err;
+            }
 
             this.clearEmptyLobbyTimer(code);
+            this.clearGraceDisconnect(code, member.userId);
             socket.join(code);
 
             return {
                 code,
                 lobby: this.serializeLobbyForClient(lobby),
+                seq: lobby.seq,
+                serverNow: Date.now(),
             };
         });
     }
@@ -498,40 +567,44 @@ export class LobbyService {
         const user = socket.data.user;
         const code = this.normalizeCode(dto.code);
 
-        return withLock(`lobby:${code}`, async () => {
+        return withLock(lobbyLockKey(code), async () => {
             const lobby = await this.getLobbyOrThrow(code);
             const members = await this.storage.listMembers(code);
             const userId = this.normalizeUserId(user.id);
 
-            // Primary lookup from list; fall back to direct storage read
-            // in case listMembers returns stale data or the user's previous
-            // entry was written by a different code path (e.g. createLobby).
-            let existingMember =
-                members.find((m) => this.normalizeUserId(m.userId) === userId) ??
+            const existingMember =
+                members.find((member) => this.normalizeUserId(member.userId) === userId) ??
                 (await this.storage.getMember(code, userId)) ??
                 null;
 
             if (!existingMember) {
                 if (lobby.status !== 'waiting' && lobby.status !== 'starting') {
-                    throw new CustomError('Lobby already started');
+                    throw new CustomError('Lobby already started', 409, 'LOBBY_ALREADY_STARTED');
                 }
                 if (lobby.joinLocked) {
-                    throw new CustomError('Lobby is locked');
+                    throw new CustomError('Lobby is locked', 409, 'LOBBY_LOCKED');
                 }
                 if (members.length >= lobby.maxMembers) {
-                    throw new CustomError('Lobby is full');
+                    throw new CustomError('Lobby is full', 409, 'LOBBY_FULL');
                 }
             }
 
             const isEmptyLobby = members.length === 0;
-
             const memberToSave: LobbyMember = existingMember
-                ? { ...existingMember, connected: true, socketId: socket.id }
+                ? {
+                    ...existingMember,
+                    connected: true,
+                    socketId: socket.id,
+                    username: user.username ?? existingMember.username,
+                    displayName: user.displayName ?? existingMember.displayName,
+                    avatarUrl: user.avatarUrl ?? existingMember.avatarUrl,
+                    trophies: user.trophies ?? existingMember.trophies,
+                }
                 : {
-                    userId: user.id,
+                    userId,
                     username: user.username,
                     displayName: user.displayName,
-                    avatarUrl: user.avatarUrl,
+                    avatarUrl: user.avatarUrl ?? undefined,
                     trophies: user.trophies ?? 0,
                     isHost: isEmptyLobby,
                     isReady: false,
@@ -540,18 +613,17 @@ export class LobbyService {
                     socketId: socket.id,
                 };
 
-            const encodedQuizId = this.encodeStoredQuizId(lobby.quizId);
-
             // Reject a free student before they occupy a lobby seat.
             if (!existingMember) {
+                const encodedQuizId = this.encodeStoredQuizId(lobby.quizId);
                 const quiz = await mainBackendService.getQuizMetadata(
                     encodedQuizId,
                     socket.data.accessToken,
                 );
-
-                const creatorId = this.normalizeUserId(quiz.creatorId ?? quiz.ownerId ?? '');
+                const creatorId = this.normalizeUserId(
+                    quiz.creatorId ?? quiz.ownerId ?? '',
+                );
                 const isCreator = creatorId !== '' && creatorId === userId;
-
                 if (!isCreator) {
                     await mainBackendService.addQuizMember({
                         quizId: encodedQuizId,
@@ -565,36 +637,37 @@ export class LobbyService {
             await this.storage.setMember(code, memberToSave);
 
             if (isEmptyLobby) {
-                await this.storage.updateLobby(code, (l) => ({
-                    ...l,
+                await this.storage.updateLobby(code, (current) => ({
+                    ...current,
                     status: 'waiting',
                     joinLocked: false,
-                    hostUserId: user.id,
+                    hostUserId: userId,
+                    seq: this.nextSeq(current),
                     updatedAt: Date.now(),
                 }));
             }
 
             this.clearEmptyLobbyTimer(code);
+            this.clearGraceDisconnect(code, userId);
             socket.join(code);
+            this.emitPresence(code, userId, true);
 
-            // Re-read lobby AFTER joining — host may have started mid-join.
             const currentLobby = await this.storage.getLobbyByCode(code);
+            const serialized = this.serializeLobbyForClient(currentLobby);
+            const timedPayload = {
+                ...serialized,
+                startedAt: currentLobby?.startedAt,
+                serverNow: Date.now(),
+            };
 
             if (currentLobby?.status === 'started' && currentLobby.startedAt) {
-                socket.emit(LobbyEvents.LOBBY_STARTED, {
-                    ...this.serializeLobbyForClient(currentLobby),
-                    startedAt: currentLobby.startedAt,
-                    serverNow: Date.now(),
-                });
+                socket.emit(LobbyEvents.LOBBY_STARTED, timedPayload);
             } else if (currentLobby?.status === 'starting' && currentLobby.startedAt) {
-                socket.emit(LobbyEvents.LOBBY_STARTING, {
-                    ...this.serializeLobbyForClient(currentLobby),
-                    startedAt: currentLobby.startedAt,
-                    serverNow: Date.now(),
-                });
+                socket.emit(LobbyEvents.LOBBY_STARTING, timedPayload);
+                socket.emit(LobbyEventAliases.STARTING, timedPayload);
             }
 
-            return await this.emitLobbyState(code);
+            return this.emitLobbyState(code);
         });
     }
 
@@ -602,7 +675,7 @@ export class LobbyService {
         const user = socket.data.user;
         const code = this.normalizeCode(dto.code);
 
-        return withLock(`lobby:${code}`, async () => {
+        return withLock(lobbyLockKey(code), async () => {
             const lobby = await this.storage.getLobbyByCode(code);
             if (!lobby || lobby.status === 'closed') {
                 return { ok: false, reason: 'LOBBY_NOT_FOUND' as const };
@@ -610,7 +683,6 @@ export class LobbyService {
 
             const userId = this.normalizeUserId(user.id);
             const existingMember = await this.storage.getMember(code, userId);
-
             if (!existingMember) {
                 return { ok: false, reason: 'NOT_A_MEMBER' as const };
             }
@@ -622,23 +694,23 @@ export class LobbyService {
             });
 
             this.clearEmptyLobbyTimer(code);
+            this.clearGraceDisconnect(code, userId);
             socket.join(code);
+            this.emitPresence(code, userId, true);
 
-            // Re-read lobby AFTER joining — status may have changed mid-rejoin
             const currentLobby = await this.storage.getLobbyByCode(code);
+            const serialized = this.serializeLobbyForClient(currentLobby);
+            const timedPayload = {
+                ...serialized,
+                startedAt: currentLobby?.startedAt,
+                serverNow: Date.now(),
+            };
 
             if (currentLobby?.status === 'started' && currentLobby.startedAt) {
-                socket.emit(LobbyEvents.LOBBY_STARTED, {
-                    ...this.serializeLobbyForClient(currentLobby),
-                    startedAt: currentLobby.startedAt,
-                    serverNow: Date.now(),
-                });
+                socket.emit(LobbyEvents.LOBBY_STARTED, timedPayload);
             } else if (currentLobby?.status === 'starting' && currentLobby.startedAt) {
-                socket.emit(LobbyEvents.LOBBY_STARTING, {
-                    ...this.serializeLobbyForClient(currentLobby),
-                    startedAt: currentLobby.startedAt,
-                    serverNow: Date.now(),
-                });
+                socket.emit(LobbyEvents.LOBBY_STARTING, timedPayload);
+                socket.emit(LobbyEventAliases.STARTING, timedPayload);
             }
 
             const state = await this.emitLobbyState(code);
@@ -646,255 +718,288 @@ export class LobbyService {
         });
     }
 
-    // ─── startLobby ───────────────────────────────────────────────────────────
-    //
-    // Transitions: waiting → starting (broadcast LOBBY_STARTING with startedAt)
-    //              then after COUNTDOWN_MS: starting → started (broadcast LOBBY_STARTED).
-    //
-    // The 'starting' grace window means:
-    //   • Late joiners still accepted (status === 'starting' passes joinLobby check)
-    //   • If host disconnects mid-countdown, cancelCountdown() reverts to 'waiting'
-    //
-    // startedAt is a server-epoch point in the future (now + COUNTDOWN_MS).
-    // Clients derive remaining time as:  remaining = startedAt - Date.now()
-    // adjusted for transmission lag using the serverNow field in the payload.
-
     async startLobby(socket: Socket, dto: StartLobbyDto) {
         const user = socket.data.user;
         const code = this.normalizeCode(dto.code);
 
-        return withLock(`lobby:${code}`, async () => {
+        return withLock(lobbyLockKey(code), async () => {
             const lobby = await this.getLobbyOrThrow(code);
 
             if (this.normalizeUserId(lobby.hostUserId) !== this.normalizeUserId(user.id)) {
-                throw new CustomError('Only host can start');
+                throw new CustomError('Only host can start', 403, 'NOT_HOST');
             }
 
             if (lobby.status !== 'waiting') {
-                throw new CustomError('Lobby already started');
+                throw new CustomError('Lobby already started', 409, 'LOBBY_ALREADY_STARTED');
             }
 
             const members = await this.storage.listMembers(code);
             if (members.length === 0) {
-                throw new CustomError('No members in lobby');
+                throw new CustomError('No members in lobby', 400, 'NO_MEMBERS');
             }
 
-            const nonHostMembers = members.filter((m) => !m.isHost);
-            const unreadyMembers = nonHostMembers.filter((m) => !m.isReady);
+            const hostId = this.normalizeUserId(lobby.hostUserId);
+            const nonHostMembers = members.filter(
+                (member) => this.normalizeUserId(member.userId) !== hostId,
+            );
+            const unreadyMembers = nonHostMembers.filter((member) => !member.isReady);
 
             if (unreadyMembers.length > 0) {
-                // Broadcast one notification to the whole room for unready members,
-                // and a separate one to the host only.
-                this.io.to(socket.id).emit('lobby_notification', {
-                    type: 'warning',
-                    message: 'همه بازیکنان باید آماده باشند.',
-                });
+                this.emitNotification(
+                    code,
+                    {
+                        type: 'warning',
+                        message: 'همه بازیکنان باید آماده باشند.',
+                    },
+                    socket.id,
+                );
 
-                // Build a lookup map once (O(n)) instead of a nested find (O(n²)).
                 const unreadyUserIds = new Set(
-                    unreadyMembers.map((m) => this.normalizeUserId(m.userId)),
+                    unreadyMembers.map((member) => this.normalizeUserId(member.userId)),
                 );
                 const roomSockets = await this.io.in(code).fetchSockets();
                 const socketByUserId = new Map(
-                    roomSockets.map((s) => [
-                        this.normalizeUserId(s.data.user?.id),
-                        s,
+                    roomSockets.map((roomSocket) => [
+                        this.normalizeUserId(roomSocket.data.user?.id),
+                        roomSocket,
                     ]),
                 );
 
                 for (const uid of unreadyUserIds) {
-                    socketByUserId.get(uid)?.emit('lobby_notification', {
-                        type: 'info',
-                        message: 'میزبان میخواهد شروع کند، لطفا دکمه آماده را بزنید',
-                    });
+                    const target = socketByUserId.get(uid);
+                    if (target) {
+                        this.emitNotification(
+                            code,
+                            {
+                                type: 'info',
+                                message: 'میزبان میخواهد شروع کند، لطفا دکمه آماده را بزنید',
+                            },
+                            target.id,
+                        );
+                    }
                 }
 
-                return { ok: false, reason: 'NOT_ALL_READY' };
+                return { ok: false, reason: 'NOT_ALL_READY' as const };
             }
 
-            // Transition to 'starting'; the actual 'started' flip happens after
-            // COUNTDOWN_MS via scheduleCountdownTransition.
             const startedAt = Date.now() + COUNTDOWN_MS;
 
-            await this.storage.updateLobby(code, (l) => ({
-                ...l,
+            await this.storage.updateLobby(code, (current) => ({
+                ...current,
                 status: 'starting',
                 startedAt,
-                joinLocked: true,
+                joinLocked: env.WAITING_ROOM_JOIN_LOCK_ON_START,
+                seq: this.nextSeq(current),
                 updatedAt: Date.now(),
             }));
 
-            // Emit fresh state before the start event so clients have the
-            // complete member list before they react to LOBBY_STARTING.
+            const currentLobby = await this.storage.getLobbyByCode(code);
             await this.emitLobbyState(code);
 
-            this.io.to(code).emit(LobbyEvents.LOBBY_STARTING, {
-                ...this.serializeLobbyForClient(
-                    await this.storage.getLobbyByCode(code),
-                ),
+            this.emitStarting(code, {
+                ...this.serializeLobbyForClient(currentLobby),
                 startedAt,
                 serverNow: Date.now(),
             });
 
-            // Schedule the 'starting' → 'started' transition server-side.
-            // If the host disconnects before this fires, cancelCountdown() will
-            // clear the timer and revert the lobby.
             this.scheduleCountdownTransition(code);
-
-            return { ok: true };
+            return { ok: true as const };
         });
     }
-
-    // ─── leaveLobby ───────────────────────────────────────────────────────────
 
     async leaveLobby(socket: Socket, dto: LeaveLobbyDto) {
         const user = socket.data.user;
         const code = this.normalizeCode(dto.code);
+        const userId = this.normalizeUserId(user.id);
 
-        await this.storage.removeMember(code, user.id);
-        socket.leave(code);
+        return withLock(lobbyLockKey(code), async () => {
+            const lobby = await this.storage.getLobbyByCode(code);
+            if (!lobby || lobby.status === 'closed') {
+                socket.leave(code);
+                return { code };
+            }
 
-        await this.reassignHostIfNeeded(code, user.id);
+            const member = await this.storage.getMember(code, userId);
+            if (!member) {
+                socket.leave(code);
+                return { code };
+            }
 
-        const lobby = await this.storage.getLobbyByCode(code);
-        if (!lobby || lobby.status === 'closed') return;
+            this.clearGraceDisconnect(code, userId);
+            socket.leave(code);
 
-        const members = await this.storage.listMembers(code);
+            if (this.isActivePlayStatus(lobby.status)) {
+                await this.storage.setMember(code, {
+                    ...member,
+                    connected: false,
+                    socketId: undefined,
+                });
+                this.emitPresence(code, userId, false);
 
-        if (members.length === 0) {
-            await this.storage.updateLobby(code, (l) => ({
-                ...l,
-                status: 'waiting',
-                joinLocked: false,
-                updatedAt: Date.now(),
-            }));
-            this.scheduleEmptyLobbyDestroy(code);
-            return;
-        }
+                if (
+                    lobby.status === 'starting' &&
+                    this.normalizeUserId(lobby.hostUserId) === userId
+                ) {
+                    await this.cancelCountdown(code);
+                }
 
-        await this.emitLobbyState(code);
+                const members = await this.storage.listMembers(code);
+                if (this.connectedCount(members) === 0) {
+                    this.scheduleEmptyLobbyDestroy(code);
+                    return { code };
+                }
+
+                await this.reassignHostIfNeeded(code, userId);
+                await this.emitLobbyState(code);
+                return { code };
+            }
+
+            await this.storage.removeMember(code, userId);
+            await this.reassignHostIfNeeded(code, userId);
+
+            const remaining = await this.storage.listMembers(code);
+            if (remaining.length === 0 || this.connectedCount(remaining) === 0) {
+                await this.storage.updateLobby(code, (current) => ({
+                    ...current,
+                    status: 'waiting',
+                    joinLocked: false,
+                    seq: this.nextSeq(current),
+                    updatedAt: Date.now(),
+                }));
+                this.scheduleEmptyLobbyDestroy(code);
+                return { code };
+            }
+
+            await this.emitLobbyState(code);
+            return { code };
+        });
     }
-
-    // ─── kickMember ───────────────────────────────────────────────────────────
 
     async kickMember(socket: Socket, dto: KickMemberDto) {
         const user = socket.data.user;
         const code = this.normalizeCode(dto.code);
+        const targetUserId = this.normalizeUserId(dto.targetUserId);
 
-        const lobby = await this.getLobbyOrThrow(code);
+        return withLock(lobbyLockKey(code), async () => {
+            const lobby = await this.getLobbyOrThrow(code);
 
-        if (this.normalizeUserId(lobby.hostUserId) !== this.normalizeUserId(user.id)) {
-            throw new CustomError('Only host can kick');
-        }
-
-        if (this.normalizeUserId(lobby.hostUserId) === this.normalizeUserId(dto.targetUserId)) {
-            throw new CustomError('Host cannot be kicked');
-        }
-
-        const targetMember = await this.storage.getMember(code, dto.targetUserId);
-
-        await this.storage.removeMember(code, dto.targetUserId);
-
-        this.io.to(code).emit(LobbyEvents.LOBBY_MEMBER_KICKED, {
-            userId: dto.targetUserId,
-        });
-
-        if (targetMember?.socketId) {
-            const targetSocket = this.io.sockets.sockets.get(targetMember.socketId);
-            if (targetSocket) {
-                targetSocket.leave(code);
+            if (this.normalizeUserId(lobby.hostUserId) !== this.normalizeUserId(user.id)) {
+                throw new CustomError('Only host can kick', 403, 'NOT_HOST');
             }
-        }
 
-        await this.emitLobbyState(code);
+            if (this.normalizeUserId(lobby.hostUserId) === targetUserId) {
+                throw new CustomError('Host cannot be kicked', 400, 'CANNOT_KICK_HOST');
+            }
+
+            const targetMember = await this.storage.getMember(code, targetUserId);
+            await this.storage.removeMember(code, targetUserId);
+            this.clearGraceDisconnect(code, targetUserId);
+
+            this.emitKicked(code, targetUserId);
+
+            if (targetMember?.socketId) {
+                const targetSocket = this.io.sockets.sockets.get(targetMember.socketId);
+                if (targetSocket) {
+                    targetSocket.leave(code);
+                }
+            }
+
+            await this.storage.updateLobby(code, (current) => ({
+                ...current,
+                seq: this.nextSeq(current),
+                updatedAt: Date.now(),
+            }));
+
+            return this.emitLobbyState(code);
+        });
     }
 
-    // ─── destroyLobby ─────────────────────────────────────────────────────────
-
-    // ─── destroyLobby ─────────────────────────────────────────────────────────────
     async destroyLobby(socket: Socket, dto: DestroyLobbyDto) {
         const user = socket.data.user;
         const code = this.normalizeCode(dto.code);
 
-        const lobby = await this.getLobbyOrThrow(code);
+        return withLock(lobbyLockKey(code), async () => {
+            const lobby = await this.getLobbyOrThrow(code);
 
-        if (this.normalizeUserId(lobby.hostUserId) !== this.normalizeUserId(user.id)) {
-            throw new CustomError('Only host can destroy');
-        }
+            if (this.normalizeUserId(lobby.hostUserId) !== this.normalizeUserId(user.id)) {
+                throw new CustomError('Only host can destroy', 403, 'NOT_HOST');
+            }
 
-        this.clearEmptyLobbyTimer(code);
-        this.clearCountdownTimer(code);
+            this.clearEmptyLobbyTimer(code);
+            this.clearCountdownTimer(code);
 
-        await this.storage.updateLobby(code, (l) => ({
-            ...l,
-            status: 'closed',
-            updatedAt: Date.now(),
-        }));
-
-        await this.storage.deleteLobby(code);
-
-        // Notify main backend that the quiz session is finished
-        try {
-            const encodedQuizId = this.encodeStoredQuizId(lobby.quizId);
-            await mainBackendService.setQuizFinished(encodedQuizId);
-        } catch {
-            // Log but don't throw — lobby is already destroyed locally
-        }
-
-        this.io.to(code).emit(LobbyEvents.LOBBY_DESTROYED);
-        this.io.in(code).socketsLeave(code);
+            await this.storage.deleteLobby(code);
+            await this.finishQuizIfNeeded(lobby);
+            this.emitDestroyed(code, 'host');
+            this.io.in(code).socketsLeave(code);
+            return { code };
+        });
     }
-
-    // ─── updateProgress ───────────────────────────────────────────────────────
 
     async updateProgress(socket: Socket, dto: UpdateProgressDto) {
         const user = socket.data.user;
         const code = this.normalizeCode(dto.code);
+        const userId = this.normalizeUserId(user.id);
 
         const lobby = await this.getLobbyOrThrow(code);
+        await this.requireMember(code, userId);
+
+        if (lobby.status !== 'started' && lobby.status !== 'results') {
+            throw new CustomError('Quiz has not started', 409, 'LOBBY_NOT_STARTED');
+        }
 
         let answeredCount = Number(dto.answeredCount);
         if (Number.isNaN(answeredCount)) answeredCount = 0;
         answeredCount = Math.max(0, Math.min(answeredCount, lobby.questionCount));
 
-        const existing = await this.storage.getMemberProgress(code, user.id);
-        if (existing?.finished) return;
+        const existing = await this.storage.getMemberProgress(code, userId);
+        if (existing?.finished) {
+            return existing;
+        }
 
-        // finished is derived server-side; client cannot poison the flag.
         const finished =
             (dto.finished ?? false) && answeredCount >= lobby.questionCount;
 
         const progress: LobbyMemberProgress = {
-            userId: user.id,
+            userId,
             answeredCount,
             finished,
             submittedAt: finished ? Date.now() : undefined,
         };
 
         await this.storage.setMemberProgress(code, progress);
-
-        this.io.to(code).emit(LobbyEvents.MEMBER_PROGRESS, progress);
+        this.io.to(code).emit(LobbyEvents.MEMBER_PROGRESS, {
+            ...progress,
+            serverNow: Date.now(),
+        });
+        return progress;
     }
-
-    // ─── submitQuiz ───────────────────────────────────────────────────────────
 
     async submitQuiz(socket: Socket, dto: SubmitQuizDto) {
         const user = socket.data.user;
         const code = this.normalizeCode(dto.code);
+        const userId = this.normalizeUserId(user.id);
 
-        return withLock(`submit:${code}:${user.id}`, async () => {
+        return withLock(`submit:${code}:${userId}`, async () => {
             const lobby = await this.getLobbyOrThrow(code);
+            await this.requireMember(code, userId);
 
-            const existingProgress = await this.storage.getMemberProgress(code, user.id);
+            if (lobby.status !== 'started' && lobby.status !== 'results') {
+                throw new CustomError('Quiz has not started', 409, 'LOBBY_NOT_STARTED');
+            }
+
+            const existingProgress = await this.storage.getMemberProgress(code, userId);
+            if (existingProgress?.finished && existingProgress.result) {
+                return existingProgress.result;
+            }
             if (existingProgress?.finished) {
-                throw new CustomError('Already submitted');
+                throw new CustomError('Already submitted', 409, 'ALREADY_SUBMITTED');
             }
 
             const encodedQuizId = this.encodeStoredQuizId(lobby.quizId);
-
             const result = await mainBackendService.gradeQuizSubmission({
                 quizId: encodedQuizId,
-                userId: user.id,
+                userId,
                 lobbyCode: code,
                 answers: dto.answers,
                 timeSpent: dto.timeSpent,
@@ -903,20 +1008,9 @@ export class LobbyService {
                 accessToken: socket.data.accessToken,
             });
 
-            await this.storage.setMemberProgress(code, {
-                ...(existingProgress ?? {
-                    userId: user.id,
-                    answeredCount: 0,
-                    finished: true,
-                }),
-                finished: true,
-                result,
-                submittedAt: Date.now(),
-            });
-
             const saveResponse = await mainBackendService.saveQuizResult({
                 quizId: encodedQuizId,
-                userId: user.id,
+                userId,
                 lobbyCode: code,
                 result,
                 accessToken: socket.data.accessToken,
@@ -924,33 +1018,87 @@ export class LobbyService {
 
             if (saveResponse?.resultId) {
                 const encodedId = encodeResultId(saveResponse.resultId);
-                (result as any).resultId = encodedId;
-                (result as any).id = encodedId;
+                if (encodedId) {
+                    result.resultId = encodedId;
+                    result.id = encodedId;
+                }
             }
+
+            await this.storage.setMemberProgress(code, {
+                userId,
+                answeredCount: existingProgress?.answeredCount ?? lobby.questionCount,
+                finished: true,
+                result,
+                submittedAt: Date.now(),
+            });
 
             this.io.to(socket.id).emit(LobbyEvents.QUIZ_RESULT, result);
+            this.io.to(code).emit(LobbyEvents.MEMBER_PROGRESS, {
+                userId,
+                answeredCount: existingProgress?.answeredCount ?? lobby.questionCount,
+                finished: true,
+                submittedAt: Date.now(),
+                serverNow: Date.now(),
+            });
 
-            const allProgress = await this.storage.listMemberProgress(code);
-            const finishedCount = allProgress.filter((p) => p.finished).length;
-            const members = await this.storage.listMembers(code);
+            await withLock(lobbyLockKey(code), async () => {
+                const allProgress = await this.storage.listMemberProgress(code);
+                const members = await this.storage.listMembers(code);
+                const finishedCount = allProgress.filter((item) => item.finished).length;
 
-            if (finishedCount === members.length) {
-                await this.storage.updateLobby(code, (l) => ({
-                    ...l,
-                    status: 'results',
-                    resultsAt: Date.now(),
-                    updatedAt: Date.now(),
-                }));
+                if (members.length > 0 && finishedCount === members.length) {
+                    await this.storage.updateLobby(code, (current) => ({
+                        ...current,
+                        status: 'results',
+                        resultsAt: Date.now(),
+                        seq: this.nextSeq(current),
+                        updatedAt: Date.now(),
+                    }));
 
-                await this.storage.scheduleLobbyExpiry(
-                    code,
-                    Date.now() + env.RESULTS_TTL_SECONDS * 1000,
-                );
+                    await this.storage.scheduleLobbyExpiry(
+                        code,
+                        Date.now() + env.RESULTS_TTL_SECONDS * 1000,
+                    );
 
-                await this.emitLobbyState(code);
-            }
+                    await this.finishQuizIfNeeded({
+                        ...(await this.storage.getLobbyByCode(code))!,
+                    });
+                    await this.emitLobbyState(code);
+                }
+            });
 
             return result;
         });
     }
+
+    async sweepExpiredLobbies(): Promise<string[]> {
+        const expired = await this.storage.listExpiredLobbyCodes(Date.now());
+        if (expired.length === 0) return [];
+
+        for (const code of expired) {
+            await withLock(lobbyLockKey(code), async () => {
+                const lobby = await this.storage.getLobbyByCode(code);
+                this.clearEmptyLobbyTimer(code);
+                this.clearCountdownTimer(code);
+                await this.storage.deleteLobby(code);
+                await this.finishQuizIfNeeded(lobby);
+                this.emitDestroyed(code, 'expired');
+                this.io.in(code).socketsLeave(code);
+            });
+        }
+
+        logger.info({ expired }, 'Expired lobbies cleaned');
+        return expired;
+    }
+}
+
+let lobbyServiceInstance: LobbyService | null = null;
+
+export function getLobbyService(io: Server): LobbyService {
+    if (!lobbyServiceInstance) {
+        lobbyServiceInstance = new LobbyService(io);
+    } else {
+        lobbyServiceInstance.attachIo(io);
+    }
+    return lobbyServiceInstance;
 }

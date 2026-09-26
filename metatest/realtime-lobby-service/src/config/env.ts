@@ -24,6 +24,7 @@ const envSchema = z.object({
     LOBBY_CODE_LENGTH: z.coerce.number().default(6),
     RESULTS_TTL_SECONDS: z.coerce.number().default(60),
     WAITING_ROOM_JOIN_LOCK_ON_START: z.coerce.boolean().default(true),
+    DISCONNECT_GRACE_MS: z.coerce.number().int().min(0).max(15_000).default(3000),
 
     SOCKET_PING_TIMEOUT: z.coerce.number().default(20000),
     SOCKET_PING_INTERVAL: z.coerce.number().default(25000),

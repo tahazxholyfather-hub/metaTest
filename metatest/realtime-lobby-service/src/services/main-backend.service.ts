@@ -60,8 +60,8 @@ export interface QuizGradeResult {
     total: number;
     correctCount: number;
     wrongCount: number;
-    resultId?: number;
-    id?: number;
+    resultId?: number | string;
+    id?: number | string;
 }
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';

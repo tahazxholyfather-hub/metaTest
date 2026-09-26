@@ -5,6 +5,7 @@ import { logger } from '../config/logger';
 import { socketAuthMiddleware } from './middlewares/auth.middleware';
 import { registerLobbyHandlers } from './handlers/lobby.handler';
 import { getStorage } from '../storage/storage.factory';
+import { getLobbyService } from '../modules/lobby/services/lobby.service';
 
 let io: Server;
 
@@ -17,6 +18,8 @@ export function createSocketServer(server: http.Server) {
         pingTimeout: env.SOCKET_PING_TIMEOUT,
         pingInterval: env.SOCKET_PING_INTERVAL,
     });
+
+    const lobbyService = getLobbyService(io);
 
     io.use(socketAuthMiddleware);
 
@@ -31,32 +34,40 @@ export function createSocketServer(server: http.Server) {
 
         registerLobbyHandlers(io, socket);
 
-        socket.on('disconnect', async () => {
+        socket.on('disconnect', async (reason) => {
             logger.info(
                 {
                     socketId: socket.id,
                     userId: socket.data.user?.id,
+                    reason,
                 },
                 'Socket disconnected',
             );
 
-            await getStorage().removeUserBindingBySocketId(socket.id);
+            try {
+                await lobbyService.handleDisconnect(socket);
+            } catch (err) {
+                logger.warn({ err, socketId: socket.id }, 'Disconnect handler failed');
+            }
+
+            try {
+                await getStorage().removeUserBindingBySocketId(socket.id);
+            } catch (err) {
+                logger.warn({ err, socketId: socket.id }, 'Failed to unbind socket');
+            }
         });
     });
 
-    startLobbyCleanupJob();
+    startLobbyCleanupJob(lobbyService);
 
     return io;
 }
 
-function startLobbyCleanupJob() {
-    const storage = getStorage();
-
-    setInterval(async () => {
-        const expired = await storage.cleanupExpiredLobbies(Date.now());
-
-        if (expired.length > 0) {
-            logger.info({ expired }, 'Expired lobbies cleaned');
-        }
+function startLobbyCleanupJob(lobbyService: ReturnType<typeof getLobbyService>) {
+    const timer = setInterval(() => {
+        void lobbyService.sweepExpiredLobbies().catch((err) => {
+            logger.warn({ err }, 'Lobby expiry sweep failed');
+        });
     }, 5000);
+    timer.unref?.();
 }
