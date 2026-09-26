@@ -1,6 +1,10 @@
 const crypto = require('crypto');
 const pool = require('../db');
 const zarinpal = require('../utils/zarinpal');
+const { COIN_PACKAGES, coinPackageById } = require('../subscription/limits');
+const entitlements = require('../subscription/entitlements');
+const usage = require('../subscription/usage');
+const coinWallet = require('../ai-teacher/services/coinWallet');
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -524,6 +528,9 @@ exports.createSubscriptionPayment = async (req, res) => {
 };
 
 exports.handleZarinpalCallback = async (req, res) => {
+    if (req.query.coinPurchaseId) {
+        return handleCoinPurchaseCallback(req, res);
+    }
     const connection = await pool.getConnection();
 
     const frontendBase = String(process.env.FRONTEND_URL || process.env.BASE_URL || '').replace(/\/+$/, '');
@@ -861,3 +868,140 @@ exports.getMySubscriptionStatus = async (req, res) => {
         connection.release();
     }
 };
+
+exports.getEntitlements = async (req, res) => {
+    try {
+        const data = await entitlements.forUser(req.user.id);
+        return res.json({ success: true, data });
+    } catch (error) {
+        console.error('getEntitlements error:', error);
+        return res.status(500).json({ success: false, message: 'خطا در دریافت محدودیت‌های پلن' });
+    }
+};
+
+exports.getCoinPackages = async (req, res) => {
+    try {
+        const ent = await entitlements.forUser(req.user.id);
+        return res.json({
+            success: true,
+            data: {
+                packages: COIN_PACKAGES,
+                canPurchase: ent.canPurchaseCoins,
+                isPaid: ent.isPaid,
+            },
+        });
+    } catch (error) {
+        console.error('getCoinPackages error:', error);
+        return res.status(500).json({ success: false, message: 'خطا در دریافت بسته‌های سکه' });
+    }
+};
+
+exports.createCoinPayment = async (req, res) => {
+    const connection = await pool.getConnection();
+    try {
+        const ent = await entitlements.forUser(req.user.id);
+        if (!ent.canPurchaseCoins) {
+            return res.status(403).json({
+                success: false,
+                code: 'PLAN_REQUIRED',
+                message: 'خرید سکه برای طرح‌های پولی است. اول پلن را ارتقا بده.',
+            });
+        }
+        const pack = coinPackageById(req.body?.packageId);
+        if (!pack) {
+            return res.status(400).json({ success: false, message: 'بسته سکه نامعتبر است.' });
+        }
+        await usage.ensureReady();
+        const [ins] = await connection.execute(
+            `INSERT INTO tam24_coin_purchases (user_id, package_id, coins, price_toman, status) VALUES (?, ?, ?, ?, 'pending')`,
+            [req.user.id, pack.id, pack.coins, pack.priceToman]
+        );
+        const purchaseId = ins.insertId;
+        const baseUrl = String(process.env.BASE_URL || '').replace(/\/+$/, '');
+        const callbackUrl = `${baseUrl}/api/payments/zarinpal/callback?coinPurchaseId=${purchaseId}`;
+        const paymentRequest = await zarinpal.payments.create({
+            amount: toRial(pack.priceToman),
+            currency: 'IRR',
+            callback_url: callbackUrl,
+            description: `خرید ${pack.coins} سکه متاتست`,
+            metadata: { mobile: req.user.phone, email: req.user.email },
+        });
+        const authority = paymentRequest?.data?.authority || paymentRequest?.authority;
+        if (!authority) {
+            await connection.execute(
+                `UPDATE tam24_coin_purchases SET status = 'failed' WHERE id = ?`,
+                [purchaseId]
+            );
+            return res.status(502).json({ success: false, message: 'درگاه پرداخت پاسخ نداد.' });
+        }
+        await connection.execute(
+            `UPDATE tam24_coin_purchases SET authority = ? WHERE id = ?`,
+            [authority, purchaseId]
+        );
+        const paymentUrl = await zarinpal.payments.getRedirectUrl(authority);
+        return res.json({
+            success: true,
+            data: { purchaseId, paymentUrl, package: pack },
+        });
+    } catch (error) {
+        console.error('createCoinPayment error:', error);
+        return res.status(500).json({ success: false, message: 'خطا در ایجاد پرداخت سکه' });
+    } finally {
+        connection.release();
+    }
+};
+
+async function handleCoinPurchaseCallback(req, res) {
+    const connection = await pool.getConnection();
+    const frontendBase = String(process.env.FRONTEND_URL || process.env.BASE_URL || '').replace(/\/+$/, '');
+    const purchaseId = Number(req.query.coinPurchaseId);
+    const statusFromCb = req.query.Status || null;
+    const authorityFromCb = req.query.Authority || null;
+    const redirect = (status) => res.redirect(`${frontendBase}/met?coins=${status}`);
+    try {
+        await usage.ensureReady();
+        const [rows] = await connection.execute(
+            `SELECT * FROM tam24_coin_purchases WHERE id = ? LIMIT 1`,
+            [purchaseId]
+        );
+        const purchase = rows[0];
+        if (!purchase) return res.status(404).send('Coin purchase not found');
+        if (purchase.status === 'paid') return redirect('paid');
+        if (statusFromCb !== 'OK') {
+            await connection.execute(
+                `UPDATE tam24_coin_purchases SET status = 'cancelled' WHERE id = ? AND status = 'pending'`,
+                [purchaseId]
+            );
+            return redirect('cancelled');
+        }
+        const verifyResult = await zarinpal.verifications.verify({
+            amount: toRial(Number(purchase.price_toman)),
+            authority: authorityFromCb || purchase.authority,
+        });
+        const verifyCode = verifyResult?.data?.code ?? null;
+        const refId = verifyResult?.data?.ref_id ?? null;
+        if (verifyCode !== 100 && verifyCode !== 101) {
+            await connection.execute(
+                `UPDATE tam24_coin_purchases SET status = 'failed' WHERE id = ? AND status = 'pending'`,
+                [purchaseId]
+            );
+            return redirect('failed');
+        }
+        await coinWallet.creditPurchased(pool, purchase.user_id, purchase.coins, {
+            reason: `خرید بسته ${purchase.package_id}`,
+            referenceType: 'coin_purchase',
+            referenceId: `coin-purchase:${purchase.id}`,
+            metadata: { packageId: purchase.package_id, refId },
+        });
+        await connection.execute(
+            `UPDATE tam24_coin_purchases SET status = 'paid', ref_id = ?, paid_at = NOW(), authority = ? WHERE id = ?`,
+            [refId, authorityFromCb || purchase.authority, purchaseId]
+        );
+        return redirect('paid');
+    } catch (error) {
+        console.error('handleCoinPurchaseCallback error:', error);
+        return res.status(500).send('Callback error');
+    } finally {
+        connection.release();
+    }
+}

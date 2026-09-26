@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { X, Tag, Loader2, Check } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Tag, Loader2, Check } from 'lucide-react';
 import { Player } from '@lordicon/react';
 import { toast } from 'sonner';
 import ICON_DATA from '../assets/wired-gradient-3235-badge-ribbon-in-reveal.json';
 import { flowApi } from '../lib/authApi';
 import { useUser } from '../context/UserContext';
+import { ResponsiveModal } from './ResponsiveModal';
 
 type Plan = {
     id: string;
@@ -372,12 +373,32 @@ export default function PlanSelectionModal({
     };
 
     return (
-        <AnimatePresence>
-            {isOpen && (
-                <div
-                    dir="rtl"
-                    className="fixed inset-0 z-[9999] flex items-end justify-center overflow-hidden p-0 sm:items-center sm:p-4"
+        <ResponsiveModal
+            isOpen={isOpen}
+            onClose={handleClose}
+            title="ارتقای حساب کاربری"
+            maxWidthClass="md:w-[min(880px,94vw)] md:max-w-[94vw]"
+            footer={
+                <button
+                    onClick={handlePay}
+                    disabled={isPaying || !selectedPlan || isLoadingPlans}
+                    className="flex w-full items-center justify-center gap-3 rounded-xl bg-[var(--accent)] py-4 text-sm font-black text-[var(--text-inverse)] shadow-[0_10px_24px_-12px_color-mix(in_srgb,var(--accent)_70%,transparent)] disabled:opacity-60"
                 >
+                    {isPaying ? (
+                        <>
+                            <Loader2 size={18} className="animate-spin" />
+                            در حال اتصال...
+                        </>
+                    ) : (
+                        <>
+                            <Check size={18} />
+                            تایید و پرداخت نهایی
+                        </>
+                    )}
+                </button>
+            }
+        >
+            <div dir="rtl">
                     <style>{`
                         @keyframes textShimmer {
                             0% { background-position: 100% 0; }
@@ -414,43 +435,10 @@ export default function PlanSelectionModal({
                         .scrollbar-hide::-webkit-scrollbar { display: none; }
                         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
                     `}</style>
-
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        onClick={handleClose}
-                        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-                    />
-
-                    <motion.div
-                        initial={{ y: '100%' }}
-                        animate={{ y: 0 }}
-                        exit={{ y: '100%' }}
-                        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                        className="relative flex max-h-[95vh] w-full flex-col overflow-hidden rounded-t-3xl border border-[var(--border)]/60 bg-[var(--bg-card)] shadow-2xl sm:max-h-[85vh] sm:w-[95vw] sm:max-w-[850px] sm:rounded-2xl"
-                    >
-                        <div className="relative flex items-center justify-between border-b border-[var(--border)]/40 px-6 py-5">
-                            <div>
-                                <h2 className="text-lg font-black text-[var(--text-primary)] sm:text-xl">
-                                    ارتقای حساب کاربری
-                                </h2>
-                                <p className="mt-1 text-xs text-[var(--text-muted)]">
-                                    پلن مناسب خود را برای دسترسی نامحدود انتخاب کنید
-                                </p>
-                            </div>
-
-                            <button
-                                type="button"
-                                onClick={handleClose}
-                                aria-label="بستن"
-                                className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] p-0 text-[var(--text-secondary)]"
-                            >
-                                <X size={18} />
-                            </button>
-                        </div>
-
-                        <div className="scrollbar-hide flex-1 space-y-3 overflow-y-auto p-5 sm:p-6">
+                    <p className="mb-4 text-xs text-[var(--text-muted)]">
+                        پلن مناسب خود را برای دسترسی نامحدود انتخاب کنید
+                    </p>
+                    <div className="space-y-3">
                             {plansError && (
                                 <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-4 text-center text-sm text-rose-400">
                                     {plansError}
@@ -622,7 +610,7 @@ export default function PlanSelectionModal({
                                         <button
                                             onClick={handleApplyDiscount}
                                             disabled={!discountCode.trim() || isApplyingDiscount || !selectedPlan}
-                                            className="absolute bottom-1.5 left-1.5 top-1.5 px-4 text-[10px] font-bold text-white rounded-lg bg-[var(--accent)] disabled:opacity-50"
+                                            className="absolute bottom-1.5 left-1.5 top-1.5 px-4 text-[10px] font-bold text-[var(--text-inverse)] rounded-lg bg-[var(--accent)] disabled:opacity-50"
                                         >
                                             {isApplyingDiscount ? (
                                                 <Loader2 size={14} className="animate-spin" />
@@ -701,28 +689,7 @@ export default function PlanSelectionModal({
                             </div>
                         </div>
 
-                        <div className="border-t border-[var(--border)]/40 bg-[var(--bg-elevated)]/20 p-6">
-                            <button
-                                onClick={handlePay}
-                                disabled={isPaying || !selectedPlan || isLoadingPlans}
-                                className="flex w-full items-center justify-center gap-3 rounded-xl bg-[var(--accent)] py-4 text-sm font-black text-white transition-all shadow-xl shadow-[var(--accent)]/20 hover:bg-[var(--accent)]/90 disabled:opacity-60"
-                            >
-                                {isPaying ? (
-                                    <>
-                                        <Loader2 size={18} className="animate-spin" />
-                                        در حال اتصال...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Check size={18} />
-                                        تایید و پرداخت نهایی
-                                    </>
-                                )}
-                            </button>
-                        </div>
-                    </motion.div>
-                </div>
-            )}
-        </AnimatePresence>
+            </div>
+        </ResponsiveModal>
     );
 }

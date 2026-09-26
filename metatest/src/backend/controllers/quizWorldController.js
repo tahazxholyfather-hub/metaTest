@@ -9,6 +9,8 @@ const {
     encodeResultId,
     decodeResultId
 } = require('../utils/hash');
+const entitlements = require('../subscription/entitlements');
+const usage = require('../subscription/usage');
 
 
 // ==========================================
@@ -397,6 +399,7 @@ const fetchQuestionImages = async (questionId) => {
 
 const handleCreateQuiz = async (req, res) => {
     const creatorId = req.user?.id || 1;
+    let examClaim = null;
 
     const {
         quizType, // 'chapter' or 'mabhas'
@@ -473,6 +476,16 @@ const handleCreateQuiz = async (req, res) => {
             ? 'in_progress'
             : 'waiting';
 
+        examClaim = await entitlements.prepareExamCreate(creatorId, settings.visibility);
+        if (!examClaim.ok) {
+            return res.json({
+                success: false,
+                code: examClaim.code,
+                message: examClaim.message,
+                nextAllowedAt: examClaim.nextAllowedAt || null,
+            });
+        }
+
         const insertQuizSql = `
             INSERT INTO quizzes 
             (
@@ -507,6 +520,11 @@ const handleCreateQuiz = async (req, res) => {
 
         const newQuizId = quizResult.insertId;
 
+        if (examClaim?.usageId) {
+            await usage.bindResource(examClaim.usageId, newQuizId);
+            examClaim = null;
+        }
+
 
         return res.json({
             success: true,
@@ -522,6 +540,7 @@ const handleCreateQuiz = async (req, res) => {
         });
 
     } catch (error) {
+        if (examClaim?.usageId) await usage.releaseUsage(examClaim.usageId);
         console.error("❌ SQL Error in handleCreateQuiz:", error);
         return res.json({ success: false, message: "خطا در ساخت آزمون در پایگاه داده" });
     }
@@ -580,6 +599,25 @@ const handleAddQuizMember = async (req, res) => {
             success: false,
             message: "شناسه آزمون معتبر نیست."
         });
+    }
+
+    if (role === 'member' && await entitlements.multiplayerBlocked(userId)) {
+        const conn = await pool.getConnection();
+        try {
+            const [rows] = await conn.query(
+                `SELECT visibility FROM quizzes WHERE id = ? LIMIT 1`,
+                [quizId]
+            );
+            if (rows[0]?.visibility === 'public') {
+                return res.status(403).json({
+                    success: false,
+                    code: 'MULTIPLAYER_LOCKED',
+                    message: 'شرکت در آزمون آنلاین برای طرح رایگان بسته است. برای ورود به لابی پلن را ارتقا بده.',
+                });
+            }
+        } finally {
+            conn.release();
+        }
     }
 
     try {

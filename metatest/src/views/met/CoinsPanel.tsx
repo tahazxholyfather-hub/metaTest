@@ -88,7 +88,7 @@ export function CoinsPanel({ wallet, onRefresh, onBuy, className = '' }: Props) 
                             <span className="text-[var(--text-muted)] tabular-nums">{faNum(wallet.daily)} / {faNum(wallet.dailyQuota)}</span>
                         </div>
                         <div className="h-1.5 rounded-full bg-[var(--border)] overflow-hidden">
-                            <motion.div className="h-full rounded-full bg-[var(--color-primary-500)]" animate={{ width: `${dailyPct * 100}%` }} transition={{ duration: 0.5, ease: easeOut }} />
+                            <motion.div className="h-full rounded-full bg-[var(--accent)]" animate={{ width: `${dailyPct * 100}%` }} transition={{ duration: 0.5, ease: easeOut }} />
                         </div>
                         <div className="text-[10px] text-[var(--text-muted)] mt-1 tabular-nums">شارژ بعدی تا {countdown || '—'} · سکه‌ی روزانه به فردا منتقل نمی‌شود</div>
                     </div>
@@ -99,7 +99,7 @@ export function CoinsPanel({ wallet, onRefresh, onBuy, className = '' }: Props) 
                 </div>
 
                 <div className="relative mt-4 flex items-center gap-2">
-                    <button type="button" onClick={() => (onBuy ? onBuy() : window.location.assign('/re'))} className="flex-1 h-9 rounded-[12px] bg-[var(--color-primary-500)] text-white text-[12px] font-extrabold inline-flex items-center justify-center gap-1.5 shadow-[0_8px_20px_-8px_rgba(139,92,246,0.8)] active:scale-[0.98] transition-transform">
+                    <button type="button" onClick={() => (onBuy ? onBuy() : window.location.assign('/re'))} className="flex-1 h-9 rounded-[12px] bg-[var(--accent)] text-[var(--text-inverse)] text-[12px] font-extrabold inline-flex items-center justify-center gap-1.5 shadow-[0_8px_20px_-8px_color-mix(in_srgb,var(--accent)_70%,transparent)] active:scale-[0.98] transition-transform">
                         <Sparkles size={14} /> خرید سکه
                     </button>
                     <button type="button" onClick={() => { onRefresh(); void load(true); }} className="h-9 px-3 rounded-[12px] border border-[var(--border)]/70 text-[12px] font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] inline-flex items-center gap-1.5">

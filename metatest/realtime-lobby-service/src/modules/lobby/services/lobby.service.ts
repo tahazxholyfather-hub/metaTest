@@ -540,21 +540,9 @@ export class LobbyService {
                     socketId: socket.id,
                 };
 
-            await this.storage.setMember(code, memberToSave);
-
-            if (isEmptyLobby) {
-                await this.storage.updateLobby(code, (l) => ({
-                    ...l,
-                    status: 'waiting',
-                    joinLocked: false,
-                    hostUserId: user.id,
-                    updatedAt: Date.now(),
-                }));
-            }
-
             const encodedQuizId = this.encodeStoredQuizId(lobby.quizId);
 
-            // Only call the backend when truly a new member — not on reconnect.
+            // Reject a free student before they occupy a lobby seat.
             if (!existingMember) {
                 const quiz = await mainBackendService.getQuizMetadata(
                     encodedQuizId,
@@ -572,6 +560,18 @@ export class LobbyService {
                         accessToken: socket.data.accessToken,
                     });
                 }
+            }
+
+            await this.storage.setMember(code, memberToSave);
+
+            if (isEmptyLobby) {
+                await this.storage.updateLobby(code, (l) => ({
+                    ...l,
+                    status: 'waiting',
+                    joinLocked: false,
+                    hostUserId: user.id,
+                    updatedAt: Date.now(),
+                }));
             }
 
             this.clearEmptyLobbyTimer(code);

@@ -21,6 +21,7 @@ type Props = {
     onSpeak?: (messageId: number) => Promise<string | null>;
     onRegenerate?: (messageId: number) => void;
     onRetry?: (message: MetMessage) => void;
+    onChatAction?: (action: string) => void;
 };
 
 function AttachmentGallery({ attachments, align }: { attachments: MetMessage['attachments']; align: 'start' | 'end' }) {
@@ -63,7 +64,7 @@ function VoiceNote({ url, seconds }: { url: string; seconds?: number | null }) {
                 setPlaying(true);
                 playSharedAudio(url, () => setPlaying(false));
             }}
-            className="inline-flex items-center gap-2 mb-1.5 px-2.5 h-8 rounded-full bg-white/12 text-white text-[11.5px] font-bold"
+            className="inline-flex items-center gap-2 mb-1.5 px-2.5 h-8 rounded-full bg-[color-mix(in_srgb,var(--text-inverse)_16%,transparent)] text-[var(--text-inverse)] text-[11.5px] font-bold"
             aria-label={playing ? 'توقف' : 'پخش پیام صوتی'}
         >
             {playing ? <Square size={12} /> : <Mic size={12} />}
@@ -83,6 +84,7 @@ export function Message({
     onSpeak,
     onRegenerate,
     onRetry,
+    onChatAction,
 }: Props) {
     const [copied, setCopied] = useState(false);
     const [speech, setSpeech] = useState<'idle' | 'loading' | 'playing'>('idle');
@@ -134,8 +136,8 @@ export function Message({
             >
                 <div className="max-w-[82%] sm:max-w-[64%] group">
                     <div
-                        className="px-3.5 py-2.5 text-[14.5px] leading-[1.6] text-white break-words rounded-[18px] rounded-br-[6px] shadow-[0_8px_24px_-12px_rgba(139,92,246,0.7)]"
-                        style={{ background: 'linear-gradient(135deg, var(--color-primary-500), color-mix(in srgb, var(--color-primary-500) 78%, #4c1d95))' }}
+                        className="px-3.5 py-2.5 text-[14.5px] leading-[1.6] text-[var(--text-inverse)] break-words rounded-[18px] rounded-br-[6px] shadow-[0_8px_24px_-12px_color-mix(in_srgb,var(--accent)_55%,transparent)]"
+                        style={{ background: 'linear-gradient(145deg, var(--color-primary-400), var(--accent))' }}
                         dir="auto"
                     >
                         {voice?.url && <VoiceNote url={voice.url} seconds={voice.durationSeconds} />}
@@ -182,7 +184,7 @@ export function Message({
                     className={`px-4 py-3 rounded-[18px] rounded-tr-[6px] border ${
                         message.error
                             ? 'bg-rose-500/6 border-rose-500/25'
-                            : 'bg-[color-mix(in_srgb,var(--text-primary)_4.5%,var(--bg-card))] border-[var(--border)]/50'
+                            : 'bg-[var(--bg-elevated)] border-[var(--border)]'
                     }`}
                 >
                     {message.error ? (
@@ -206,6 +208,20 @@ export function Message({
                     ) : (
                         <>
                             {!!message.content && <RichText text={message.content} />}
+                            {!!message.actions?.length && (
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                    {message.actions.map((action) => (
+                                        <button
+                                            key={action.id}
+                                            type="button"
+                                            onClick={() => onChatAction?.(action.action)}
+                                            className={`h-8 rounded-full px-3 text-[12px] font-extrabold ${action.action === 'open_plans' ? 'bg-[var(--accent)] text-[var(--text-inverse)] shadow-[0_8px_18px_-10px_color-mix(in_srgb,var(--accent)_80%,transparent)]' : 'border border-[color-mix(in_srgb,var(--accent)_40%,var(--border))] bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] text-[var(--accent)]'}`}
+                                        >
+                                            {action.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                             <AttachmentGallery attachments={message.attachments} align="end" />
                             {empty && (
                                 <p className="flex items-center gap-1.5 text-[12px] text-[var(--text-muted)] m-0">
@@ -237,7 +253,7 @@ export function Message({
                                 {speech === 'loading' ? <GraySpinner size={13} /> : speech === 'playing' ? <Square size={13} /> : <Volume2 size={13} />}
                             </button>
                         )}
-                        {canRegenerate && persisted && onRegenerate && (
+                        {canRegenerate && persisted && onRegenerate && !message.actions?.length && (
                             <button
                                 type="button"
                                 disabled={busy}

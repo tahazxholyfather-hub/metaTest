@@ -1,4 +1,6 @@
 const pool = require('../db');
+const entitlements = require('../subscription/entitlements');
+const usage = require('../subscription/usage');
 
 
 
@@ -675,6 +677,8 @@ const handleCheckAnswer = async (req, res) => {
             return res.json({ success: false, message: 'Invalid parameters' });
         }
 
+        await usage.ensureReady();
+
         // Bulletproof helper to parse is_correct regardless of what type mysql2 returns
         const parseIsCorrect = (val) => {
             if (Buffer.isBuffer(val)) return val[0] === 1;
@@ -904,13 +908,40 @@ const handleCheckAnswer = async (req, res) => {
             [questionId]
         );
 
+        const [subjectRows] = await conn.query(
+            `SELECT q.subject_id, s.title AS subject_title
+             FROM questions_tam24 q
+             LEFT JOIN subjects_tam24 s ON s.id = q.subject_id
+             WHERE q.id = ?
+             LIMIT 1`,
+            [questionId]
+        );
+        const solutionAccess = await entitlements.consumeSolution(conn, {
+            userId,
+            subjectTitle: subjectRows[0]?.subject_title,
+            subjectId: subjectRows[0]?.subject_id,
+            questionId,
+        });
+        const descriptiveAnswer = solutionAccess.allowed && descRows.length > 0
+            ? descRows[0].answer_text
+            : null;
+
         await conn.commit();
 
         res.json({
             success: true,
             is_correct: isCorrect,
             correct_option_id: correctOptionId,
-            descriptive_answer: descRows.length > 0 ? descRows[0].answer_text : null,
+            descriptive_answer: descriptiveAnswer,
+            solution_access: {
+                locked: solutionAccess.locked,
+                allowed: solutionAccess.allowed,
+                subjectKey: solutionAccess.subjectKey,
+                subjectLabel: solutionAccess.subjectLabel,
+                used: solutionAccess.used,
+                limit: solutionAccess.limit,
+                remaining: solutionAccess.remaining,
+            },
             option_stats,
             reward_data: rewardData,
         });

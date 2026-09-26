@@ -274,6 +274,24 @@ export const flowApi = {
             { method: "GET" }
         ),
 
+    getEntitlements: () =>
+        request<{ success: boolean; data?: any; message?: string }>(
+            `${API_BASE}/payments/entitlements`,
+            { method: "GET" }
+        ),
+
+    getCoinPackages: () =>
+        request<{ success: boolean; data?: { packages: any[]; canPurchase: boolean; isPaid: boolean }; message?: string; code?: string }>(
+            `${API_BASE}/payments/coin-packages`,
+            { method: "GET" }
+        ),
+
+    createCoinPayment: (payload: { packageId: string }) =>
+        request<{ success: boolean; data?: { purchaseId: number; paymentUrl: string }; message?: string; code?: string }>(
+            `${API_BASE}/payments/coins/create`,
+            { method: "POST", body: JSON.stringify(payload) }
+        ),
+
 
 
     // Dashboard (uses /api/dashboard routes, not /api/flow)

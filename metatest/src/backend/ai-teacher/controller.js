@@ -34,7 +34,7 @@ const getBootstrap = async (req, res) => {
         if (!user) return fail(res, 404, 'NOT_FOUND', 'کاربر یافت نشد.');
 
         const [wallet, subjectRows, settings, latestConversation] = await Promise.all([
-            walletSnapshot(userId, user.current_plan),
+            walletSnapshot(userId, user.current_plan, user.plan_expires_at),
             listSubjectsFromDb(),
             ensureSettings(userId),
             conversationService.getLatestConversation(db, userId),
@@ -93,7 +93,7 @@ const openSession = async (req, res) => {
         const userId = req.user.id;
         const user = await loadUserRow(userId);
         if (!user) return fail(res, 404, 'NOT_FOUND', 'کاربر یافت نشد.');
-        const wallet = await walletSnapshot(userId, user.current_plan);
+        const wallet = await walletSnapshot(userId, user.current_plan, user.plan_expires_at);
         const conversation = await conversationService.getLatestConversation(db, userId);
         if (!conversation) return res.json({ success: true, data: { conversation: null, messages: [], hasMore: false, wallet } });
         const messages = await conversationService.getMessages(db, conversation.id, { limit: 50 });
@@ -182,7 +182,7 @@ const deleteConversation = async (req, res) => {
 const getWallet = async (req, res) => {
     try {
         const user = await loadUserRow(req.user.id);
-        const wallet = await walletSnapshot(req.user.id, user?.current_plan);
+        const wallet = await walletSnapshot(req.user.id, user?.current_plan, user?.plan_expires_at);
         return res.json({ success: true, data: wallet });
     } catch (err) {
         console.error('[met] getWallet', err);
@@ -365,7 +365,7 @@ const voiceTranscribe = async (req, res) => {
     try {
         if (!req.file?.buffer?.length) return fail(res, 400, 'NO_FILE', 'فایل صوتی دریافت نشد.');
         const user = await loadUserRow(userId);
-        const wallet = await walletSnapshot(userId, user?.current_plan);
+        const wallet = await walletSnapshot(userId, user?.current_plan, user?.plan_expires_at);
         const cost = pricing.flatCoinCost('stt', MODELS.stt);
         if (wallet.total < cost) return res.status(402).json({ success: false, code: 'INSUFFICIENT_COINS', message: userMessageForError('INSUFFICIENT_COINS'), wallet });
 
@@ -440,7 +440,7 @@ const voiceSpeak = async (req, res) => {
         if (existing) return res.json({ success: true, data: { url: existing.url, charged: 0, cached: true } });
 
         const user = await loadUserRow(userId);
-        const wallet = await walletSnapshot(userId, user?.current_plan);
+        const wallet = await walletSnapshot(userId, user?.current_plan, user?.plan_expires_at);
         const cost = pricing.flatCoinCost('tts', MODELS.tts);
         if (wallet.total < cost) return res.status(402).json({ success: false, code: 'INSUFFICIENT_COINS', message: userMessageForError('INSUFFICIENT_COINS'), wallet });
 
@@ -497,7 +497,7 @@ const getQuestionSession = async (req, res) => {
         });
         const messages = await conversationService.getMessages(db, conversation.id, { limit: 80 });
         const user = await loadUserRow(userId);
-        const wallet = await walletSnapshot(userId, user?.current_plan);
+        const wallet = await walletSnapshot(userId, user?.current_plan, user?.plan_expires_at);
 
         return res.json({
             success: true,

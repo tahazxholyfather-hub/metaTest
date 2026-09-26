@@ -34,6 +34,7 @@ type Props = {
     composerRef: React.RefObject<ComposerHandle | null>;
     /** Extra bottom padding (mobile global bottom nav). */
     bottomInset?: string;
+    onChatAction?: (action: string) => void;
 };
 
 function greeting(firstName?: string | null) {
@@ -60,6 +61,7 @@ export function ChatScreen({
     ensureConversation,
     composerRef,
     bottomInset,
+    onChatAction,
 }: Props) {
     const reduce = usePrefersReducedMotion();
     const subject = findSubject(subjects, subjectKey);
@@ -300,6 +302,7 @@ export function ChatScreen({
                                         onSpeak={onSpeak}
                                         onRegenerate={(id) => void chat.regenerate(id)}
                                         onRetry={retry}
+                                        onChatAction={onChatAction}
                                     />
                                 ))}
                                 {/* Typing dots until the first streamed token — never pair with an empty bubble. */}

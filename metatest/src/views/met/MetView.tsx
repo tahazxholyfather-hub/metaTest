@@ -19,6 +19,7 @@ import { SUBJECT_FALLBACKS, sortSubjects } from './subjectIcons';
 import { subscribeSharedAudio } from './audio';
 import { GraySpinner, easeOut, useIsMobile } from './ui';
 import PlanSelectionModal from '../../components/PlanSelectionModal';
+import CoinPurchaseModal from '../../components/CoinPurchaseModal';
 
 type Props = {
     onNavigate: (view: View) => void;
@@ -44,6 +45,7 @@ export function MetView({ onNavigate }: Props) {
     const [listeningLevel, setListeningLevel] = useState<number | null>(null);
     const [speaking, setSpeaking] = useState<{ on: boolean; level: number }>({ on: false, level: 0 });
     const [buyOpen, setBuyOpen] = useState(false);
+    const [plansOpen, setPlansOpen] = useState(false);
     const composerRef = useRef<ComposerHandle | null>(null);
     const openedInitial = useRef(false);
 
@@ -241,6 +243,10 @@ export function MetView({ onNavigate }: Props) {
                         ensureConversation={ensureConversation}
                         composerRef={composerRef}
                         bottomInset={isMobile ? 'var(--app-bottom-nav-space)' : undefined}
+                        onChatAction={(action) => {
+                            if (action === 'open_plans') setPlansOpen(true);
+                            if (action === 'open_coins') setBuyOpen(true);
+                        }}
                     />
                 </div>
 
@@ -288,7 +294,12 @@ export function MetView({ onNavigate }: Props) {
                 </ResponsiveModal>
             )}
 
-            <PlanSelectionModal isOpen={buyOpen} onClose={() => setBuyOpen(false)} />
+            <CoinPurchaseModal
+                isOpen={buyOpen}
+                onClose={() => setBuyOpen(false)}
+                onRequirePlan={() => { setBuyOpen(false); setPlansOpen(true); }}
+            />
+            <PlanSelectionModal isOpen={plansOpen} onClose={() => setPlansOpen(false)} />
         </div>
     );
 }

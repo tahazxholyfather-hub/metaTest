@@ -283,11 +283,11 @@ export const SideNav = ({ activeView, onNavigate, theme, onToggleTheme, isCollap
                     flex items-center justify-center
                     rounded-xl
                     p-0
-                    bg-violet-600
-                    hover:bg-violet-500
-                    text-white
-                    shadow-[0_3px_14px_rgba(124,58,237,0.22)]
-                    hover:shadow-[0_4px_18px_rgba(124,58,237,0.32)]
+                    bg-[var(--accent)]
+                    hover:brightness-110
+                    text-[var(--text-inverse)]
+                    shadow-[0_3px_14px_color-mix(in_srgb,var(--accent)_35%,transparent)]
+                    hover:shadow-[0_4px_18px_color-mix(in_srgb,var(--accent)_45%,transparent)]
                     hover:-translate-y-0.5
                     transition-all duration-200
                 "
@@ -333,13 +333,13 @@ export const SideNav = ({ activeView, onNavigate, theme, onToggleTheme, isCollap
                             )}
                         </div>
                     ) : (
-                        <div className="relative overflow-hidden rounded-2xl border border-violet-500/20 p-3.5 bg-[var(--bg-element)]">
-                            <div className="pointer-events-none absolute -top-8 -left-6 w-24 h-24 rounded-full bg-violet-500/10 blur-3xl" />
-                            <div className="pointer-events-none absolute -bottom-10 -right-6 w-28 h-28 rounded-full bg-violet-600/8 blur-3xl" />
+                        <div className="relative overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--accent)_28%,transparent)] p-3.5 bg-[var(--bg-element)]">
+                            <div className="pointer-events-none absolute -top-8 -left-6 w-24 h-24 rounded-full bg-[var(--accent)]/10 blur-3xl" />
+                            <div className="pointer-events-none absolute -bottom-10 -right-6 w-28 h-28 rounded-full bg-[var(--accent)]/10 blur-3xl" />
 
                             <div className="relative z-10 flex flex-col gap-3">
                                 <div className="flex items-start gap-2.5">
-                                    <div className="w-9 h-9 rounded-xl bg-violet-500/10 border border-violet-400/15 text-violet-400 flex items-center justify-center shrink-0">
+                                    <div className="w-9 h-9 rounded-xl bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_22%,transparent)] text-[var(--icon-color)] flex items-center justify-center shrink-0">
                                         <Sparkles size={16} />
                                     </div>
 
@@ -356,7 +356,7 @@ export const SideNav = ({ activeView, onNavigate, theme, onToggleTheme, isCollap
 
                                 <button
                                     onClick={() => setIsPlanModalOpen(true)}
-                                    className="relative overflow-hidden group w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white shadow-[0_4px_20px_rgba(124,58,237,0.18)] hover:shadow-[0_6px_24px_rgba(124,58,237,0.28)] hover:-translate-y-0.5 transition-all duration-200"
+                                    className="relative overflow-hidden group w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-[var(--accent)] hover:brightness-110 text-[var(--text-inverse)] shadow-[0_4px_20px_color-mix(in_srgb,var(--accent)_28%,transparent)] hover:shadow-[0_6px_24px_color-mix(in_srgb,var(--accent)_38%,transparent)] hover:-translate-y-0.5 transition-all duration-200"
                                 >
                                     <Rocket size={14} className="relative z-10" />
 
