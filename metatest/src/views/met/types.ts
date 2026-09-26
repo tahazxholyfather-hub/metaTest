@@ -136,6 +136,8 @@ export interface MetMessage {
     /** Client-only: local error text for a failed turn. */
     error?: string;
     truncated?: boolean;
+    /** Server-attached buttons (upgrade plan, buy coins) rendered inside the bubble. */
+    actions?: { id: string; label: string; action: 'open_plans' | 'open_coins' | string }[];
 }
 
 export interface MetBootstrap {

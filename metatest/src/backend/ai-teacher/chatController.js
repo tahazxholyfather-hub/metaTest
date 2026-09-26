@@ -35,6 +35,8 @@ const toolsService = require('./services/toolsService');
 const fileStorage = require('./services/fileStorage');
 const questionContext = require('./services/questionContext');
 const { logUsage } = require('./services/usageLogger');
+const { isPaidPlan } = require('../subscription/limits');
+const entitlements = require('../subscription/entitlements');
 
 const DATA_TOOL_TRIGGERS = /(نمره|امتیاز|عملکرد|فعالیت|پیشرفت|چطورم|چطور بودم|رتبه|ضعف|قوی|activity|progress|score|how am i)/i;
 const QUESTION_TOOL_TRIGGERS = /(سوال|سؤال|تست|تمرین|نمونه|آزمون|امتحان|کنکور|مسئله|مساله|question|quiz|exercise|practice)/i;
@@ -75,6 +77,55 @@ async function resolveImageAttachments(userId, raw) {
 }
 
 const stripTransient = (atts) => atts.map(({ dataUrl, ...rest }) => rest);
+
+async function sendScriptedReply({
+    out, userId, conversationId, subjectKey, message, attachments, regenerateMessageId, text, actions, wallet,
+}) {
+    let userMessageId = null;
+    if (!regenerateMessageId) {
+        const [ins] = await db.query(
+            `INSERT INTO tam24_ai_messages (conversation_id, role, content, attachments, subject_key) VALUES (?, 'user', ?, ?, ?)`,
+            [conversationId, message, attachments.length ? JSON.stringify(stripTransient(attachments)) : null, subjectKey]
+        );
+        userMessageId = ins.insertId;
+        out.send('user_message', {
+            id: userMessageId, role: 'user', content: message, attachments: stripTransient(attachments), conversationId, createdAt: new Date().toISOString(),
+        });
+    }
+    const stored = actions?.length ? [{ type: 'ui_actions', actions }] : null;
+    const [assistant] = await db.query(
+        `INSERT INTO tam24_ai_messages (conversation_id, role, content, attachments, subject_key, status, coin_cost) VALUES (?, 'assistant', ?, ?, ?, 'complete', 0)`,
+        [conversationId, text, stored ? JSON.stringify(stored) : null, subjectKey]
+    );
+    await conversationService.touchConversation(db, conversationId, { messagesAdded: regenerateMessageId ? 1 : 2 });
+    const payload = {
+        id: assistant.insertId,
+        conversationId,
+        role: 'assistant',
+        content: text,
+        attachments: [],
+        actions: actions || [],
+        status: 'complete',
+        coinCost: 0,
+        createdAt: new Date().toISOString(),
+    };
+    out.send('status', { status: 'thinking' });
+    out.send('assistant_start', { id: payload.id, conversationId });
+    out.send('delta', { text });
+    out.send('done', { message: payload, wallet, charged: 0, subjectKey, stopped: false });
+    out.send('status', { status: 'ready' });
+    return userMessageId;
+}
+
+function upgradeActions(kind) {
+    if (kind === 'coins') {
+        return [{ id: 'buy-coins', label: 'خرید سکه', action: 'open_coins' }];
+    }
+    return [
+        { id: 'upgrade-plan', label: 'ارتقا پلن', action: 'open_plans' },
+        { id: 'buy-coins', label: 'خرید سکه', action: 'open_coins' },
+    ];
+}
 
 const streamChat = async (req, res) => {
     const userId = req.user.id;
@@ -178,9 +229,11 @@ const streamChat = async (req, res) => {
         const settings = await ensureSettings(userId);
 
         // ── Coins: quota, estimate, reserve ─────────────────────────────────
-        const grant = await coinWallet.applyDailyGrant(db, userId, user.current_plan);
+        const paid = isPaidPlan(user.current_plan, user.plan_expires_at);
+        const coinPlan = paid ? user.current_plan : 'free';
+        const grant = await coinWallet.applyDailyGrant(db, userId, coinPlan);
         const wallet = grant.wallet;
-        const dailyQuota = dailyCoinsForPlan(user.current_plan);
+        const dailyQuota = dailyCoinsForPlan(coinPlan);
         // Fair-use guard: shrink replies quietly when coins run low instead of cutting the student off.
         const lowBalance = wallet.total <= Math.max(15, Math.round(dailyQuota * 0.15));
 
@@ -189,12 +242,41 @@ const streamChat = async (req, res) => {
         const providerUserText = quizCtx ? (questionContext.expandUserMessage(message, intentKey) || message) : message;
         const typical = pricing.estimateTypicalCoins({ model, maxOutputTokens: maxTokens });
         const maxEst = pricing.estimateMaxCoins({ model, maxOutputTokens: maxTokens, allowImage: featureStatus().imageGeneration });
+        const walletView = walletFromBuckets(wallet, coinPlan);
 
         if (wallet.total < typical.coins) {
-            throw Object.assign(new Error('insufficient coins'), {
-                code: 'INSUFFICIENT_COINS', balance: wallet.total, needed: typical.coins, wallet: walletFromBuckets(wallet, user.current_plan),
+            const text = paid
+                ? 'سکه‌هات تموم شده. می‌تونی یک بسته سکه بگیری تا همین گفتگو رو ادامه بدیم، یا تا شارژ فردا صبر کنی — هر جور راحت‌تری.'
+                : 'سکه‌های امروزت تموم شد. با طرح رایگان تقریباً یکی‌دو تا سوال در روز با هم حرف می‌زنیم و فردا دوباره شارژ می‌شی. اگه همین الان می‌خوای ادامه بدیم، پلن رو ارتقا بده.';
+            await sendScriptedReply({
+                out, userId, conversationId, subjectKey, message, attachments, regenerateMessageId,
+                text,
+                actions: upgradeActions(paid ? 'coins' : 'plan'),
+                wallet: walletView,
             });
+            return out.end();
         }
+
+        if (quizCtx && !paid) {
+            const askGate = await entitlements.consumeAskMet(null, {
+                userId,
+                subjectKey: quizCtx.subjectKey,
+                subjectTitle: quizCtx.subject,
+                subjectId: quizCtx.subjectId,
+                questionId: quizCtx.questionId,
+            });
+            if (!askGate.allowed) {
+                const label = askGate.subjectLabel || 'این درس';
+                await sendScriptedReply({
+                    out, userId, conversationId, subjectKey, message, attachments, regenerateMessageId,
+                    text: `برای ${label} یک بار تونستم رایگان کنارت باشم و اون سهم تموم شد. اگه پلن رو ارتقا بدی، هر سوال ${label} رو همین‌جا با هم باز می‌کنیم و وسطش قطع نمی‌شم.`,
+                    actions: [{ id: 'upgrade-plan', label: 'ارتقا پلن', action: 'open_plans' }],
+                    wallet: walletView,
+                });
+                return out.end();
+            }
+        }
+
         const reserveAmount = Math.max(typical.coins, Math.min(wallet.total, maxEst.coins));
 
         conn = await db.getConnection();
@@ -207,7 +289,7 @@ const streamChat = async (req, res) => {
         out.send('status', { status: 'thinking' });
         out.send('meta', {
             conversationId, subjectKey, reserved: reservation.reserved, typicalCoins: typical.coins,
-            wallet: walletFromBuckets(reservation.wallet, user.current_plan), regenerateMessageId: regenerateMessageId || null,
+            wallet: walletFromBuckets(reservation.wallet, coinPlan), regenerateMessageId: regenerateMessageId || null,
         });
 
         const isFirstExchange = Number(conversation.message_count || 0) === 0;
@@ -414,7 +496,7 @@ const streamChat = async (req, res) => {
             knowledgeService.logKnowledgeUsage(db, { items: knowledgeContext.items, userId, conversationId, messageId: assistantMsgId }).catch(() => {});
         }
 
-        const walletAfter = walletFromBuckets(charge.wallet, user.current_plan);
+        const walletAfter = walletFromBuckets(charge.wallet, coinPlan);
         out.send('done', {
             message: {
                 id: assistantMsgId, conversationId, role: 'assistant', content: fullText, coinCost: charge.charged,

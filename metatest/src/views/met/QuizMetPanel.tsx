@@ -9,6 +9,8 @@ import { Message } from './Message';
 import type { MetFeatures, MetMessage, MetSettings, MetWallet, QuizIntent, QuizQuestionContext, SubjectKey } from './types';
 import { CoinChip, EmptyHint, GraySpinner, TypingDots, WorkingText, easeDrawer, easeOut, faNum, springDrawer, useIsMobile, workingStatusText } from './ui';
 import { useMetChat } from './useMetChat';
+import PlanSelectionModal from '../../components/PlanSelectionModal';
+import CoinPurchaseModal from '../../components/CoinPurchaseModal';
 
 type Props = {
     open: boolean;
@@ -51,6 +53,8 @@ export function QuizMetPanel({ open, onClose, questionId }: Props) {
     const [bootError, setBootError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [showCoins, setShowCoins] = useState(false);
+    const [plansOpen, setPlansOpen] = useState(false);
+    const [coinsOpen, setCoinsOpen] = useState(false);
     const [openingLine, setOpeningLine] = useState(pickOpeningLine);
     const [showOpening, setShowOpening] = useState(true);
     const composerRef = useRef<ComposerHandle>(null);
@@ -158,6 +162,7 @@ export function QuizMetPanel({ open, onClose, questionId }: Props) {
     }), [openingLine, questionId]);
 
     return (
+        <>
         <AnimatePresence>
             {open && (
                 <motion.div
@@ -258,6 +263,10 @@ export function QuizMetPanel({ open, onClose, questionId }: Props) {
                                     }}
                                     onRegenerate={(id) => void chat.regenerate(id)}
                                     onRetry={() => void chat.regenerate(chat.lastAssistantId || 0)}
+                                    onChatAction={(action) => {
+                                        if (action === 'open_plans') setPlansOpen(true);
+                                        if (action === 'open_coins') setCoinsOpen(true);
+                                    }}
                                 />
                             ))}
                             <AnimatePresence>
@@ -314,6 +323,13 @@ export function QuizMetPanel({ open, onClose, questionId }: Props) {
                 </motion.div>
             )}
         </AnimatePresence>
+        <CoinPurchaseModal
+            isOpen={coinsOpen}
+            onClose={() => setCoinsOpen(false)}
+            onRequirePlan={() => { setCoinsOpen(false); setPlansOpen(true); }}
+        />
+        <PlanSelectionModal isOpen={plansOpen} onClose={() => setPlansOpen(false)} />
+        </>
     );
 }
 

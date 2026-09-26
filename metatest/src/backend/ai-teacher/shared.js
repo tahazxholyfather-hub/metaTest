@@ -2,6 +2,7 @@
 
 const db = require('../db');
 const { dailyCoinsForPlan, featureStatus, unavailableReason, FILE_LIMITS, CONTEXT_LIMITS } = require('./config');
+const { isPaidPlan } = require('../subscription/limits');
 const { SUBJECT_LIST } = require('./subjects');
 const coinWallet = require('./services/coinWallet');
 const conversationService = require('./services/conversationService');
@@ -10,6 +11,9 @@ const promptBuilder = require('./services/promptBuilder');
 /** Shared shaping + loaders used by both controllers. */
 
 function publicMessage(row) {
+    const raw = conversationService.parseAttachments(row.attachments);
+    const carrier = raw.find((item) => item && item.type === 'ui_actions');
+    const attachments = raw.filter((item) => item && item.type !== 'ui_actions');
     return {
         id: row.id,
         conversationId: row.conversation_id,
@@ -20,7 +24,8 @@ function publicMessage(row) {
         totalTokens: row.total_tokens || 0,
         coinCost: row.coin_cost || 0,
         model: row.model || null,
-        attachments: conversationService.parseAttachments(row.attachments),
+        attachments,
+        actions: Array.isArray(carrier?.actions) ? carrier.actions : [],
         status: row.status || 'complete',
         latencyMs: row.latency_ms ?? null,
         regeneratedFrom: row.regenerated_from ?? null,
@@ -99,26 +104,34 @@ function nextResetAtIso() {
     return next.toISOString();
 }
 
+/** Expired or empty plans use the free coin budget. Named and numeric paid plans do not. */
+function coinPlanKey(planKey, expiresAt) {
+    if (expiresAt === undefined) return planKey || 'free';
+    return isPaidPlan(planKey, expiresAt) ? (planKey || 'free') : 'free';
+}
+
 /** Apply the idempotent daily grant and return the wallet as the UI sees it. */
-async function walletSnapshot(userId, planKey) {
-    const grant = await coinWallet.applyDailyGrant(db, userId, planKey);
+async function walletSnapshot(userId, planKey, expiresAt) {
+    const key = coinPlanKey(planKey, expiresAt);
+    const grant = await coinWallet.applyDailyGrant(db, userId, key);
     const w = grant.wallet;
     return {
         daily: w.daily,
         purchased: w.purchased,
         total: w.total,
         balance: w.total,
-        dailyQuota: dailyCoinsForPlan(planKey),
+        dailyQuota: dailyCoinsForPlan(key),
         grantedToday: grant.granted,
         grantAmount: grant.amount,
         nextResetAt: nextResetAtIso(),
     };
 }
 
-function walletFromBuckets(w, planKey) {
+function walletFromBuckets(w, planKey, expiresAt) {
+    const key = coinPlanKey(planKey, expiresAt);
     return {
         daily: w.daily, purchased: w.purchased, total: w.total, balance: w.total,
-        dailyQuota: dailyCoinsForPlan(planKey), nextResetAt: nextResetAtIso(),
+        dailyQuota: dailyCoinsForPlan(key), nextResetAt: nextResetAtIso(),
     };
 }
 

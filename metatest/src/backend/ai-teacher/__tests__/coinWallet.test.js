@@ -59,11 +59,12 @@ function fakeDb(initial = { daily: 0, purchased: 0, grantedOn: null }) {
 }
 
 (async () => {
-    await test('daily coin quota by plan (free default 80)', () => {
-        assert.strictEqual(dailyCoinsForPlan('free'), 80);
+    await test('daily coin quota by plan (free is a small daily budget)', () => {
+        assert.strictEqual(dailyCoinsForPlan('free'), 24);
         assert.strictEqual(dailyCoinsForPlan('bronze'), 300);
         assert.strictEqual(dailyCoinsForPlan('diamond'), 1500);
-        assert.strictEqual(dailyCoinsForPlan('unknown'), 80);
+        assert.strictEqual(dailyCoinsForPlan('3'), 300, 'numeric paid plan ids use the bronze floor');
+        assert.strictEqual(dailyCoinsForPlan('unknown'), 300);
     });
 
     await test('four curriculum subjects + general fallback', () => {
@@ -128,13 +129,13 @@ function fakeDb(initial = { daily: 0, purchased: 0, grantedOn: null }) {
         const r = await coinWallet.applyDailyGrant(db, 1, 'free');
         assert.strictEqual(r.granted, true);
         assert.strictEqual(r.expired, 30, 'yesterday\'s leftover daily coins expire');
-        assert.strictEqual(state.daily_balance, 80);
+        assert.strictEqual(state.daily_balance, 24);
         assert.strictEqual(state.purchased_balance, 50);
         assert.ok(ledger.some((l) => l.type === 'daily_expire' && l.daily_delta === -30));
-        assert.ok(ledger.some((l) => l.type === 'daily_grant' && l.daily_delta === 80));
+        assert.ok(ledger.some((l) => l.type === 'daily_grant' && l.daily_delta === 24));
         const again = await coinWallet.applyDailyGrant(db, 1, 'free');
         assert.strictEqual(again.granted, false, 'grant is idempotent within a day');
-        assert.strictEqual(state.daily_balance, 80);
+        assert.strictEqual(state.daily_balance, 24);
     });
 
     await test('wallet: reserve daily-first, settle, release unused; purchased spent only when daily is out', async () => {

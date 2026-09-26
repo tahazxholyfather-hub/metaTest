@@ -828,15 +828,32 @@ mjx-container[display="true"] {
     animation: ai-text-shimmer 2.6s ease-in-out infinite;
 }
 
+.premium-title-shimmer {
+    background-image: linear-gradient(
+            100deg,
+            var(--text-primary) 0%,
+            var(--text-primary) 36%,
+            color-mix(in srgb, var(--text-primary) 55%, white) 50%,
+            var(--text-primary) 64%,
+            var(--text-primary) 100%
+    );
+    background-size: 220% 100%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    animation: ai-text-shimmer 3.4s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
     .ai-teacher-root .ai-composer-shell,
     .ai-teacher-root [role="status"] {
         animation: none !important;
     }
-    .ai-text-shimmer {
+    .ai-text-shimmer,
+    .premium-title-shimmer {
         animation: none !important;
         background: none;
-        color: var(--text-muted);
+        color: var(--text-primary);
         -webkit-background-clip: unset;
         background-clip: unset;
     }

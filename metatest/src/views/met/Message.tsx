@@ -21,6 +21,7 @@ type Props = {
     onSpeak?: (messageId: number) => Promise<string | null>;
     onRegenerate?: (messageId: number) => void;
     onRetry?: (message: MetMessage) => void;
+    onChatAction?: (action: string) => void;
 };
 
 function AttachmentGallery({ attachments, align }: { attachments: MetMessage['attachments']; align: 'start' | 'end' }) {
@@ -83,6 +84,7 @@ export function Message({
     onSpeak,
     onRegenerate,
     onRetry,
+    onChatAction,
 }: Props) {
     const [copied, setCopied] = useState(false);
     const [speech, setSpeech] = useState<'idle' | 'loading' | 'playing'>('idle');
@@ -206,6 +208,20 @@ export function Message({
                     ) : (
                         <>
                             {!!message.content && <RichText text={message.content} />}
+                            {!!message.actions?.length && (
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                    {message.actions.map((action) => (
+                                        <button
+                                            key={action.id}
+                                            type="button"
+                                            onClick={() => onChatAction?.(action.action)}
+                                            className={`h-8 rounded-full px-3 text-[12px] font-extrabold ${action.action === 'open_plans' ? 'bg-[var(--text-primary)] text-[var(--bg-card)]' : 'border border-[var(--border)] text-[var(--text-primary)]'}`}
+                                        >
+                                            {action.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                             <AttachmentGallery attachments={message.attachments} align="end" />
                             {empty && (
                                 <p className="flex items-center gap-1.5 text-[12px] text-[var(--text-muted)] m-0">
@@ -237,7 +253,7 @@ export function Message({
                                 {speech === 'loading' ? <GraySpinner size={13} /> : speech === 'playing' ? <Square size={13} /> : <Volume2 size={13} />}
                             </button>
                         )}
-                        {canRegenerate && persisted && onRegenerate && (
+                        {canRegenerate && persisted && onRegenerate && !message.actions?.length && (
                             <button
                                 type="button"
                                 disabled={busy}

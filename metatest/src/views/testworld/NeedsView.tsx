@@ -3,15 +3,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     Play, ChevronLeft, Book, Clock, Activity, Users, Globe, ShieldCheck,
     CheckCircle2, List, Image as ImageIcon, Check,
-    Target, PenTool, Zap, Edit3, Layers
+    Target, PenTool, Zap, Edit3, Layers, Lock
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { flowApi } from '../../lib/authApi';
-import { useUser } from '../../context/UserContext';
 import { useNavigate } from 'react-router-dom';
 import { createLobby } from '../../socket/lobby.socket';
 import { useSocket } from '../../socket/useSocket';
 import { QuizCountdown } from '../../components/QuizCountdown';
+import { PremiumUpgrade } from '../../components/PremiumUpgrade';
+import PlanSelectionModal from '../../components/PlanSelectionModal';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -38,6 +39,17 @@ type FlowState = {
     chapters: string[];
     mabhas: string[];
     settings: QuizSettings;
+};
+
+type PlanEntitlements = {
+    isPaid: boolean;
+    multiplayer: boolean;
+    personalExam?: {
+        allowed: boolean;
+        used?: number;
+        limit?: number | null;
+        nextAllowedAt?: string | null;
+    };
 };
 
 // ─── Motion variants ──────────────────────────────────────────────────────────
@@ -283,9 +295,25 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
         lessons: [], grades: [], quizType: null, chapters: [], mabhas: [],
         settings: { time: 30, difficulty: 2, visibility: 'private', memberLimit: 10, quizName: '', questionCounts: {} },
     });
+    const [entitlements, setEntitlements] = useState<PlanEntitlements | null>(null);
+    const [plansOpen, setPlansOpen] = useState(false);
 
     const navigate = useNavigate();
     const { socket, connect } = useSocket();
+
+    useEffect(() => {
+        let alive = true;
+        flowApi.getEntitlements()
+            .then((res) => {
+                if (alive && res?.success && res.data) setEntitlements(res.data);
+            })
+            .catch(() => { /* server still enforces on create */ });
+        return () => { alive = false; };
+    }, []);
+
+    const multiplayerLocked = !!entitlements && !entitlements.isPaid && !entitlements.multiplayer;
+    const personalExamLocked = !!entitlements && !entitlements.isPaid && entitlements.personalExam?.allowed === false;
+    const createBlocked = flowData.settings.visibility === 'public' ? multiplayerLocked : personalExamLocked;
 
     // ─── Data fetching ────────────────────────────────────────────────────────
 
@@ -505,7 +533,11 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
         if (step === 3) return !flowData.quizType;
         if (step === 4) return flowData.chapters.length === 0;
         if (step === 5) return flowData.mabhas.length === 0;
-        if (step === 6) return !flowData.settings.time || flowData.settings.time <= 0;
+        if (step === 6) {
+            if (!flowData.settings.time || flowData.settings.time <= 0) return true;
+            if (flowData.settings.visibility === 'public' && multiplayerLocked) return true;
+            if (flowData.settings.visibility === 'private' && personalExamLocked) return true;
+        }
         return false;
     };
 
@@ -563,6 +595,10 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
     // ─── Quiz creation ────────────────────────────────────────────────────────
 
     const handleStartQuiz = async () => {
+        if (createBlocked) {
+            setPlansOpen(true);
+            return;
+        }
         setIsCreatingQuiz(true);
         const loadingToastId = toast.loading('درحال ساخت آزمون...');
         try {
@@ -585,10 +621,27 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
                 chapterNames: nameMap(flowData.chapters), mabhasNames: nameMap(flowData.mabhas),
             };
 
-            const res = await flowApi.dispatch('create_quiz', payload);
+            const res = await flowApi.dispatch('create_quiz', payload) as {
+                success?: boolean;
+                message?: string;
+                code?: string;
+                nextAllowedAt?: string | null;
+                quiz?: { id?: string; _id?: string };
+                data?: any;
+            };
             await new Promise(r => setTimeout(r, 800));
 
             if (!res?.success) {
+                if (res?.code === 'MULTIPLAYER_LOCKED' || res?.code === 'PERSONAL_EXAM_COOLDOWN') {
+                    setEntitlements((prev) => ({
+                        isPaid: false,
+                        multiplayer: res.code === 'MULTIPLAYER_LOCKED' ? false : (prev?.multiplayer ?? false),
+                        personalExam: res.code === 'PERSONAL_EXAM_COOLDOWN'
+                            ? { allowed: false, used: 1, limit: 1, nextAllowedAt: res.nextAllowedAt || null }
+                            : (prev?.personalExam || { allowed: true }),
+                    }));
+                    setPlansOpen(true);
+                }
                 toast.error(res?.message || 'ساخت آزمون ناموفق بود.', { id: loadingToastId });
                 return;
             }
@@ -866,8 +919,12 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
                                 icon={flowData.settings.visibility === 'public' ? Globe : ShieldCheck}
                                 label="حریم خصوصی آزمون"
                                 desc={flowData.settings.visibility === 'public'
-                                    ? "دیگران می‌توانند از طریق کد دعوت وارد لابی شوند و با شما رقابت کنند."
-                                    : "فقط شما این آزمون را می‌بینید. بدون لابی، مستقیم وارد آزمون می‌شوید."
+                                    ? (multiplayerLocked
+                                        ? 'آزمون آنلاین برای طرح رایگان بسته است. آزمون شخصی همچنان باز است.'
+                                        : 'دیگران می‌توانند از طریق کد دعوت وارد لابی شوند و با شما رقابت کنند.')
+                                    : (personalExamLocked
+                                        ? 'سهم رایگان این ۲۴ ساعت استفاده شده است.'
+                                        : 'فقط شما این آزمون را می‌بینید. بدون لابی، مستقیم وارد آزمون می‌شوید.')
                                 }
                             >
                                 <SmoothSegmentedControl
@@ -882,7 +939,24 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
                             </SettingRow>
 
                             <AnimatePresence initial={false}>
-                                {flowData.settings.visibility === 'public' && (
+                                {flowData.settings.visibility === 'public' && multiplayerLocked && (
+                                    <motion.div
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: 'auto', opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        transition={{ duration: 0.2 }}
+                                        className="overflow-hidden px-4 pb-4"
+                                    >
+                                        <PremiumUpgrade
+                                            icon={Lock}
+                                            title="آزمون آنلاین قفل است"
+                                            description="رقابت آنلاین و لابی چندنفره برای طرح رایگان بسته است. آزمون شخصی هنوز باز است؛ برای ساخت آزمون عمومی پلن را ارتقا بده."
+                                            actionLabel="ارتقا پلن"
+                                            onAction={() => setPlansOpen(true)}
+                                        />
+                                    </motion.div>
+                                )}
+                                {flowData.settings.visibility === 'public' && !multiplayerLocked && (
                                     <motion.div
                                         initial={{ height: 0, opacity: 0 }}
                                         animate={{ height: 'auto', opacity: 1 }}
@@ -902,6 +976,23 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
                                                 options={[{ label: '۵ نفر', value: '5' }, { label: '۱۰ نفر', value: '10' }, { label: '۱۵ نفر', value: '15' }]}
                                             />
                                         </SettingRow>
+                                    </motion.div>
+                                )}
+                                {flowData.settings.visibility === 'private' && personalExamLocked && (
+                                    <motion.div
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: 'auto', opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        transition={{ duration: 0.2 }}
+                                        className="overflow-hidden px-4 pb-4"
+                                    >
+                                        <PremiumUpgrade
+                                            icon={Lock}
+                                            title="سهم آزمون شخصی امروز تمام شد"
+                                            description="در طرح رایگان هر ۲۴ ساعت یک آزمون شخصی می‌توانی بسازی. برای ساخت آزمون بیشتر پلن را ارتقا بده."
+                                            actionLabel="ارتقا پلن"
+                                            onAction={() => setPlansOpen(true)}
+                                        />
                                     </motion.div>
                                 )}
                             </AnimatePresence>
@@ -1087,6 +1178,17 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
                                         )}
                                     </div>
 
+                                    {createBlocked ? (
+                                        <PremiumUpgrade
+                                            icon={Lock}
+                                            title={flowData.settings.visibility === 'public' ? 'آزمون آنلاین قفل است' : 'سهم آزمون شخصی امروز تمام شد'}
+                                            description={flowData.settings.visibility === 'public'
+                                                ? 'رقابت آنلاین برای طرح رایگان بسته است. آزمون شخصی هنوز باز است.'
+                                                : 'در طرح رایگان هر ۲۴ ساعت یک آزمون شخصی می‌توانی بسازی.'}
+                                            actionLabel="ارتقا پلن"
+                                            onAction={() => setPlansOpen(true)}
+                                        />
+                                    ) : (
                                     <button
                                         onClick={handleStartQuiz}
                                         disabled={isNextDisabled() || isCreatingQuiz || budgetOver}
@@ -1101,6 +1203,7 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
                                             : <><span>{flowData.settings.visibility === 'public' ? 'ساخت آزمون' : 'ساخت و شروع آزمون'}</span><Play size={18} className="rotate-180" /></>
                                         }
                                     </button>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -1184,6 +1287,7 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
                 </div>
 
             </div>
+            <PlanSelectionModal isOpen={plansOpen} onClose={() => setPlansOpen(false)} />
         </div>
     );
 };

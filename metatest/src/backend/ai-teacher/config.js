@@ -109,7 +109,8 @@ function unavailableReason() {
 const USD_TO_IRR = num(process.env.AI_USD_TO_IRR || process.env.AI_TEACHER_USD_TO_IRR, 1_000_000, { min: 1 });
 const IRR_PER_COIN = num(process.env.AI_IRR_PER_COIN || process.env.AI_TEACHER_IRR_PER_ENERGY, 100, { min: 1 });
 
-const DEFAULT_DAILY_FREE = num(process.env.AI_DAILY_FREE_COINS, 80, { min: 0 });
+const { FREE_LIMITS } = require('../subscription/limits');
+const DEFAULT_DAILY_FREE = num(process.env.AI_DAILY_FREE_COINS, FREE_LIMITS.dailyCoins, { min: 0 });
 const DAILY_COINS_BY_PLAN = Object.freeze({
     free: DEFAULT_DAILY_FREE,
     bronze: num(process.env.AI_DAILY_COINS_BRONZE, 300, { min: 0 }),
@@ -202,7 +203,10 @@ const SUGGESTIONS = Object.freeze({
 
 function dailyCoinsForPlan(planKey) {
     const key = String(planKey || 'free').toLowerCase();
-    return DAILY_COINS_BY_PLAN[key] ?? DAILY_COINS_BY_PLAN.free;
+    if (Object.prototype.hasOwnProperty.call(DAILY_COINS_BY_PLAN, key)) return DAILY_COINS_BY_PLAN[key];
+    // Paid checkout stores subscription_plans.id, which is not a named key.
+    // Those students stay on at least the bronze daily quota — never the free cap.
+    return DAILY_COINS_BY_PLAN.bronze;
 }
 
 /**

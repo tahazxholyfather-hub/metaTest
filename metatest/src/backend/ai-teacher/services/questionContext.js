@@ -205,6 +205,7 @@ async function loadQuestionContext(db, { userId, questionId }) {
         questionId: qid,
         questionText: stripHtml(question.question_text),
         subjectKey,
+        subjectId: question.subject_id || null,
         subject: question.subject_title || null,
         lesson: question.chapter_title || question.chapter || null,
         topic: question.topic_title || null,

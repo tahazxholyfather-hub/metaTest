@@ -3,7 +3,7 @@ import { flowApi } from '../lib/authApi';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Heart, Archive, AlertTriangle, Timer, Power, LogOut, Bookmark, ArrowRight, ArrowLeft,
-    MoreVertical, FileText, ChevronRight, ChevronLeft, CheckCircle2, XCircle, X, Check, Volume2, VolumeX
+    MoreVertical, FileText, ChevronRight, ChevronLeft, CheckCircle2, XCircle, X, Check, Volume2, VolumeX, Lock
 } from 'lucide-react';
 
 import { useAudio } from '../hooks/useAudio';
@@ -31,6 +31,8 @@ import { MathRenderer } from '../components/ui/MathRenderer';
 import {GameRewardToast} from '../components/GameRewardToast';
 import { Met } from '../components/met';
 import { QuizMetPanel } from './met/QuizMetPanel';
+import { PremiumUpgrade } from '../components/PremiumUpgrade';
+import PlanSelectionModal from '../components/PlanSelectionModal';
 
 import React from 'react';
 
@@ -86,6 +88,7 @@ type HistoryEntry = {
     isCorrect: boolean | null;
     correctOptionId: number | null;
     descriptiveAnswer: string | null;
+    solutionLocked?: boolean;
     optionStats: Stats[];
     totalQuestions: number;
     currentQuestionCount: number;
@@ -294,6 +297,8 @@ export function QuizView({
     const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
     const [correctOptionId, setCorrectOptionId] = useState<number | null>(null);
     const [descriptiveAnswer, setDescriptiveAnswer] = useState<string | null>(null);
+    const [solutionLocked, setSolutionLocked] = useState(false);
+    const [plansOpen, setPlansOpen] = useState(false);
     const [optionStats, setOptionStats] = useState<Stats[]>([]);
 
     // Action States
@@ -405,6 +410,7 @@ export function QuizView({
         setIsCorrect(entry.isCorrect);
         setCorrectOptionId(entry.correctOptionId);
         setDescriptiveAnswer(entry.descriptiveAnswer);
+        setSolutionLocked(!!entry.solutionLocked);
         setOptionStats(entry.optionStats);
         setTotalQuestions(entry.totalQuestions);
         setCurrentQuestionCount(entry.currentQuestionCount);
@@ -489,6 +495,7 @@ export function QuizView({
         setIsCorrect(saved.isCorrect ?? null);
         setCorrectOptionId(saved.correctOptionId ?? null);
         setDescriptiveAnswer(saved.descriptiveAnswer ?? null);
+        setSolutionLocked(!!(saved.history?.[saved.historyIndex ?? -1] as HistoryEntry | undefined)?.solutionLocked);
         setOptionStats(saved.optionStats ?? []);
 
         setIsFavorite(saved.isFavorite ?? false);
@@ -507,6 +514,7 @@ export function QuizView({
         setIsCorrect(null);
         setCorrectOptionId(null);
         setDescriptiveAnswer(null);
+        setSolutionLocked(false);
         setOptionStats([]);
         setIsFavorite(false);
         setIsReviewLater(false);
@@ -552,6 +560,7 @@ export function QuizView({
                     isCorrect: null,
                     correctOptionId: null,
                     descriptiveAnswer: null,
+                    solutionLocked: false,
                     optionStats: [],
                     totalQuestions: totalQ,
                     currentQuestionCount: currQCount,
@@ -756,11 +765,13 @@ export function QuizView({
             const fetchedCorrectOptionId = response.correct_option_id ?? null;
             const fetchedDescAnswer = response.descriptive_answer ? decodeHtmlEntities(response.descriptive_answer) : null;
             const fetchedOptionStats = response.option_stats ?? [];
+            const locked = !!response.solution_access?.locked;
 
             // Update local state
             setIsCorrect(response.is_correct);
             setCorrectOptionId(fetchedCorrectOptionId);
             setDescriptiveAnswer(fetchedDescAnswer);
+            setSolutionLocked(locked);
             setOptionStats(fetchedOptionStats);
             setIsAnswered(true);
 
@@ -771,6 +782,7 @@ export function QuizView({
                 isCorrect: response.is_correct,
                 correctOptionId: fetchedCorrectOptionId,
                 descriptiveAnswer: fetchedDescAnswer,
+                solutionLocked: locked,
                 optionStats: fetchedOptionStats
             });
 
@@ -1360,6 +1372,18 @@ export function QuizView({
                                             </motion.div>
                                         )}
                                     </AnimatePresence>
+
+                                    {isAnswered && solutionLocked && !descriptiveAnswer && (
+                                        <div className="mt-8">
+                                            <PremiumUpgrade
+                                                icon={Lock}
+                                                title="پاسخ تشریحی این درس قفل شد"
+                                                description="در طرح رایگان برای هر درس فقط یک پاسخ تشریحی باز می‌شود. سوال‌ها را همچنان می‌توانی جواب بدهی؛ برای دیدن بقیه‌ی حل‌ها پلن را ارتقا بده."
+                                                actionLabel="ارتقا پلن"
+                                                onAction={() => setPlansOpen(true)}
+                                            />
+                                        </div>
+                                    )}
                                 </motion.div>
                             ) : (
                                 <div className="flex items-center justify-center h-full text-[var(--text-muted)] mt-20">خطا در دریافت سوال</div>
@@ -1543,6 +1567,8 @@ export function QuizView({
                     </button>
                 </div>
             </ResponsiveModal>
+
+            <PlanSelectionModal isOpen={plansOpen} onClose={() => setPlansOpen(false)} />
 
             {/* Note Modal */}
             <ResponsiveModal
