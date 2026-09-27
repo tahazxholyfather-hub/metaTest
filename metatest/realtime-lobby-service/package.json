@@ -7,7 +7,7 @@
     "start": "node dist/server.js",
     "dev": "nodemon",
     "build": "tsc",
-    "test": "tsx --test src/utils/hash.test.ts src/core/lock.test.ts src/storage/memory/memory.store.test.ts"
+    "test": "tsx --test src/utils/hash.test.ts src/core/lock.test.ts src/core/plan-lock.test.ts src/storage/memory/memory.store.test.ts"
   },
   "keywords": [],
   "author": "",

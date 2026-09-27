@@ -1,6 +1,7 @@
 import { env } from '../config/env';
 import { logger } from '../config/logger';
 import { CustomError } from '../core/exceptions/custom-error';
+import { mainBackendHttpError } from '../core/plan-lock';
 
 
 export interface MainBackendUserInfo {
@@ -527,13 +528,10 @@ export class MainBackendService {
                     'Main backend request failed',
                 );
 
-                throw new CustomError(
+                throw mainBackendHttpError(
                     message,
-                    response.status >= 500 ? 502 : response.status,
-                    'MAIN_BACKEND_REQUEST_FAILED',
-                    {
-                        status: response.status,
-                    },
+                    response.status,
+                    responseBody,
                 );
             }
 

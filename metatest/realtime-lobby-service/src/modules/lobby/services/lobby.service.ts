@@ -26,6 +26,7 @@ import {
     UpdateProgressDto,
 } from '../dtos/lobby.schema';
 import { encodeQuizId, decodeQuizId, encodeResultId } from '../../../utils/hash';
+import { rethrowJoinDenied } from '../../../core/plan-lock';
 
 const COUNTDOWN_MS = 3000;
 const EMPTY_LOBBY_TTL_MS = 60_000;
@@ -165,6 +166,33 @@ export class LobbyService {
             throw new CustomError('Member not found', 403, 'NOT_A_MEMBER');
         }
         return member;
+    }
+
+    private async ensureNewMemberAllowed(
+        socket: Socket,
+        lobby: Lobby,
+        userId: string,
+    ): Promise<void> {
+        const encodedQuizId = this.encodeStoredQuizId(lobby.quizId);
+        const quiz = await mainBackendService.getQuizMetadata(
+            encodedQuizId,
+            socket.data.accessToken,
+        );
+        const creatorId = this.normalizeUserId(quiz.creatorId ?? quiz.ownerId ?? '');
+        if (creatorId !== '' && creatorId === userId) {
+            return;
+        }
+
+        try {
+            await mainBackendService.addQuizMember({
+                quizId: encodedQuizId,
+                userId: socket.data.user.id,
+                role: 'member',
+                accessToken: socket.data.accessToken,
+            });
+        } catch (err) {
+            rethrowJoinDenied(err);
+        }
     }
 
     private emitNotification(
@@ -587,6 +615,7 @@ export class LobbyService {
                 if (members.length >= lobby.maxMembers) {
                     throw new CustomError('Lobby is full', 409, 'LOBBY_FULL');
                 }
+                await this.ensureNewMemberAllowed(socket, lobby, userId);
             }
 
             const isEmptyLobby = members.length === 0;
@@ -624,31 +653,6 @@ export class LobbyService {
                     seq: this.nextSeq(current),
                     updatedAt: Date.now(),
                 }));
-            }
-
-            if (!existingMember) {
-                try {
-                    const encodedQuizId = this.encodeStoredQuizId(lobby.quizId);
-                    const quiz = await mainBackendService.getQuizMetadata(
-                        encodedQuizId,
-                        socket.data.accessToken,
-                    );
-                    const creatorId = this.normalizeUserId(
-                        quiz.creatorId ?? quiz.ownerId ?? '',
-                    );
-                    const isCreator = creatorId !== '' && creatorId === userId;
-                    if (!isCreator) {
-                        await mainBackendService.addQuizMember({
-                            quizId: encodedQuizId,
-                            userId: user.id,
-                            role: 'member',
-                            accessToken: socket.data.accessToken,
-                        });
-                    }
-                } catch (err) {
-                    await this.storage.removeMember(code, userId);
-                    throw err;
-                }
             }
 
             this.clearEmptyLobbyTimer(code);
