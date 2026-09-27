@@ -18,7 +18,6 @@ import {
     Diamond,
     Files,
     History,
-    Sparkles,
     Rocket
 } from 'lucide-react';
 import type { View } from '../types';
@@ -333,41 +332,35 @@ export const SideNav = ({ activeView, onNavigate, theme, onToggleTheme, isCollap
                             )}
                         </div>
                     ) : (
-                        <div className="relative overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--accent)_28%,transparent)] p-3.5 bg-[var(--bg-element)]">
-                            <div className="pointer-events-none absolute -top-8 -left-6 w-24 h-24 rounded-full bg-[var(--accent)]/10 blur-3xl" />
-                            <div className="pointer-events-none absolute -bottom-10 -right-6 w-28 h-28 rounded-full bg-[var(--accent)]/10 blur-3xl" />
+                        <button
+                            type="button"
+                            onClick={() => setIsPlanModalOpen(true)}
+                            className="group relative w-full overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--accent)_28%,transparent)] bg-[var(--bg-element)] px-3 py-2.5 text-right transition-all duration-200 hover:border-[color-mix(in_srgb,var(--accent)_46%,transparent)]"
+                        >
+                            <span
+                                aria-hidden
+                                className="pointer-events-none absolute inset-y-0 right-0 w-16 bg-[linear-gradient(270deg,color-mix(in_srgb,var(--accent)_16%,transparent),transparent)]"
+                            />
 
-                            <div className="relative z-10 flex flex-col gap-3">
-                                <div className="flex items-start gap-2.5">
-                                    <div className="w-9 h-9 rounded-xl bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_22%,transparent)] text-[var(--icon-color)] flex items-center justify-center shrink-0">
-                                        <Sparkles size={16} />
-                                    </div>
+                            <span className="relative z-10 flex items-center gap-2.5">
+                                <span className="min-w-0 flex-1">
+                                    <span className="block truncate text-[12px] font-extrabold leading-tight text-[var(--text-primary)]">
+                                        طرح رایگان
+                                    </span>
+                                    <span className="mt-0.5 block truncate text-[10px] leading-tight text-[var(--text-muted)]">
+                                        دسترسی کامل
+                                    </span>
+                                </span>
 
-                                    <div className="min-w-0">
-                                        <div className="text-[11px] font-extrabold text-[var(--text-primary)] leading-tight">
-                                            طرح رایگان
-                                        </div>
-
-                                        <p className="text-[9.5px] text-[var(--text-muted)] mt-0.5 leading-snug">
-                                            برای دسترسی کامل، اشتراک ویژه را فعال کنید.
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <button
-                                    onClick={() => setIsPlanModalOpen(true)}
-                                    className="relative overflow-hidden group w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-[var(--accent)] hover:brightness-110 text-white shadow-[0_4px_20px_color-mix(in_srgb,var(--accent)_28%,transparent)] hover:shadow-[0_6px_24px_color-mix(in_srgb,var(--accent)_38%,transparent)] hover:-translate-y-0.5 transition-all duration-200"
-                                >
-                                    <Rocket size={14} className="relative z-10" />
-
-                                    <span className="relative z-10 text-xs font-extrabold tracking-wide">
-                اشتراک ویژه
-            </span>
-
-                                    <div className="btn-shimmer-effect" />
-                                </button>
-                            </div>
-                        </div>
+                                <span className="relative inline-flex shrink-0 items-center gap-1 overflow-hidden rounded-xl bg-[var(--accent)] px-2.5 py-1.5 text-white shadow-[0_3px_12px_color-mix(in_srgb,var(--accent)_28%,transparent)] transition-transform duration-200 group-hover:-translate-y-px">
+                                    <Rocket size={13} strokeWidth={2.2} className="relative z-10" />
+                                    <span className="relative z-10 whitespace-nowrap text-[11px] font-extrabold">
+                                        اشتراک ویژه
+                                    </span>
+                                    <span className="btn-shimmer-effect" />
+                                </span>
+                            </span>
+                        </button>
                     )
                 )}
 
