@@ -15,6 +15,7 @@ export interface Lobby {
     questionCount: number;
     maxMembers: number;
     joinLocked: boolean;
+    seq: number;
 }
 
 export interface LobbyMember {
@@ -35,8 +36,6 @@ export interface LobbyMember {
     socketId?: string;
 }
 
-
-
 export interface SetReadyPayload {
     code: string;
     isReady: boolean;
@@ -53,7 +52,6 @@ export interface LobbyNotification {
     type: 'info' | 'warning' | 'error' | 'success';
 }
 
-
 export interface LobbyMemberProgress {
     userId: string;
     answeredCount: number;
@@ -64,6 +62,8 @@ export interface LobbyMemberProgress {
         total: number;
         correctCount: number;
         wrongCount: number;
+        resultId?: string | number;
+        id?: string | number;
     };
 }
 
@@ -71,7 +71,8 @@ export interface LobbyState {
     lobby: Lobby;
     members: LobbyMember[];
     progress: LobbyMemberProgress[];
-
+    seq?: number;
+    serverNow?: number;
 }
 
 export interface UserSessionBinding {
@@ -79,4 +80,8 @@ export interface UserSessionBinding {
     socketId: string;
     connectedAt: number;
     lobbyCode?: string;
+}
+
+export interface SerializedLobby extends Omit<Lobby, 'quizId'> {
+    quizId: string;
 }
