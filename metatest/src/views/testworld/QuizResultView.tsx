@@ -1033,7 +1033,7 @@ export default function ResultDashboard() {
                                                                     </div>
                                                                 </div>
 
-                                                                <div className="line-clamp-2 text-sm text-white font-medium">
+                                                                <div className="line-clamp-2 text-sm text-[var(--text-primary)] font-medium">
                                                                     <MathRenderer text={q.text} inline={true} />
                                                                 </div>
 

@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Activity, ChevronDown, ChevronLeft, Edit3, Filter, Globe,
-    ListFilter, Loader2, Play, Plus, Search, ShieldCheck, SlidersHorizontal,
-    Trash2, Users, Check, BookOpen
+    ListFilter, Loader2, Play, Plus, Minus, Search, ShieldCheck, SlidersHorizontal,
+    Trash2, Users, BookOpen
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { flowApi } from '../../lib/authApi';
@@ -26,7 +26,9 @@ type BankQuestion = {
     topic_title?: string;
     chapter_title?: string;
     image?: string | null;
-    options?: { id: number; text: string }[];
+    options?: { id: number; text: string; is_correct?: boolean }[];
+    correct_option_id?: number | null;
+    descriptive_answer?: string | null;
 };
 
 type FilterOption = { id: number | string; title: string };
@@ -150,7 +152,8 @@ export function QuestionSelectorView({
     const [page, setPage] = useState(1);
     const [loading, setLoading] = useState(false);
     const [hasApplied, setHasApplied] = useState(false);
-    const [showAnswers, setShowAnswers] = useState(false);
+    const [openAnswerIds, setOpenAnswerIds] = useState<Set<number>>(new Set());
+    const [answerLoadingIds, setAnswerLoadingIds] = useState<Set<number>>(new Set());
 
     const [selected, setSelected] = useState<BankQuestion[]>([]);
     const [time, setTime] = useState(30);
@@ -235,7 +238,7 @@ export function QuestionSelectorView({
         })();
     }, [selectedChapters, selectedGrades]);
 
-    const fetchQuestions = useCallback(async (nextPage = 1, opts?: { includeOptions?: boolean; keepSelection?: boolean }) => {
+    const fetchQuestions = useCallback(async (nextPage = 1, opts?: { keepSelection?: boolean }) => {
         if (toIds(selectedSubjects).length === 0) {
             setQuestions([]);
             setTotal(0);
@@ -255,7 +258,6 @@ export function QuestionSelectorView({
                 mabhas: toIds(selectedMabhas),
                 difficulties,
                 search: search.trim(),
-                includeOptions: opts?.includeOptions ?? showAnswers,
             };
             if (mode === 'auto') {
                 payload.sample = true;
@@ -288,7 +290,7 @@ export function QuestionSelectorView({
         } finally {
             setLoading(false);
         }
-    }, [selectedSubjects, selectedGrades, selectedChapters, selectedMabhas, difficulties, search, mode, autoCount, showAnswers]);
+    }, [selectedSubjects, selectedGrades, selectedChapters, selectedMabhas, difficulties, search, mode, autoCount]);
 
     useEffect(() => {
         if (selectedSubjects.length === 0) {
@@ -320,6 +322,53 @@ export function QuestionSelectorView({
             }
             return [...prev, question];
         });
+    };
+
+    const mergeQuestionAnswer = (questionId: number, patch: Partial<BankQuestion>) => {
+        setQuestions((prev) => prev.map((q) => (q.id === questionId ? { ...q, ...patch } : q)));
+        setSelected((prev) => prev.map((q) => (q.id === questionId ? { ...q, ...patch } : q)));
+    };
+
+    const hasLoadedAnswer = (question: BankQuestion) =>
+        Boolean(question.descriptive_answer) ||
+        Boolean(question.correct_option_id) ||
+        (question.options || []).some((opt) => opt.is_correct);
+
+    const toggleAnswer = async (question: BankQuestion) => {
+        const isOpen = openAnswerIds.has(question.id);
+        if (isOpen) {
+            setOpenAnswerIds((prev) => {
+                const next = new Set(prev);
+                next.delete(question.id);
+                return next;
+            });
+            return;
+        }
+
+        setOpenAnswerIds((prev) => new Set(prev).add(question.id));
+        if (hasLoadedAnswer(question) || answerLoadingIds.has(question.id)) return;
+
+        setAnswerLoadingIds((prev) => new Set(prev).add(question.id));
+        try {
+            const res = await flowApi.dispatch('get_bank_question_answer', { question_id: question.id });
+            if (!res?.success) {
+                toast.error(res?.message || 'دریافت پاسخ سوال ناموفق بود.');
+                return;
+            }
+            mergeQuestionAnswer(question.id, {
+                options: Array.isArray(res.options) ? res.options : [],
+                correct_option_id: res.correct_option_id ?? null,
+                descriptive_answer: res.descriptive_answer || null,
+            });
+        } catch {
+            toast.error('ارتباط با سرور برقرار نشد.');
+        } finally {
+            setAnswerLoadingIds((prev) => {
+                const next = new Set(prev);
+                next.delete(question.id);
+                return next;
+            });
+        }
     };
 
     const addVisible = () => {
@@ -556,19 +605,6 @@ export function QuestionSelectorView({
                                 )}
                             </div>
                             <div className="flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        const next = !showAnswers;
-                                        setShowAnswers(next);
-                                        if (next && hasApplied) fetchQuestions(page, { includeOptions: true, keepSelection: true });
-                                    }}
-                                    className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border ${
-                                        showAnswers ? 'border-[var(--accent)] text-[var(--accent)] bg-[var(--accent)]/10' : 'border-[var(--border)] text-[var(--text-muted)]'
-                                    }`}
-                                >
-                                    {showAnswers ? 'نمایش سوال' : 'نمایش پاسخ'}
-                                </button>
                                 {mode === 'manual' && questions.length > 0 && (
                                     <button type="button" onClick={addVisible} className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-[var(--bg-element)]">
                                         افزودن همین صفحه
@@ -598,6 +634,10 @@ export function QuestionSelectorView({
                         <AnimatePresence>
                             {!loading && questions.map((q, idx) => {
                                 const isOn = selectedIds.has(q.id);
+                                const answerOpen = openAnswerIds.has(q.id);
+                                const answerLoading = answerLoadingIds.has(q.id);
+                                const correctId = q.correct_option_id ?? q.options?.find((opt) => opt.is_correct)?.id;
+                                const correctIndex = (q.options || []).findIndex((opt) => opt.id === correctId);
                                 return (
                                     <motion.article
                                         key={q.id}
@@ -618,12 +658,15 @@ export function QuestionSelectorView({
                                             <button
                                                 type="button"
                                                 onClick={() => toggleQuestion(q)}
-                                                className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                                                    isOn ? 'bg-[var(--accent)] text-white' : 'bg-[var(--bg-element)] text-[var(--accent)]'
+                                                className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center border-2 transition-colors ${
+                                                    isOn
+                                                        ? 'bg-[var(--accent)] border-[var(--accent)] text-white'
+                                                        : 'bg-[var(--bg-element)] border-[var(--accent)] text-[var(--accent)]'
                                                 }`}
                                                 aria-label={isOn ? 'حذف از آزمون' : 'افزودن به آزمون'}
+                                                title={isOn ? 'حذف از آزمون' : 'افزودن به آزمون'}
                                             >
-                                                {isOn ? <Check size={16} /> : <Plus size={16} />}
+                                                {isOn ? <Minus size={16} strokeWidth={2.5} /> : <Plus size={16} strokeWidth={2.5} />}
                                             </button>
                                         </div>
                                         <div className="text-[13px] text-[var(--text-primary)] leading-7">
@@ -636,16 +679,54 @@ export function QuestionSelectorView({
                                                 className="mt-3 max-h-48 object-contain rounded-xl border border-[var(--border)] bg-white"
                                             />
                                         )}
-                                        {showAnswers && q.options && q.options.length > 0 && (
-                                            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                                {q.options.map((opt, i) => (
-                                                    <div key={opt.id} className="px-3 py-2 rounded-xl bg-[var(--bg-element)] text-[12px] text-[var(--text-secondary)]">
-                                                        <span className="font-bold ml-1">{i + 1})</span>
-                                                        <MathRenderer text={opt.text} inline />
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
+                                        <div className="mt-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleAnswer(q)}
+                                                className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl border text-[12px] font-bold transition-colors ${
+                                                    answerOpen
+                                                        ? 'border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]'
+                                                        : 'border-[var(--border)] bg-[var(--bg-element)] text-[var(--text-secondary)] hover:border-[var(--accent)]'
+                                                }`}
+                                            >
+                                                <span>پاسخ و گزینه درست</span>
+                                                <ChevronDown size={16} className={`transition-transform ${answerOpen ? 'rotate-180' : ''}`} />
+                                            </button>
+                                            {answerOpen && (
+                                                <div className="mt-2 rounded-xl border border-[var(--border)] bg-[var(--bg-element)] p-3 space-y-3">
+                                                    {answerLoading ? (
+                                                        <div className="flex items-center justify-center gap-2 py-3 text-[12px] text-[var(--text-muted)]">
+                                                            <Loader2 size={14} className="animate-spin" />
+                                                            در حال دریافت پاسخ...
+                                                        </div>
+                                                    ) : (
+                                                        <>
+                                                            {correctIndex >= 0 && q.options?.[correctIndex] ? (
+                                                                <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2">
+                                                                    <div className="text-[11px] font-bold text-emerald-600 dark:text-emerald-300 mb-1">گزینه درست</div>
+                                                                    <div className="text-[12px] text-[var(--text-primary)] leading-7">
+                                                                        <span className="font-bold ml-1">{correctIndex + 1})</span>
+                                                                        <MathRenderer text={q.options[correctIndex].text} inline />
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <p className="text-[12px] text-[var(--text-muted)]">گزینه درست ثبت نشده است.</p>
+                                                            )}
+                                                            {q.descriptive_answer ? (
+                                                                <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2">
+                                                                    <div className="text-[11px] font-bold text-[var(--accent)] mb-1">پاسخ تشریحی</div>
+                                                                    <div className="text-[12px] text-[var(--text-primary)] leading-7">
+                                                                        <MathRenderer text={q.descriptive_answer} />
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <p className="text-[12px] text-[var(--text-muted)]">پاسخ تشریحی برای این سوال ثبت نشده است.</p>
+                                                            )}
+                                                        </>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
                                     </motion.article>
                                 );
                             })}

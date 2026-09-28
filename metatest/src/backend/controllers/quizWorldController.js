@@ -587,6 +587,50 @@ const handleSearchBankQuestions = async (req, res) => {
     }
 };
 
+const parseIsCorrectFlag = (val) => {
+    if (Buffer.isBuffer(val)) return val[0] === 1;
+    return Number(val) === 1 || val === true || val === '1';
+};
+
+const handleGetBankQuestionAnswer = async (req, res) => {
+    try {
+        const questionId = toPositiveInt(req.body?.question_id ?? req.body?.questionId);
+        if (!questionId) {
+            return res.json({ success: false, message: 'شناسه سوال نامعتبر است.' });
+        }
+
+        const [optRows] = await pool.query(
+            `SELECT id, option_text, COALESCE(CAST(is_correct AS UNSIGNED), 0) AS is_correct
+             FROM options_tam24
+             WHERE question_id = ?
+             ORDER BY id ASC`,
+            [questionId]
+        );
+        const [descRows] = await pool.query(
+            'SELECT answer_text FROM descriptive_answers_tam24 WHERE question_id = ? LIMIT 1',
+            [questionId]
+        );
+
+        const options = optRows.map((row) => ({
+            id: Number(row.id),
+            text: row.option_text,
+            is_correct: parseIsCorrectFlag(row.is_correct),
+        }));
+        const correct = options.find((opt) => opt.is_correct);
+
+        res.json({
+            success: true,
+            question_id: questionId,
+            options,
+            correct_option_id: correct ? correct.id : null,
+            descriptive_answer: descRows.length > 0 ? descRows[0].answer_text : null,
+        });
+    } catch (error) {
+        console.error('❌ SQL Error in handleGetBankQuestionAnswer:', error);
+        res.json({ success: false, message: 'خطا در دریافت پاسخ سوال' });
+    }
+};
+
 const handleCreateQuiz = async (req, res) => {
     const creatorId = req.user?.id || 1;
 
@@ -2946,6 +2990,7 @@ module.exports = {
     handleGetChaptersBySubjects,   // به روز شده
     handleGetMabahesByChapters,    // به روز شده
     handleSearchBankQuestions,
+    handleGetBankQuestionAnswer,
     handleCreateQuiz,
     handleGetQuizByShareCode,
     handleGetQuizMetadata,
