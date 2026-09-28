@@ -26,24 +26,31 @@ export function createSocket(options: CreateSocketOptions = {}): Socket {
     }
 
     if (socketInstance && !options.forceNew) {
+        socketInstance.auth = { token };
         return socketInstance;
     }
 
-    // Do not set extraHeaders in the browser. Authorization there forces an
-    // OPTIONS preflight that LiteSpeed/nginx often answers without CORS.
-    // Socket.IO already sends the JWT in handshake.auth.token.
+    if (socketInstance && options.forceNew) {
+        socketInstance.removeAllListeners();
+        socketInstance.disconnect();
+        socketInstance = null;
+    }
+
+    // LiteSpeed/OpenLiteSpeed on socket.metatest.app does not proxy WebSocket
+    // upgrades. Engine.IO then aborts with "WebSocket is closed before the
+    // connection is established". Stay on HTTP long-polling. Do not send
+    // extraHeaders — that forces a CORS preflight the proxy also drops.
     socketInstance = io(realtimeUrl, {
         autoConnect: true,
-        transports: ['websocket', 'polling'],
-        withCredentials: true,
-        auth: {
-            token,
-        },
+        transports: ['polling'],
+        upgrade: false,
+        withCredentials: false,
+        auth: { token },
         reconnection: true,
         reconnectionAttempts: 10,
-        reconnectionDelay: 400,
-        reconnectionDelayMax: 4000,
-        timeout: 8000,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        timeout: 20000,
     });
 
     return socketInstance;
@@ -56,7 +63,7 @@ export function getSocket(): Socket | null {
 export function connectSocket(token?: string | null): Socket {
     const socket = createSocket({ token });
 
-    if (!socket.connected) {
+    if (!socket.connected && !(socket as Socket & { active?: boolean }).active) {
         socket.connect();
     }
 
@@ -64,11 +71,7 @@ export function connectSocket(token?: string | null): Socket {
 }
 
 export function disconnectSocket(): void {
-    if (!socketInstance) {
-        return;
-    }
-
-    socketInstance.disconnect();
+    socketInstance?.disconnect();
 }
 
 export function destroySocket(): void {
@@ -83,16 +86,12 @@ export function destroySocket(): void {
 
 export function refreshSocketAuthToken(token: string): Socket {
     const socket = createSocket();
-
-    socket.auth = {
-        token,
-    };
+    socket.auth = { token };
 
     if (socket.connected) {
         socket.disconnect();
+        socket.connect();
     }
-
-    socket.connect();
 
     return socket;
 }
