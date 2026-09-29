@@ -94,7 +94,7 @@ class AuthService {
                     fullName || 'کاربر مهمان',
 
                 avatarUrl:
-                    profile.avatar_url ?? '/user_default.png',
+                    this.normalizeAvatarUrl(profile.avatar_url) ?? '/avatars/user_default.png',
 
                 firstName,
                 lastName,
@@ -116,18 +116,17 @@ class AuthService {
     }
 
     private normalizeAvatarUrl(value?: string | null): string | null {
-        if (!value) {
-            return null;
+        if (!value) return null;
+        const trimmed = String(value).trim();
+        if (!trimmed) return null;
+
+        if (/^https?:\/\//i.test(trimmed)) {
+            return trimmed.replace(/\/api\/(?=avatars\/)/i, '/');
         }
 
-        if (value.startsWith('http://') || value.startsWith('https://')) {
-            return value;
-        }
-
-        const baseUrl = env.MAIN_BACKEND_URL.replace(/\/$/, '');
-        const path = value.startsWith('/') ? value : `/${value}`;
-
-        return `${baseUrl}${path}`;
+        const origin = env.MAIN_BACKEND_ORIGIN.replace(/\/+$/, '');
+        const avatarPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+        return `${origin}${avatarPath}`;
     }
 }
 

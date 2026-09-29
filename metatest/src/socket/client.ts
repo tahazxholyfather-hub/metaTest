@@ -1,4 +1,3 @@
-//clients.ts
 import { io, Socket } from 'socket.io-client';
 import { getAccessToken } from './token';
 
@@ -9,13 +8,17 @@ export interface CreateSocketOptions {
     forceNew?: boolean;
 }
 
+function getRealtimeUrl(): string {
+    const fromEnv =
+        import.meta.env.VITE_REALTIME_URL ||
+        import.meta.env.VITE_REALTIME_API_URL ||
+        'https://socket.metatest.app';
+
+    return String(fromEnv).replace(/\/+$/, '');
+}
+
 export function createSocket(options: CreateSocketOptions = {}): Socket {
-    const realtimeUrl = 'https://socket.metatest.app/';
-
-    if (!realtimeUrl) {
-        throw new Error('Missing VITE_REALTIME_URL environment variable');
-    }
-
+    const realtimeUrl = getRealtimeUrl();
     const token = options.token ?? getAccessToken();
 
     if (!token) {
@@ -23,23 +26,31 @@ export function createSocket(options: CreateSocketOptions = {}): Socket {
     }
 
     if (socketInstance && !options.forceNew) {
+        socketInstance.auth = { token };
         return socketInstance;
     }
 
+    if (socketInstance && options.forceNew) {
+        socketInstance.removeAllListeners();
+        socketInstance.disconnect();
+        socketInstance = null;
+    }
+
+    // LiteSpeed/OpenLiteSpeed on socket.metatest.app does not proxy WebSocket
+    // upgrades. Engine.IO then aborts with "WebSocket is closed before the
+    // connection is established". Stay on HTTP long-polling. Do not send
+    // extraHeaders — that forces a CORS preflight the proxy also drops.
     socketInstance = io(realtimeUrl, {
         autoConnect: true,
         transports: ['polling'],
-        auth: {
-            token,
-        },
-        extraHeaders: {
-            Authorization: `Bearer ${token}`,
-        },
+        upgrade: false,
+        withCredentials: false,
+        auth: { token },
         reconnection: true,
         reconnectionAttempts: 10,
-        reconnectionDelay: 500,
+        reconnectionDelay: 1000,
         reconnectionDelayMax: 5000,
-        timeout: 10000,
+        timeout: 20000,
     });
 
     return socketInstance;
@@ -52,7 +63,7 @@ export function getSocket(): Socket | null {
 export function connectSocket(token?: string | null): Socket {
     const socket = createSocket({ token });
 
-    if (!socket.connected) {
+    if (!socket.connected && !(socket as Socket & { active?: boolean }).active) {
         socket.connect();
     }
 
@@ -60,11 +71,7 @@ export function connectSocket(token?: string | null): Socket {
 }
 
 export function disconnectSocket(): void {
-    if (!socketInstance) {
-        return;
-    }
-
-    socketInstance.disconnect();
+    socketInstance?.disconnect();
 }
 
 export function destroySocket(): void {
@@ -79,20 +86,12 @@ export function destroySocket(): void {
 
 export function refreshSocketAuthToken(token: string): Socket {
     const socket = createSocket();
-
-    socket.auth = {
-        token,
-    };
-
-    socket.io.opts.extraHeaders = {
-        Authorization: `Bearer ${token}`,
-    };
+    socket.auth = { token };
 
     if (socket.connected) {
         socket.disconnect();
+        socket.connect();
     }
-
-    socket.connect();
 
     return socket;
 }
