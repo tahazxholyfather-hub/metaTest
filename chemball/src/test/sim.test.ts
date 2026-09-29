@@ -10,6 +10,7 @@ import { findLoose, resolveAll } from "../game/sim";
 import { createInitialBoard, shiftDown } from "../game/spawn";
 import type { RunSummary } from "../game/types";
 import { MemoryPlayerRepository } from "../save/memoryRepository";
+import { normalizeProfile } from "../save/models";
 
 beforeEach(() => {
   resetIds();
@@ -110,6 +111,12 @@ describe("score and difficulty", () => {
     const late = fallSpeed(difficultyFactor(180, 20000));
     expect(late).toBeGreaterThan(early * 2);
     expect(early).toBeLessThan(30);
+    expect(fallSpeed(0, 0)).toBeLessThan(1);
+    expect(fallSpeed(0, 40)).toBeGreaterThan(fallSpeed(0, 0) * 4);
+    const veteran = normalizeProfile({ name: "Nova", totalRuns: 2 });
+    expect(veteran.language).toBe("en");
+    expect(veteran.tourCompleted).toBe(true);
+    expect(normalizeProfile({ totalRuns: 0, tourCompleted: false }).tourCompleted).toBe(false);
   });
 });
 
@@ -153,7 +160,7 @@ describe("engine", () => {
     await engine.init();
     engine.animScale = 0.001;
     engine.setLayout(makeLayout(390, 844));
-    for (let frame = 0; frame < 900 && !finished.summary; frame += 1) engine.update(0.05);
+    for (let frame = 0; frame < 8000 && !finished.summary; frame += 1) engine.update(0.05);
     const summary = finished.summary;
     expect(summary).toBeTruthy();
     await new Promise((resolve) => setTimeout(resolve, 30));

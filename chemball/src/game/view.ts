@@ -57,4 +57,6 @@ export interface ViewState {
   ring: { x: number; y: number; r: number; t: number; massive: boolean } | null;
   banner: string;
   bannerLife: number;
+  guide: { x: number; y: number; r: number } | null;
+  nextLabel: string;
 }

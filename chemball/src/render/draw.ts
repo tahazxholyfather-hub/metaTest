@@ -35,7 +35,7 @@ export function renderFrame(ctx: CanvasRenderingContext2D, view: ViewState, dpr:
     ctx.font = "600 11px Outfit, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
-    ctx.fillText("NEXT", view.next.x, view.next.y - view.next.r * view.next.scale - 8);
+    ctx.fillText(view.nextLabel, view.next.x, view.next.y - view.next.r * view.next.scale - 8);
     ctx.globalAlpha = 1;
   }
   for (const float of view.floats) drawFloat(ctx, float);
@@ -216,25 +216,25 @@ function drawBall(ctx: CanvasRenderingContext2D, ball: ViewBall): void {
   ctx.fillStyle = gradient;
   ctx.fill();
   ctx.lineWidth = Math.max(1.25, radius * 0.055);
-  ctx.strokeStyle = "rgba(255,255,255,0.28)";
+  ctx.strokeStyle = "rgba(255,255,255,0.45)";
   ctx.stroke();
-  ctx.fillStyle = "rgba(255,255,255,0.5)";
+  ctx.fillStyle = "rgba(255,255,255,0.55)";
   ctx.beginPath();
-  ctx.ellipse(x - radius * 0.28, y - radius * 0.34, radius * 0.26, radius * 0.14, -0.7, 0, Math.PI * 2);
+  ctx.ellipse(x - radius * 0.28, y - radius * 0.34, radius * 0.22, radius * 0.12, -0.7, 0, Math.PI * 2);
   ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x, y, radius * 0.72, 0, Math.PI * 2);
+  ctx.fillStyle = style.glow;
+  ctx.globalAlpha = ball.alpha * 0.96;
+  ctx.fill();
+  ctx.globalAlpha = ball.alpha;
   if (ball.kind === "material") {
-    drawIcon(ctx, ball.icon, x, y - radius * 0.08, radius);
-    ctx.fillStyle = style.ink;
-    ctx.font = `700 ${Math.max(8, radius * 0.28)}px "JetBrains Mono", monospace`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(ball.glyph, x, y + radius * 0.48);
+    drawIcon(ctx, ball.icon, x, y - radius * 0.16, radius * 1.35, style.ink);
+    paintGlyph(ctx, ball.glyph, x, y + radius * 0.46, Math.max(9, radius * 0.34), style.ink);
   } else {
-    ctx.fillStyle = style.ink;
-    ctx.font = `700 ${radius * (ball.glyph.length > 1 ? 0.48 : 0.68)}px "JetBrains Mono", monospace`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(ball.glyph, x, y + radius * 0.02);
+    drawSigil(ctx, ball.icon || ball.glyph, x, y - radius * 0.3, radius * 0.34, style.ink);
+    const letters = ball.glyph.length;
+    paintGlyph(ctx, ball.glyph, x, y + radius * 0.2, radius * (letters > 1 ? 0.52 : 0.7), style.ink);
   }
   if (ball.frost) {
     ctx.strokeStyle = "rgba(230, 250, 255, 0.85)";
@@ -246,49 +246,242 @@ function drawBall(ctx: CanvasRenderingContext2D, ball: ViewBall): void {
   ctx.restore();
 }
 
-function drawIcon(ctx: CanvasRenderingContext2D, icon: string, x: number, y: number, radius: number): void {
+function paintGlyph(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  size: number,
+  color: string,
+): void {
+  ctx.save();
+  ctx.font = `800 ${size}px "JetBrains Mono", monospace`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.lineJoin = "round";
+  ctx.miterLimit = 2;
+  ctx.lineWidth = Math.max(2, size * 0.16);
+  ctx.strokeStyle = "rgba(255,255,255,0.88)";
+  ctx.strokeText(text, x, y);
+  ctx.fillStyle = color;
+  ctx.fillText(text, x, y);
+  ctx.restore();
+}
+
+function drawSigil(
+  ctx: CanvasRenderingContext2D,
+  id: string,
+  x: number,
+  y: number,
+  size: number,
+  color: string,
+): void {
   ctx.save();
   ctx.translate(x, y);
-  ctx.strokeStyle = "rgba(255,255,255,0.92)";
-  ctx.fillStyle = "rgba(255,255,255,0.88)";
-  ctx.lineWidth = Math.max(1.2, radius * 0.07);
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = Math.max(1.4, size * 0.16);
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  const r = size;
+  if (id === "H") {
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.72, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.18, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (id === "O") {
+    ctx.beginPath();
+    ctx.arc(-r * 0.28, 0, r * 0.42, 0, Math.PI * 2);
+    ctx.arc(r * 0.28, 0, r * 0.42, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (id === "C") {
+    ctx.beginPath();
+    for (let i = 0; i < 6; i += 1) {
+      const angle = -Math.PI / 2 + (i * Math.PI) / 3;
+      const px = Math.cos(angle) * r * 0.78;
+      const py = Math.sin(angle) * r * 0.78;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.stroke();
+  } else if (id === "N") {
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.55, 0);
+    ctx.lineTo(r * 0.55, 0);
+    ctx.moveTo(-r * 0.55, -r * 0.28);
+    ctx.lineTo(r * 0.55, -r * 0.28);
+    ctx.moveTo(-r * 0.55, r * 0.28);
+    ctx.lineTo(r * 0.55, r * 0.28);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(-r * 0.55, 0, r * 0.16, 0, Math.PI * 2);
+    ctx.arc(r * 0.55, 0, r * 0.16, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (id === "Na" || id === "K") {
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 0.85);
+    ctx.lineTo(r * 0.7, -r * 0.28);
+    ctx.lineTo(r * 0.7, r * 0.45);
+    ctx.lineTo(0, r * 0.9);
+    ctx.lineTo(-r * 0.7, r * 0.45);
+    ctx.lineTo(-r * 0.7, -r * 0.28);
+    ctx.closePath();
+    ctx.stroke();
+    if (id === "K") {
+      ctx.beginPath();
+      ctx.arc(0, r * 0.05, r * 0.16, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (id === "Cl") {
+    ctx.beginPath();
+    for (let row = -1; row <= 1; row += 1) {
+      ctx.moveTo(-r * 0.8, row * r * 0.38);
+      ctx.quadraticCurveTo(-r * 0.3, row * r * 0.38 - r * 0.28, 0, row * r * 0.38);
+      ctx.quadraticCurveTo(r * 0.3, row * r * 0.38 + r * 0.28, r * 0.8, row * r * 0.38);
+    }
+    ctx.stroke();
+  } else if (id === "Ca") {
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 0.8);
+    ctx.lineTo(0, r * 0.8);
+    ctx.moveTo(-r * 0.7, -r * 0.05);
+    ctx.lineTo(r * 0.7, -r * 0.05);
+    ctx.stroke();
+  } else if (id === "Mg") {
+    spike(ctx, r * 0.9, 8);
+    ctx.stroke();
+  } else if (id === "Fe") {
+    ctx.beginPath();
+    ctx.arc(0, -r * 0.05, r * 0.62, Math.PI * 0.08, Math.PI * 0.92, true);
+    ctx.moveTo(-r * 0.48, r * 0.15);
+    ctx.lineTo(-r * 0.48, r * 0.7);
+    ctx.moveTo(r * 0.48, r * 0.15);
+    ctx.lineTo(r * 0.48, r * 0.7);
+    ctx.stroke();
+  } else if (id === "S") {
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 0.85);
+    ctx.lineTo(r * 0.55, 0);
+    ctx.lineTo(0, r * 0.85);
+    ctx.lineTo(-r * 0.55, 0);
+    ctx.closePath();
+    ctx.stroke();
+  } else if (id === "Al") {
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.7, -r * 0.2);
+    ctx.lineTo(r * 0.15, -r * 0.7);
+    ctx.lineTo(r * 0.7, r * 0.15);
+    ctx.lineTo(-r * 0.15, r * 0.65);
+    ctx.closePath();
+    ctx.stroke();
+  } else {
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.4, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawIcon(
+  ctx: CanvasRenderingContext2D,
+  icon: string,
+  x: number,
+  y: number,
+  radius: number,
+  ink: string,
+): void {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.strokeStyle = ink;
+  ctx.fillStyle = ink;
+  ctx.lineWidth = Math.max(1.5, radius * 0.07);
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
   const r = radius * 0.34;
   if (icon === "water" || icon === "charged") {
     ctx.beginPath();
-    ctx.moveTo(0, -r);
-    ctx.bezierCurveTo(r * 0.95, r * 0.1, r * 0.7, r, 0, r);
-    ctx.bezierCurveTo(-r * 0.7, r, -r * 0.95, r * 0.1, 0, -r);
+    ctx.moveTo(0, -r * 1.15);
+    ctx.bezierCurveTo(r * 1.05, r * 0.05, r * 0.75, r * 1.05, 0, r * 1.05);
+    ctx.bezierCurveTo(-r * 0.75, r * 1.05, -r * 1.05, r * 0.05, 0, -r * 1.15);
     ctx.fill();
+    if (icon === "charged") {
+      ctx.fillStyle = "rgba(255,255,255,0.92)";
+      ctx.beginPath();
+      ctx.moveTo(r * 0.12, -r * 0.45);
+      ctx.lineTo(-r * 0.28, r * 0.05);
+      ctx.lineTo(r * 0.02, r * 0.05);
+      ctx.lineTo(-r * 0.1, r * 0.55);
+      ctx.lineTo(r * 0.38, -r * 0.08);
+      ctx.lineTo(r * 0.05, -r * 0.08);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = ink;
+    }
   } else if (icon === "fire") {
     ctx.beginPath();
-    ctx.moveTo(0, -r * 1.15);
-    ctx.bezierCurveTo(r, -r * 0.1, r * 0.7, r * 0.9, 0, r);
-    ctx.bezierCurveTo(-r * 0.85, r * 0.45, -r * 0.7, -r * 0.2, 0, -r * 1.15);
+    ctx.moveTo(0, -r * 1.25);
+    ctx.bezierCurveTo(r * 1.05, -r * 0.15, r * 0.8, r * 0.95, 0, r);
+    ctx.bezierCurveTo(-r * 0.95, r * 0.5, -r * 0.85, -r * 0.2, 0, -r * 1.25);
     ctx.fill();
-  } else if (icon === "steam" || icon === "smoke") {
+  } else if (icon === "steam") {
     ctx.beginPath();
-    ctx.arc(-r * 0.45, r * 0.15, r * 0.38, 0, Math.PI * 2);
-    ctx.arc(r * 0.15, -r * 0.05, r * 0.48, 0, Math.PI * 2);
-    ctx.arc(r * 0.5, r * 0.28, r * 0.28, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (icon === "acid" || icon === "corrosion") {
-    for (let i = 0; i < 3; i += 1) {
-      ctx.beginPath();
-      ctx.arc(-r * 0.45 + i * r * 0.45, i === 1 ? -r * 0.15 : r * 0.2, r * 0.28, 0, Math.PI * 2);
-      ctx.stroke();
+    for (let col = -1; col <= 1; col += 1) {
+      const x0 = col * r * 0.48;
+      ctx.moveTo(x0, r * 0.7);
+      ctx.bezierCurveTo(x0 - r * 0.35, r * 0.15, x0 + r * 0.35, -r * 0.15, x0, -r * 0.75);
     }
-  } else if (icon === "explosive") {
-    spike(ctx, r * 1.05, 10);
-    ctx.fill();
-  } else if (icon === "ice" || icon === "crystal") {
+    ctx.stroke();
+  } else if (icon === "smoke") {
     ctx.beginPath();
-    ctx.moveTo(0, -r);
-    ctx.lineTo(r * 0.72, 0);
-    ctx.lineTo(0, r);
-    ctx.lineTo(-r * 0.72, 0);
+    ctx.arc(-r * 0.42, r * 0.2, r * 0.4, 0, Math.PI * 2);
+    ctx.arc(r * 0.12, -r * 0.12, r * 0.5, 0, Math.PI * 2);
+    ctx.arc(r * 0.5, r * 0.28, r * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (icon === "acid") {
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.7, -r * 0.85);
+    ctx.lineTo(r * 0.7, -r * 0.85);
+    ctx.lineTo(r * 0.28, r * 0.15);
+    ctx.lineTo(r * 0.45, r * 0.95);
+    ctx.lineTo(-r * 0.45, r * 0.95);
+    ctx.lineTo(-r * 0.28, r * 0.15);
     ctx.closePath();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, r * 0.45, r * 0.14, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (icon === "corrosion") {
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.78, 0.4, Math.PI * 1.7);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(r * 0.15, -r * 0.05, r * 0.22, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (icon === "explosive") {
+    spike(ctx, r * 1.15, 10);
+    ctx.fill();
+  } else if (icon === "ice") {
+    ctx.beginPath();
+    for (let i = 0; i < 6; i += 1) {
+      const angle = (i * Math.PI) / 3;
+      ctx.moveTo(0, 0);
+      ctx.lineTo(Math.cos(angle) * r, Math.sin(angle) * r);
+    }
+    ctx.stroke();
+  } else if (icon === "crystal") {
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 1.05);
+    ctx.lineTo(r * 0.78, 0);
+    ctx.lineTo(0, r * 1.05);
+    ctx.lineTo(-r * 0.78, 0);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.78, 0);
+    ctx.lineTo(r * 0.78, 0);
     ctx.stroke();
   } else if (icon === "energy") {
     ctx.beginPath();

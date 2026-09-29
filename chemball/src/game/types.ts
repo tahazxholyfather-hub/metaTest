@@ -134,6 +134,8 @@ export interface HudSnapshot {
   hint: boolean;
   sound: boolean;
   discovered: string[];
+  language: "en" | "fa";
+  tourCompleted: boolean;
 }
 
 export interface DiscoveryNotice {

@@ -1,6 +1,7 @@
 import { buildLeaderboard } from "./leaderboard";
 import {
   createDefaultProfile,
+  normalizeProfile,
   type LeaderboardEntry,
   type PlayerProfile,
   type RunRecord,
@@ -68,7 +69,9 @@ export class LocalPlayerRepository implements PlayerRepository {
   private async read(): Promise<SaveBlob> {
     try {
       const fromDb = await idbGet();
-      if (fromDb) return fromDb;
+      if (fromDb?.profile && Array.isArray(fromDb.runs)) {
+        return { profile: normalizeProfile(fromDb.profile), runs: fromDb.runs };
+      }
     } catch {
       /* fall through to localStorage */
     }
@@ -94,7 +97,7 @@ function readLocal(): SaveBlob | null {
   try {
     const parsed = JSON.parse(raw) as SaveBlob;
     if (!parsed.profile || !Array.isArray(parsed.runs)) return null;
-    return parsed;
+    return { profile: normalizeProfile(parsed.profile), runs: parsed.runs };
   } catch {
     return null;
   }

@@ -22,6 +22,12 @@ import {
 } from "./sim";
 import { createInitialBoard, generateRow, nextShotElement, shiftDown } from "./spawn";
 import type { Ball, DiscoveryNotice, HudSnapshot, Layout, RunStats, RunSummary, VisualStyle } from "./types";
+
+export interface TourBeat {
+  kind: "reaction" | "match" | "explode";
+  x: number;
+  y: number;
+}
 import type { FloatText, Particle, ViewBall, ViewState } from "./view";
 
 interface Phase {
@@ -58,6 +64,7 @@ export class GameEngine {
   onHud: (hud: HudSnapshot) => void = () => {};
   onDiscovery: (notice: DiscoveryNotice) => void = () => {};
   onSummary: (summary: RunSummary) => void = () => {};
+  onBeat: (beat: TourBeat) => void = () => {};
 
   private readonly rng: Rng;
   private layout: Layout = makeLayout(390, 844);
@@ -93,6 +100,10 @@ export class GameEngine {
   private banner = "";
   private bannerLife = 0;
   private hudSig = "";
+  private tutorial = false;
+  private gated = false;
+  private told = { reaction: false, match: false, explode: false };
+  private chrome = { next: "NEXT", chain: "CHAIN" };
 
   constructor(
     private readonly repo: PlayerRepository,
@@ -149,6 +160,41 @@ export class GameEngine {
     return this.repo.getLeaderboard(this.profile);
   }
 
+  needsTour(): boolean {
+    return !!this.profile && !this.profile.tourCompleted;
+  }
+
+  beginTutorial(): void {
+    this.restart("teach");
+  }
+
+  releaseBeat(): void {
+    this.gated = false;
+  }
+
+  isCalm(): boolean {
+    return this.ready && !this.shot && !this.phase && !this.chainLive && this.queue.length === 0 && !this.gated;
+  }
+
+  async completeTour(): Promise<void> {
+    this.tutorial = false;
+    this.gated = false;
+    this.profile.tourCompleted = true;
+    await this.repo.savePlayer(this.profile);
+    this.restart("live");
+    this.pause(true);
+  }
+
+  async setLanguage(language: "en" | "fa"): Promise<void> {
+    this.profile.language = language;
+    await this.repo.savePlayer(this.profile);
+    this.emit();
+  }
+
+  setChrome(chrome: { next?: string; chain?: string }): void {
+    this.chrome = { ...this.chrome, ...chrome };
+  }
+
   pointer(x: number, y: number): void {
     const dx = x - this.layout.launcherX;
     const dy = y - this.layout.launcherY;
@@ -175,6 +221,10 @@ export class GameEngine {
     const factor = difficultyFactor(this.elapsed, this.score);
     this.currentId = this.nextId;
     this.nextId = nextShotElement(this.board, this.rng, factor);
+    if (this.tutorial && !this.told.reaction) {
+      this.currentId = "H";
+      this.nextId = "O";
+    }
     this.launcherBorn = 1;
     this.audio.play("shoot");
     if (!this.profile.hintSeen) {
@@ -193,10 +243,13 @@ export class GameEngine {
     this.startChain(ball.id);
   }
 
-  restart(): void {
+  restart(mode: "auto" | "teach" | "live" = "auto"): void {
     this.ending = false;
     this.paused = false;
     this.status = "playing";
+    this.tutorial = mode === "teach";
+    this.gated = false;
+    this.told = { reaction: false, match: false, explode: false };
     this.phase = null;
     this.queue = [];
     this.focus = [];
@@ -219,7 +272,7 @@ export class GameEngine {
     this.stats = emptyStats();
     this.bestAtStart = this.profile.bestScore;
     this.aimAngle = -Math.PI / 2;
-    const teach = this.profile.totalRuns === 0;
+    const teach = mode === "teach" || (mode === "auto" && this.profile.totalRuns === 0 && !this.profile.tourCompleted);
     this.board = createInitialBoard(this.rng, teach);
     this.currentId = teach ? "H" : nextShotElement(this.board, this.rng, 0);
     this.nextId = teach ? "O" : nextShotElement(this.board, this.rng, 0);
@@ -231,7 +284,7 @@ export class GameEngine {
     if (this.dead || !this.ready) return;
     const step = Math.min(0.05, Math.max(0, dt));
     this.updateJuice(step);
-    if (this.ending || this.status === "gameover" || this.paused) return;
+    if (this.ending || this.status === "gameover" || this.paused || this.gated) return;
     this.elapsed += step;
     if (this.phase) {
       this.phase.elapsed += step;
@@ -321,7 +374,7 @@ export class GameEngine {
           scale,
           alpha,
           kind,
-          icon: kind === "material" ? iconFor(ball, icon) : "",
+          icon: kind === "element" ? icon || ball.elementId || "" : iconFor(ball, icon),
           glyph,
           formula,
           style,
@@ -358,7 +411,16 @@ export class GameEngine {
       ring,
       banner: this.banner,
       bannerLife: this.bannerLife,
+      guide: this.guidePoint(),
+      nextLabel: this.chrome.next,
     };
+  }
+
+  private guidePoint(): { x: number; y: number; r: number } | null {
+    const marked = this.board.all().find((ball) => ball.elementId === "O" && ball.col === 3 && ball.row === 4);
+    if (!marked) return null;
+    const point = cellCenter(marked.col, marked.row, this.layout, this.descent);
+    return { x: point.x, y: point.y, r: this.layout.drawRadius };
   }
 
   private startChain(ballId: string): void {
@@ -432,13 +494,35 @@ export class GameEngine {
   private commit(): void {
     if (!this.phase) return;
     const { cmd, prediction } = this.phase;
+    const beatAt = this.beatPoint(cmd);
     const result = applyCommand(this.board, cmd, prediction);
     this.trace.push(result.log);
     this.queue.push(...result.extra);
     this.focus = result.focusIds;
     this.grant(result);
     this.phase = null;
+    this.maybeGate(cmd, beatAt);
     this.emit();
+  }
+
+  private beatPoint(cmd: Command): { x: number; y: number } {
+    if (cmd.type === "explode") return cellCenter(cmd.col, cmd.row, this.layout, this.descent);
+    const id = cmd.type === "reaction" ? cmd.primaryId : "ballIds" in cmd ? cmd.ballIds[0] : undefined;
+    const ball = id ? this.board.getId(id) : undefined;
+    if (ball) return cellCenter(ball.col, ball.row, this.layout, this.descent);
+    return { x: this.layout.width / 2, y: this.layout.height * 0.4 };
+  }
+
+  private maybeGate(cmd: Command, at: { x: number; y: number }): void {
+    if (!this.tutorial) return;
+    let kind: TourBeat["kind"] | null = null;
+    if (cmd.type === "reaction" && !this.told.reaction) kind = "reaction";
+    else if (cmd.type === "match" && !this.told.match) kind = "match";
+    else if (cmd.type === "explode" && !this.told.explode) kind = "explode";
+    if (!kind) return;
+    this.told[kind] = true;
+    this.gated = true;
+    this.onBeat({ kind, x: at.x, y: at.y });
   }
 
   private grant(result: ReturnType<typeof applyCommand>): void {
@@ -480,13 +564,13 @@ export class GameEngine {
     if (bonus > 0) {
       this.score += bonus;
       this.stats.score = this.score;
-      this.banner = `CHAIN ×${this.chainSteps}`;
+      this.banner = `${this.chrome.chain} ×${this.chainSteps}`;
       this.bannerLife = 1.15;
       this.floats.push({
         x: this.layout.width / 2,
         y: this.layout.height * 0.4,
         text: `+${bonus.toLocaleString("en-US")}`,
-        sub: "CHAIN",
+        sub: this.chrome.chain,
         life: 1.05,
         max: 1.05,
         color: "#ffe7a3",
@@ -558,8 +642,9 @@ export class GameEngine {
   }
 
   private descend(dt: number): void {
+    if (this.tutorial) return;
     const factor = difficultyFactor(this.elapsed, this.score);
-    this.descent += fallSpeed(factor) * dt;
+    this.descent += fallSpeed(factor, this.elapsed) * dt;
     if (this.danger()) {
       this.endRun();
       return;
@@ -587,7 +672,7 @@ export class GameEngine {
   }
 
   private drift(dt: number): void {
-    if (this.elapsed < 2.4) return;
+    if (this.tutorial || this.elapsed < 14) return;
     this.driftTimer += dt;
     if (this.driftTimer < 0.9) return;
     this.driftTimer = 0;
@@ -853,7 +938,7 @@ export class GameEngine {
   private look(ball: Ball): Look {
     if (ball.kind === "element" && ball.elementId) {
       const element = getElement(ball.elementId);
-      return { kind: "element", icon: "", glyph: element.symbol, formula: element.name, style: element.visualStyle };
+      return { kind: "element", icon: element.id, glyph: element.symbol, formula: element.name, style: element.visualStyle };
     }
     const material = getMaterial(ball.materialId ?? "water");
     return { kind: "material", icon: material.id, glyph: material.formula, formula: material.name, style: material.visual };
@@ -870,7 +955,7 @@ export class GameEngine {
       scale,
       alpha: 1,
       kind,
-      icon: kind === "material" ? id : "",
+      icon: id,
       glyph,
       formula,
       style,
@@ -911,13 +996,15 @@ export class GameEngine {
       hint: !!this.profile && !this.profile.hintSeen && this.status === "playing",
       sound: this.profile?.sound ?? true,
       discovered: this.profile?.discoveredReactions ?? [],
+      language: this.profile?.language ?? "en",
+      tourCompleted: this.profile?.tourCompleted ?? false,
     };
   }
 
   private emit(): void {
     if (!this.profile) return;
     const hud = this.hud();
-    const sig = `${hud.status}|${hud.score}|${hud.name}|${hud.hint}|${hud.sound}|${hud.bestScore}|${hud.xp}|${hud.level}|${hud.discovered.join(",")}`;
+    const sig = `${hud.status}|${hud.score}|${hud.name}|${hud.hint}|${hud.sound}|${hud.bestScore}|${hud.xp}|${hud.level}|${hud.language}|${hud.tourCompleted}|${hud.discovered.join(",")}`;
     if (sig === this.hudSig) return;
     this.hudSig = sig;
     this.onHud(hud);
