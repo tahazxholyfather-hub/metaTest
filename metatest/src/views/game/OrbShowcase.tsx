@@ -407,6 +407,9 @@ const SHOWCASE_CSS = `
   align-items: flex-end;
   gap: 28px 32px;
 }
+.orb-showcase__pair-cell {
+  grid-column: span 2;
+}
 .orb-showcase__pair {
   display: flex;
   align-items: center;
