@@ -25,7 +25,7 @@ import {
 
 type Screen = "brand" | "home" | "leaders" | "howto" | "settings" | "off" | "play";
 type PlayPhase = "tour" | "countdown" | "live";
-type TourStep = "intro" | "aim" | "water" | "match" | "chain" | "between" | "settle" | "danger";
+type TourStep = "intro" | "aim" | "water" | "match" | "chain" | "settle" | "danger";
 
 const EMPTY_HUD: HudSnapshot = {
   status: "playing",
@@ -50,6 +50,7 @@ export function App() {
   const repoRef = useRef(new LocalPlayerRepository());
   const sessionRef = useRef(false);
   const tourStepRef = useRef<TourStep>("intro");
+  const waitingRef = useRef(false);
   const [ready, setReady] = useState(false);
   const [screen, setScreen] = useState<Screen>("brand");
   const [hud, setHud] = useState<HudSnapshot>(EMPTY_HUD);
@@ -86,6 +87,7 @@ export function App() {
       setPauseOpen(false);
     };
     engine.onBeat = (next) => {
+      waitingRef.current = false;
       setBeat({ x: next.x, y: next.y });
       setTourStep(next.kind === "reaction" ? "water" : next.kind === "match" ? "match" : "chain");
     };
@@ -122,6 +124,7 @@ export function App() {
       sessionRef.current = true;
       if (engine.needsTour()) {
         engine.beginTutorial();
+        waitingRef.current = false;
         setPlayPhase("tour");
         setTourStep("intro");
         setBeat(null);
@@ -139,7 +142,12 @@ export function App() {
       const dt = Math.min(0.034, (now - last) / 1000);
       last = now;
       engine.update(dt);
-      if (tourStepRef.current === "settle" && engine.isCalm()) setTourStep("danger");
+      const stepNow = tourStepRef.current;
+      if (stepNow === "settle" && engine.isCalm()) setTourStep("danger");
+      if (waitingRef.current && (stepNow === "water" || stepNow === "match") && engine.isCalm()) {
+        waitingRef.current = false;
+        setTourStep("danger");
+      }
       const ctx = canvas.getContext("2d");
       if (ctx) renderFrame(ctx, engine.snapshot(), Math.min(2, window.devicePixelRatio || 1));
       frame = requestAnimationFrame(loop);
@@ -185,10 +193,24 @@ export function App() {
   };
 
   const finishTour = () => {
+    waitingRef.current = false;
     setDiscovery(null);
     void engineRef.current?.completeTour().then(() => {
       setPlayPhase("countdown");
       setCount(3);
+    });
+  };
+
+  const replayLesson = () => {
+    void engineRef.current?.replayLesson().then(() => {
+      sessionRef.current = false;
+      waitingRef.current = false;
+      setSummary(null);
+      setPauseOpen(false);
+      setDiscovery(null);
+      setBeat(null);
+      setTourStep("intro");
+      setScreen("play");
     });
   };
 
@@ -201,11 +223,12 @@ export function App() {
     }
     if (tourStep === "water" || tourStep === "match") {
       engine.releaseBeat();
-      setTourStep("between");
+      waitingRef.current = true;
       return;
     }
     if (tourStep === "chain") {
       engine.releaseBeat();
+      waitingRef.current = false;
       setTourStep("settle");
       return;
     }
@@ -225,10 +248,14 @@ export function App() {
     formula: reactionFormula(reaction),
     product: materialName(hud.language, reaction.products[0]?.id ?? ""),
   }));
-  const tourCard = tourStep === "between" || tourStep === "settle" ? null : tourStep;
-  const showTour = screen === "play" && playPhase === "tour" && tourCard !== null && !summary;
+  const tourCard = tourStep === "settle" ? "chain" : tourStep;
+  const showTour = screen === "play" && playPhase === "tour" && !summary;
   const tourView = showTour && engineRef.current ? engineRef.current.snapshot() : null;
   const aimLocked = playPhase === "tour" && tourStep !== "aim";
+  const guideLine =
+    tourStep === "aim" && tourView?.current && tourView.guide
+      ? shotLine(tourView.current, tourView.guide)
+      : null;
 
   return (
     <div className="stage">
@@ -261,6 +288,7 @@ export function App() {
             discovered={discovered}
             hidden={hiddenLine(hud.language, REACTIONS.length - discovered.length)}
             onBack={() => setScreen("home")}
+            onReplay={replayLesson}
           />
         )}
         {screen === "settings" && (
@@ -323,7 +351,7 @@ export function App() {
               </button>
             </header>
             {hud.hint && playPhase === "live" && !summary && <div className="hint">{copy.hint}</div>}
-            {discovery && (
+            {discovery && playPhase !== "tour" && (
               <div className="toast" role="status">
                 <p className="kicker">{copy.newReaction}</p>
                 <strong>{discovery.formula}</strong>
@@ -336,6 +364,8 @@ export function App() {
                 copy={copy}
                 step={tourCard}
                 spots={spotsFor(tourCard, tourView, beat)}
+                guide={guideLine}
+                hold={tourStep === "settle"}
                 onNext={onTourNext}
                 onSkip={finishTour}
               />
@@ -398,4 +428,21 @@ export function App() {
       </div>
     </div>
   );
+}
+
+function shotLine(
+  from: { x: number; y: number; r: number },
+  to: { x: number; y: number; r: number },
+): { x1: number; y1: number; x2: number; y2: number } {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len;
+  const uy = dy / len;
+  return {
+    x1: from.x + ux * from.r * 1.05,
+    y1: from.y + uy * from.r * 1.05,
+    x2: to.x - ux * to.r * 1.25,
+    y2: to.y - uy * to.r * 1.25,
+  };
 }

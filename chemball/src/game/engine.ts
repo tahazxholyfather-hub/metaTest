@@ -185,6 +185,12 @@ export class GameEngine {
     this.pause(true);
   }
 
+  async replayLesson(): Promise<void> {
+    this.profile.tourCompleted = false;
+    await this.repo.savePlayer(this.profile);
+    this.emit();
+  }
+
   async setLanguage(language: "en" | "fa"): Promise<void> {
     this.profile.language = language;
     await this.repo.savePlayer(this.profile);
@@ -196,6 +202,10 @@ export class GameEngine {
   }
 
   pointer(x: number, y: number): void {
+    if (this.tutorial && !this.told.reaction) {
+      this.lockGuideAim();
+      return;
+    }
     const dx = x - this.layout.launcherX;
     const dy = y - this.layout.launcherY;
     let angle = Math.atan2(dy, dx);
@@ -210,6 +220,7 @@ export class GameEngine {
   shoot(): void {
     if (!this.ready || this.ending || this.paused || this.status !== "playing") return;
     if (this.shot || this.phase || this.queue.length || this.chainLive) return;
+    if (this.tutorial && !this.told.reaction) this.lockGuideAim();
     const angle = this.aimAngle;
     this.shot = {
       elementId: this.currentId,
@@ -277,11 +288,13 @@ export class GameEngine {
     this.currentId = teach ? "H" : nextShotElement(this.board, this.rng, 0);
     this.nextId = teach ? "O" : nextShotElement(this.board, this.rng, 0);
     this.launcherBorn = 1;
+    if (teach) this.lockGuideAim();
     this.emit();
   }
 
   update(dt: number): void {
     if (this.dead || !this.ready) return;
+    if (this.tutorial && !this.told.reaction) this.lockGuideAim();
     const step = Math.min(0.05, Math.max(0, dt));
     this.updateJuice(step);
     if (this.ending || this.status === "gameover" || this.paused || this.gated) return;
@@ -513,10 +526,20 @@ export class GameEngine {
     return { x: this.layout.width / 2, y: this.layout.height * 0.4 };
   }
 
+  private lockGuideAim(): void {
+    const guide = this.guidePoint();
+    if (!guide) return;
+    const dx = guide.x - this.layout.launcherX;
+    const dy = guide.y - this.layout.launcherY;
+    let angle = Math.atan2(dy, dx);
+    if (angle > 0) angle = dx < 0 ? -Math.PI + 0.18 : -0.18;
+    this.aimAngle = clamp(angle, -Math.PI + 0.18, -0.18);
+  }
+
   private maybeGate(cmd: Command, at: { x: number; y: number }): void {
     if (!this.tutorial) return;
     let kind: TourBeat["kind"] | null = null;
-    if (cmd.type === "reaction" && !this.told.reaction) kind = "reaction";
+    if (cmd.type === "reaction" && cmd.reactionId === "water" && !this.told.reaction) kind = "reaction";
     else if (cmd.type === "match" && !this.told.match) kind = "match";
     else if (cmd.type === "explode" && !this.told.explode) kind = "explode";
     if (!kind) return;

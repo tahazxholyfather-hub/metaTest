@@ -165,11 +165,13 @@ export function HowToPage({
   discovered,
   hidden,
   onBack,
+  onReplay,
 }: {
   copy: Copy;
   discovered: Array<{ id: string; formula: string; product: string }>;
   hidden: string;
   onBack: () => void;
+  onReplay: () => void;
 }) {
   const steps = [
     [copy.how1t, copy.how1d],
@@ -183,6 +185,9 @@ export function HowToPage({
         {copy.back}
       </button>
       <h1>{copy.howTitle}</h1>
+      <button className="primary lesson" type="button" data-testid="replay-lesson" onClick={onReplay}>
+        {copy.tourReplay}
+      </button>
       <div className="page-body">
         {steps.map(([title, body], index) => (
           <article className="step" key={title}>
@@ -320,12 +325,16 @@ export function TourLayer({
   copy,
   step,
   spots,
+  guide,
+  hold,
   onNext,
   onSkip,
 }: {
   copy: Copy;
   step: "intro" | "aim" | "water" | "match" | "chain" | "danger";
   spots: Spot[];
+  guide: { x1: number; y1: number; x2: number; y2: number } | null;
+  hold?: boolean;
   onNext: () => void;
   onSkip: () => void;
 }) {
@@ -341,7 +350,8 @@ export function TourLayer({
             : step === "chain"
               ? [copy.tourChainT, copy.tourChainD, copy.next]
               : [copy.tourDangerT, copy.tourDangerD, copy.ready];
-  const high = step === "aim" || step === "danger";
+  const high = step === "intro" || step === "aim" || step === "danger";
+  const action = hold ? "" : card[2];
   return (
     <div className="tour" data-testid="tour">
       <svg className="tour-dim" aria-hidden>
@@ -357,8 +367,13 @@ export function TourLayer({
             )}
           </mask>
         </defs>
-        <rect width="100%" height="100%" fill="rgba(5,7,14,0.72)" mask="url(#tour-holes)" />
+        <rect width="100%" height="100%" fill="rgba(5,7,14,0.58)" mask="url(#tour-holes)" />
       </svg>
+      {guide && (
+        <svg className="tour-guide" aria-hidden>
+          <path d={`M ${guide.x1} ${guide.y1} L ${guide.x2} ${guide.y2}`} />
+        </svg>
+      )}
       {spots.map((spot, index) => (
         <div
           key={index}
@@ -377,9 +392,9 @@ export function TourLayer({
           <button className="skip" type="button" data-testid="tour-skip" onClick={onSkip}>
             {copy.skip}
           </button>
-          {card[2] && (
+          {action && (
             <button className="next" type="button" data-testid="tour-next" onClick={onNext}>
-              {card[2]}
+              {action}
             </button>
           )}
         </div>
@@ -393,6 +408,10 @@ export function spotsFor(
   view: ViewState,
   beat: { x: number; y: number } | null,
 ): Spot[] {
+  if (step === "intro") {
+    if (view.current) return [{ x: view.current.x, y: view.current.y, r: view.current.r * 1.65 }];
+    return [{ x: view.launcherX, y: view.launcherY, r: 40 }];
+  }
   if (step === "aim") {
     const spots: Spot[] = [];
     if (view.current) spots.push({ x: view.current.x, y: view.current.y, r: view.current.r * 1.35 });

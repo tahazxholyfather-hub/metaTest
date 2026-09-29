@@ -179,6 +179,18 @@ describe("engine", () => {
     expect(engine.trace.join(" | ")).toContain("reaction:water");
     expect(engine.trace.join(" | ")).toContain("match:water");
   });
+
+  it("keeps the lesson shot on oxygen when the pointer misses", async () => {
+    const engine = new GameEngine(new MemoryPlayerRepository(), createSilentSfx(), 11);
+    await engine.init();
+    engine.animScale = 0.001;
+    engine.beginTutorial();
+    engine.setLayout(makeLayout(390, 844));
+    engine.pointer(12, 820);
+    engine.shoot();
+    for (let frame = 0; frame < 280; frame += 1) engine.update(1 / 60);
+    expect(engine.trace.join(" | ")).toContain("reaction:water");
+  });
 });
 
 function anchored(): Board {
