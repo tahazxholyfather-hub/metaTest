@@ -96,6 +96,10 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    engineRef.current?.setAimPreview(playPhase !== "tour" || tourStep === "aim");
+  }, [playPhase, tourStep]);
+
+  useEffect(() => {
     engineRef.current?.setChrome({ next: copy.nextBall, chain: copy.chain });
     document.documentElement.lang = hud.language === "fa" ? "fa" : "en";
   }, [copy.chain, copy.nextBall, hud.language]);
@@ -215,7 +219,6 @@ export function App() {
       return;
     }
     if (tourStep === "learn") {
-      engine.releaseBeat();
       setTourStep("danger");
       return;
     }

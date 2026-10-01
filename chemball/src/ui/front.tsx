@@ -355,7 +355,7 @@ export function TourLayer({
             ? [copy.tourLearnT, copy.tourLearnD, copy.next]
             : [copy.tourDangerT, copy.tourDangerD, copy.ready];
   const action = card[2];
-  const raised = step === "hydrogen" || step === "aim" || step === "danger";
+  const place = step === "aim" ? "cine aim" : step === "danger" ? "cine gap low" : step === "hydrogen" ? "cine gap" : "cine";
   return (
     <div className="tour" data-testid="tour">
       <svg className="tour-dim" aria-hidden>
@@ -389,8 +389,8 @@ export function TourLayer({
           }
         />
       ))}
-      <div className={raised ? "cine high" : "cine"} key={step} data-testid="tour-card">
-        <lord-icon src={LORD[step]} trigger="loop" colors="primary:#f4f1ea,secondary:#b7c0cc" />
+      <div className={place} key={step} data-testid="tour-card">
+        {step !== "aim" && <lord-icon src={LORD[step]} trigger="loop" colors="primary:#f4f1ea,secondary:#b7c0cc" />}
         <h2>{card[0]}</h2>
         <p>{card[1]}</p>
         <div className="cine-actions">

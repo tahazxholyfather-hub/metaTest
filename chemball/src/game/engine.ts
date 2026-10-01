@@ -105,6 +105,7 @@ export class GameEngine {
   private gated = false;
   private told = { reaction: false, match: false, explode: false };
   private chrome = { next: "NEXT", chain: "CHAIN" };
+  private previewAim = true;
 
   constructor(
     private readonly repo: PlayerRepository,
@@ -171,6 +172,11 @@ export class GameEngine {
 
   releaseBeat(): void {
     this.gated = false;
+  }
+
+  /** The lesson hides the trajectory until the aim scene. */
+  setAimPreview(visible: boolean): void {
+    this.previewAim = visible;
   }
 
   isCalm(): boolean {
@@ -289,6 +295,7 @@ export class GameEngine {
     this.current = teach ? { kind: "element", id: "H" } : nextAmmo(this.board, this.rng, 0);
     this.next = teach ? { kind: "element", id: "O" } : nextAmmo(this.board, this.rng, 0);
     this.launcherBorn = 1;
+    this.previewAim = !teach;
     if (teach) this.lockGuideAim();
     this.emit();
   }
@@ -397,7 +404,10 @@ export class GameEngine {
         });
       }
     }
-    const traced = this.ready && !this.shot && !this.phase && !this.chainLive ? this.traceAim() : { points: [], ghost: null };
+    const traced =
+      this.previewAim && this.ready && !this.shot && !this.phase && !this.chainLive
+        ? this.traceAim()
+        : { points: [], ghost: null };
     const splash = this.splashView(eased);
     const bolts = this.boltView(eased);
     const ring = this.ringView(eased);
@@ -571,9 +581,10 @@ export class GameEngine {
       const headline = result.materialId ? getMaterial(result.materialId).formula : labelFor(result);
       const xpLine = reaction?.xp ? `+${reaction.xp} XP` : `+${points.toLocaleString("en-US")}`;
       const chainLine = this.chainSteps > 0 ? `CHAIN ×${used}` : "REACTION";
+      const drop = Math.max(108, this.layout.drawRadius * 4.4);
       this.floats.push({
         x: point.x,
-        y: point.y - 8,
+        y: Math.min(this.layout.height * 0.62, point.y + drop),
         text: headline,
         sub: `${chainLine}  ${xpLine}`,
         life: 1.15,

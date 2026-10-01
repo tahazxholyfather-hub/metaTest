@@ -402,21 +402,27 @@ function drawFloat(ctx: CanvasRenderingContext2D, float: ViewState["floats"][num
   ctx.globalAlpha = alpha;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.font = `650 26px "IBM Plex Sans", Manrope, sans-serif`;
-  const titleWidth = ctx.measureText(float.text).width;
+  const chemical = /[₀₁₂₃₄₅₆₇₈₉⁺⁻]/.test(float.text);
+  ctx.font = `650 ${chemical ? 22 : 26}px "IBM Plex Sans", Manrope, sans-serif`;
+  const titleWidth = chemical ? float.text.length * 14 : ctx.measureText(float.text).width;
   ctx.font = `500 12px "IBM Plex Sans", Manrope, sans-serif`;
   const subWidth = ctx.measureText(float.sub).width;
-  const width = Math.max(titleWidth, subWidth) + 28;
-  const height = 54;
+  const width = Math.max(titleWidth, subWidth) + 36;
+  const height = 70;
   ctx.fillStyle = "rgba(247, 244, 238, 0.94)";
-  roundRect(ctx, float.x - width / 2, float.y - height / 2, width, height, 16);
+  roundRect(ctx, float.x - width / 2, float.y - height / 2, width, height, 18);
   ctx.fill();
-  ctx.fillStyle = "#1a1c22";
-  ctx.font = `650 26px "IBM Plex Sans", Manrope, sans-serif`;
-  ctx.fillText(float.text, float.x, float.y - 8);
+  if (chemical) paintSymbol(ctx, float.text, float.x, float.y - 16, 36, "#1a1c22");
+  else {
+    ctx.fillStyle = "#1a1c22";
+    ctx.font = `650 26px "IBM Plex Sans", Manrope, sans-serif`;
+    ctx.fillText(float.text, float.x, float.y - 12);
+  }
   ctx.globalAlpha = alpha * 0.62;
-  ctx.font = `500 11px "IBM Plex Sans", Manrope, sans-serif`;
-  ctx.fillText(float.sub, float.x, float.y + 14);
+  ctx.fillStyle = "#1a1c22";
+  ctx.font = `500 12px "IBM Plex Sans", Manrope, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.fillText(float.sub, float.x, float.y + 18);
   ctx.restore();
 }
 

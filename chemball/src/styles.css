@@ -778,6 +778,7 @@ button, input { font-family: inherit; }
 
 .cine {
   pointer-events: auto;
+  z-index: 2;
   position: absolute;
   left: 22px;
   right: 22px;
@@ -787,9 +788,40 @@ button, input { font-family: inherit; }
   animation: coach-in 0.5s ease both;
 }
 
-.cine.high {
+.cine.aim {
+  left: auto;
+  right: 14px;
+  width: min(158px, 40%);
+  bottom: calc(168px + env(safe-area-inset-bottom));
+  text-align: left;
+}
+
+.cine.aim h2 {
+  font-size: 28px;
+}
+
+.cine.aim p {
+  margin-left: 0;
+}
+
+.cine.aim .cine-actions {
+  justify-content: flex-start;
+}
+
+.cine.gap {
   bottom: auto;
-  top: calc(78px + env(safe-area-inset-top));
+  top: 47%;
+  transform: translateY(-50%);
+  animation-name: cine-gap-in;
+}
+
+.cine.gap.low {
+  top: 64%;
+}
+
+@keyframes cine-gap-in {
+  from { opacity: 0; transform: translateY(calc(-50% + 12px)); }
+  to { opacity: 1; transform: translateY(-50%); }
 }
 
 .cine lord-icon {
@@ -954,6 +986,7 @@ button, input { font-family: inherit; }
   .brand-mark,
   .coach,
   .cine,
+  .cine.gap,
   .toast lord-icon {
     animation: none;
   }
