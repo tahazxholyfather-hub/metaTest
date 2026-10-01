@@ -6,6 +6,7 @@ import EditQuestions from './EditQuestions';
 import InsertQuestions from './InsertQuestions';
 import CurriculumManager from './CurriculumManager';
 import PdfLibraryManager from './PdfLibraryManager';
+import DiscountCodesManager from './DiscountCodesManager';
 import AuthView, { type User } from './AuthView'; // Importing User interface from AuthView
 import Spinner from './Spinner';
 import { flowApi } from '../lib/authApi';
@@ -117,7 +118,8 @@ export default function AdminPanel() {
                             : activeTab === 'insert-questions' ? 'Insert Questions'
                                 : activeTab === 'curriculum' ? 'Curriculum'
                                     : activeTab === 'pdf-library' ? 'PDF Library'
-                                        : 'Repository'
+                                        : activeTab === 'discount-codes' ? 'کد تخفیف'
+                                            : 'Repository'
                     }
                 />
 
@@ -137,6 +139,7 @@ export default function AdminPanel() {
                                 {activeTab === 'insert-questions' && <InsertQuestions />}
                                 {activeTab === 'curriculum' && <CurriculumManager user={user} />}
                                 {activeTab === 'pdf-library' && <PdfLibraryManager user={user} />}
+                                {activeTab === 'discount-codes' && <DiscountCodesManager user={user} />}
                             </div>
                         )}
                     </div>

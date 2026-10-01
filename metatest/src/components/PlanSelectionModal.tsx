@@ -273,7 +273,10 @@ export default function PlanSelectionModal({
             }
 
             const data = res.data || {};
-            const percent = Number(data.percent ?? data.discountPercent ?? 0);
+            const coupon = data.coupon || data;
+            const percent = Number(
+                coupon.percent ?? data.discountPercent ?? data.pricing?.couponPercent ?? 0
+            );
 
             if (!percent || percent <= 0) {
                 const errMsg = data.message || res.message || 'کد تخفیف معتبر نیست.';
@@ -283,9 +286,9 @@ export default function PlanSelectionModal({
             }
 
             setCouponData({
-                code,
+                code: coupon.code || code,
                 percent,
-                couponId: data.couponId ? String(data.couponId) : String(data.id),
+                couponId: String(coupon.id ?? data.couponId ?? data.id ?? ''),
                 message: data.message ?? res.message,
             });
             toast.success(`تخفیف ${percent}٪ با موفقیت اعمال شد.`);

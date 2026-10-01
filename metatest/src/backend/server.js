@@ -401,6 +401,19 @@ app.post('/api/flow', requireToken, async (req, res) => {
                 await adminController.handleAdminInsertQuestions(req, res);
                 break;
 
+            case 'Admin_get_discount_codes':
+                await adminController.handleAdminGetDiscountCodes(req, res);
+                break;
+            case 'Admin_save_discount_code':
+                await adminController.handleAdminSaveDiscountCode(req, res);
+                break;
+            case 'Admin_toggle_discount_code':
+                await adminController.handleAdminToggleDiscountCode(req, res);
+                break;
+            case 'Admin_delete_discount_code':
+                await adminController.handleAdminDeleteDiscountCode(req, res);
+                break;
+
             // =========================================================
 
             default:

@@ -35,7 +35,7 @@ type FilterOption = { id: number | string; title: string };
 
 const DIFFICULTIES = ['آسان', 'متوسط', 'سخت'] as const;
 const PAGE_SIZE = 12;
-const MAX_SELECTED = 50;
+const AUTO_SAMPLE_MAX = 200;
 const IMAGE_BASE = '/images/questions/';
 
 const toIds = (list: Array<string | number>) =>
@@ -258,6 +258,7 @@ export function QuestionSelectorView({
                 mabhas: toIds(selectedMabhas),
                 difficulties,
                 search: search.trim(),
+                includeOptions: true,
             };
             if (mode === 'auto') {
                 payload.sample = true;
@@ -282,8 +283,8 @@ export function QuestionSelectorView({
             setPage(nextPage);
             setHasApplied(true);
             if (mode === 'auto' && !opts?.keepSelection) {
-                setSelected(list.slice(0, MAX_SELECTED));
-                toast.success(`${Math.min(list.length, MAX_SELECTED)} سوال به‌صورت خودکار انتخاب شد.`);
+                setSelected(list);
+                toast.success(`${list.length} سوال به‌صورت خودکار انتخاب شد.`);
             }
         } catch {
             toast.error('ارتباط با سرور برقرار نشد.');
@@ -316,10 +317,6 @@ export function QuestionSelectorView({
     const toggleQuestion = (question: BankQuestion) => {
         setSelected((prev) => {
             if (prev.some((q) => q.id === question.id)) return prev.filter((q) => q.id !== question.id);
-            if (prev.length >= MAX_SELECTED) {
-                toast.error(`حداکثر ${MAX_SELECTED} سوال می‌توانید انتخاب کنید.`);
-                return prev;
-            }
             return [...prev, question];
         });
     };
@@ -375,7 +372,6 @@ export function QuestionSelectorView({
         setSelected((prev) => {
             const next = [...prev];
             for (const q of questions) {
-                if (next.length >= MAX_SELECTED) break;
                 if (!next.some((x) => x.id === q.id)) next.push(q);
             }
             return next;
@@ -575,7 +571,7 @@ export function QuestionSelectorView({
                                     <input
                                         type="range"
                                         min={1}
-                                        max={MAX_SELECTED}
+                                        max={AUTO_SAMPLE_MAX}
                                         value={autoCount}
                                         onChange={(e) => setAutoCount(Number(e.target.value))}
                                         className="w-full accent-[var(--accent)]"
@@ -661,7 +657,7 @@ export function QuestionSelectorView({
                                                 className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center border-2 transition-colors ${
                                                     isOn
                                                         ? 'bg-[var(--accent)] border-[var(--accent)] text-white'
-                                                        : 'bg-[var(--bg-element)] border-[var(--accent)] text-[var(--accent)]'
+                                                        : 'bg-white dark:bg-[var(--bg-element)] border-[var(--accent)] text-[var(--accent)]'
                                                 }`}
                                                 aria-label={isOn ? 'حذف از آزمون' : 'افزودن به آزمون'}
                                                 title={isOn ? 'حذف از آزمون' : 'افزودن به آزمون'}
@@ -678,6 +674,19 @@ export function QuestionSelectorView({
                                                 alt=""
                                                 className="mt-3 max-h-48 object-contain rounded-xl border border-[var(--border)] bg-white"
                                             />
+                                        )}
+                                        {q.options && q.options.length > 0 && (
+                                            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                {q.options.map((opt, i) => (
+                                                    <div
+                                                        key={opt.id}
+                                                        className="px-3 py-2 rounded-xl bg-[var(--bg-element)] border border-[var(--border)] text-[12px] text-[var(--text-primary)] leading-7"
+                                                    >
+                                                        <span className="font-bold ml-1 text-[var(--text-muted)]">{i + 1})</span>
+                                                        <MathRenderer text={opt.text} inline />
+                                                    </div>
+                                                ))}
+                                            </div>
                                         )}
                                         <div className="mt-3">
                                             <button
@@ -761,7 +770,7 @@ export function QuestionSelectorView({
                 <div className="bg-[var(--bg-card)] border border-[var(--border)] shadow-xl rounded-2xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center gap-3">
                     <div className="flex items-center gap-2 text-[12px] font-bold text-[var(--text-primary)] min-w-[110px]">
                         <BookOpen size={16} className="text-[var(--accent)]" />
-                        {selected.length} / {MAX_SELECTED} سوال
+                        {selected.length} سوال
                     </div>
                     <input
                         value={quizName}

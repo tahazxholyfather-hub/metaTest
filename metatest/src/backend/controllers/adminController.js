@@ -3,6 +3,7 @@ const cookie = require('cookie');
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
+const crypto = require('crypto');
 const {
     ensureQuestionTagTables,
     saveQuestionTags,
@@ -29,6 +30,15 @@ const getAdminIdFromRequest = (req) => {
         return Number.isNaN(adminId) ? null : adminId;
     }
     return null;
+};
+
+const requireAdmin = (req, res) => {
+    const adminId = getAdminIdFromRequest(req);
+    if (!adminId) {
+        res.json({ success: false, message: 'Unauthorized' });
+        return null;
+    }
+    return adminId;
 };
 
 // Helper: Only admin with id 1 is allowed to delete records
@@ -1117,6 +1127,186 @@ const handleAdminInsertQuestions = async (req, res) => {
     }
 };
 
+const ensureDiscountCodesTable = async () => {
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS discount_codes (
+            id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+            code varchar(100) NOT NULL,
+            percent decimal(5,2) NOT NULL,
+            active tinyint(1) NOT NULL DEFAULT 1,
+            expires_at datetime DEFAULT NULL,
+            max_uses int(11) DEFAULT NULL,
+            used_count int(11) NOT NULL DEFAULT 0,
+            allowed_plan_ids longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
+            created_at timestamp NOT NULL DEFAULT current_timestamp(),
+            updated_at timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+            PRIMARY KEY (id),
+            UNIQUE KEY code (code)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+    `);
+};
+
+const normalizeDiscountCode = (value) =>
+    String(value || '')
+        .trim()
+        .toUpperCase()
+        .replace(/\s+/g, '');
+
+const generateDiscountCode = () => {
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let out = 'MT';
+    const bytes = crypto.randomBytes(6);
+    for (let i = 0; i < 6; i++) out += alphabet[bytes[i] % alphabet.length];
+    return out;
+};
+
+const mapDiscountRow = (row) => {
+    const maxUses = row.max_uses == null ? null : Number(row.max_uses);
+    const usedCount = Number(row.used_count) || 0;
+    const remaining = maxUses == null ? null : Math.max(0, maxUses - usedCount);
+    return {
+        id: Number(row.id),
+        code: row.code,
+        percent: Number(row.percent),
+        active: Number(row.active) === 1,
+        expires_at: row.expires_at || null,
+        max_uses: maxUses,
+        used_count: usedCount,
+        remaining,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+    };
+};
+
+const handleAdminGetDiscountCodes = async (req, res) => {
+    try {
+        if (requireAdmin(req, res) === null) return;
+        await ensureDiscountCodesTable();
+        const search = typeof req.body.search === 'string' ? req.body.search.trim() : '';
+        const params = [];
+        let where = '1=1';
+        if (search) {
+            where += ' AND code LIKE ?';
+            params.push(`%${search}%`);
+        }
+        const [rows] = await pool.query(
+            `SELECT id, code, percent, active, expires_at, max_uses, used_count, created_at, updated_at
+             FROM discount_codes
+             WHERE ${where}
+             ORDER BY id DESC`,
+            params
+        );
+        res.json({ success: true, codes: rows.map(mapDiscountRow) });
+    } catch (error) {
+        console.error('❌ SQL Error in handleAdminGetDiscountCodes:', error);
+        res.json({ success: false, message: 'خطا در دریافت کدهای تخفیف' });
+    }
+};
+
+const handleAdminSaveDiscountCode = async (req, res) => {
+    try {
+        if (requireAdmin(req, res) === null) return;
+        await ensureDiscountCodesTable();
+
+        const id = req.body.id ? Number(req.body.id) : null;
+        let code = normalizeDiscountCode(req.body.code);
+        const percent = Number(req.body.percent);
+        const maxUsesRaw = req.body.max_uses;
+        const maxUses = maxUsesRaw === '' || maxUsesRaw == null ? null : Number(maxUsesRaw);
+        const active = req.body.active === false || req.body.active === 0 || req.body.active === '0' ? 0 : 1;
+        const expiresAt = req.body.expires_at ? String(req.body.expires_at).trim() || null : null;
+
+        if (!code) {
+            for (let i = 0; i < 8; i++) {
+                const candidate = generateDiscountCode();
+                const [exists] = await pool.query('SELECT id FROM discount_codes WHERE code = ? LIMIT 1', [candidate]);
+                if (exists.length === 0) {
+                    code = candidate;
+                    break;
+                }
+            }
+        }
+        if (!code) {
+            return res.json({ success: false, message: 'کد تخفیف نامعتبر است.' });
+        }
+        if (!Number.isFinite(percent) || percent <= 0 || percent > 100) {
+            return res.json({ success: false, message: 'درصد تخفیف باید بین ۱ تا ۱۰۰ باشد.' });
+        }
+        if (maxUses != null && (!Number.isInteger(maxUses) || maxUses < 1)) {
+            return res.json({ success: false, message: 'تعداد نفرات باید عدد صحیح بزرگ‌تر از صفر باشد.' });
+        }
+
+        if (id) {
+            const [exists] = await pool.query('SELECT id FROM discount_codes WHERE id = ? LIMIT 1', [id]);
+            if (!exists.length) {
+                return res.json({ success: false, message: 'کد تخفیف پیدا نشد.' });
+            }
+            try {
+                await pool.query(
+                    `UPDATE discount_codes
+                     SET code = ?, percent = ?, active = ?, expires_at = ?, max_uses = ?, updated_at = NOW()
+                     WHERE id = ?`,
+                    [code, percent, active, expiresAt, maxUses, id]
+                );
+            } catch (err) {
+                if (err && err.code === 'ER_DUP_ENTRY') {
+                    return res.json({ success: false, message: 'این کد تخفیف از قبل وجود دارد.' });
+                }
+                throw err;
+            }
+            return res.json({ success: true, message: 'کد تخفیف به‌روزرسانی شد.', code });
+        }
+
+        try {
+            await pool.query(
+                `INSERT INTO discount_codes (code, percent, active, expires_at, max_uses, used_count)
+                 VALUES (?, ?, ?, ?, ?, 0)`,
+                [code, percent, active, expiresAt, maxUses]
+            );
+        } catch (err) {
+            if (err && err.code === 'ER_DUP_ENTRY') {
+                return res.json({ success: false, message: 'این کد تخفیف از قبل وجود دارد.' });
+            }
+            throw err;
+        }
+
+        res.json({ success: true, message: 'کد تخفیف ساخته شد.', code });
+    } catch (error) {
+        console.error('❌ SQL Error in handleAdminSaveDiscountCode:', error);
+        res.json({ success: false, message: 'خطا در ذخیره کد تخفیف' });
+    }
+};
+
+const handleAdminToggleDiscountCode = async (req, res) => {
+    try {
+        if (requireAdmin(req, res) === null) return;
+        const id = Number(req.body.id);
+        if (!id) return res.json({ success: false, message: 'شناسه نامعتبر است.' });
+        const [rows] = await pool.query('SELECT active FROM discount_codes WHERE id = ? LIMIT 1', [id]);
+        if (!rows.length) return res.json({ success: false, message: 'کد تخفیف پیدا نشد.' });
+        const next = Number(rows[0].active) === 1 ? 0 : 1;
+        await pool.query('UPDATE discount_codes SET active = ?, updated_at = NOW() WHERE id = ?', [next, id]);
+        res.json({ success: true, active: next === 1 });
+    } catch (error) {
+        console.error('❌ SQL Error in handleAdminToggleDiscountCode:', error);
+        res.json({ success: false, message: 'خطا در تغییر وضعیت کد تخفیف' });
+    }
+};
+
+const handleAdminDeleteDiscountCode = async (req, res) => {
+    try {
+        if (requireSuperAdmin(req, res) === null) return;
+        const id = Number(req.body.id);
+        if (!id) return res.json({ success: false, message: 'شناسه نامعتبر است.' });
+        const [result] = await pool.query('DELETE FROM discount_codes WHERE id = ?', [id]);
+        if (!result.affectedRows) return res.json({ success: false, message: 'کد تخفیف پیدا نشد.' });
+        res.json({ success: true, message: 'کد تخفیف حذف شد.' });
+    } catch (error) {
+        console.error('❌ SQL Error in handleAdminDeleteDiscountCode:', error);
+        res.json({ success: false, message: 'خطا در حذف کد تخفیف' });
+    }
+};
+
 
 module.exports = {
     handleUpdateQuestion,
@@ -1140,5 +1330,9 @@ module.exports = {
     handleAdminDeletePdf,
     // Insert questions (manual + docx auto-import)
     handleAdminParseQuestionsDocx,
-    handleAdminInsertQuestions
+    handleAdminInsertQuestions,
+    handleAdminGetDiscountCodes,
+    handleAdminSaveDiscountCode,
+    handleAdminToggleDiscountCode,
+    handleAdminDeleteDiscountCode,
 };

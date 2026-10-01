@@ -469,7 +469,7 @@ const handleSearchBankQuestions = async (req, res) => {
         const sample = Boolean(body.sample);
         const page = Math.max(1, parseInt(body.page, 10) || 1);
         const pageSize = Math.min(40, Math.max(5, parseInt(body.pageSize, 10) || 12));
-        const sampleSize = Math.min(50, Math.max(1, parseInt(body.sampleSize, 10) || 10));
+        const sampleSize = Math.min(300, Math.max(1, parseInt(body.sampleSize, 10) || 10));
 
         const runFilteredCount = async (requireEditDone) => {
             await ensureQuestionTagTables();
@@ -666,9 +666,12 @@ const handleCreateQuiz = async (req, res) => {
 
     try {
         if (isSelectorQuiz) {
-            const uniqueIds = [...new Set(explicitQuestionIds)].slice(0, 50);
+            const uniqueIds = [...new Set(explicitQuestionIds)];
             if (uniqueIds.length === 0) {
                 return res.json({ success: false, message: "هیچ سوالی انتخاب نشده است." });
+            }
+            if (uniqueIds.length > 1000) {
+                return res.json({ success: false, message: "تعداد سوال‌های انتخاب‌شده بیش از حد مجاز است." });
             }
             const [foundRows] = await pool.query(
                 `SELECT id FROM questions_tam24

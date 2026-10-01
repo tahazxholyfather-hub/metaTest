@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Layers, LogOut, Hexagon, ChevronLeft, ListTree, FileText, FilePlus2 } from 'lucide-react';
+import { LayoutDashboard, Layers, LogOut, Hexagon, ListTree, FileText, FilePlus2, BadgePercent } from 'lucide-react';
 import type { User } from './AuthView';
 
 interface SidebarProps {
@@ -18,6 +18,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpen, setI
         { id: 'insert-questions', label: 'Insert Questions', icon: FilePlus2 },
         { id: 'curriculum', label: 'Curriculum', icon: ListTree },
         { id: 'pdf-library', label: 'PDF Library', icon: FileText },
+        { id: 'discount-codes', label: 'کد تخفیف', icon: BadgePercent },
     ];
 
     return (
