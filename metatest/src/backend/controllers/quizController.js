@@ -1,5 +1,5 @@
 const pool = require('../db');
-const { ensureQuestionTagTables, joinOnTag, matchTagIn } = require('../utils/questionTags');
+const { ensureQuestionTagTables, joinOnTag, matchTagIn, majorityGradeSql, filterTopicsForSelectedGrades } = require('../utils/questionTags');
 
 
 
@@ -287,6 +287,7 @@ const handleGetChaptersBySubject = async (req, res) => {
             SELECT 
                 t.id, 
                 t.title,
+                ${majorityGradeSql('t', { requireEditDone: false })} AS majority_grade_id,
                 COUNT(q.id) AS question_count,
 
                 COUNT(CASE WHEN ua.status = 'correct' THEN 1 END) AS correct_count,
@@ -343,7 +344,10 @@ const handleGetChaptersBySubject = async (req, res) => {
 
         const [rows] = await pool.query(sql, params);
 
-        res.json({ success: true, chapters: rows });
+        res.json({
+            success: true,
+            chapters: filterTopicsForSelectedGrades(rows, gradeId),
+        });
     } catch (error) {
         console.error("❌ SQL Error in handleGetChaptersBySubject:", error);
         res.json({ success: false, message: "Database error fetching chapters" });

@@ -192,6 +192,62 @@ function addTagFilter(parts, params, questionAlias, tagKey, ids) {
     params.push(...matched.params);
 }
 
+function normalizeFaDigits(title) {
+    return String(title || '')
+        .replace(/ي/g, 'ی')
+        .replace(/ك/g, 'ک');
+}
+
+/** Grade ids mentioned in a chapter title. 'دهم' is not counted inside یازدهم/دوازدهم. */
+function gradesFromTopicTitle(title) {
+    const t = normalizeFaDigits(title);
+    const found = new Set();
+    if (t.includes('دوازدهم')) found.add(3);
+    if (t.includes('یازدهم')) found.add(2);
+    const stripped = t.replace(/دوازدهم/g, '\0').replace(/یازدهم/g, '\0');
+    if (stripped.includes('دهم')) found.add(1);
+    return found;
+}
+
+/**
+ * A topic's home grade: most of its primary-tagged فعال/done questions.
+ * Used when the title does not name a grade (e.g. آمار, مشتق).
+ */
+function majorityGradeSql(topicAlias = 't', { requireEditDone = true } = {}) {
+    const editClause = requireEditDone ? "AND q2.edit_status = 'done'" : '';
+    return `(
+        SELECT q2.grade_id
+        FROM questions_tam24 q2
+        WHERE q2.topic_id = ${topicAlias}.id
+          AND q2.status = 'فعال'
+          ${editClause}
+          AND q2.grade_id IS NOT NULL
+        GROUP BY q2.grade_id
+        ORDER BY COUNT(*) DESC, q2.grade_id ASC
+        LIMIT 1
+    )`;
+}
+
+function filterTopicsForSelectedGrades(rows, gradeIds) {
+    const selected = toPositiveIds(gradeIds);
+    if (!selected.length) return rows;
+    const selectedSet = new Set(selected);
+    return (rows || []).filter((row) => {
+        const named = gradesFromTopicTitle(row.title);
+        if (named.size > 0) {
+            for (const g of named) {
+                if (selectedSet.has(g)) return true;
+            }
+            return false;
+        }
+        const maj = Number(row.majority_grade_id);
+        if (Number.isInteger(maj) && maj > 0) {
+            return selectedSet.has(maj);
+        }
+        return true;
+    });
+}
+
 module.exports = {
     ensureQuestionTagTables,
     saveQuestionTags,
@@ -200,4 +256,7 @@ module.exports = {
     matchTagIn,
     addTagFilter,
     toPositiveIds,
+    gradesFromTopicTitle,
+    majorityGradeSql,
+    filterTopicsForSelectedGrades,
 };

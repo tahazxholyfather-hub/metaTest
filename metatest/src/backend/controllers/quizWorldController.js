@@ -14,6 +14,8 @@ const {
     joinOnTag,
     matchTagIn,
     addTagFilter,
+    majorityGradeSql,
+    filterTopicsForSelectedGrades,
 } = require('../utils/questionTags');
 
 
@@ -329,7 +331,9 @@ const handleGetChaptersBySubjects = async (req, res) => {
         const gradeMatch = matchTagIn('q', 'grade', gradeIds);
 
         let sql = `
-            SELECT t.id, t.title, COUNT(DISTINCT q.id) AS question_count, t.subject_id, MIN(q.grade_id) AS grade_id
+            SELECT t.id, t.title, COUNT(DISTINCT q.id) AS question_count, t.subject_id,
+                   MIN(q.grade_id) AS grade_id,
+                   ${majorityGradeSql('t', { requireEditDone: true })} AS majority_grade_id
             FROM questions_tam24 q
             JOIN topics_tam24 t ON ${joinOnTag('q', 't', 'topic')}
             WHERE q.subject_id IN (?)
@@ -349,7 +353,10 @@ const handleGetChaptersBySubjects = async (req, res) => {
         `;
         params.push(MIN_QUESTIONS);
         const [rows] = await pool.query(sql, params);
-        res.json({ success: true, chapters: rows });
+        res.json({
+            success: true,
+            chapters: filterTopicsForSelectedGrades(rows, gradeIds),
+        });
     } catch (error) {
         console.error("❌ SQL Error in handleGetChaptersBySubjects:", error);
         res.json({ success: false, message: "Database error fetching chapters" });
