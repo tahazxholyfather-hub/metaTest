@@ -6,7 +6,7 @@ import type { PlayerProfile, RunRecord } from "../save/models";
 import type { PlayerRepository } from "../save/repository";
 import { Board, createBall } from "./board";
 import { difficultyFactor, fallSpeed } from "./difficulty";
-import { reactionFormula, reactionProductName } from "./formula";
+import { reactionExplanation, reactionFormula, reactionProductName } from "./formula";
 import { cellCenter, cellInside, inBounds, makeLayout, neighborCoords } from "./hex";
 import { mulberry32, type Rng } from "./rng";
 import { chainBonus, levelFromXp, xpFromStats } from "./score";
@@ -20,8 +20,9 @@ import {
   type Command,
   type EffectPrediction,
 } from "./sim";
-import { createInitialBoard, generateRow, nextShotElement, shiftDown } from "./spawn";
-import type { Ball, DiscoveryNotice, HudSnapshot, Layout, RunStats, RunSummary, VisualStyle } from "./types";
+import { applyPower, POWER_LOOK } from "./powers";
+import { createInitialBoard, generateRow, nextAmmo, shiftDown } from "./spawn";
+import type { Ammo, Ball, DiscoveryNotice, HudSnapshot, Layout, RunStats, RunSummary, VisualStyle } from "./types";
 
 export interface TourBeat {
   kind: "reaction" | "match" | "explode";
@@ -83,10 +84,10 @@ export class GameEngine {
   private descent = 0;
   private driftTimer = 0;
   private aimAngle = -Math.PI / 2;
-  private currentId = "H";
-  private nextId = "O";
+  private current: Ammo = { kind: "element", id: "H" };
+  private next: Ammo = { kind: "element", id: "O" };
   private launcherBorn = 1;
-  private shot: { elementId: string; x: number; y: number; vx: number; vy: number } | null = null;
+  private shot: { ammo: Ammo; x: number; y: number; vx: number; vy: number } | null = null;
   private phase: Phase | null = null;
   private queue: Command[] = [];
   private focus: string[] = [];
@@ -223,21 +224,21 @@ export class GameEngine {
     if (this.tutorial && !this.told.reaction) this.lockGuideAim();
     const angle = this.aimAngle;
     this.shot = {
-      elementId: this.currentId,
+      ammo: this.current,
       x: this.layout.launcherX,
       y: this.layout.launcherY - this.layout.drawRadius * 0.2,
       vx: Math.cos(angle),
       vy: Math.sin(angle),
     };
     const factor = difficultyFactor(this.elapsed, this.score);
-    this.currentId = this.nextId;
-    this.nextId = nextShotElement(this.board, this.rng, factor);
+    this.current = this.next;
+    this.next = nextAmmo(this.board, this.rng, factor);
     if (this.tutorial && !this.told.reaction) {
-      this.currentId = "H";
-      this.nextId = "O";
+      this.current = { kind: "element", id: "H" };
+      this.next = { kind: "element", id: "O" };
     }
     this.launcherBorn = 1;
-    this.audio.play("shoot");
+    this.audio.play("orbShoot");
     if (!this.profile.hintSeen) {
       this.profile.hintSeen = true;
       void this.repo.savePlayer(this.profile);
@@ -285,8 +286,8 @@ export class GameEngine {
     this.aimAngle = -Math.PI / 2;
     const teach = mode === "teach" || (mode === "auto" && this.profile.totalRuns === 0 && !this.profile.tourCompleted);
     this.board = createInitialBoard(this.rng, teach);
-    this.currentId = teach ? "H" : nextShotElement(this.board, this.rng, 0);
-    this.nextId = teach ? "O" : nextShotElement(this.board, this.rng, 0);
+    this.current = teach ? { kind: "element", id: "H" } : nextAmmo(this.board, this.rng, 0);
+    this.next = teach ? { kind: "element", id: "O" } : nextAmmo(this.board, this.rng, 0);
     this.launcherBorn = 1;
     if (teach) this.lockGuideAim();
     this.emit();
@@ -328,9 +329,9 @@ export class GameEngine {
 
   snapshot(): ViewState {
     const layout = this.layout;
-    const blankShot = this.ready ? this.makeViewBall(this.currentId, "element", layout.launcherX, layout.launcherY, 1 - this.launcherBorn * 0.25) : null;
+    const blankShot = this.ready ? this.makeAmmoBall(this.current, layout.launcherX, layout.launcherY, 1 - this.launcherBorn * 0.25) : null;
     const next = this.ready
-      ? this.makeViewBall(this.nextId, "element", Math.max(46, layout.drawRadius + 28), layout.launcherY + 10, 0.78)
+      ? this.makeAmmoBall(this.next, Math.max(46, layout.drawRadius + 28), layout.launcherY + 10, 0.78)
       : null;
     const balls: ViewBall[] = [];
     const t = this.phase ? clamp(this.phase.elapsed / Math.max(0.0001, this.phase.duration), 0, 1) : 0;
@@ -392,6 +393,7 @@ export class GameEngine {
           formula,
           style,
           frost: ball.frozenShifts > 0,
+          charge: ball.charge,
         });
       }
     }
@@ -399,9 +401,7 @@ export class GameEngine {
     const splash = this.splashView(eased);
     const bolts = this.boltView(eased);
     const ring = this.ringView(eased);
-    const shot = this.shot
-      ? this.makeViewBall(this.shot.elementId, "element", this.shot.x, this.shot.y, 1)
-      : null;
+    const shot = this.shot ? this.makeAmmoBall(this.shot.ammo, this.shot.x, this.shot.y, 1) : null;
     return {
       width: layout.width,
       height: layout.height,
@@ -470,13 +470,14 @@ export class GameEngine {
           icon: mat.id,
         };
       }
+      this.audio.play("reactionStart");
       this.audio.play(reaction.soundEffect);
     } else if (cmd.type === "match") {
       phase.pulseIds = cmd.ballIds;
       this.audio.play(getMaterial(cmd.materialId).sound);
     } else if (cmd.type === "impact") {
       phase.pulseIds = [cmd.ballId];
-      this.audio.play("attach");
+      this.audio.play("orbCollision");
     } else if (cmd.type === "explode") {
       this.shake = cmd.massive ? 11 : 6;
       this.flash = cmd.massive ? 0.42 : 0.24;
@@ -485,6 +486,14 @@ export class GameEngine {
       this.burst(point.x, point.y, cmd.massive ? 26 : 14, "#ffb15a");
     } else if (cmd.type === "effect") {
       this.audio.play(cmd.behavior === "corrode" ? "acid" : "react");
+    } else if (cmd.type === "drift") {
+      const ball = this.board.getId(cmd.ballId);
+      if (ball) {
+        const from = cellCenter(ball.col, ball.row, this.layout, this.descent);
+        const to = cellCenter(cmd.col, cmd.row, this.layout, this.descent);
+        phase.rise = { id: ball.id, x0: from.x, y0: from.y, x1: to.x, y1: to.y };
+      }
+      this.audio.play("bondForm");
     } else if (cmd.type === "rise") {
       const ball = this.board.getId(cmd.ballId);
       if (ball) {
@@ -558,14 +567,18 @@ export class GameEngine {
       this.score += points;
       this.stats.score = this.score;
       const point = this.effectPoint(result);
+      const reaction = result.reactionId ? getReaction(result.reactionId) : undefined;
+      const headline = result.materialId ? getMaterial(result.materialId).formula : labelFor(result);
+      const xpLine = reaction?.xp ? `+${reaction.xp} XP` : `+${points.toLocaleString("en-US")}`;
+      const chainLine = this.chainSteps > 0 ? `CHAIN ×${used}` : "REACTION";
       this.floats.push({
         x: point.x,
-        y: point.y,
-        text: `+${points.toLocaleString("en-US")}`,
-        sub: `${labelFor(result)} ×${used}`,
-        life: 0.95,
-        max: 0.95,
-        color: colorFor(result.scoreKind),
+        y: point.y - 8,
+        text: headline,
+        sub: `${chainLine}  ${xpLine}`,
+        life: 1.15,
+        max: 1.15,
+        color: "#1a1c22",
       });
       if (this.floats.length > 8) this.floats.splice(0, this.floats.length - 8);
     }
@@ -573,7 +586,11 @@ export class GameEngine {
     this.chainSteps += 1;
     this.combo = Math.min(8, this.combo + 1);
     this.stats.maxCombo = Math.max(this.stats.maxCombo, this.combo);
-    if (result.scoreKind === "reaction" || result.scoreKind === "explosion") this.stats.reactionsCreated += 1;
+    if (result.scoreKind === "reaction" || result.scoreKind === "explosion") {
+      this.stats.reactionsCreated += 1;
+      this.audio.play(this.chainSteps > 1 ? "chainReaction" : "reactionComplete");
+      this.audio.play("comboIncrease");
+    }
     if (result.scoreKind === "match") this.stats.materialsMatched += 1;
     if (result.reactionId) this.discover(result.reactionId);
     if (result.materialId) this.unlock(result.materialId);
@@ -587,17 +604,19 @@ export class GameEngine {
     if (bonus > 0) {
       this.score += bonus;
       this.stats.score = this.score;
-      this.banner = `${this.chrome.chain} ×${this.chainSteps}`;
-      this.bannerLife = 1.15;
+      this.banner = `CHAIN ×${this.chainSteps}`;
+      this.bannerLife = 1.25;
       this.floats.push({
         x: this.layout.width / 2,
-        y: this.layout.height * 0.4,
-        text: `+${bonus.toLocaleString("en-US")}`,
-        sub: this.chrome.chain,
-        life: 1.05,
-        max: 1.05,
-        color: "#ffe7a3",
+        y: this.layout.height * 0.34,
+        text: "PERFECT",
+        sub: `CHAIN ×${this.chainSteps}`,
+        life: 1.2,
+        max: 1.2,
+        color: "#1a1c22",
       });
+      this.audio.play("perfectShot");
+      this.audio.play("chainReaction");
       this.audio.play("discover");
     }
     this.chainLive = false;
@@ -627,10 +646,16 @@ export class GameEngine {
       remain -= distance;
       if (this.shot.x < this.layout.drawRadius) {
         this.shot.x = this.layout.drawRadius;
-        this.shot.vx = Math.abs(this.shot.vx);
+        if (this.shot.vx < 0) {
+          this.shot.vx = Math.abs(this.shot.vx);
+          this.audio.play("orbBounce");
+        }
       } else if (this.shot.x > this.layout.width - this.layout.drawRadius) {
         this.shot.x = this.layout.width - this.layout.drawRadius;
-        this.shot.vx = -Math.abs(this.shot.vx);
+        if (this.shot.vx > 0) {
+          this.shot.vx = -Math.abs(this.shot.vx);
+          this.audio.play("orbBounce");
+        }
       }
       if (this.shot.y <= this.layout.topLimit) {
         this.stick(this.shot.x, this.shot.y);
@@ -655,12 +680,30 @@ export class GameEngine {
       socket = this.closestOf(row0, x, y);
     }
     if (!socket) socket = this.closestSocket(x, y);
-    const elementId = this.shot.elementId;
+    const ammo = this.shot.ammo;
     this.shot = null;
     if (!socket) return;
-    const ball = createBall({ kind: "element", elementId, col: socket.col, row: socket.row });
+    this.audio.play("orbCollision");
+    if (ammo.kind === "power") {
+      const outcome = applyPower(this.board, ammo.id, socket.col, socket.row, hit?.id);
+      this.trace.push(outcome.log);
+      this.burst(x, y, 10, "#f4f1ea");
+      this.chainLive = true;
+      this.chainSteps = 0;
+      this.combo = 1;
+      this.focus = outcome.focusIds;
+      this.queue = outcome.extra;
+      this.lastSig = "";
+      this.audio.play(outcome.sound);
+      if (outcome.scoreBase > 0) {
+        this.score += outcome.scoreBase;
+        this.stats.score = this.score;
+      }
+      return;
+    }
+    const ball = createBall({ kind: "element", elementId: ammo.id, col: socket.col, row: socket.row });
     this.board.add(ball);
-    this.burst(x, y, 8, getElement(elementId).visualStyle.glow);
+    this.burst(x, y, 8, "#f7f4ee");
     this.startChain(ball.id);
   }
 
@@ -786,11 +829,13 @@ export class GameEngine {
     this.profile.discoveredReactions.push(reactionId);
     const reaction = getReaction(reactionId);
     this.audio.play("discover");
+    const productId = reaction.products[0]?.id;
     this.onDiscovery({
       id: `${reactionId}-${this.profile.discoveredReactions.length}`,
       reactionId,
-      formula: reactionFormula(reaction),
+      formula: productId ? getMaterial(productId).formula : reactionFormula(reaction),
       product: reactionProductName(reaction),
+      explanation: reactionExplanation(reaction),
     });
     void this.repo.savePlayer(this.profile);
   }
@@ -983,6 +1028,26 @@ export class GameEngine {
       formula,
       style,
       frost: false,
+      charge: 0,
+    };
+  }
+
+  private makeAmmoBall(ammo: Ammo, x: number, y: number, scale: number): ViewBall {
+    if (ammo.kind === "element") return this.makeViewBall(ammo.id, "element", x, y, scale);
+    const power = POWER_LOOK[ammo.id];
+    return {
+      x,
+      y,
+      r: this.layout.drawRadius,
+      scale,
+      alpha: 1,
+      kind: "element",
+      icon: ammo.id,
+      glyph: power.glyph,
+      formula: power.formula,
+      style: power.style,
+      frost: false,
+      charge: 0,
     };
   }
 
@@ -1000,6 +1065,7 @@ export class GameEngine {
       case "explode":
         return (cmd.massive ? 0.56 : 0.46) * scale;
       case "rise":
+      case "drift":
         return 0.26 * scale;
       case "clear":
         return 0.48 * scale;
@@ -1045,18 +1111,11 @@ function iconFor(ball: Ball, fallback: string): string {
 }
 
 function labelFor(result: ReturnType<typeof applyCommand>): string {
-  if (result.scoreKind === "explosion") return "BOOM";
+  if (result.scoreKind === "explosion") return "Burst";
   if (result.scoreKind === "match" && result.materialId) return getMaterial(result.materialId).name.toUpperCase();
   if (result.scoreKind === "reaction") return "REACT";
   if (result.scoreKind === "clear") return "CLEAR";
   return "SCORE";
-}
-
-function colorFor(kind: ReturnType<typeof applyCommand>["scoreKind"]): string {
-  if (kind === "explosion") return "#ffb15a";
-  if (kind === "match") return "#8dffa8";
-  if (kind === "reaction") return "#9fd8ff";
-  return "#d5dced";
 }
 
 function emptyStats(): RunStats {

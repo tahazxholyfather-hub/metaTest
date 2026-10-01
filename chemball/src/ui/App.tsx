@@ -25,7 +25,7 @@ import {
 
 type Screen = "brand" | "home" | "leaders" | "howto" | "settings" | "off" | "play";
 type PlayPhase = "tour" | "countdown" | "live";
-type TourStep = "intro" | "aim" | "water" | "match" | "chain" | "settle" | "danger";
+type TourStep = "hydrogen" | "oxygen" | "aim" | "learn" | "danger";
 
 const EMPTY_HUD: HudSnapshot = {
   status: "playing",
@@ -49,8 +49,7 @@ export function App() {
   const engineRef = useRef<GameEngine | null>(null);
   const repoRef = useRef(new LocalPlayerRepository());
   const sessionRef = useRef(false);
-  const tourStepRef = useRef<TourStep>("intro");
-  const waitingRef = useRef(false);
+  const tourStepRef = useRef<TourStep>("hydrogen");
   const [ready, setReady] = useState(false);
   const [screen, setScreen] = useState<Screen>("brand");
   const [hud, setHud] = useState<HudSnapshot>(EMPTY_HUD);
@@ -60,7 +59,7 @@ export function App() {
   const [leaveAsk, setLeaveAsk] = useState(false);
   const [pauseOpen, setPauseOpen] = useState(false);
   const [playPhase, setPlayPhase] = useState<PlayPhase>("live");
-  const [tourStep, setTourStep] = useState<TourStep>("intro");
+  const [tourStep, setTourStep] = useState<TourStep>("hydrogen");
   const [beat, setBeat] = useState<{ x: number; y: number } | null>(null);
   const [count, setCount] = useState(3);
   tourStepRef.current = tourStep;
@@ -80,16 +79,15 @@ export function App() {
       setDiscovery(notice);
       window.setTimeout(() => {
         setDiscovery((current) => (current?.id === notice.id ? null : current));
-      }, 1700);
+      }, 2800);
     };
     engine.onSummary = (next) => {
       setSummary(next);
       setPauseOpen(false);
     };
     engine.onBeat = (next) => {
-      waitingRef.current = false;
       setBeat({ x: next.x, y: next.y });
-      setTourStep(next.kind === "reaction" ? "water" : next.kind === "match" ? "match" : "chain");
+      if (next.kind === "reaction") setTourStep("learn");
     };
     void engine.init().then(() => setReady(true));
     return () => {
@@ -124,9 +122,8 @@ export function App() {
       sessionRef.current = true;
       if (engine.needsTour()) {
         engine.beginTutorial();
-        waitingRef.current = false;
         setPlayPhase("tour");
-        setTourStep("intro");
+        setTourStep("hydrogen");
         setBeat(null);
       } else {
         engine.restart("live");
@@ -142,12 +139,6 @@ export function App() {
       const dt = Math.min(0.034, (now - last) / 1000);
       last = now;
       engine.update(dt);
-      const stepNow = tourStepRef.current;
-      if (stepNow === "settle" && engine.isCalm()) setTourStep("danger");
-      if (waitingRef.current && (stepNow === "water" || stepNow === "match") && engine.isCalm()) {
-        waitingRef.current = false;
-        setTourStep("danger");
-      }
       const ctx = canvas.getContext("2d");
       if (ctx) renderFrame(ctx, engine.snapshot(), Math.min(2, window.devicePixelRatio || 1));
       frame = requestAnimationFrame(loop);
@@ -193,7 +184,6 @@ export function App() {
   };
 
   const finishTour = () => {
-    waitingRef.current = false;
     setDiscovery(null);
     void engineRef.current?.completeTour().then(() => {
       setPlayPhase("countdown");
@@ -204,12 +194,11 @@ export function App() {
   const replayLesson = () => {
     void engineRef.current?.replayLesson().then(() => {
       sessionRef.current = false;
-      waitingRef.current = false;
       setSummary(null);
       setPauseOpen(false);
       setDiscovery(null);
       setBeat(null);
-      setTourStep("intro");
+      setTourStep("hydrogen");
       setScreen("play");
     });
   };
@@ -217,19 +206,17 @@ export function App() {
   const onTourNext = () => {
     const engine = engineRef.current;
     if (!engine) return;
-    if (tourStep === "intro") {
+    if (tourStep === "hydrogen") {
+      setTourStep("oxygen");
+      return;
+    }
+    if (tourStep === "oxygen") {
       setTourStep("aim");
       return;
     }
-    if (tourStep === "water" || tourStep === "match") {
+    if (tourStep === "learn") {
       engine.releaseBeat();
-      waitingRef.current = true;
-      return;
-    }
-    if (tourStep === "chain") {
-      engine.releaseBeat();
-      waitingRef.current = false;
-      setTourStep("settle");
+      setTourStep("danger");
       return;
     }
     if (tourStep === "danger") finishTour();
@@ -248,7 +235,7 @@ export function App() {
     formula: reactionFormula(reaction),
     product: materialName(hud.language, reaction.products[0]?.id ?? ""),
   }));
-  const tourCard = tourStep === "settle" ? "chain" : tourStep;
+  const tourCard = tourStep;
   const showTour = screen === "play" && playPhase === "tour" && !summary;
   const tourView = showTour && engineRef.current ? engineRef.current.snapshot() : null;
   const aimLocked = playPhase === "tour" && tourStep !== "aim";
@@ -353,9 +340,15 @@ export function App() {
             {hud.hint && playPhase === "live" && !summary && <div className="hint">{copy.hint}</div>}
             {discovery && playPhase !== "tour" && (
               <div className="toast" role="status">
+                <lord-icon
+                  src="https://cdn.lordicon.com/tqywkdcz.json"
+                  trigger="loop"
+                  colors="primary:#f4f1ea,secondary:#b7c0cc"
+                />
                 <p className="kicker">{copy.newReaction}</p>
                 <strong>{discovery.formula}</strong>
                 <em>{materialName(hud.language, REACTIONS.find((item) => item.id === discovery.reactionId)?.products[0]?.id ?? "")}</em>
+                <p className="why">{discovery.explanation}</p>
               </div>
             )}
             {playPhase === "countdown" && !summary && <Countdown value={count} />}
@@ -365,7 +358,6 @@ export function App() {
                 step={tourCard}
                 spots={spotsFor(tourCard, tourView, beat)}
                 guide={guideLine}
-                hold={tourStep === "settle"}
                 onNext={onTourNext}
                 onSkip={finishTour}
               />

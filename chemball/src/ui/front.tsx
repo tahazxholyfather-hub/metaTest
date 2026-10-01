@@ -321,37 +321,41 @@ export interface Spot {
   wide?: boolean;
 }
 
+const LORD = {
+  hydrogen: "https://cdn.lordicon.com/gqzfzudq.json",
+  oxygen: "https://cdn.lordicon.com/wxnxiano.json",
+  aim: "https://cdn.lordicon.com/iltqorsz.json",
+  learn: "https://cdn.lordicon.com/tqywkdcz.json",
+  danger: "https://cdn.lordicon.com/dnmvmpfk.json",
+} as const;
+
 export function TourLayer({
   copy,
   step,
   spots,
   guide,
-  hold,
   onNext,
   onSkip,
 }: {
   copy: Copy;
-  step: "intro" | "aim" | "water" | "match" | "chain" | "danger";
+  step: "hydrogen" | "oxygen" | "aim" | "learn" | "danger";
   spots: Spot[];
   guide: { x1: number; y1: number; x2: number; y2: number } | null;
-  hold?: boolean;
   onNext: () => void;
   onSkip: () => void;
 }) {
   const card =
-    step === "intro"
+    step === "hydrogen"
       ? [copy.tourIntroT, copy.tourIntroD, copy.next]
-      : step === "aim"
-        ? [copy.tourAimT, copy.tourAimD, ""]
-        : step === "water"
-          ? [copy.tourWaterT, copy.tourWaterD, copy.next]
-          : step === "match"
-            ? [copy.tourMatchT, copy.tourMatchD, copy.next]
-            : step === "chain"
-              ? [copy.tourChainT, copy.tourChainD, copy.next]
-              : [copy.tourDangerT, copy.tourDangerD, copy.ready];
-  const high = step === "intro" || step === "aim" || step === "danger";
-  const action = hold ? "" : card[2];
+      : step === "oxygen"
+        ? [copy.tourOT, copy.tourOD, copy.next]
+        : step === "aim"
+          ? [copy.tourAimT, copy.tourAimD, ""]
+          : step === "learn"
+            ? [copy.tourLearnT, copy.tourLearnD, copy.next]
+            : [copy.tourDangerT, copy.tourDangerD, copy.ready];
+  const action = card[2];
+  const raised = step === "hydrogen" || step === "aim" || step === "danger";
   return (
     <div className="tour" data-testid="tour">
       <svg className="tour-dim" aria-hidden>
@@ -385,10 +389,11 @@ export function TourLayer({
           }
         />
       ))}
-      <div className={high ? "coach high" : "coach"} key={step} data-testid="tour-card">
-        <p className="kicker">{card[0]}</p>
+      <div className={raised ? "cine high" : "cine"} key={step} data-testid="tour-card">
+        <lord-icon src={LORD[step]} trigger="loop" colors="primary:#f4f1ea,secondary:#b7c0cc" />
+        <h2>{card[0]}</h2>
         <p>{card[1]}</p>
-        <div className="coach-actions">
+        <div className="cine-actions">
           <button className="skip" type="button" data-testid="tour-skip" onClick={onSkip}>
             {copy.skip}
           </button>
@@ -404,14 +409,16 @@ export function TourLayer({
 }
 
 export function spotsFor(
-  step: "intro" | "aim" | "water" | "match" | "chain" | "danger",
+  step: "hydrogen" | "oxygen" | "aim" | "learn" | "danger",
   view: ViewState,
   beat: { x: number; y: number } | null,
 ): Spot[] {
-  if (step === "intro") {
-    if (view.current) return [{ x: view.current.x, y: view.current.y, r: view.current.r * 1.65 }];
-    return [{ x: view.launcherX, y: view.launcherY, r: 40 }];
+  if (step === "hydrogen") {
+    if (view.current) return [{ x: view.current.x, y: view.current.y, r: view.current.r * 1.7 }];
+    return [{ x: view.launcherX, y: view.launcherY, r: 42 }];
   }
+  if (step === "oxygen" && view.guide) return [{ x: view.guide.x, y: view.guide.y, r: view.guide.r * 1.55 }];
+  if (step === "learn" && beat) return [{ x: beat.x, y: beat.y, r: 52 }];
   if (step === "aim") {
     const spots: Spot[] = [];
     if (view.current) spots.push({ x: view.current.x, y: view.current.y, r: view.current.r * 1.35 });
@@ -420,9 +427,6 @@ export function spotsFor(
   }
   if (step === "danger") {
     return [{ x: view.width / 2, y: view.dangerY, r: Math.max(80, view.width * 0.38), wide: true }];
-  }
-  if ((step === "water" || step === "match" || step === "chain") && beat) {
-    return [{ x: beat.x, y: beat.y, r: 46 }];
   }
   if (!view.balls.length) return [{ x: view.width / 2, y: view.height * 0.34, r: 110 }];
   let minX = Infinity;

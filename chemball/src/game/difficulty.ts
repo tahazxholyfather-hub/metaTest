@@ -11,17 +11,17 @@ export function difficultyFactor(elapsed: number, score: number): number {
  * `elapsed` defaults to a settled run so callers that omit it see the awake speed.
  */
 export function fallSpeed(factor: number, elapsed = 10_000): number {
-  const settled = 4.2 + Math.pow(factor, 1.45) * 96;
-  const wake = clamp((elapsed - 5) / 18, 0, 1);
-  return settled * (0.08 + 0.92 * wake);
+  const settled = 3.2 + Math.pow(factor, 1.6) * 84;
+  const wake = clamp((elapsed - 14) / 32, 0, 1);
+  return settled * (0.05 + 0.95 * wake);
 }
 
 export function holeChance(factor: number): number {
-  return clamp(0.46 - factor * 0.34, 0.08, 0.5);
+  return clamp(0.58 - factor * 0.36, 0.14, 0.62);
 }
 
 export function materialChance(factor: number): number {
-  return clamp((factor - 0.18) * 0.22, 0, 0.16);
+  return factor < 0 ? 0 : 0;
 }
 
 function clamp(value: number, min: number, max: number): number {

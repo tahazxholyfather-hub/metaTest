@@ -1,6 +1,9 @@
+import { defineElement } from "@lordicon/element";
 import { createRoot } from "react-dom/client";
 import { App } from "./ui/App";
 import "./styles.css";
+
+defineElement();
 
 const root = document.getElementById("root");
 if (!root) throw new Error("Missing root");

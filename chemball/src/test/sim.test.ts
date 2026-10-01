@@ -7,6 +7,7 @@ import { COLS, cellCenter, hexDistance, makeLayout, neighborCoords } from "../ga
 import { mulberry32 } from "../game/rng";
 import { chainBonus, levelFromXp } from "../game/score";
 import { findLoose, resolveAll } from "../game/sim";
+import { applyPower } from "../game/powers";
 import { createInitialBoard, shiftDown } from "../game/spawn";
 import type { RunSummary } from "../game/types";
 import { MemoryPlayerRepository } from "../save/memoryRepository";
@@ -55,16 +56,66 @@ describe("reactions", () => {
     expect(result.log.some((line) => line.startsWith("reaction:carbon-gas"))).toBe(false);
   });
 
-  it("chains water into steam and then an explosion", () => {
-    const board = pocket();
-    const shot = createBall({ kind: "element", elementId: "H", col: 3, row: 5 });
+  it("chains a water collision into steam when fire is beside the product", () => {
+    const board = quenchPocket();
+    const shot = createBall({ kind: "element", elementId: "H", col: 3, row: 3 });
     board.add(shot);
     const result = resolveAll(board, [shot.id], 20);
     expect(result.log).toContain("reaction:water");
-    expect(result.log).toContain("match:water");
-    expect(result.log.some((line) => line === "reaction:steam-blast" || line.startsWith("explosion"))).toBe(true);
-    expect(result.steps).toBeGreaterThanOrEqual(3);
+    expect(result.log.some((line) => line.startsWith("match"))).toBe(false);
+    expect(result.log).toContain("reaction:quench");
+    expect(result.steps).toBeGreaterThanOrEqual(2);
     expect(result.steps).toBeLessThanOrEqual(12);
+  });
+
+  it("leaves three water orbs untouched", () => {
+    const board = anchored();
+    board.add(createBall({ kind: "element", elementId: "C", col: 3, row: 1 }));
+    const ids = [
+      [3, 2],
+      [4, 2],
+      [3, 3],
+    ].map(([col, row]) => {
+      const ball = createBall({ kind: "material", materialId: "water", col: col!, row: row! });
+      board.add(ball);
+      return ball.id;
+    });
+    const result = resolveAll(board, [ids[0]!]);
+    expect(result.log.some((line) => line.startsWith("match"))).toBe(false);
+    expect(ids.every((id) => board.getId(id))).toBe(true);
+  });
+
+  it("does not form salt until sodium and chlorine are ionized", () => {
+    const board = anchored();
+    board.add(createBall({ kind: "element", elementId: "C", col: 3, row: 1 }));
+    const sodium = createBall({ kind: "element", elementId: "Na", col: 3, row: 2 });
+    const chlorine = createBall({ kind: "element", elementId: "Cl", col: 4, row: 2 });
+    board.add(sodium);
+    board.add(chlorine);
+    const quiet = resolveAll(board, [sodium.id]);
+    expect(quiet.log.some((line) => line.startsWith("reaction:salt"))).toBe(false);
+    expect(board.getId(sodium.id)?.elementId).toBe("Na");
+    sodium.charge = 1;
+    chlorine.charge = -1;
+    const formed = resolveAll(board, [sodium.id]);
+    expect(formed.log).toContain("reaction:salt");
+    expect(board.getId(sodium.id)?.materialId).toBe("crystal");
+  });
+
+  it("pulls opposite ions together and then forms salt", () => {
+    const board = anchored();
+    board.add(createBall({ kind: "element", elementId: "C", col: 3, row: 1 }));
+    const sodium = createBall({ kind: "element", elementId: "Na", col: 3, row: 2 });
+    const chlorine = createBall({ kind: "element", elementId: "Cl", col: 3, row: 4 });
+    board.add(sodium);
+    board.add(chlorine);
+    const outcome = applyPower(board, "ion", 3, 3);
+    expect(outcome.log).toBe("power:ion");
+    expect(sodium.charge).toBe(1);
+    expect(chlorine.charge).toBe(-1);
+    const result = resolveAll(board, outcome.focusIds, 20);
+    expect(result.log).toContain("drift");
+    expect(result.log).toContain("reaction:salt");
   });
 });
 
@@ -74,11 +125,9 @@ describe("board", () => {
     expect(board.get(3, 5)).toBeUndefined();
     expect(board.get(2, 5)).toBeUndefined();
     expect(board.get(3, 4)?.elementId).toBe("O");
-    expect(board.get(4, 4)?.materialId).toBe("water");
-    expect(board.get(4, 5)?.materialId).toBe("water");
-    expect(board.get(5, 6)?.materialId).toBe("fire");
-    expect(board.get(5, 4)?.materialId).toBe("fire");
-    expect(board.get(4, 6)).toBeUndefined();
+    expect(board.get(4, 4)?.elementId).toBe("H");
+    expect(board.get(3, 0)?.elementId).toBe("H");
+    expect(board.all().every((ball) => ball.elementId === "H" || ball.elementId === "O")).toBe(true);
     const loose = findLoose(board);
     expect(loose.fall).toEqual([]);
     expect(loose.rise).toEqual([]);
@@ -128,9 +177,8 @@ describe("engine", () => {
     engine.attachAt(3, 5, "H");
     for (let frame = 0; frame < 200; frame += 1) engine.update(1 / 30);
     expect(engine.trace.join(" | ")).toContain("reaction:water");
-    expect(engine.trace.join(" | ")).toContain("match:water");
-    expect(engine.trace.some((line) => line.includes("steam-blast") || line.startsWith("explosion"))).toBe(true);
-    expect(engine.snapshot().balls.length).toBeGreaterThan(0);
+    expect(engine.trace.join(" | ").includes("match:")).toBe(false);
+    expect(engine.snapshot().balls.some((ball) => ball.glyph === "H₂O" || engine.trace.includes("reaction:water"))).toBe(true);
   });
 
   it("lands a aimed shot in the opening pocket and reacts", async () => {
@@ -146,8 +194,7 @@ describe("engine", () => {
     for (let frame = 0; frame < 280; frame += 1) engine.update(1 / 60);
     const trace = engine.trace.join(" | ");
     expect(trace, JSON.stringify({ ghost, target, trace: engine.trace })).toContain("reaction:water");
-    expect(trace).toContain("match:water");
-    expect(engine.trace.some((line) => line.includes("steam-blast") || line.startsWith("explosion"))).toBe(true);
+    expect(trace.includes("match:")).toBe(false);
   });
 
   it("ends the run when the stack reaches the danger line", async () => {
@@ -177,7 +224,7 @@ describe("engine", () => {
     engine.shoot();
     for (let frame = 0; frame < 280; frame += 1) engine.update(1 / 60);
     expect(engine.trace.join(" | ")).toContain("reaction:water");
-    expect(engine.trace.join(" | ")).toContain("match:water");
+    expect(engine.trace.join(" | ").includes("match:")).toBe(false);
   });
 
   it("keeps the lesson shot on oxygen when the pointer misses", async () => {
@@ -201,16 +248,11 @@ function anchored(): Board {
   return board;
 }
 
-function pocket(): Board {
+function quenchPocket(): Board {
   const board = anchored();
-  for (let row = 1; row <= 4; row += 1) {
-    board.add(createBall({ kind: "element", elementId: "C", col: 2, row }));
-    if (row < 4) board.add(createBall({ kind: "element", elementId: "C", col: 4, row }));
-  }
-  board.add(createBall({ kind: "material", materialId: "fire", col: 5, row: 4 }));
-  board.add(createBall({ kind: "element", elementId: "O", col: 3, row: 4 }));
-  board.add(createBall({ kind: "material", materialId: "water", col: 4, row: 4 }));
-  board.add(createBall({ kind: "material", materialId: "water", col: 4, row: 5 }));
-  board.add(createBall({ kind: "material", materialId: "fire", col: 5, row: 6 }));
+  board.add(createBall({ kind: "element", elementId: "C", col: 3, row: 1 }));
+  board.add(createBall({ kind: "element", elementId: "O", col: 3, row: 2 }));
+  board.add(createBall({ kind: "element", elementId: "H", col: 4, row: 2 }));
+  board.add(createBall({ kind: "material", materialId: "fire", col: 2, row: 3 }));
   return board;
 }

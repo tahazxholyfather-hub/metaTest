@@ -3,6 +3,7 @@ import { getMaterial, isRisingMaterial } from "../data/materials";
 import { getReaction, sortedReactions } from "../data/reactions";
 import { Board } from "./board";
 import { cellKey, hexDistance, inBounds, neighborCoords } from "./hex";
+import { planDrift } from "./powers";
 import type { Ball, BehaviorId, ReactionDef } from "./types";
 
 export interface EffectPrediction {
@@ -42,6 +43,7 @@ export type Command =
       scoreValue: number;
     }
   | { type: "rise"; ballId: string; row: number }
+  | { type: "drift"; ballId: string; col: number; row: number }
   | { type: "clear"; mode: "fall" | "rise"; ballIds: string[] };
 
 export interface ApplyResult {
@@ -111,15 +113,21 @@ export function planCommand(board: Board, focus: string[]): Command | null {
   for (const id of seeds) {
     const ball = board.getId(id);
     if (!ball) continue;
-    if (ball.kind === "material" && ball.materialId) {
-      const group = connectedMaterial(board, ball);
-      const need = getMaterial(ball.materialId).matchRequired;
-      if (group.length >= need) {
-        return { type: "match", materialId: ball.materialId, ballIds: group.map((item) => item.id) };
-      }
+    if (ball.unstable) {
+      ball.unstable = false;
+      return {
+        type: "explode",
+        col: ball.col,
+        row: ball.row,
+        radius: 1,
+        protectIds: [],
+        ignite: false,
+        massive: false,
+        scoreValue: 180,
+      };
     }
     const reaction = selectReaction(board, ball);
-    if (reaction) {
+    if (reaction && reaction.reaction.chainable !== false) {
       return {
         type: "reaction",
         reactionId: reaction.reaction.id,
@@ -128,6 +136,9 @@ export function planCommand(board: Board, focus: string[]): Command | null {
       };
     }
   }
+
+  const drift = planDrift(board);
+  if (drift) return { type: "drift", ballId: drift.ballId, col: drift.col, row: drift.row };
 
   for (const id of impulseIds) {
     const ball = board.getId(id);
@@ -194,6 +205,8 @@ export function applyCommand(board: Board, cmd: Command, prediction?: EffectPred
     }
     case "rise":
       return applyRise(board, cmd.ballId);
+    case "drift":
+      return applyDrift(board, cmd.ballId, cmd.col, cmd.row);
     case "clear":
       return applyClear(board, cmd.ballIds, cmd.mode);
     default:
@@ -270,6 +283,8 @@ export function commandSig(cmd: Command): string {
       return `boom:${cmd.col},${cmd.row}:${cmd.radius}`;
     case "rise":
       return `rise:${cmd.ballId}@${cmd.row}`;
+    case "drift":
+      return `drift:${cmd.ballId}@${cmd.col},${cmd.row}`;
     case "clear":
       return `clear:${cmd.mode}:${[...cmd.ballIds].sort().join(",")}`;
   }
@@ -286,9 +301,14 @@ function applyReaction(board: Board, cmd: Extract<Command, { type: "reaction" }>
     if (id === primary.id) continue;
     if (board.remove(id)) removed += 1;
   }
+  const catalyzed = cmd.ballIds.some((id) => board.getId(id)?.catalyzed);
   primary.kind = "material";
   primary.elementId = undefined;
   primary.materialId = product.id;
+  primary.charge = 0;
+  primary.catalyzed = false;
+  primary.unstable = false;
+  primary.bondedTo = undefined;
   primary.frozenShifts = 0;
   primary.born = 1;
   const mat = getMaterial(product.id);
@@ -314,13 +334,21 @@ function applyReaction(board: Board, cmd: Extract<Command, { type: "reaction" }>
     focusIds: extra.length ? [] : [primary.id],
     extra,
     countsAsStep: true,
-    scoreBase: reaction.scoreValue,
+    scoreBase: catalyzed ? reaction.scoreValue * 2 : reaction.scoreValue,
     scoreKind: "reaction",
     secondaryBonus: true,
     reactionId: reaction.id,
     materialId: product.id,
     removed,
   };
+}
+
+function applyDrift(board: Board, id: string, col: number, row: number): ApplyResult {
+  const ball = board.getId(id);
+  if (!ball || board.occupied(col, row)) return EMPTY_RESULT;
+  board.move(id, col, row);
+  ball.born = 0.35;
+  return { ...EMPTY_RESULT, log: "drift", focusIds: [ball.id] };
 }
 
 function applyRise(board: Board, id: string): ApplyResult {
@@ -702,7 +730,8 @@ function allocate(reaction: ReactionDef, pool: Ball[], anchor: Ball): Ball[] | n
   return used;
 }
 
-function fits(ball: Ball, need: { type: "element" | "material"; id: string }): boolean {
+function fits(ball: Ball, need: { type: "element" | "material"; id: string; charge?: -1 | 0 | 1 }): boolean {
+  if (need.charge !== undefined && ball.charge !== need.charge) return false;
   if (need.type === "element") return ball.kind === "element" && ball.elementId === need.id;
   return ball.kind === "material" && ball.materialId === need.id;
 }

@@ -12,6 +12,7 @@ export interface ViewBall {
   formula: string;
   style: VisualStyle;
   frost: boolean;
+  charge: -1 | 0 | 1;
 }
 
 export interface Particle {

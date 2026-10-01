@@ -153,19 +153,40 @@ button, input { font-family: inherit; }
   color: #ffe7a3;
 }
 
+.toast lord-icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 2px;
+  display: block;
+}
+
 .toast strong {
   display: block;
   margin-top: 4px;
-  font-family: "JetBrains Mono", monospace;
-  font-size: 16px;
+  font-family: "IBM Plex Sans", Manrope, sans-serif;
+  font-size: 28px;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  color: #f7f4ee;
 }
 
 .toast em {
   display: block;
   margin-top: 2px;
   font-style: normal;
-  color: #b7f0ff;
-  font-weight: 700;
+  font-family: "IBM Plex Sans", Manrope, sans-serif;
+  color: rgba(244, 241, 234, 0.62);
+  font-weight: 550;
+  font-size: 13px;
+}
+
+.toast .why {
+  margin: 8px 0 0;
+  font-family: "IBM Plex Sans", Manrope, Vazirmatn, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 500;
+  color: rgba(244, 241, 234, 0.78);
 }
 
 .overlay {
@@ -755,6 +776,77 @@ button, input { font-family: inherit; }
   border-radius: 999px;
 }
 
+.cine {
+  pointer-events: auto;
+  position: absolute;
+  left: 22px;
+  right: 22px;
+  bottom: calc(112px + env(safe-area-inset-bottom));
+  text-align: center;
+  color: #f7f4ee;
+  animation: coach-in 0.5s ease both;
+}
+
+.cine.high {
+  bottom: auto;
+  top: calc(78px + env(safe-area-inset-top));
+}
+
+.cine lord-icon {
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 6px;
+  display: block;
+}
+
+.cine h2 {
+  margin: 0;
+  font-family: Syne, "IBM Plex Sans", Vazirmatn, sans-serif;
+  font-weight: 700;
+  font-size: 34px;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+}
+
+.cine p {
+  margin: 8px auto 0;
+  max-width: 28ch;
+  font-family: "IBM Plex Sans", Manrope, Vazirmatn, sans-serif;
+  font-weight: 500;
+  font-size: 15px;
+  line-height: 1.45;
+  color: rgba(244, 241, 234, 0.72);
+}
+
+.cine-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 14px;
+}
+
+.cine .skip,
+.cine .next {
+  background: none;
+  border: 0;
+  color: rgba(244, 241, 234, 0.55);
+  padding: 8px 0;
+  font-size: 15px;
+  font-family: "IBM Plex Sans", Manrope, Vazirmatn, sans-serif;
+}
+
+.cine .next {
+  color: #f7f4ee;
+  font-weight: 650;
+}
+
+.phone[lang="fa"] .cine h2,
+.phone[lang="fa"] .cine p,
+.phone[lang="fa"] .toast .why {
+  font-family: Vazirmatn, "IBM Plex Sans", sans-serif;
+  letter-spacing: 0;
+}
+
 .coach {
   pointer-events: auto;
   position: absolute;
@@ -860,7 +952,9 @@ button, input { font-family: inherit; }
   .spot-ring,
   .countdown span,
   .brand-mark,
-  .coach {
+  .coach,
+  .cine,
+  .toast lord-icon {
     animation: none;
   }
   .title-shine { background-position: 0 0; }
