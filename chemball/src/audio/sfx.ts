@@ -29,6 +29,18 @@ const TONES: Record<SoundId, { freq: number; dur: number; type: OscillatorType; 
   ui: { freq: 480, dur: 0.04, type: "sine", gain: 0.03 },
   splash: { freq: 360, dur: 0.1, type: "sine", gain: 0.04 },
   crystal: { freq: 1040, dur: 0.09, type: "triangle", gain: 0.04 },
+  orbShoot: { freq: 520, dur: 0.07, type: "triangle", gain: 0.04 },
+  orbCollision: { freq: 240, dur: 0.05, type: "sine", gain: 0.045 },
+  orbBounce: { freq: 680, dur: 0.04, type: "sine", gain: 0.025 },
+  ionize: { freq: 880, dur: 0.1, type: "triangle", gain: 0.04 },
+  bondForm: { freq: 560, dur: 0.08, type: "sine", gain: 0.035 },
+  reactionStart: { freq: 420, dur: 0.08, type: "triangle", gain: 0.04 },
+  reactionComplete: { freq: 720, dur: 0.14, type: "triangle", gain: 0.05 },
+  chainReaction: { freq: 640, dur: 0.16, type: "triangle", gain: 0.05 },
+  perfectShot: { freq: 980, dur: 0.18, type: "sine", gain: 0.045 },
+  orbDestroy: { freq: 180, dur: 0.1, type: "triangle", gain: 0.04 },
+  comboIncrease: { freq: 760, dur: 0.06, type: "sine", gain: 0.03 },
+  powerActivate: { freq: 610, dur: 0.09, type: "triangle", gain: 0.04 },
 };
 
 export class AudioBus implements Sfx {

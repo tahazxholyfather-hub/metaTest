@@ -15,3 +15,10 @@ export function reactionProductName(reaction: ReactionDef): string {
   const product = reaction.products[0];
   return product ? getMaterial(product.id).name : "Material";
 }
+
+export function reactionExplanation(reaction: ReactionDef): string {
+  if (reaction.explanation) return reaction.explanation;
+  const product = reaction.products[0];
+  const formula = product ? getMaterial(product.id).formula : reactionProductName(reaction);
+  return `${reactionFormula(reaction)} forms ${formula}.`;
+}

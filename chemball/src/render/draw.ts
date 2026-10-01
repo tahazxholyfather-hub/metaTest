@@ -35,7 +35,7 @@ export function renderFrame(ctx: CanvasRenderingContext2D, view: ViewState, dpr:
     ctx.font = "600 11px Outfit, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
-    ctx.fillText("NEXT", view.next.x, view.next.y - view.next.r * view.next.scale - 8);
+    ctx.fillText(view.nextLabel, view.next.x, view.next.y - view.next.r * view.next.scale - 8);
     ctx.globalAlpha = 1;
   }
   for (const float of view.floats) drawFloat(ctx, float);
@@ -201,125 +201,160 @@ function drawBall(ctx: CanvasRenderingContext2D, ball: ViewBall): void {
   const radius = ball.r * ball.scale;
   if (radius < 2 || ball.alpha <= 0.02) return;
   const { x, y, style } = ball;
+  const tint = style.tint ?? "#e7e2d8";
+  const ink = "#1a1c22";
   ctx.save();
   ctx.globalAlpha = ball.alpha;
-  ctx.fillStyle = "rgba(0,0,0,0.28)";
+
+  ctx.fillStyle = "rgba(8, 10, 16, 0.28)";
   ctx.beginPath();
-  ctx.ellipse(x, y + radius * 0.86, radius * 0.68, radius * 0.2, 0, 0, Math.PI * 2);
+  ctx.ellipse(x + radius * 0.06, y + radius * 0.92, radius * 0.58, radius * 0.14, 0, 0, Math.PI * 2);
   ctx.fill();
-  const gradient = ctx.createRadialGradient(x - radius * 0.34, y - radius * 0.4, radius * 0.12, x, y + radius * 0.1, radius);
-  gradient.addColorStop(0, style.glow);
-  gradient.addColorStop(0.42, style.base);
-  gradient.addColorStop(1, style.rim);
+
+  const wash = ctx.createRadialGradient(x, y, radius * 0.86, x, y, radius * 1.08);
+  wash.addColorStop(0, withAlpha(tint, 0.0));
+  wash.addColorStop(1, withAlpha(tint, ball.charge ? 0.22 : 0.1));
+  ctx.fillStyle = wash;
+  ctx.beginPath();
+  ctx.arc(x, y, radius * 1.08, 0, Math.PI * 2);
+  ctx.fill();
+
+  const body = ctx.createRadialGradient(
+    x - radius * 0.32,
+    y - radius * 0.38,
+    radius * 0.05,
+    x + radius * 0.04,
+    y + radius * 0.12,
+    radius,
+  );
+  body.addColorStop(0, "#ffffff");
+  body.addColorStop(0.22, "#fbf9f5");
+  body.addColorStop(0.62, "#f3efe8");
+  body.addColorStop(0.86, mixToward(tint, 246, 0.72));
+  body.addColorStop(1, mixToward(tint, 90, 0.18));
   ctx.beginPath();
   ctx.arc(x, y, radius, 0, Math.PI * 2);
-  ctx.fillStyle = gradient;
+  ctx.fillStyle = body;
   ctx.fill();
-  ctx.lineWidth = Math.max(1.25, radius * 0.055);
-  ctx.strokeStyle = "rgba(255,255,255,0.28)";
-  ctx.stroke();
-  ctx.fillStyle = "rgba(255,255,255,0.5)";
+
+  const shade = ctx.createRadialGradient(x, y + radius * 0.55, radius * 0.08, x, y, radius);
+  shade.addColorStop(0, withAlpha(tint, 0.28));
+  shade.addColorStop(0.55, "rgba(40, 36, 28, 0.05)");
+  shade.addColorStop(1, "rgba(40, 36, 28, 0)");
+  ctx.fillStyle = shade;
   ctx.beginPath();
-  ctx.ellipse(x - radius * 0.28, y - radius * 0.34, radius * 0.26, radius * 0.14, -0.7, 0, Math.PI * 2);
+  ctx.arc(x, y, radius * 0.96, 0, Math.PI * 2);
   ctx.fill();
-  if (ball.kind === "material") {
-    drawIcon(ctx, ball.icon, x, y - radius * 0.08, radius);
-    ctx.fillStyle = style.ink;
-    ctx.font = `700 ${Math.max(8, radius * 0.28)}px "JetBrains Mono", monospace`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(ball.glyph, x, y + radius * 0.48);
-  } else {
-    ctx.fillStyle = style.ink;
-    ctx.font = `700 ${radius * (ball.glyph.length > 1 ? 0.48 : 0.68)}px "JetBrains Mono", monospace`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(ball.glyph, x, y + radius * 0.02);
-  }
-  if (ball.frost) {
-    ctx.strokeStyle = "rgba(230, 250, 255, 0.85)";
-    ctx.lineWidth = 1.4;
+
+  const marked = chargeMark(ball.glyph, ball.charge);
+  paintSymbol(ctx, marked, x, y + radius * 0.02, radius, ink);
+
+  ctx.fillStyle = "rgba(255,255,255,0.92)";
+  ctx.beginPath();
+  ctx.ellipse(x - radius * 0.28, y - radius * 0.34, radius * 0.16, radius * 0.07, -0.7, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(x, y, radius * 0.9, Math.PI * 1.15, Math.PI * 1.75);
+  ctx.strokeStyle = "rgba(255,255,255,0.7)";
+  ctx.lineWidth = Math.max(1, radius * 0.035);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(x, y, radius - 0.5, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(40, 36, 30, 0.18)";
+  ctx.lineWidth = Math.max(1, radius * 0.03);
+  ctx.stroke();
+
+  if (ball.charge) {
+    ctx.strokeStyle = ball.charge > 0 ? "rgba(70, 110, 160, 0.35)" : "rgba(90, 130, 80, 0.35)";
+    ctx.lineWidth = 1.25;
     ctx.beginPath();
     ctx.arc(x, y, radius * 0.78, 0, Math.PI * 2);
     ctx.stroke();
   }
+  if (ball.frost) {
+    ctx.strokeStyle = "rgba(190, 214, 224, 0.9)";
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.arc(x, y, radius * 0.82, Math.PI * 1.15, Math.PI * 1.85);
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
-function drawIcon(ctx: CanvasRenderingContext2D, icon: string, x: number, y: number, radius: number): void {
+function chargeMark(glyph: string, charge: -1 | 0 | 1): string {
+  if (charge > 0) return `${glyph}⁺`;
+  if (charge < 0) return `${glyph}⁻`;
+  return glyph;
+}
+
+function paintSymbol(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  radius: number,
+  color: string,
+): void {
+  if (!text) return;
+  const runs = markRuns(text);
+  const bases = runs.filter((run) => run.role === "base").length;
+  const size = radius * (bases <= 1 ? 0.8 : bases === 2 ? 0.58 : bases === 3 ? 0.46 : 0.38);
+  const subSize = size * 0.58;
   ctx.save();
-  ctx.translate(x, y);
-  ctx.strokeStyle = "rgba(255,255,255,0.92)";
-  ctx.fillStyle = "rgba(255,255,255,0.88)";
-  ctx.lineWidth = Math.max(1.2, radius * 0.07);
-  ctx.lineJoin = "round";
-  ctx.lineCap = "round";
-  const r = radius * 0.34;
-  if (icon === "water" || icon === "charged") {
-    ctx.beginPath();
-    ctx.moveTo(0, -r);
-    ctx.bezierCurveTo(r * 0.95, r * 0.1, r * 0.7, r, 0, r);
-    ctx.bezierCurveTo(-r * 0.7, r, -r * 0.95, r * 0.1, 0, -r);
-    ctx.fill();
-  } else if (icon === "fire") {
-    ctx.beginPath();
-    ctx.moveTo(0, -r * 1.15);
-    ctx.bezierCurveTo(r, -r * 0.1, r * 0.7, r * 0.9, 0, r);
-    ctx.bezierCurveTo(-r * 0.85, r * 0.45, -r * 0.7, -r * 0.2, 0, -r * 1.15);
-    ctx.fill();
-  } else if (icon === "steam" || icon === "smoke") {
-    ctx.beginPath();
-    ctx.arc(-r * 0.45, r * 0.15, r * 0.38, 0, Math.PI * 2);
-    ctx.arc(r * 0.15, -r * 0.05, r * 0.48, 0, Math.PI * 2);
-    ctx.arc(r * 0.5, r * 0.28, r * 0.28, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (icon === "acid" || icon === "corrosion") {
-    for (let i = 0; i < 3; i += 1) {
-      ctx.beginPath();
-      ctx.arc(-r * 0.45 + i * r * 0.45, i === 1 ? -r * 0.15 : r * 0.2, r * 0.28, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-  } else if (icon === "explosive") {
-    spike(ctx, r * 1.05, 10);
-    ctx.fill();
-  } else if (icon === "ice" || icon === "crystal") {
-    ctx.beginPath();
-    ctx.moveTo(0, -r);
-    ctx.lineTo(r * 0.72, 0);
-    ctx.lineTo(0, r);
-    ctx.lineTo(-r * 0.72, 0);
-    ctx.closePath();
-    ctx.stroke();
-  } else if (icon === "energy") {
-    ctx.beginPath();
-    ctx.moveTo(r * 0.15, -r);
-    ctx.lineTo(-r * 0.45, r * 0.05);
-    ctx.lineTo(r * 0.05, r * 0.05);
-    ctx.lineTo(-r * 0.15, r);
-    ctx.lineTo(r * 0.55, -r * 0.12);
-    ctx.lineTo(r * 0.05, -r * 0.12);
-    ctx.closePath();
-    ctx.fill();
-  } else {
-    ctx.beginPath();
-    ctx.arc(0, 0, r * 0.45, 0, Math.PI * 2);
-    ctx.stroke();
-  }
+  ctx.fillStyle = color;
+  ctx.textBaseline = "middle";
+  ctx.textAlign = "left";
+  const widths = runs.map((run) => {
+    ctx.font = `650 ${run.role === "base" ? size : subSize}px "IBM Plex Sans", Manrope, sans-serif`;
+    return ctx.measureText(run.text).width;
+  });
+  const total = widths.reduce((sum, width) => sum + width, 0);
+  let cursor = x - total / 2;
+  runs.forEach((run, index) => {
+    const width = widths[index] ?? 0;
+    const dy = run.role === "sub" ? size * 0.28 : run.role === "sup" ? -size * 0.32 : 0;
+    ctx.font = `650 ${run.role === "base" ? size : subSize}px "IBM Plex Sans", Manrope, sans-serif`;
+    ctx.fillText(run.text, cursor, y + dy);
+    cursor += width;
+  });
   ctx.restore();
 }
 
-function spike(ctx: CanvasRenderingContext2D, radius: number, points: number): void {
-  ctx.beginPath();
-  for (let i = 0; i < points * 2; i += 1) {
-    const angle = -Math.PI / 2 + (i * Math.PI) / points;
-    const dist = i % 2 === 0 ? radius : radius * 0.45;
-    const x = Math.cos(angle) * dist;
-    const y = Math.sin(angle) * dist;
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.closePath();
+function markRuns(text: string): Array<{ text: string; role: "base" | "sub" | "sup" }> {
+  const subs: Record<string, string> = { "₀": "0", "₁": "1", "₂": "2", "₃": "3", "₄": "4", "₅": "5", "₆": "6", "₇": "7", "₈": "8", "₉": "9" };
+  return [...text].map((char) => {
+    if (subs[char]) return { text: subs[char], role: "sub" as const };
+    if (char === "⁺" || char === "+") return { text: "+", role: "sup" as const };
+    if (char === "⁻" || char === "−") return { text: "−", role: "sup" as const };
+    return { text: char, role: "base" as const };
+  });
 }
+
+
+function hexToRgb(hex: string): [number, number, number] {
+  const raw = hex.replace("#", "");
+  const full = raw.length === 3 ? raw.split("").map((part) => part + part).join("") : raw.padEnd(6, "0").slice(0, 6);
+  return [
+    Number.parseInt(full.slice(0, 2), 16) || 0,
+    Number.parseInt(full.slice(2, 4), 16) || 0,
+    Number.parseInt(full.slice(4, 6), 16) || 0,
+  ];
+}
+
+
+function mixToward(hex: string, toward: number, amount: number): string {
+  const [r, g, b] = hexToRgb(hex);
+  const channel = (value: number) => Math.max(0, Math.min(255, Math.round(value + (toward - value) * amount)));
+  return `#${[channel(r), channel(g), channel(b)].map((value) => value.toString(16).padStart(2, "0")).join("")}`;
+}
+
+function withAlpha(hex: string, alpha: number): string {
+  const [r, g, b] = hexToRgb(hex);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 
 function drawSplash(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number): void {
   ctx.save();
@@ -367,11 +402,36 @@ function drawFloat(ctx: CanvasRenderingContext2D, float: ViewState["floats"][num
   ctx.globalAlpha = alpha;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillStyle = float.color;
-  ctx.font = "700 18px Outfit, sans-serif";
-  ctx.fillText(float.text, float.x, float.y);
-  ctx.globalAlpha = alpha * 0.85;
-  ctx.font = "600 11px Outfit, sans-serif";
-  ctx.fillText(float.sub, float.x, float.y + 16);
+  const chemical = /[₀₁₂₃₄₅₆₇₈₉⁺⁻]/.test(float.text);
+  ctx.font = `650 ${chemical ? 22 : 26}px "IBM Plex Sans", Manrope, sans-serif`;
+  const titleWidth = chemical ? float.text.length * 14 : ctx.measureText(float.text).width;
+  ctx.font = `500 12px "IBM Plex Sans", Manrope, sans-serif`;
+  const subWidth = ctx.measureText(float.sub).width;
+  const width = Math.max(titleWidth, subWidth) + 36;
+  const height = 70;
+  ctx.fillStyle = "rgba(247, 244, 238, 0.94)";
+  roundRect(ctx, float.x - width / 2, float.y - height / 2, width, height, 18);
+  ctx.fill();
+  if (chemical) paintSymbol(ctx, float.text, float.x, float.y - 16, 36, "#1a1c22");
+  else {
+    ctx.fillStyle = "#1a1c22";
+    ctx.font = `650 26px "IBM Plex Sans", Manrope, sans-serif`;
+    ctx.fillText(float.text, float.x, float.y - 12);
+  }
+  ctx.globalAlpha = alpha * 0.62;
+  ctx.fillStyle = "#1a1c22";
+  ctx.font = `500 12px "IBM Plex Sans", Manrope, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.fillText(float.sub, float.x, float.y + 18);
   ctx.restore();
+}
+
+function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number): void {
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + width, y, x + width, y + height, radius);
+  ctx.arcTo(x + width, y + height, x, y + height, radius);
+  ctx.arcTo(x, y + height, x, y, radius);
+  ctx.arcTo(x, y, x + width, y, radius);
+  ctx.closePath();
 }

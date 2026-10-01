@@ -3,6 +3,8 @@ export interface VisualStyle {
   glow: string;
   rim: string;
   ink: string;
+  /** A whisper of element color. The orb itself stays light. */
+  tint?: string;
 }
 
 export interface ElementDef {
@@ -40,7 +42,19 @@ export type SoundId =
   | "over"
   | "ui"
   | "splash"
-  | "crystal";
+  | "crystal"
+  | "orbShoot"
+  | "orbCollision"
+  | "orbBounce"
+  | "ionize"
+  | "bondForm"
+  | "reactionStart"
+  | "reactionComplete"
+  | "chainReaction"
+  | "perfectShot"
+  | "orbDestroy"
+  | "comboIncrease"
+  | "powerActivate";
 
 export interface MaterialDef {
   id: string;
@@ -57,10 +71,18 @@ export interface MaterialDef {
   sound: SoundId;
 }
 
+export type Charge = -1 | 0 | 1;
+
+export type PowerId = "ion" | "catalyst" | "energy" | "bond" | "unstable" | "magnet" | "freeze" | "void";
+
+export type Ammo = { kind: "element"; id: string } | { kind: "power"; id: PowerId };
+
 export interface ReactantSpec {
   type: "element" | "material";
   id: string;
   count: number;
+  /** When set, only an orb with this charge can fill the slot. */
+  charge?: Charge;
 }
 
 export interface ReactionDef {
@@ -77,6 +99,10 @@ export interface ReactionDef {
   chainPotential: number;
   blastRadius?: number;
   consumeProduct?: boolean;
+  /** Short line shown the first time the player performs this reaction. */
+  explanation?: string;
+  xp?: number;
+  chainable?: boolean;
 }
 
 export type BallKind = "element" | "material";
@@ -92,6 +118,10 @@ export interface Ball {
   impulse: number;
   riseSteps: number;
   born: number;
+  charge: Charge;
+  catalyzed: boolean;
+  unstable: boolean;
+  bondedTo?: string;
 }
 
 export interface Layout {
@@ -134,6 +164,8 @@ export interface HudSnapshot {
   hint: boolean;
   sound: boolean;
   discovered: string[];
+  language: "en" | "fa";
+  tourCompleted: boolean;
 }
 
 export interface DiscoveryNotice {
@@ -141,6 +173,7 @@ export interface DiscoveryNotice {
   reactionId: string;
   formula: string;
   product: string;
+  explanation: string;
 }
 
 export interface RunSummary {

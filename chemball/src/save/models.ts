@@ -11,6 +11,8 @@
  * Score ranks the leaderboard. XP is account progression only.
  */
 
+export type Language = "en" | "fa";
+
 export interface PlayerProfile {
   id: string;
   name: string;
@@ -24,6 +26,8 @@ export interface PlayerProfile {
   unlockedMaterials: string[];
   sound: boolean;
   hintSeen: boolean;
+  language: Language;
+  tourCompleted: boolean;
   createdAt: string;
 }
 
@@ -101,7 +105,34 @@ export function createDefaultProfile(): PlayerProfile {
     unlockedMaterials: [],
     sound: true,
     hintSeen: false,
+    language: "en",
+    tourCompleted: false,
     createdAt: new Date().toISOString(),
+  };
+}
+
+/** Fills fields missing from an older local save. English and an unfinished tour stay the defaults. */
+export function normalizeProfile(raw: Partial<PlayerProfile> | null | undefined): PlayerProfile {
+  const base = createDefaultProfile();
+  const name = raw?.name?.trim().slice(0, 16) || base.name;
+  return {
+    ...base,
+    ...raw,
+    id: raw?.id || base.id,
+    name,
+    avatar: raw?.avatar || name.slice(0, 1).toUpperCase(),
+    xp: raw?.xp ?? 0,
+    level: raw?.level ?? 1,
+    totalRuns: raw?.totalRuns ?? 0,
+    bestScore: raw?.bestScore ?? 0,
+    totalScore: raw?.totalScore ?? 0,
+    discoveredReactions: raw?.discoveredReactions ?? [],
+    unlockedMaterials: raw?.unlockedMaterials ?? [],
+    sound: raw?.sound !== false,
+    hintSeen: raw?.hintSeen ?? false,
+    language: raw?.language === "fa" ? "fa" : "en",
+    tourCompleted: typeof raw?.tourCompleted === "boolean" ? raw.tourCompleted : (raw?.totalRuns ?? 0) > 0,
+    createdAt: raw?.createdAt || base.createdAt,
   };
 }
 

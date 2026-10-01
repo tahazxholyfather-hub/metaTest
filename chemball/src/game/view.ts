@@ -12,6 +12,7 @@ export interface ViewBall {
   formula: string;
   style: VisualStyle;
   frost: boolean;
+  charge: -1 | 0 | 1;
 }
 
 export interface Particle {
@@ -57,4 +58,6 @@ export interface ViewState {
   ring: { x: number; y: number; r: number; t: number; massive: boolean } | null;
   banner: string;
   bannerLife: number;
+  guide: { x: number; y: number; r: number } | null;
+  nextLabel: string;
 }

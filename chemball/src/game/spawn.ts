@@ -1,23 +1,40 @@
 import { getElement } from "../data/elements";
 import { Board, createBall } from "./board";
-import { holeChance, materialChance } from "./difficulty";
-import { COLS, cellKey, inBounds, neighborCoords } from "./hex";
+import { holeChance } from "./difficulty";
+import { COLS, cellKey, inBounds } from "./hex";
 import { pick, weightedPick, type Rng } from "./rng";
-import { findLoose } from "./sim";
+import type { Ammo, PowerId } from "./types";
 
 export type SpawnCell =
   | { kind: "empty" }
   | { kind: "element"; id: string }
   | { kind: "material"; id: string };
 
-const PROTECT = new Set(["3,4", "4,4", "4,5", "5,4", "5,6"]);
-const CORRIDOR = new Set(["2,5", "2,6", "2,7", "3,5", "3,6", "3,7"]);
-
 export function elementPool(factor: number): string[] {
-  const pool = ["H", "O", "C", "Na", "Cl"];
-  if (factor >= 0.18) pool.push("S", "Mg", "Fe");
-  if (factor >= 0.42) pool.push("N", "Ca", "Al", "K");
+  const pool = ["H", "O"];
+  if (factor >= 0.16) pool.push("C");
+  if (factor >= 0.32) pool.push("Na", "Cl");
+  if (factor >= 0.48) pool.push("S", "N");
+  if (factor >= 0.66) pool.push("Mg", "Fe", "Ca", "K", "Al", "P", "F");
   return pool;
+}
+
+export function nextAmmo(board: Board, rng: Rng, factor: number): Ammo {
+  const powers = powersFor(board, factor);
+  if (powers.length && rng() < Math.min(0.16, 0.04 + factor * 0.2)) {
+    return { kind: "power", id: pick(rng, powers) };
+  }
+  return { kind: "element", id: nextShotElement(board, rng, factor) };
+}
+
+function powersFor(board: Board, factor: number): PowerId[] {
+  const list: PowerId[] = [];
+  const hasIonTarget = board.all().some((ball) => ball.elementId === "Na" || ball.elementId === "Cl" || ball.elementId === "K");
+  if (factor >= 0.28 && hasIonTarget) list.push("ion");
+  if (factor >= 0.4) list.push("catalyst", "bond");
+  if (factor >= 0.52) list.push("energy", "magnet", "freeze");
+  if (factor >= 0.7) list.push("unstable", "void");
+  return list;
 }
 
 export function nextShotElement(board: Board, rng: Rng, factor: number): string {
@@ -30,6 +47,12 @@ export function nextShotElement(board: Board, rng: Rng, factor: number): string 
         .map((ball) => ball.elementId!),
     ),
   ];
+  if (factor < 0.16) {
+    const hydrogen = board.all().filter((ball) => ball.elementId === "H").length;
+    const oxygen = board.all().filter((ball) => ball.elementId === "O").length;
+    if (hydrogen + 1 < oxygen * 2) return "H";
+    if (oxygen < hydrogen / 2) return "O";
+  }
   const source = present.length > 0 && rng() < 0.68 ? present : pool;
   return weightedPick(
     rng,
@@ -38,32 +61,26 @@ export function nextShotElement(board: Board, rng: Rng, factor: number): string 
 }
 
 export function createInitialBoard(rng: Rng, teach = true): Board {
-  if (!teach) return createCalmBoard(rng);
+  if (teach) return createLessonBoard();
+  return createCalmBoard(rng);
+}
+
+/** Sparse lesson: one hydrogen beside one oxygen, with a clear shot into both. */
+export function createLessonBoard(): Board {
   const board = new Board();
-  for (let row = 0; row < 5; row += 1) {
-    for (let col = 0; col < COLS; col += 1) {
-      const key = `${col},${row}`;
-      if (CORRIDOR.has(key)) continue;
-      if (key === "4,4") {
-        board.add(createBall({ kind: "material", materialId: "water", col, row }));
-        continue;
-      }
-      if (key === "3,4") {
-        board.add(createBall({ kind: "element", elementId: "O", col, row }));
-        continue;
-      }
-      if (key === "5,4") {
-        board.add(createBall({ kind: "material", materialId: "fire", col, row }));
-        continue;
-      }
-      board.add(createBall({ kind: "element", elementId: openingElement(rng), col, row }));
-    }
+  const placed: Array<[number, number, string]> = [
+    [3, 0, "H"],
+    [3, 1, "O"],
+    [3, 2, "H"],
+    [3, 3, "O"],
+    [3, 4, "O"],
+    [4, 4, "H"],
+  ];
+  for (const [col, row, id] of placed) {
+    const ball = createBall({ kind: "element", elementId: id, col, row });
+    ball.born = 0;
+    board.add(ball);
   }
-  board.add(createBall({ kind: "material", materialId: "water", col: 4, row: 5 }));
-  board.add(createBall({ kind: "material", materialId: "fire", col: 5, row: 6 }));
-  ensureIngredients(board);
-  pokeHoles(board, rng);
-  for (const ball of board.all()) ball.born = 0;
   return board;
 }
 
@@ -72,9 +89,6 @@ export function generateRow(rng: Rng, factor: number, touch: string[]): SpawnCel
   const pool = elementPool(factor);
   const cells: SpawnCell[] = mask.map((filled) => {
     if (!filled) return { kind: "empty" };
-    if (rng() < materialChance(factor)) {
-      return { kind: "material", id: spawnMaterial(rng, factor) };
-    }
     return { kind: "element", id: weightedPick(rng, pool.map((id) => ({ id, weight: Math.max(1, 6 - getElement(id).rarity) }))) };
   });
   const pair = rng() < 0.55 ? pick(rng, pairsFor(pool)) : null;
@@ -153,94 +167,23 @@ export function shiftDown(board: Board, spawned: SpawnCell[]): void {
 
 function createCalmBoard(rng: Rng): Board {
   const board = new Board();
-  for (let row = 0; row < 5; row += 1) {
+  for (let row = 0; row < 3; row += 1) {
     for (let col = 0; col < COLS; col += 1) {
-      board.add(createBall({ kind: "element", elementId: openingElement(rng), col, row }));
+      if (rng() < 0.48) continue;
+      const ball = createBall({ kind: "element", elementId: rng() < 0.62 ? "H" : "O", col, row });
+      ball.born = 0;
+      board.add(ball);
     }
   }
-  ensureIngredients(board);
-  pokeHoles(board, rng);
+  if (!board.all().some((ball) => ball.elementId === "H")) {
+    board.add(createBall({ kind: "element", elementId: "H", col: 2, row: 0 }));
+  }
+  if (!board.all().some((ball) => ball.elementId === "O")) {
+    board.add(createBall({ kind: "element", elementId: "O", col: 4, row: 0 }));
+  }
+  if (!board.get(3, 0)) board.add(createBall({ kind: "element", elementId: "H", col: 3, row: 0 }));
   for (const ball of board.all()) ball.born = 0;
   return board;
-}
-
-function openingElement(rng: Rng): string {
-  return weightedPick(rng, [
-    { id: "H", weight: 5 },
-    { id: "O", weight: 5 },
-    { id: "C", weight: 4 },
-    { id: "Na", weight: 3 },
-    { id: "Cl", weight: 3 },
-    { id: "S", weight: 2 },
-    { id: "Mg", weight: 2 },
-    { id: "Fe", weight: 2 },
-    { id: "N", weight: 1 },
-  ]);
-}
-
-function ensureIngredients(board: Board): void {
-  const need = ["H", "O", "Na", "Cl", "Mg", "Fe", "S"];
-  const have = new Set(board.all().map((ball) => ball.elementId).filter((id): id is string => !!id));
-  const flex = board.all().filter((ball) => ball.kind === "element" && !PROTECT.has(`${ball.col},${ball.row}`));
-  let cursor = 0;
-  for (const id of need) {
-    if (have.has(id) || cursor >= flex.length) continue;
-    const ball = flex[cursor];
-    if (!ball) break;
-    cursor += 1;
-    ball.elementId = id;
-    have.add(id);
-  }
-}
-
-function pokeHoles(board: Board, rng: Rng): void {
-  const candidates = board
-    .all()
-    .filter((ball) => ball.row > 0 && ball.row < 4 && !PROTECT.has(`${ball.col},${ball.row}`));
-  for (let i = candidates.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(rng() * (i + 1));
-    const swap = candidates[i]!;
-    candidates[i] = candidates[j]!;
-    candidates[j] = swap;
-  }
-  let holes = 0;
-  for (const ball of candidates) {
-    if (holes >= 5) break;
-    const snapshot = { ...ball };
-    board.remove(ball.id);
-    const loose = findLoose(board);
-    if (loose.fall.length || loose.rise.length) {
-      board.add(createBall({ kind: snapshot.kind, elementId: snapshot.elementId, materialId: snapshot.materialId, col: snapshot.col, row: snapshot.row }));
-      continue;
-    }
-    holes += 1;
-  }
-  bridgeLoose(board);
-}
-
-function bridgeLoose(board: Board): void {
-  for (let pass = 0; pass < 6; pass += 1) {
-    const loose = findLoose(board);
-    const looseIds = new Set([...loose.fall, ...loose.rise]);
-    const id = loose.fall[0] ?? loose.rise[0];
-    if (!id) return;
-    const ball = board.getId(id);
-    if (!ball) return;
-    let fixed = false;
-    for (const [col, row] of neighborCoords(ball.col, ball.row)) {
-      if (!inBounds(col, row) || board.occupied(col, row)) continue;
-      if (CORRIDOR.has(`${col},${row}`)) continue;
-      const touches = neighborCoords(col, row).some(([nc, nr]) => {
-        const near = board.get(nc, nr);
-        return !!near && !looseIds.has(near.id);
-      });
-      if (!touches) continue;
-      board.add(createBall({ kind: "element", elementId: "C", col, row }));
-      fixed = true;
-      break;
-    }
-    if (!fixed) return;
-  }
 }
 
 function formationMask(rng: Rng, factor: number): boolean[] {
@@ -253,11 +196,14 @@ function formationMask(rng: Rng, factor: number): boolean[] {
     if (pattern === "windows") return col === 3 ? rng() > 0.75 : rng() > holes;
     return rng() > holes;
   });
-  if (mask.filter(Boolean).length < 4) {
-    mask[2] = true;
-    mask[3] = true;
-    mask[4] = true;
+  const cap = factor < 0.2 ? 3 : 5;
+  let kept = 0;
+  for (let col = 0; col < mask.length; col += 1) {
+    if (!mask[col]) continue;
+    kept += 1;
+    if (kept > cap) mask[col] = false;
   }
+  if (kept === 0) mask[3] = true;
   return mask;
 }
 
@@ -273,12 +219,4 @@ function pairsFor(pool: string[]): Array<[string, string]> {
   ];
   const allowed = catalog.filter((pair) => pool.includes(pair[0]) && pool.includes(pair[1]));
   return allowed.length ? allowed : [["H", "O"]];
-}
-
-function spawnMaterial(rng: Rng, factor: number): string {
-  const roll = rng();
-  if (roll < 0.42) return "fire";
-  if (roll < 0.7) return "ice";
-  if (roll < 0.88) return "water";
-  return factor > 0.62 ? "explosive" : "fire";
 }

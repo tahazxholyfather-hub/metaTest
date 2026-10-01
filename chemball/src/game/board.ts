@@ -31,6 +31,9 @@ export function createBall(input: {
     impulse: input.impulse ?? 0,
     riseSteps: 0,
     born: 1,
+    charge: 0,
+    catalyzed: false,
+    unstable: false,
   };
 }
 
