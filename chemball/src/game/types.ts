@@ -134,6 +134,8 @@ export interface HudSnapshot {
   hint: boolean;
   sound: boolean;
   discovered: string[];
+  armedGadget: string;
+  gadgetCharges: string;
 }
 
 export interface DiscoveryNotice {

@@ -7,7 +7,7 @@ import { COLS, cellCenter, hexDistance, makeLayout, neighborCoords } from "../ga
 import { mulberry32 } from "../game/rng";
 import { chainBonus, levelFromXp } from "../game/score";
 import { findLoose, resolveAll } from "../game/sim";
-import { createInitialBoard, shiftDown } from "../game/spawn";
+import { createInitialBoard, generateRow, shiftDown } from "../game/spawn";
 import type { RunSummary } from "../game/types";
 import { MemoryPlayerRepository } from "../save/memoryRepository";
 
@@ -81,6 +81,29 @@ describe("board", () => {
     const loose = findLoose(board);
     expect(loose.fall).toEqual([]);
     expect(loose.rise).toEqual([]);
+  });
+
+  it("drops a full row straight down", () => {
+    const board = new Board();
+    for (let col = 0; col < COLS; col += 1) {
+      board.add(createBall({ kind: "element", elementId: "H", col, row: 0 }));
+    }
+    shiftDown(
+      board,
+      Array.from({ length: COLS }, () => ({ kind: "element" as const, id: "O" })),
+    );
+    for (let col = 0; col < COLS; col += 1) {
+      expect(board.get(col, 1)?.elementId).toBe("H");
+      expect(board.get(col, 0)?.elementId).toBe("O");
+    }
+  });
+
+  it("keeps a new row almost full and free of materials at the start", () => {
+    const row = generateRow(mulberry32(1), 0, []);
+    const filled = row.filter((cell) => cell.kind !== "empty");
+    expect(filled.length).toBeGreaterThanOrEqual(6);
+    expect(row.some((cell) => cell.kind === "material")).toBe(false);
+    expect(filled.every((cell) => cell.kind === "element" && ["H", "O", "C"].includes(cell.id))).toBe(true);
   });
 
   it("holds a frozen ball while neighbors descend", () => {

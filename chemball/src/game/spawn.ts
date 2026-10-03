@@ -1,22 +1,23 @@
 import { getElement } from "../data/elements";
 import { Board, createBall } from "./board";
 import { holeChance, materialChance } from "./difficulty";
-import { COLS, cellKey, inBounds, neighborCoords } from "./hex";
+import { COLS, cellKey, inBounds } from "./hex";
 import { pick, weightedPick, type Rng } from "./rng";
-import { findLoose } from "./sim";
+import type { Ball } from "./types";
 
 export type SpawnCell =
   | { kind: "empty" }
   | { kind: "element"; id: string }
   | { kind: "material"; id: string };
 
-const PROTECT = new Set(["3,4", "4,4", "4,5", "5,4", "5,6"]);
-const CORRIDOR = new Set(["2,5", "2,6", "2,7", "3,5", "3,6", "3,7"]);
+const BAND = ["H", "O", "C"] as const;
 
 export function elementPool(factor: number): string[] {
-  const pool = ["H", "O", "C", "Na", "Cl"];
-  if (factor >= 0.18) pool.push("S", "Mg", "Fe");
-  if (factor >= 0.42) pool.push("N", "Ca", "Al", "K");
+  const pool = ["H", "O", "C"];
+  if (factor >= 0.1) pool.push("Na", "Cl");
+  if (factor >= 0.24) pool.push("S");
+  if (factor >= 0.4) pool.push("Mg", "Fe");
+  if (factor >= 0.62) pool.push("N", "Ca", "Al", "K");
   return pool;
 }
 
@@ -30,7 +31,7 @@ export function nextShotElement(board: Board, rng: Rng, factor: number): string 
         .map((ball) => ball.elementId!),
     ),
   ];
-  const source = present.length > 0 && rng() < 0.68 ? present : pool;
+  const source = present.length > 0 && rng() < 0.62 ? present : pool;
   return weightedPick(
     rng,
     source.map((id) => ({ id, weight: Math.max(1, 6 - getElement(id).rarity) })),
@@ -43,7 +44,6 @@ export function createInitialBoard(rng: Rng, teach = true): Board {
   for (let row = 0; row < 5; row += 1) {
     for (let col = 0; col < COLS; col += 1) {
       const key = `${col},${row}`;
-      if (CORRIDOR.has(key)) continue;
       if (key === "4,4") {
         board.add(createBall({ kind: "material", materialId: "water", col, row }));
         continue;
@@ -56,13 +56,11 @@ export function createInitialBoard(rng: Rng, teach = true): Board {
         board.add(createBall({ kind: "material", materialId: "fire", col, row }));
         continue;
       }
-      board.add(createBall({ kind: "element", elementId: openingElement(rng), col, row }));
+      board.add(createBall({ kind: "element", elementId: bandElement(col, row), col, row }));
     }
   }
   board.add(createBall({ kind: "material", materialId: "water", col: 4, row: 5 }));
   board.add(createBall({ kind: "material", materialId: "fire", col: 5, row: 6 }));
-  ensureIngredients(board);
-  pokeHoles(board, rng);
   for (const ball of board.all()) ball.born = 0;
   return board;
 }
@@ -70,69 +68,54 @@ export function createInitialBoard(rng: Rng, teach = true): Board {
 export function generateRow(rng: Rng, factor: number, touch: string[]): SpawnCell[] {
   const mask = formationMask(rng, factor);
   const pool = elementPool(factor);
-  const cells: SpawnCell[] = mask.map((filled) => {
+  const cells: SpawnCell[] = mask.map((filled, col) => {
     if (!filled) return { kind: "empty" };
-    if (rng() < materialChance(factor)) {
-      return { kind: "material", id: spawnMaterial(rng, factor) };
-    }
-    return { kind: "element", id: weightedPick(rng, pool.map((id) => ({ id, weight: Math.max(1, 6 - getElement(id).rarity) }))) };
+    return { kind: "element", id: pool[col % pool.length] ?? "H" };
   });
-  const pair = rng() < 0.55 ? pick(rng, pairsFor(pool)) : null;
-  if (pair) {
-    for (let col = 0; col < COLS - 1; col += 1) {
-      if (cells[col]?.kind !== "empty" && cells[col + 1]?.kind !== "empty") {
-        cells[col] = { kind: "element", id: pair[0] };
-        cells[col + 1] = { kind: "element", id: pair[1] };
-        break;
-      }
+  const pair = pick(rng, pairsFor(pool));
+  let pairCol = -1;
+  for (let col = 2; col < COLS - 2; col += 1) {
+    if (cells[col]?.kind === "element" && cells[col + 1]?.kind === "element") {
+      cells[col] = { kind: "element", id: pair[0] };
+      cells[col + 1] = { kind: "element", id: pair[1] };
+      pairCol = col;
+      break;
     }
+  }
+  if (factor >= 0.34 && rng() < Math.max(materialChance(factor), 0.01) * 3) {
+    const slot = [4, 1, 5].find((index) => index !== pairCol && index !== pairCol + 1 && cells[index]?.kind === "element");
+    if (slot !== undefined) cells[slot] = { kind: "material", id: spawnMaterial(rng, factor) };
   }
   const link = touch.find((id) => pool.includes(id));
-  if (link) {
-    const slot = cells.findIndex((cell) => cell.kind === "element");
-    if (slot >= 0) cells[slot] = { kind: "element", id: link };
-  }
-  if (!cells.slice(2, 5).some((cell) => cell.kind !== "empty")) {
-    cells[3] = { kind: "element", id: pick(rng, pool) };
+  if (link && rng() < 0.4) {
+    const edge = cells[0]?.kind === "element" ? 0 : cells[COLS - 1]?.kind === "element" ? COLS - 1 : -1;
+    if (edge >= 0) cells[edge] = { kind: "element", id: link };
   }
   return cells;
 }
 
 export function shiftDown(board: Board, spawned: SpawnCell[]): void {
-  const ordered = board.all().sort((a, b) => b.row - a.row || b.col - a.col);
-  const placed: Array<{ ball: ReturnType<Board["getId"]>; col: number; row: number }> = [];
+  const ordered = board.all().sort((a, b) => b.row - a.row || a.col - b.col);
   const occ = new Set<string>();
+  const placed: Array<{ ball: Ball; col: number; row: number }> = [];
   for (const ball of ordered) {
-    if (!ball) continue;
-    let targetRow = ball.row + 1;
-    if (ball.frozenShifts > 0) {
-      ball.frozenShifts -= 1;
-      targetRow = ball.row;
+    const frozen = ball.frozenShifts > 0;
+    if (frozen) ball.frozenShifts -= 1;
+    let destRow = frozen ? ball.row : ball.row + 1;
+    if (!inBounds(ball.col, destRow) || occ.has(cellKey(ball.col, destRow))) {
+      destRow = ball.row;
+      if (occ.has(cellKey(ball.col, destRow))) {
+        let drop = ball.row + 1;
+        while (drop < 47 && occ.has(cellKey(ball.col, drop))) drop += 1;
+        destRow = drop;
+      }
     }
-    const options: Array<[number, number]> = [
-      [ball.col, targetRow],
-      [ball.col - 1, targetRow],
-      [ball.col + 1, targetRow],
-      [ball.col, ball.row],
-    ];
-    let dest: [number, number] | null = null;
-    for (const [col, row] of options) {
-      if (!inBounds(col, row) || occ.has(cellKey(col, row))) continue;
-      dest = [col, row];
-      break;
-    }
-    if (!dest) {
-      let row = ball.row + 2;
-      while (occ.has(cellKey(ball.col, row))) row += 1;
-      dest = [ball.col, row];
-    }
-    occ.add(cellKey(dest[0], dest[1]));
-    placed.push({ ball, col: dest[0], row: dest[1] });
+    occ.add(cellKey(ball.col, destRow));
+    placed.push({ ball, col: ball.col, row: destRow });
   }
   board.balls.clear();
   board.cells.clear();
   for (const item of placed) {
-    if (!item.ball) continue;
     item.ball.col = item.col;
     item.ball.row = item.row;
     board.add(item.ball);
@@ -153,111 +136,24 @@ export function shiftDown(board: Board, spawned: SpawnCell[]): void {
 
 function createCalmBoard(rng: Rng): Board {
   const board = new Board();
-  for (let row = 0; row < 5; row += 1) {
+  for (let row = 0; row < 4; row += 1) {
+    const gap = rng() < 0.22 ? (rng() < 0.5 ? 0 : COLS - 1) : -1;
     for (let col = 0; col < COLS; col += 1) {
-      board.add(createBall({ kind: "element", elementId: openingElement(rng), col, row }));
+      if (col === gap) continue;
+      board.add(createBall({ kind: "element", elementId: bandElement(col, row), col, row }));
     }
   }
-  ensureIngredients(board);
-  pokeHoles(board, rng);
   for (const ball of board.all()) ball.born = 0;
   return board;
 }
 
-function openingElement(rng: Rng): string {
-  return weightedPick(rng, [
-    { id: "H", weight: 5 },
-    { id: "O", weight: 5 },
-    { id: "C", weight: 4 },
-    { id: "Na", weight: 3 },
-    { id: "Cl", weight: 3 },
-    { id: "S", weight: 2 },
-    { id: "Mg", weight: 2 },
-    { id: "Fe", weight: 2 },
-    { id: "N", weight: 1 },
-  ]);
-}
-
-function ensureIngredients(board: Board): void {
-  const need = ["H", "O", "Na", "Cl", "Mg", "Fe", "S"];
-  const have = new Set(board.all().map((ball) => ball.elementId).filter((id): id is string => !!id));
-  const flex = board.all().filter((ball) => ball.kind === "element" && !PROTECT.has(`${ball.col},${ball.row}`));
-  let cursor = 0;
-  for (const id of need) {
-    if (have.has(id) || cursor >= flex.length) continue;
-    const ball = flex[cursor];
-    if (!ball) break;
-    cursor += 1;
-    ball.elementId = id;
-    have.add(id);
-  }
-}
-
-function pokeHoles(board: Board, rng: Rng): void {
-  const candidates = board
-    .all()
-    .filter((ball) => ball.row > 0 && ball.row < 4 && !PROTECT.has(`${ball.col},${ball.row}`));
-  for (let i = candidates.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(rng() * (i + 1));
-    const swap = candidates[i]!;
-    candidates[i] = candidates[j]!;
-    candidates[j] = swap;
-  }
-  let holes = 0;
-  for (const ball of candidates) {
-    if (holes >= 5) break;
-    const snapshot = { ...ball };
-    board.remove(ball.id);
-    const loose = findLoose(board);
-    if (loose.fall.length || loose.rise.length) {
-      board.add(createBall({ kind: snapshot.kind, elementId: snapshot.elementId, materialId: snapshot.materialId, col: snapshot.col, row: snapshot.row }));
-      continue;
-    }
-    holes += 1;
-  }
-  bridgeLoose(board);
-}
-
-function bridgeLoose(board: Board): void {
-  for (let pass = 0; pass < 6; pass += 1) {
-    const loose = findLoose(board);
-    const looseIds = new Set([...loose.fall, ...loose.rise]);
-    const id = loose.fall[0] ?? loose.rise[0];
-    if (!id) return;
-    const ball = board.getId(id);
-    if (!ball) return;
-    let fixed = false;
-    for (const [col, row] of neighborCoords(ball.col, ball.row)) {
-      if (!inBounds(col, row) || board.occupied(col, row)) continue;
-      if (CORRIDOR.has(`${col},${row}`)) continue;
-      const touches = neighborCoords(col, row).some(([nc, nr]) => {
-        const near = board.get(nc, nr);
-        return !!near && !looseIds.has(near.id);
-      });
-      if (!touches) continue;
-      board.add(createBall({ kind: "element", elementId: "C", col, row }));
-      fixed = true;
-      break;
-    }
-    if (!fixed) return;
-  }
+function bandElement(col: number, row: number): string {
+  return BAND[(col + row) % BAND.length] ?? "H";
 }
 
 function formationMask(rng: Rng, factor: number): boolean[] {
-  const pattern = pick(rng, ["row", "stagger", "cluster", "side", "windows"] as const);
-  const holes = holeChance(factor);
-  const mask = Array.from({ length: COLS }, (_, col) => {
-    if (pattern === "stagger") return col % 2 === (rng() > 0.5 ? 0 : 1) ? rng() > holes * 0.4 : rng() > 0.72;
-    if (pattern === "cluster") return col >= 1 && col <= 5 ? rng() > holes * 0.35 : rng() > 0.62;
-    if (pattern === "side") return col <= 4 ? rng() > holes * 0.45 : rng() > 0.55;
-    if (pattern === "windows") return col === 3 ? rng() > 0.75 : rng() > holes;
-    return rng() > holes;
-  });
-  if (mask.filter(Boolean).length < 4) {
-    mask[2] = true;
-    mask[3] = true;
-    mask[4] = true;
-  }
+  const mask = Array.from({ length: COLS }, () => true);
+  if (rng() < holeChance(factor)) mask[rng() < 0.5 ? 0 : COLS - 1] = false;
   return mask;
 }
 
@@ -277,8 +173,8 @@ function pairsFor(pool: string[]): Array<[string, string]> {
 
 function spawnMaterial(rng: Rng, factor: number): string {
   const roll = rng();
-  if (roll < 0.42) return "fire";
-  if (roll < 0.7) return "ice";
-  if (roll < 0.88) return "water";
-  return factor > 0.62 ? "explosive" : "fire";
+  if (roll < 0.46) return "fire";
+  if (roll < 0.72) return "ice";
+  if (roll < 0.9) return "water";
+  return factor > 0.7 ? "explosive" : "fire";
 }

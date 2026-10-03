@@ -387,6 +387,22 @@ export const REACTIONS: ReactionDef[] = [
     chainPotential: 1,
   },
   {
+    id: "rust",
+    reactants: [
+      { type: "element", id: "Fe", count: 1 },
+      { type: "element", id: "O", count: 1 },
+    ],
+    products: [{ type: "material", id: "corrosion" }],
+    priority: 9,
+    minRequired: 2,
+    affectedRadius: 1,
+    transformation: "merge",
+    visualEffect: "acid",
+    soundEffect: "acid",
+    scoreValue: 55,
+    chainPotential: 2,
+  },
+  {
     id: "carbon-gas",
     reactants: [
       { type: "element", id: "C", count: 1 },
