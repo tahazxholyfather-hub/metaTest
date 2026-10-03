@@ -222,7 +222,7 @@ button, input { font-family: inherit; }
   position: absolute;
   left: 16px;
   right: 84px;
-  bottom: calc(132px + env(safe-area-inset-bottom));
+  bottom: calc(186px + env(safe-area-inset-bottom));
   z-index: 4;
   display: flex;
   flex-direction: column;

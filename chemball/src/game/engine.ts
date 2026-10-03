@@ -497,8 +497,8 @@ export class GameEngine {
         y: point.y - 8,
         text: `+${points.toLocaleString("en-US")}`,
         sub: boosted > 1 ? "کاتالیز" : scoreLabel(result.scoreKind, result.materialId),
-        life: 1.28,
-        max: 1.28,
+        life: 1.55,
+        max: 1.55,
         color,
         pop: boosted > 1 || result.scoreKind === "explosion" ? 1.22 : 1,
       });
@@ -524,14 +524,14 @@ export class GameEngine {
       this.score += bonus;
       this.stats.score = this.score;
       this.banner = `زنجیره ${this.chainSteps}`;
-      this.bannerLife = 1.2;
+      this.bannerLife = 1.55;
       this.floats.push({
         x: this.layout.width / 2,
         y: this.layout.height * 0.47,
         text: `+${bonus.toLocaleString("en-US")}`,
         sub: "زنجیره",
-        life: 1.4,
-        max: 1.4,
+        life: 1.7,
+        max: 1.7,
         color: "#ffe7a3",
         pop: 1.28,
       });

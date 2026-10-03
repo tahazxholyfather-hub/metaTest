@@ -194,12 +194,17 @@ function drawLauncher(ctx: CanvasRenderingContext2D, view: ViewState): void {
 }
 
 function drawArmed(ctx: CanvasRenderingContext2D, ball: ViewBall, armed: string): void {
-  const radius = ball.r * ball.scale + 6;
-  const pulse = 0.65 + Math.sin(performance.now() / 220) * 0.35;
+  const radius = ball.r * ball.scale + 8;
+  const pulse = 0.55 + Math.sin(performance.now() / 180) * 0.45;
   ctx.save();
-  ctx.globalAlpha = 0.45 + pulse * 0.4;
   ctx.strokeStyle = armedColor(armed);
-  ctx.lineWidth = 2.4;
+  ctx.globalAlpha = 0.35 + pulse * 0.25;
+  ctx.lineWidth = 7;
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, radius + 3, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.globalAlpha = 0.85;
+  ctx.lineWidth = 2.5;
   ctx.beginPath();
   ctx.arc(ball.x, ball.y, radius, 0, Math.PI * 2);
   ctx.stroke();
@@ -413,11 +418,11 @@ function drawRing(ctx: CanvasRenderingContext2D, ring: NonNullable<ViewState["ri
 }
 
 function drawFloat(ctx: CanvasRenderingContext2D, float: ViewState["floats"][number]): void {
-  const alpha = Math.max(0, float.life / float.max);
-  const age = 1 - alpha;
-  let scale = 1;
-  if (age < 0.14) scale = 0.32 + (age / 0.14) * 1.08;
-  else if (age < 0.3) scale = 1.4 - ((age - 0.14) / 0.16) * 0.4;
+  const age = 1 - Math.max(0, float.life / float.max);
+  const alpha = age < 0.62 ? 1 : Math.max(0, 1 - (age - 0.62) / 0.38);
+  let scale = 1.08;
+  if (age < 0.1) scale = 0.28 + (age / 0.1) * 1.22;
+  else if (age < 0.22) scale = 1.5 - ((age - 0.1) / 0.12) * 0.42;
   scale *= float.pop;
   ctx.save();
   ctx.globalAlpha = alpha;
@@ -425,23 +430,27 @@ function drawFloat(ctx: CanvasRenderingContext2D, float: ViewState["floats"][num
   ctx.scale(scale, scale);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.font = '700 40px "JetBrains Mono", monospace';
-  ctx.lineWidth = 7;
-  ctx.strokeStyle = "rgba(6, 10, 20, 0.38)";
-  ctx.strokeText(float.text, 0, 0);
+  ctx.beginPath();
+  ctx.fillStyle = "rgba(8, 10, 20, 0.42)";
+  ctx.roundRect(-78, -32, 156, 72, 22);
+  ctx.fill();
+  ctx.font = '700 42px "JetBrains Mono", monospace';
+  ctx.lineWidth = 8;
+  ctx.strokeStyle = "rgba(6, 10, 20, 0.55)";
+  ctx.strokeText(float.text, 0, -4);
   ctx.shadowColor = float.color;
-  ctx.shadowBlur = 18;
+  ctx.shadowBlur = 22;
   ctx.fillStyle = "#ffffff";
-  ctx.fillText(float.text, 0, 0);
+  ctx.fillText(float.text, 0, -4);
   ctx.shadowBlur = 0;
-  ctx.font = "600 14px Vazirmatn, sans-serif";
+  ctx.font = "700 15px Vazirmatn, sans-serif";
   ctx.fillStyle = float.color;
-  ctx.fillText(float.sub, 0, 28);
+  ctx.fillText(float.sub, 0, 26);
   ctx.restore();
 }
 
 function drawBanner(ctx: CanvasRenderingContext2D, view: ViewState): void {
-  const intro = Math.min(1, (1.2 - view.bannerLife) / 0.16);
+  const intro = Math.min(1, Math.max(0, (1.55 - view.bannerLife) / 0.18));
   const scale = 0.7 + intro * 0.38;
   ctx.save();
   ctx.globalAlpha = Math.min(1, view.bannerLife);

@@ -109,6 +109,11 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    if (mode !== "play" || hud.hint) return;
+    setTip((current) => Math.max(current, hud.score > 0 ? 2 : 1));
+  }, [mode, hud.hint, hud.score]);
+
+  useEffect(() => {
     if (mode !== "play" || summary || sheet) return;
     const timer = window.setTimeout(() => {
       setTip((current) => (current < TIPS.length - 1 ? current + 1 : current));
