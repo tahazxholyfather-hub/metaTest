@@ -6,8 +6,10 @@ import type { PlayerProfile, RunRecord } from "../save/models";
 import type { PlayerRepository } from "../save/repository";
 import { Board, createBall } from "./board";
 import { difficultyFactor, fallSpeed } from "./difficulty";
-import { reactionFormula, reactionProductName } from "./formula";
+import { chemicalGlyph, reactionFormula, reactionProductName } from "./formula";
+import { applyFrost, applyMagnet, applyVoid, emptyCharges, encodeCharges, isGadget, type GadgetId } from "./gadgets";
 import { cellCenter, cellInside, inBounds, makeLayout, neighborCoords } from "./hex";
+import { materialName, scoreLabel } from "./labels";
 import { mulberry32, type Rng } from "./rng";
 import { chainBonus, levelFromXp, xpFromStats } from "./score";
 import {
@@ -79,7 +81,11 @@ export class GameEngine {
   private currentId = "H";
   private nextId = "O";
   private launcherBorn = 1;
-  private shot: { elementId: string; x: number; y: number; vx: number; vy: number } | null = null;
+  private shot: { elementId: string; x: number; y: number; vx: number; vy: number; gadget: GadgetId | null } | null = null;
+  private armed: GadgetId | null = null;
+  private charges = emptyCharges();
+  private scoreBoost = 1;
+  private sparkSeeds: string[] = [];
   private phase: Phase | null = null;
   private queue: Command[] = [];
   private focus: string[] = [];
@@ -149,6 +155,14 @@ export class GameEngine {
     return this.repo.getLeaderboard(this.profile);
   }
 
+  armGadget(id: string): void {
+    if (!this.ready || this.ending || this.status === "gameover") return;
+    if (!isGadget(id) || this.charges[id] <= 0) return;
+    this.armed = this.armed === id ? null : id;
+    this.audio.play("ui");
+    this.emit();
+  }
+
   pointer(x: number, y: number): void {
     const dx = x - this.layout.launcherX;
     const dy = y - this.layout.launcherY;
@@ -165,12 +179,18 @@ export class GameEngine {
     if (!this.ready || this.ending || this.paused || this.status !== "playing") return;
     if (this.shot || this.phase || this.queue.length || this.chainLive) return;
     const angle = this.aimAngle;
+    const gadget = this.armed && this.charges[this.armed] > 0 ? this.armed : null;
+    if (gadget) {
+      this.charges[gadget] -= 1;
+      this.armed = null;
+    }
     this.shot = {
       elementId: this.currentId,
       x: this.layout.launcherX,
       y: this.layout.launcherY - this.layout.drawRadius * 0.2,
       vx: Math.cos(angle),
       vy: Math.sin(angle),
+      gadget,
     };
     const factor = difficultyFactor(this.elapsed, this.score);
     this.currentId = this.nextId;
@@ -215,6 +235,10 @@ export class GameEngine {
     this.flash = 0;
     this.banner = "";
     this.bannerLife = 0;
+    this.armed = null;
+    this.charges = emptyCharges();
+    this.scoreBoost = 1;
+    this.sparkSeeds = [];
     this.trace.length = 0;
     this.stats = emptyStats();
     this.bestAtStart = this.profile.bestScore;
@@ -358,6 +382,7 @@ export class GameEngine {
       ring,
       banner: this.banner,
       bannerLife: this.bannerLife,
+      armed: this.armed ?? "",
     };
   }
 
@@ -390,14 +415,23 @@ export class GameEngine {
           otherIds: cmd.ballIds.filter((id) => id !== primary.id),
           from: this.look(primary).style,
           to: mat.visual,
-          glyph: mat.formula,
-          formula: mat.name,
+          glyph: chemicalGlyph(mat.formula),
+          formula: materialName(mat.id),
           icon: mat.id,
         };
+        const point = cellCenter(primary.col, primary.row, this.layout, this.descent);
+        this.burst(point.x, point.y, 22, mat.visual.base);
+        this.flash = Math.max(this.flash, 0.22);
+        this.shake = Math.max(this.shake, 3.2);
       }
       this.audio.play(reaction.soundEffect);
     } else if (cmd.type === "match") {
       phase.pulseIds = cmd.ballIds;
+      const anchor = this.board.getId(cmd.ballIds[0] ?? "");
+      if (anchor) {
+        const point = cellCenter(anchor.col, anchor.row, this.layout, this.descent);
+        this.burst(point.x, point.y, 16, getMaterial(cmd.materialId).visual.base);
+      }
       this.audio.play(getMaterial(cmd.materialId).sound);
     } else if (cmd.type === "impact") {
       phase.pulseIds = [cmd.ballId];
@@ -436,6 +470,10 @@ export class GameEngine {
     this.trace.push(result.log);
     this.queue.push(...result.extra);
     this.focus = result.focusIds;
+    if (cmd.type === "impact" && this.sparkSeeds.length) {
+      this.focus = [...new Set([...result.focusIds, ...this.sparkSeeds])];
+      this.sparkSeeds = [];
+    }
     this.grant(result);
     this.phase = null;
     this.emit();
@@ -447,20 +485,25 @@ export class GameEngine {
       let base = result.scoreBase;
       if (result.scoreKind === "reaction" && this.chainSteps > 0) base += 100;
       const used = this.combo;
-      const points = Math.round(base * used);
+      const boosted = this.scoreBoost;
+      const points = Math.round(base * used * boosted);
+      if (boosted > 1) this.scoreBoost = 1;
       this.score += points;
       this.stats.score = this.score;
       const point = this.effectPoint(result);
+      const color = colorFor(result.scoreKind);
       this.floats.push({
         x: point.x,
-        y: point.y,
+        y: point.y - 8,
         text: `+${points.toLocaleString("en-US")}`,
-        sub: `${labelFor(result)} ×${used}`,
-        life: 0.95,
-        max: 0.95,
-        color: colorFor(result.scoreKind),
+        sub: boosted > 1 ? "کاتالیز" : scoreLabel(result.scoreKind, result.materialId),
+        life: 1.55,
+        max: 1.55,
+        color,
+        pop: boosted > 1 || result.scoreKind === "explosion" ? 1.22 : 1,
       });
-      if (this.floats.length > 8) this.floats.splice(0, this.floats.length - 8);
+      this.burst(point.x, point.y, result.scoreKind === "explosion" ? 18 : 8, color);
+      if (this.floats.length > 5) this.floats.splice(0, this.floats.length - 5);
     }
     if (!result.countsAsStep) return;
     this.chainSteps += 1;
@@ -480,17 +523,19 @@ export class GameEngine {
     if (bonus > 0) {
       this.score += bonus;
       this.stats.score = this.score;
-      this.banner = `CHAIN ×${this.chainSteps}`;
-      this.bannerLife = 1.15;
+      this.banner = `زنجیره ${this.chainSteps}`;
+      this.bannerLife = 1.55;
       this.floats.push({
         x: this.layout.width / 2,
-        y: this.layout.height * 0.4,
+        y: this.layout.height * 0.47,
         text: `+${bonus.toLocaleString("en-US")}`,
-        sub: "CHAIN",
-        life: 1.05,
-        max: 1.05,
+        sub: "زنجیره",
+        life: 1.7,
+        max: 1.7,
         color: "#ffe7a3",
+        pop: 1.28,
       });
+      this.burst(this.layout.width / 2, this.layout.height * 0.42, 24, "#ffe7a3");
       this.audio.play("discover");
     }
     this.chainLive = false;
@@ -549,15 +594,21 @@ export class GameEngine {
     }
     if (!socket) socket = this.closestSocket(x, y);
     const elementId = this.shot.elementId;
+    const gadget = this.shot.gadget;
     this.shot = null;
-    if (!socket) return;
+    if (!socket) {
+      if (gadget) this.refund(gadget);
+      return;
+    }
     const ball = createBall({ kind: "element", elementId, col: socket.col, row: socket.row });
     this.board.add(ball);
+    if (gadget) this.useGadget(gadget, ball, hit);
     this.burst(x, y, 8, getElement(elementId).visualStyle.glow);
     this.startChain(ball.id);
   }
 
   private descend(dt: number): void {
+    if (this.elapsed < 1.6) return;
     const factor = difficultyFactor(this.elapsed, this.score);
     this.descent += fallSpeed(factor) * dt;
     if (this.danger()) {
@@ -587,7 +638,7 @@ export class GameEngine {
   }
 
   private drift(dt: number): void {
-    if (this.elapsed < 2.4) return;
+    if (this.elapsed < 16) return;
     this.driftTimer += dt;
     if (this.driftTimer < 0.9) return;
     this.driftTimer = 0;
@@ -828,16 +879,81 @@ export class GameEngine {
   }
 
   private ringView(t: number): ViewState["ring"] {
-    if (this.phase?.cmd.type !== "explode") return null;
-    const cmd = this.phase.cmd;
-    const point = cellCenter(cmd.col, cmd.row, this.layout, this.descent);
-    return {
-      x: point.x,
-      y: point.y,
-      r: this.layout.drawRadius * (1.2 + t * (cmd.massive ? 7.2 : 4.6)),
-      t,
-      massive: cmd.massive,
-    };
+    if (this.phase?.cmd.type === "explode") {
+      const cmd = this.phase.cmd;
+      const point = cellCenter(cmd.col, cmd.row, this.layout, this.descent);
+      return {
+        x: point.x,
+        y: point.y,
+        r: this.layout.drawRadius * (1.2 + t * (cmd.massive ? 7.2 : 4.6)),
+        t,
+        massive: cmd.massive,
+        color: cmd.massive ? "#ffd27a" : "#ffb15a",
+      };
+    }
+    if (this.phase?.cmd.type === "reaction") {
+      const ball = this.board.getId(this.phase.cmd.primaryId);
+      if (!ball) return null;
+      const point = cellCenter(ball.col, ball.row, this.layout, this.descent);
+      return {
+        x: point.x,
+        y: point.y,
+        r: this.layout.drawRadius * (0.55 + t * 2.8),
+        t,
+        massive: false,
+        color: this.phase.morph?.to.base ?? "#9fd8ff",
+      };
+    }
+    if (this.phase?.cmd.type === "match") {
+      const ball = this.board.getId(this.phase.cmd.ballIds[0] ?? "");
+      if (!ball) return null;
+      const point = cellCenter(ball.col, ball.row, this.layout, this.descent);
+      return {
+        x: point.x,
+        y: point.y,
+        r: this.layout.drawRadius * (0.7 + t * 3.1),
+        t,
+        massive: false,
+        color: getMaterial(this.phase.cmd.materialId).visual.base,
+      };
+    }
+    return null;
+  }
+
+  private useGadget(id: GadgetId, ball: Ball, hit?: Ball): void {
+    const point = cellCenter(ball.col, ball.row, this.layout, this.descent);
+    if (id === "frost") {
+      applyFrost(this.board, ball.col, ball.row);
+      this.burst(point.x, point.y, 16, "#bfefff");
+      return;
+    }
+    if (id === "void") {
+      if (hit && applyVoid(this.board, hit)) {
+        const gone = cellCenter(hit.col, hit.row, this.layout, this.descent);
+        this.burst(gone.x, gone.y, 14, "#d5deee");
+      }
+      return;
+    }
+    if (id === "magnet") {
+      applyMagnet(this.board, ball.col, ball.row);
+      this.burst(point.x, point.y, 14, "#e3a4ff");
+      return;
+    }
+    if (id === "spark") {
+      this.sparkSeeds = neighborCoords(ball.col, ball.row)
+        .map(([col, row]) => this.board.get(col, row)?.id)
+        .filter((seed): seed is string => !!seed);
+      this.burst(point.x, point.y, 18, "#ffe56a");
+      this.flash = Math.max(this.flash, 0.2);
+      return;
+    }
+    this.scoreBoost = 2;
+    this.burst(point.x, point.y, 12, "#b6e36a");
+  }
+
+  private refund(id: GadgetId): void {
+    this.charges[id] += 1;
+    this.emit();
   }
 
   private effectPoint(result: ReturnType<typeof applyCommand>): { x: number; y: number } {
@@ -856,13 +972,19 @@ export class GameEngine {
       return { kind: "element", icon: "", glyph: element.symbol, formula: element.name, style: element.visualStyle };
     }
     const material = getMaterial(ball.materialId ?? "water");
-    return { kind: "material", icon: material.id, glyph: material.formula, formula: material.name, style: material.visual };
+    return {
+      kind: "material",
+      icon: material.id,
+      glyph: chemicalGlyph(material.formula),
+      formula: materialName(material.id),
+      style: material.visual,
+    };
   }
 
   private makeViewBall(id: string, kind: "element" | "material", x: number, y: number, scale: number): ViewBall {
     const style = kind === "element" ? getElement(id).visualStyle : getMaterial(id).visual;
-    const glyph = kind === "element" ? getElement(id).symbol : getMaterial(id).formula;
-    const formula = kind === "element" ? getElement(id).name : getMaterial(id).name;
+    const glyph = kind === "element" ? getElement(id).symbol : chemicalGlyph(getMaterial(id).formula);
+    const formula = kind === "element" ? getElement(id).symbol : materialName(id);
     return {
       x,
       y,
@@ -911,13 +1033,15 @@ export class GameEngine {
       hint: !!this.profile && !this.profile.hintSeen && this.status === "playing",
       sound: this.profile?.sound ?? true,
       discovered: this.profile?.discoveredReactions ?? [],
+      armedGadget: this.armed ?? "",
+      gadgetCharges: encodeCharges(this.charges),
     };
   }
 
   private emit(): void {
     if (!this.profile) return;
     const hud = this.hud();
-    const sig = `${hud.status}|${hud.score}|${hud.name}|${hud.hint}|${hud.sound}|${hud.bestScore}|${hud.xp}|${hud.level}|${hud.discovered.join(",")}`;
+    const sig = `${hud.status}|${hud.score}|${hud.combo}|${hud.name}|${hud.hint}|${hud.sound}|${hud.bestScore}|${hud.xp}|${hud.level}|${hud.armedGadget}|${hud.gadgetCharges}|${hud.discovered.join(",")}`;
     if (sig === this.hudSig) return;
     this.hudSig = sig;
     this.onHud(hud);
@@ -932,14 +1056,6 @@ function openNeighbors(board: Board, ball: Ball): Array<[number, number]> {
 
 function iconFor(ball: Ball, fallback: string): string {
   return ball.materialId ?? fallback;
-}
-
-function labelFor(result: ReturnType<typeof applyCommand>): string {
-  if (result.scoreKind === "explosion") return "BOOM";
-  if (result.scoreKind === "match" && result.materialId) return getMaterial(result.materialId).name.toUpperCase();
-  if (result.scoreKind === "reaction") return "REACT";
-  if (result.scoreKind === "clear") return "CLEAR";
-  return "SCORE";
 }
 
 function colorFor(kind: ReturnType<typeof applyCommand>["scoreKind"]): string {

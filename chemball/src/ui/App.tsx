@@ -1,14 +1,14 @@
-import { useEffect, useRef, useState, type PointerEvent } from "react";
+import { Atom, Play, Trophy } from "lucide-react";
+import { useEffect, useRef, useState, type FormEvent, type PointerEvent } from "react";
 import { AudioBus } from "../audio/sfx";
-import { REACTIONS } from "../data/reactions";
 import { GameEngine } from "../game/engine";
-import { reactionFormula, reactionProductName } from "../game/formula";
 import { makeLayout } from "../game/hex";
 import { formatNumber } from "../game/score";
 import type { DiscoveryNotice, HudSnapshot, RunSummary } from "../game/types";
 import { renderFrame } from "../render/draw";
-import type { LeaderboardEntry } from "../save/models";
 import { LocalPlayerRepository } from "../save/localRepository";
+import { SIGNS, TIPS } from "./copy";
+import { GadgetSheet, Guide } from "./panels";
 
 const EMPTY_HUD: HudSnapshot = {
   status: "playing",
@@ -22,7 +22,12 @@ const EMPTY_HUD: HudSnapshot = {
   hint: true,
   sound: true,
   discovered: [],
+  armedGadget: "",
+  gadgetCharges: "frost:2,void:1,magnet:2,spark:2,catalyst:2",
 };
+
+type Mode = "home" | "play";
+type Sheet = "gadgets" | "guide" | null;
 
 export function App() {
   const phoneRef = useRef<HTMLDivElement>(null);
@@ -31,10 +36,15 @@ export function App() {
   const repoRef = useRef(new LocalPlayerRepository());
   const [hud, setHud] = useState<HudSnapshot>(EMPTY_HUD);
   const [summary, setSummary] = useState<RunSummary | null>(null);
-  const [menu, setMenu] = useState(false);
-  const [leaders, setLeaders] = useState<LeaderboardEntry[]>([]);
   const [discovery, setDiscovery] = useState<DiscoveryNotice | null>(null);
+  const [mode, setMode] = useState<Mode>("home");
+  const [sheet, setSheet] = useState<Sheet>(null);
+  const [naming, setNaming] = useState(false);
   const [draftName, setDraftName] = useState("Reza");
+  const [tip, setTip] = useState(0);
+  const [pop, setPop] = useState(0);
+  const scoreRef = useRef(0);
+  const modeRef = useRef<Mode>("home");
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -44,6 +54,10 @@ export function App() {
     engineRef.current = engine;
     engine.onHud = (next) => {
       setHud(next);
+      if (next.score !== scoreRef.current) {
+        scoreRef.current = next.score;
+        setPop((value) => value + 1);
+      }
     };
     engine.onDiscovery = (notice) => {
       setDiscovery(notice);
@@ -53,7 +67,7 @@ export function App() {
     };
     engine.onSummary = (next) => {
       setSummary(next);
-      setMenu(false);
+      setSheet(null);
     };
 
     let frame = 0;
@@ -82,6 +96,7 @@ export function App() {
     const observer = new ResizeObserver(resize);
     observer.observe(phone);
     void engine.init().then(() => {
+      if (modeRef.current === "home") engine.pause(true);
       resize();
       last = performance.now();
       frame = requestAnimationFrame(loop);
@@ -93,27 +108,60 @@ export function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (mode !== "play" || hud.hint) return;
+    setTip((current) => Math.max(current, hud.score > 0 ? 2 : 1));
+  }, [mode, hud.hint, hud.score]);
+
+  useEffect(() => {
+    if (mode !== "play" || summary || sheet) return;
+    const timer = window.setTimeout(() => {
+      setTip((current) => (current < TIPS.length - 1 ? current + 1 : current));
+    }, 3400);
+    return () => window.clearTimeout(timer);
+  }, [mode, summary, sheet, tip]);
+
+  const live = mode === "play" && !sheet && !summary;
+
   const aim = (event: PointerEvent<HTMLCanvasElement>) => {
+    if (!live) return;
     const rect = event.currentTarget.getBoundingClientRect();
     engineRef.current?.pointer(event.clientX - rect.left, event.clientY - rect.top);
   };
 
-  const openMenu = async () => {
+  const begin = () => {
     const engine = engineRef.current;
     if (!engine) return;
-    engine.pause(true);
-    setDraftName(hud.name);
-    setMenu(true);
-    setLeaders(await engine.leaderboard());
+    engine.unlockAudio();
+    modeRef.current = "play";
+    if (hud.status === "gameover") engine.restart();
+    else engine.pause(false);
+    setSummary(null);
+    setSheet(null);
+    setNaming(false);
+    setTip(0);
+    setMode("play");
   };
 
-  const closeMenu = () => {
-    engineRef.current?.pause(false);
-    setMenu(false);
+  const openGadgets = () => {
+    engineRef.current?.pause(true);
+    setSheet("gadgets");
   };
 
-  const known = new Set(hud.discovered);
-  const discovered = REACTIONS.filter((reaction) => known.has(reaction.id));
+  const closeSheet = () => {
+    if (hud.status !== "gameover") engineRef.current?.pause(false);
+    setSheet(null);
+  };
+
+  const saveName = (event: FormEvent) => {
+    event.preventDefault();
+    void engineRef.current?.rename(draftName);
+    setNaming(false);
+  };
+
+  const charges = parseCharges(hud.gadgetCharges);
+  const chargeTotal = Object.values(charges).reduce((sum, value) => sum + value, 0);
+  const lesson = TIPS[tip] ?? TIPS[0];
 
   return (
     <div className="stage">
@@ -121,118 +169,170 @@ export function App() {
         <canvas
           ref={canvasRef}
           onPointerDown={(event) => {
+            if (!live) return;
             event.currentTarget.setPointerCapture(event.pointerId);
             engineRef.current?.unlockAudio();
             aim(event);
           }}
           onPointerMove={aim}
-          onPointerUp={() => engineRef.current?.shoot()}
+          onPointerUp={() => {
+            if (live) engineRef.current?.shoot();
+          }}
         />
-        <header className="hud">
-          <div className="who">
-            <div className="avatar" aria-hidden>
-              {hud.avatar}
+        {mode === "home" && (
+          <div className="home">
+            <header className="home-bar">
+              <div className="best-chip">
+                <Trophy size={15} />
+                <span>
+                  <small>رکورد</small>
+                  <b>{formatNumber(hud.bestScore)}</b>
+                </span>
+              </div>
+              {naming ? (
+                <form className="name-form" onSubmit={saveName}>
+                  <input
+                    aria-label="نام"
+                    value={draftName}
+                    maxLength={16}
+                    autoFocus
+                    onChange={(event) => setDraftName(event.target.value)}
+                    onBlur={() => {
+                      void engineRef.current?.rename(draftName);
+                      setNaming(false);
+                    }}
+                  />
+                </form>
+              ) : (
+                <button
+                  className="name-chip"
+                  type="button"
+                  onClick={() => {
+                    setDraftName(hud.name);
+                    setNaming(true);
+                  }}
+                >
+                  {hud.name}
+                </button>
+              )}
+            </header>
+            <div className="field" aria-hidden>
+              {SIGNS.map((sign) => (
+                <span
+                  key={sign.s}
+                  className="sign"
+                  style={{
+                    left: sign.x,
+                    top: sign.y,
+                    width: sign.n,
+                    height: sign.n,
+                    color: sign.c,
+                    animationDelay: sign.d,
+                  }}
+                >
+                  {sign.s}
+                </span>
+              ))}
             </div>
-            <span>{hud.name}</span>
+            <button className="play" type="button" aria-label="شروع" onClick={begin}>
+              <span className="play-ring" />
+              <span className="play-ring late" />
+              <Play size={34} strokeWidth={2.4} className="play-icon" />
+            </button>
           </div>
-          <div className="score">{formatNumber(hud.score)}</div>
-          <button className="menu-btn" type="button" aria-label="Menu" onClick={() => void openMenu()}>
-            ☰
+        )}
+        {mode === "play" && (
+          <header className="hud">
+            <div className={pop > 0 ? "score pop" : "score"} key={pop}>
+              {formatNumber(hud.score)}
+            </div>
+            {hud.combo > 1 && !summary && <div className="combo">×{hud.combo}</div>}
+          </header>
+        )}
+        {live && lesson && (
+          <div className="snack rtl" role="status">
+            <b>{lesson.k}</b>
+            <span>{lesson.t}</span>
+          </div>
+        )}
+        {mode === "play" && !summary && sheet !== "guide" && (
+          <button
+            className={hud.armedGadget ? "gadget-btn armed" : "gadget-btn"}
+            type="button"
+            aria-label="ابزارها"
+            onClick={openGadgets}
+          >
+            <Atom size={26} />
+            <em>{chargeTotal}</em>
           </button>
-        </header>
-        {hud.hint && !summary && <div className="hint">Drag to aim · release to shoot</div>}
-        {discovery && (
-          <div className="toast" role="status">
-            <p className="kicker">NEW REACTION</p>
-            <strong>{discovery.formula}</strong>
+        )}
+        {discovery && mode === "play" && (
+          <div className="toast rtl" role="status">
+            <p className="kicker">واکنش تازه</p>
+            <strong dir="ltr">{discovery.formula}</strong>
             <em>{discovery.product}</em>
           </div>
         )}
         {summary && (
           <div className="overlay">
-            <section className="endcard">
-              <p className="wordmark">CHEMBALL</p>
-              <p className="record-label">RECORD</p>
+            <section className="endcard rtl">
+              <p className="wordmark">شیمی‌بال</p>
+              <p className="record-label">رکورد این آزمایش</p>
               <p className="record">{formatNumber(summary.score)}</p>
-              <p className="xp">+{formatNumber(summary.xpEarned)} XP</p>
-              {summary.isRecord && <div className="badge">NEW RECORD!</div>}
-              <p className="best">BEST {formatNumber(summary.bestScore)}</p>
+              <p className="xp">+{formatNumber(summary.xpEarned)} تجربه</p>
+              {summary.isRecord && <div className="badge">رکورد تازه</div>}
+              <p className="best">بهترین {formatNumber(summary.bestScore)}</p>
               <p className="stats">
-                {summary.reactionsCreated} reactions · {summary.materialsMatched} matches · chain {summary.highestChain}
+                {summary.reactionsCreated} واکنش · {summary.materialsMatched} جور · زنجیره {summary.highestChain}
               </p>
               <button
                 className="primary"
                 type="button"
                 onClick={() => {
                   setSummary(null);
+                  setTip(0);
                   engineRef.current?.restart();
                 }}
               >
-                PLAY AGAIN
+                دوباره
               </button>
-            </section>
-          </div>
-        )}
-        {menu && !summary && (
-          <div className="overlay">
-            <section className="sheet">
-              <div className="sheet-head">
-                <p className="level">
-                  Level {hud.level} · {formatNumber(hud.xp)} XP
-                </p>
-                <button className="close" type="button" onClick={closeMenu} aria-label="Close">
-                  ×
-                </button>
-              </div>
-              <form
-                className="name-row"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void engineRef.current?.rename(draftName);
+              <button
+                className="ghost"
+                type="button"
+                onClick={() => {
+                  setSummary(null);
+                  setSheet(null);
+                  modeRef.current = "home";
+                  setMode("home");
                 }}
               >
-                <input
-                  aria-label="Player name"
-                  value={draftName}
-                  maxLength={16}
-                  onChange={(event) => setDraftName(event.target.value)}
-                />
-                <button type="submit">Save</button>
-              </form>
-              <button className="sound" type="button" onClick={() => void engineRef.current?.setSound(!hud.sound)}>
-                Sound {hud.sound ? "on" : "off"}
-              </button>
-              <h2>HOW TO PLAY</h2>
-              <p className="help">Shoot an element into a neighbor to create a material. Color is only an identity.</p>
-              <p className="help">Match 3 connected copies of that material. Elements never match on their own.</p>
-              <p className="help">Water falls, fire spreads, steam rises, acid dissolves, explosives detonate, ice locks a row.</p>
-              <h2>RECORD BOARD</h2>
-              {leaders.map((entry, index) => (
-                <div className={entry.you ? "row you" : "row"} key={entry.id}>
-                  <span>
-                    {index + 1}. {entry.name}
-                  </span>
-                  <b>{formatNumber(entry.score)}</b>
-                </div>
-              ))}
-              <h2>DISCOVERED</h2>
-              {discovered.length === 0 && <p className="help">Reactions appear here the first time you create them.</p>}
-              {discovered.map((reaction) => (
-                <div className="row" key={reaction.id}>
-                  <span>{reactionFormula(reaction)}</span>
-                  <b>{reactionProductName(reaction)}</b>
-                </div>
-              ))}
-              <p className="help">
-                {REACTIONS.length - discovered.length} reactions still hidden. Best {formatNumber(hud.bestScore)}.
-              </p>
-              <button className="ghost" type="button" onClick={closeMenu}>
-                BACK TO LAB
+                خانه
               </button>
             </section>
           </div>
         )}
+        {sheet === "gadgets" && !summary && (
+          <GadgetSheet
+            charges={charges}
+            armed={hud.armedGadget}
+            sound={hud.sound}
+            onArm={(id) => engineRef.current?.armGadget(id)}
+            onSound={() => void engineRef.current?.setSound(!hud.sound)}
+            onGuide={() => setSheet("guide")}
+            onClose={closeSheet}
+          />
+        )}
+        {sheet === "guide" && !summary && <Guide discovered={hud.discovered} onBack={() => setSheet("gadgets")} />}
       </div>
     </div>
   );
+}
+
+function parseCharges(raw: string): Record<string, number> {
+  const charges: Record<string, number> = {};
+  for (const part of raw.split(",")) {
+    const [id, count] = part.split(":");
+    if (id) charges[id] = Number(count) || 0;
+  }
+  return charges;
 }
