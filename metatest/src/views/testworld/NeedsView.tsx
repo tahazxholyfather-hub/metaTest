@@ -520,6 +520,19 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
         return false;
     };
 
+    const isReviewBudgetOver = () => {
+        if (step !== 7) return false;
+        const TOTAL_BUDGET = 50;
+        const selectedItems = (flowData.quizType === 'chapter' ? flowData.chapters : flowData.mabhas)
+            .map((id) => getCachedItem(id, flowData.quizType === 'chapter' ? chaptersCache : mabhasCache))
+            .filter(Boolean);
+        const perItemBudget = selectedItems.length > 0 ? Math.floor(TOTAL_BUDGET / selectedItems.length) : TOTAL_BUDGET;
+        const totalQuestions = selectedItems.reduce((acc: number, item: any) => {
+            return acc + (flowData.settings.questionCounts[item.id] || Math.min(10, Math.min(perItemBudget, item.question_count || 30)));
+        }, 0);
+        return totalQuestions > TOTAL_BUDGET;
+    };
+
     // ─── State mutators ───────────────────────────────────────────────────────
 
     const toggleLesson = (item: any) => {
@@ -644,6 +657,29 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
             setIsCreatingQuiz(false);
         }
     };
+
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key !== 'Enter' || e.repeat) return;
+            if (e.altKey || e.ctrlKey || e.metaKey) return;
+            const target = e.target as HTMLElement | null;
+            const tag = target?.tagName;
+            if (tag === 'TEXTAREA' || target?.isContentEditable) return;
+            if (tag === 'SELECT') return;
+            if (dataLoading || isCreatingQuiz || showStartCountdown) return;
+            if (step < 7) {
+                if (isNextDisabled()) return;
+                e.preventDefault();
+                handleNext();
+                return;
+            }
+            if (isNextDisabled() || isReviewBudgetOver()) return;
+            e.preventDefault();
+            handleStartQuiz();
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    });
 
     if (showStartCountdown && createdPrivateQuizId) {
         return <QuizCountdown durationMs={3000} onComplete={() => navigate(`/quiz/${createdPrivateQuizId}`)} />;

@@ -673,12 +673,9 @@ const handleCreateQuiz = async (req, res) => {
 
     try {
         if (isSelectorQuiz) {
-            const uniqueIds = [...new Set(explicitQuestionIds)];
+            const uniqueIds = [...new Set(explicitQuestionIds)].slice(0, 50);
             if (uniqueIds.length === 0) {
                 return res.json({ success: false, message: "هیچ سوالی انتخاب نشده است." });
-            }
-            if (uniqueIds.length > 1000) {
-                return res.json({ success: false, message: "تعداد سوال‌های انتخاب‌شده بیش از حد مجاز است." });
             }
             const [foundRows] = await pool.query(
                 `SELECT id FROM questions_tam24

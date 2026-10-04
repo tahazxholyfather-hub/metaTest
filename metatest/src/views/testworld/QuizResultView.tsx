@@ -1,13 +1,9 @@
-import React, { useState, useMemo, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useState, useMemo, useEffect, useLayoutEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useReactToPrint } from 'react-to-print';
-import PrintResultSheet from './PrintResultSheet';
 import { toast, Toaster } from 'sonner';
 import {
     Share2,
-    Printer,
     LogOut,
     Clock3,
     BookOpenText,
@@ -49,7 +45,7 @@ import {
     QuestionSkeleton
 } from './SharedComponents';
 
-import MathRenderer, { loadMathJax } from '../../components/ui/MathRenderer';
+import MathRenderer from '../../components/ui/MathRenderer';
 import { ResponsiveModal } from '../../components/ResponsiveModal';
 import { clsx } from 'clsx';
 import { flowApi } from '../../lib/authApi';
@@ -408,7 +404,6 @@ export default function ResultDashboard() {
     const [originalWaveChartData, setOriginalWaveChartData] = useState([]);
 
     const [selectedQuestion, setSelectedQuestion] = useState(null);
-    const printRef = useRef(null);
     // Members state (only populated for public quizzes)
     const [members, setMembers] = useState([]);
     const [membersLoading, setMembersLoading] = useState(false);
@@ -420,24 +415,6 @@ export default function ResultDashboard() {
     const handleLeave = useCallback(() => {
         navigate('/dashboard');
     }, [navigate]);
-
-    // ─── Print: navigate to print view with active user data ─────────────────
-    const handlePrint = useReactToPrint({
-        contentRef: printRef,
-        documentTitle: 'کارنامه آزمون',
-        onBeforePrint: async () => {
-            const node = printRef.current;
-            if (!node) return;
-            const loaded = await loadMathJax();
-            if (!loaded || !window.MathJax?.typesetPromise) return;
-            try {
-                window.MathJax.typesetClear?.([node]);
-                await window.MathJax.typesetPromise([node]);
-            } catch (err) {
-                console.error('Print MathJax typeset failed:', err);
-            }
-        },
-    });
 
     // ─── Fetch quiz result (self) on mount ────────────────────────────────────
     const fetchResultData = useCallback(async () => {
@@ -690,16 +667,6 @@ export default function ResultDashboard() {
                                 >
                                     <Share2 className="h-5 w-5 sm:h-4 sm:w-4 text-[var(--color-primary-400)]" />
                                     <span className="hidden sm:inline">اشتراک</span>
-                                </button>
-
-                                {/* Print → navigate to print route with data */}
-                                <button
-                                    onClick={handlePrint}
-                                    disabled={!activeUser || loading}
-                                    className="inline-flex p-0 h-10 w-10 sm:h-11 sm:w-auto items-center justify-center gap-2 rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] sm:px-4 text-sm font-medium text-[var(--text-primary)] transition hover:bg-[var(--hover-overlay)] disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    <Printer className="h-5 w-5 sm:h-4 sm:w-4 text-[var(--color-primary-400)]" />
-                                    <span className="hidden sm:inline">چاپ</span>
                                 </button>
                             </div>
                         </div>
@@ -1222,31 +1189,6 @@ export default function ResultDashboard() {
                         </div>
                     )}
                 </ResponsiveModal>
-
-                {typeof document !== 'undefined' && createPortal(
-                    <div
-                        aria-hidden="true"
-                        className="pointer-events-none"
-                        style={{
-                            position: 'fixed',
-                            left: 0,
-                            top: 0,
-                            width: 0,
-                            height: 0,
-                            overflow: 'hidden',
-                        }}
-                    >
-                        <div ref={printRef} style={{ width: '210mm' }}>
-                            <PrintResultSheet
-                                activeUser={activeUser}
-                                questions={questions}
-                                lessonsData={lessonsData}
-                                quizTitle="کارنامه آزمون"
-                            />
-                        </div>
-                    </div>,
-                    document.body
-                )}
 
                 <style>{`
                   .math-renderer .mjx-chtml {

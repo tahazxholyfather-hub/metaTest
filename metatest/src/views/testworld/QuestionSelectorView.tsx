@@ -35,7 +35,7 @@ type FilterOption = { id: number | string; title: string };
 
 const DIFFICULTIES = ['آسان', 'متوسط', 'سخت'] as const;
 const PAGE_SIZE = 12;
-const AUTO_SAMPLE_MAX = 200;
+const MAX_SELECTED = 50;
 const IMAGE_BASE = '/images/questions/';
 
 const toIds = (list: Array<string | number>) =>
@@ -283,8 +283,8 @@ export function QuestionSelectorView({
             setPage(nextPage);
             setHasApplied(true);
             if (mode === 'auto' && !opts?.keepSelection) {
-                setSelected(list);
-                toast.success(`${list.length} سوال به‌صورت خودکار انتخاب شد.`);
+                setSelected(list.slice(0, MAX_SELECTED));
+                toast.success(`${Math.min(list.length, MAX_SELECTED)} سوال به‌صورت خودکار انتخاب شد.`);
             }
         } catch {
             toast.error('ارتباط با سرور برقرار نشد.');
@@ -317,6 +317,10 @@ export function QuestionSelectorView({
     const toggleQuestion = (question: BankQuestion) => {
         setSelected((prev) => {
             if (prev.some((q) => q.id === question.id)) return prev.filter((q) => q.id !== question.id);
+            if (prev.length >= MAX_SELECTED) {
+                toast.error(`حداکثر ${MAX_SELECTED} سوال می‌توانید انتخاب کنید.`);
+                return prev;
+            }
             return [...prev, question];
         });
     };
@@ -372,6 +376,7 @@ export function QuestionSelectorView({
         setSelected((prev) => {
             const next = [...prev];
             for (const q of questions) {
+                if (next.length >= MAX_SELECTED) break;
                 if (!next.some((x) => x.id === q.id)) next.push(q);
             }
             return next;
@@ -381,6 +386,10 @@ export function QuestionSelectorView({
     const handleStartQuiz = async () => {
         if (selected.length === 0) {
             toast.error('حداقل یک سوال انتخاب کنید.');
+            return;
+        }
+        if (selected.length > MAX_SELECTED) {
+            toast.error(`حداکثر ${MAX_SELECTED} سوال می‌توانید انتخاب کنید.`);
             return;
         }
         if (!time || time <= 0) {
@@ -571,7 +580,7 @@ export function QuestionSelectorView({
                                     <input
                                         type="range"
                                         min={1}
-                                        max={AUTO_SAMPLE_MAX}
+                                        max={MAX_SELECTED}
                                         value={autoCount}
                                         onChange={(e) => setAutoCount(Number(e.target.value))}
                                         className="w-full accent-[var(--accent)]"
@@ -770,7 +779,7 @@ export function QuestionSelectorView({
                 <div className="bg-[var(--bg-card)] border border-[var(--border)] shadow-xl rounded-2xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center gap-3">
                     <div className="flex items-center gap-2 text-[12px] font-bold text-[var(--text-primary)] min-w-[110px]">
                         <BookOpen size={16} className="text-[var(--accent)]" />
-                        {selected.length} سوال
+                        {selected.length} / {MAX_SELECTED} سوال
                     </div>
                     <input
                         value={quizName}
