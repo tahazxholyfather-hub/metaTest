@@ -1,12 +1,13 @@
 /** 0 = opening pace, 1 = late-run pressure. Never shown as a timer. */
 export function difficultyFactor(elapsed: number, score: number): number {
-  const timeCurve = 1 - Math.exp(-elapsed / 140);
-  const scoreCurve = 1 - Math.exp(-score / 18000);
-  return clamp(timeCurve * 0.62 + scoreCurve * 0.38, 0, 1);
+  const timeCurve = 1 - Math.exp(-elapsed / 200);
+  const scoreCurve = 1 - Math.exp(-score / 20000);
+  return clamp(timeCurve * 0.6 + scoreCurve * 0.4, 0, 1);
 }
 
+/** Pixels per second the stack creeps down. The opening is slow enough to read every row. */
 export function fallSpeed(factor: number): number {
-  return 12 + Math.pow(factor, 1.55) * 78;
+  return 3 + Math.pow(factor, 1.7) * 56;
 }
 
 /** Chance a new row leaves a single edge gap. The rest of the row stays intact. */

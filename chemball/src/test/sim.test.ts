@@ -176,7 +176,7 @@ describe("engine", () => {
     await engine.init();
     engine.animScale = 0.001;
     engine.setLayout(makeLayout(390, 844));
-    for (let frame = 0; frame < 900 && !finished.summary; frame += 1) engine.update(0.05);
+    for (let frame = 0; frame < 4000 && !finished.summary; frame += 1) engine.update(0.05);
     const summary = finished.summary;
     expect(summary).toBeTruthy();
     await new Promise((resolve) => setTimeout(resolve, 30));

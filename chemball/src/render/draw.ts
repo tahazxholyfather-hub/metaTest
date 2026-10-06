@@ -13,6 +13,9 @@ import {
   type IconNode,
 } from "lucide";
 import type { ViewBall, ViewState } from "../game/view";
+import { chemImage } from "./chem";
+
+const NUMBER_FONT = '"Orbitron", "JetBrains Mono", monospace';
 
 const MATERIAL_ICONS: Record<string, IconNode> = {
   water: Droplets,
@@ -65,6 +68,7 @@ export function renderFrame(ctx: CanvasRenderingContext2D, view: ViewState, dpr:
   for (const float of view.floats) drawFloat(ctx, float);
   if (view.banner && view.bannerLife > 0) drawBanner(ctx, view);
   ctx.restore();
+  if (view.chill > 0.01) drawChill(ctx, view);
   if (view.flash > 0.01) {
     ctx.fillStyle = `rgba(255,244,220,${view.flash * 0.35})`;
     ctx.fillRect(0, 0, view.width, view.height);
@@ -262,21 +266,15 @@ function drawBall(ctx: CanvasRenderingContext2D, ball: ViewBall): void {
     const lively = ball.icon === "fire" || ball.icon === "energy" || ball.icon === "steam" || ball.icon === "charged";
     const breathe = 1 + Math.sin(performance.now() / (lively ? 280 : 700) + y) * (lively ? 0.07 : 0.03);
     const hasFormula = ball.glyph.length > 0;
-    strokeIcon(ctx, icon, x, y - (hasFormula ? radius * 0.12 : 0), radius * 1.05 * breathe, ink);
+    const iconSize = radius * (hasFormula ? 0.9 : 1.08) * breathe;
+    strokeIcon(ctx, icon, x, y - (hasFormula ? radius * 0.2 : 0), iconSize, ink);
     if (hasFormula) {
-      ctx.fillStyle = ink;
-      ctx.globalAlpha = ball.alpha * 0.9;
-      ctx.font = `600 ${Math.max(8, radius * 0.3)}px "JetBrains Mono", monospace`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(ball.glyph, x, y + radius * 0.46);
+      ctx.globalAlpha = ball.alpha * 0.92;
+      drawFormula(ctx, ball.glyph, x, y + radius * 0.48, radius * 1.3, radius * 0.4, ink, 18);
     }
   } else {
-    ctx.fillStyle = ink;
-    ctx.font = `600 ${radius * (ball.glyph.length > 1 ? 0.46 : 0.62)}px "JetBrains Mono", monospace`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(ball.glyph, x, y + radius * 0.02);
+    const height = radius * (ball.glyph.length > 1 ? 0.78 : 0.92);
+    drawFormula(ctx, ball.glyph, x, y + radius * 0.03, radius * 1.45, height, ink, 34);
   }
   if (ball.frost) {
     ctx.strokeStyle = "rgba(210, 244, 255, 0.9)";
@@ -286,6 +284,32 @@ function drawBall(ctx: CanvasRenderingContext2D, ball: ViewBall): void {
     ctx.stroke();
   }
   ctx.restore();
+}
+
+/** Draws a MathJax formula centered at (x, y), fitted inside maxWidth × height. Falls back to text while decoding. */
+function drawFormula(
+  ctx: CanvasRenderingContext2D,
+  tex: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  height: number,
+  color: string,
+  weight: number,
+): void {
+  const chem = chemImage(tex, color, weight);
+  if (!chem) {
+    ctx.fillStyle = color;
+    ctx.font = `600 ${height * 0.8}px "Times New Roman", serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(tex.replace(/[()+\-]/g, ""), x, y);
+    return;
+  }
+  const scale = Math.min(height / chem.height, maxWidth / chem.width);
+  const w = chem.width * scale;
+  const h = chem.height * scale;
+  ctx.drawImage(chem.image, x - w / 2, y - h / 2, w, h);
 }
 
 function strokeIcon(
@@ -434,7 +458,7 @@ function drawFloat(ctx: CanvasRenderingContext2D, float: ViewState["floats"][num
   ctx.fillStyle = "rgba(8, 10, 20, 0.42)";
   ctx.roundRect(-78, -32, 156, 72, 22);
   ctx.fill();
-  ctx.font = '700 42px "JetBrains Mono", monospace';
+  ctx.font = `900 38px ${NUMBER_FONT}`;
   ctx.lineWidth = 8;
   ctx.strokeStyle = "rgba(6, 10, 20, 0.55)";
   ctx.strokeText(float.text, 0, -4);
@@ -466,11 +490,29 @@ function drawBanner(ctx: CanvasRenderingContext2D, view: ViewState): void {
   ctx.restore();
 }
 
+function drawChill(ctx: CanvasRenderingContext2D, view: ViewState): void {
+  const { width, height } = view;
+  const edge = ctx.createRadialGradient(width / 2, height * 0.42, height * 0.24, width / 2, height * 0.45, height * 0.7);
+  edge.addColorStop(0, "rgba(160, 220, 255, 0)");
+  edge.addColorStop(1, `rgba(170, 225, 255, ${0.32 * view.chill})`);
+  ctx.fillStyle = edge;
+  ctx.fillRect(0, 0, width, height);
+  const time = performance.now() / 1000;
+  ctx.save();
+  ctx.globalAlpha = 0.5 * view.chill;
+  ctx.fillStyle = "#e8f8ff";
+  for (let i = 0; i < 26; i += 1) {
+    const px = (i * 97.3 + Math.sin(time * 0.6 + i) * 14) % width;
+    const py = (i * 53.7 + time * (10 + (i % 4) * 4)) % (height * 0.8);
+    ctx.beginPath();
+    ctx.arc(px, py, 1 + (i % 3) * 0.6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
 function armedColor(id: string): string {
-  if (id === "frost") return "#8fd4ea";
-  if (id === "void") return "#d5deee";
-  if (id === "magnet") return "#e3a4ff";
-  if (id === "spark") return "#ffe56a";
+  if (id === "burner") return "#ff9a4a";
   return "#b6e36a";
 }
 

@@ -59,4 +59,5 @@ export interface ViewState {
   banner: string;
   bannerLife: number;
   armed: string;
+  chill: number;
 }

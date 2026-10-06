@@ -6,10 +6,19 @@ import type { PlayerProfile, RunRecord } from "../save/models";
 import type { PlayerRepository } from "../save/repository";
 import { Board, createBall } from "./board";
 import { difficultyFactor, fallSpeed } from "./difficulty";
-import { chemicalGlyph, reactionFormula, reactionProductName } from "./formula";
-import { applyFrost, applyMagnet, applyVoid, emptyCharges, encodeCharges, isGadget, type GadgetId } from "./gadgets";
+import { reactionProductName, reactionTex } from "./formula";
+import {
+  CATALYST_FACTOR,
+  GADGET_COOLDOWN,
+  GADGET_IDS,
+  NITROGEN_SECONDS,
+  burnerTargets,
+  isGadget,
+  readyCooldowns,
+  type GadgetId,
+} from "./gadgets";
 import { cellCenter, cellInside, inBounds, makeLayout, neighborCoords } from "./hex";
-import { materialName, scoreLabel } from "./labels";
+import { faDigits, materialName, materialTex, scoreLabel } from "./labels";
 import { mulberry32, type Rng } from "./rng";
 import { chainBonus, levelFromXp, xpFromStats } from "./score";
 import {
@@ -81,11 +90,14 @@ export class GameEngine {
   private currentId = "H";
   private nextId = "O";
   private launcherBorn = 1;
-  private shot: { elementId: string; x: number; y: number; vx: number; vy: number; gadget: GadgetId | null } | null = null;
-  private armed: GadgetId | null = null;
-  private charges = emptyCharges();
-  private scoreBoost = 1;
-  private sparkSeeds: string[] = [];
+  private shot: { elementId: string; x: number; y: number; vx: number; vy: number; burner: boolean } | null = null;
+  private selected: GadgetId = "nitrogen";
+  private burnerArmed = false;
+  private catalystReady = false;
+  private chainBoost = 1;
+  private chill = 0;
+  private cooldowns = readyCooldowns();
+  private blast: { x: number; y: number; t: number } | null = null;
   private phase: Phase | null = null;
   private queue: Command[] = [];
   private focus: string[] = [];
@@ -136,7 +148,7 @@ export class GameEngine {
   }
 
   async rename(name: string): Promise<void> {
-    const clean = name.trim().slice(0, 16) || "Reza";
+    const clean = name.trim().slice(0, 16) || "رضا";
     this.profile.name = clean;
     this.profile.avatar = clean.slice(0, 1).toUpperCase();
     await this.repo.savePlayer(this.profile);
@@ -155,12 +167,41 @@ export class GameEngine {
     return this.repo.getLeaderboard(this.profile);
   }
 
-  armGadget(id: string): void {
-    if (!this.ready || this.ending || this.status === "gameover") return;
-    if (!isGadget(id) || this.charges[id] <= 0) return;
-    this.armed = this.armed === id ? null : id;
+  selectGadget(id: string): void {
+    if (!isGadget(id)) return;
+    if (this.selected !== id) this.burnerArmed = false;
+    this.selected = id;
     this.audio.play("ui");
     this.emit();
+  }
+
+  /** Uses the selected gadget. Returns false while it is cooling down. */
+  useGadget(): boolean {
+    if (!this.ready || this.ending || this.paused || this.status !== "playing") return false;
+    const id = this.selected;
+    if (id === "burner" && this.burnerArmed) {
+      this.burnerArmed = false;
+      this.emit();
+      return true;
+    }
+    if (this.cooldowns[id] > 0) return false;
+    const { launcherX: x, launcherY: y } = this.layout;
+    if (id === "nitrogen") {
+      this.chill = NITROGEN_SECONDS;
+      this.cooldowns.nitrogen = GADGET_COOLDOWN.nitrogen;
+      this.audio.play("freeze");
+      this.burst(x, y - 60, 26, "#bfefff");
+    } else if (id === "catalyst") {
+      this.catalystReady = true;
+      this.cooldowns.catalyst = GADGET_COOLDOWN.catalyst;
+      this.audio.play("discover");
+      this.burst(x, y, 18, "#b6e36a");
+    } else {
+      this.burnerArmed = true;
+      this.audio.play("ui");
+    }
+    this.emit();
+    return true;
   }
 
   pointer(x: number, y: number): void {
@@ -179,18 +220,15 @@ export class GameEngine {
     if (!this.ready || this.ending || this.paused || this.status !== "playing") return;
     if (this.shot || this.phase || this.queue.length || this.chainLive) return;
     const angle = this.aimAngle;
-    const gadget = this.armed && this.charges[this.armed] > 0 ? this.armed : null;
-    if (gadget) {
-      this.charges[gadget] -= 1;
-      this.armed = null;
-    }
+    const burner = this.burnerArmed;
+    this.burnerArmed = false;
     this.shot = {
       elementId: this.currentId,
       x: this.layout.launcherX,
       y: this.layout.launcherY - this.layout.drawRadius * 0.2,
       vx: Math.cos(angle),
       vy: Math.sin(angle),
-      gadget,
+      burner,
     };
     const factor = difficultyFactor(this.elapsed, this.score);
     this.currentId = this.nextId;
@@ -235,10 +273,12 @@ export class GameEngine {
     this.flash = 0;
     this.banner = "";
     this.bannerLife = 0;
-    this.armed = null;
-    this.charges = emptyCharges();
-    this.scoreBoost = 1;
-    this.sparkSeeds = [];
+    this.burnerArmed = false;
+    this.catalystReady = false;
+    this.chainBoost = 1;
+    this.chill = 0;
+    this.cooldowns = readyCooldowns();
+    this.blast = null;
     this.trace.length = 0;
     this.stats = emptyStats();
     this.bestAtStart = this.profile.bestScore;
@@ -257,6 +297,7 @@ export class GameEngine {
     this.updateJuice(step);
     if (this.ending || this.status === "gameover" || this.paused) return;
     this.elapsed += step;
+    this.tickGadgets(step);
     if (this.phase) {
       this.phase.elapsed += step;
       if (this.phase.elapsed >= this.phase.duration) this.commit();
@@ -349,7 +390,7 @@ export class GameEngine {
           glyph,
           formula,
           style,
-          frost: ball.frozenShifts > 0,
+          frost: ball.frozenShifts > 0 || this.chill > 0,
         });
       }
     }
@@ -382,8 +423,17 @@ export class GameEngine {
       ring,
       banner: this.banner,
       bannerLife: this.bannerLife,
-      armed: this.armed ?? "",
+      armed: this.burnerArmed ? "burner" : this.catalystReady ? "catalyst" : "",
+      chill: clamp(this.chill / 1.2, 0, 1),
     };
+  }
+
+  private tickGadgets(dt: number): void {
+    for (const id of GADGET_IDS) {
+      if (this.cooldowns[id] > 0) this.cooldowns[id] = Math.max(0, this.cooldowns[id] - dt);
+    }
+    if (this.chill > 0) this.chill = Math.max(0, this.chill - dt);
+    this.emit();
   }
 
   private startChain(ballId: string): void {
@@ -393,6 +443,13 @@ export class GameEngine {
     this.focus = [ballId];
     this.queue = [{ type: "impact", ballId }];
     this.lastSig = "";
+    this.armCatalyst();
+  }
+
+  private armCatalyst(): void {
+    if (!this.catalystReady) return;
+    this.catalystReady = false;
+    this.chainBoost = CATALYST_FACTOR;
   }
 
   private beginPhase(cmd: Command): void {
@@ -415,7 +472,7 @@ export class GameEngine {
           otherIds: cmd.ballIds.filter((id) => id !== primary.id),
           from: this.look(primary).style,
           to: mat.visual,
-          glyph: chemicalGlyph(mat.formula),
+          glyph: materialTex(mat.id),
           formula: materialName(mat.id),
           icon: mat.id,
         };
@@ -470,10 +527,6 @@ export class GameEngine {
     this.trace.push(result.log);
     this.queue.push(...result.extra);
     this.focus = result.focusIds;
-    if (cmd.type === "impact" && this.sparkSeeds.length) {
-      this.focus = [...new Set([...result.focusIds, ...this.sparkSeeds])];
-      this.sparkSeeds = [];
-    }
     this.grant(result);
     this.phase = null;
     this.emit();
@@ -485,9 +538,8 @@ export class GameEngine {
       let base = result.scoreBase;
       if (result.scoreKind === "reaction" && this.chainSteps > 0) base += 100;
       const used = this.combo;
-      const boosted = this.scoreBoost;
+      const boosted = this.chainBoost;
       const points = Math.round(base * used * boosted);
-      if (boosted > 1) this.scoreBoost = 1;
       this.score += points;
       this.stats.score = this.score;
       const point = this.effectPoint(result);
@@ -496,7 +548,7 @@ export class GameEngine {
         x: point.x,
         y: point.y - 8,
         text: `+${points.toLocaleString("en-US")}`,
-        sub: boosted > 1 ? "کاتالیز" : scoreLabel(result.scoreKind, result.materialId),
+        sub: boosted > 1 ? "کاتالیزگر ×۲" : scoreLabel(result.scoreKind, result.materialId),
         life: 1.55,
         max: 1.55,
         color,
@@ -523,7 +575,7 @@ export class GameEngine {
     if (bonus > 0) {
       this.score += bonus;
       this.stats.score = this.score;
-      this.banner = `زنجیره ${this.chainSteps}`;
+      this.banner = `زنجیرهٔ ${faDigits(this.chainSteps)}تایی`;
       this.bannerLife = 1.55;
       this.floats.push({
         x: this.layout.width / 2,
@@ -540,6 +592,7 @@ export class GameEngine {
     }
     this.chainLive = false;
     this.combo = 1;
+    this.chainBoost = 1;
     this.queue = [];
     this.focus = [];
     this.lastSig = "";
@@ -594,21 +647,60 @@ export class GameEngine {
     }
     if (!socket) socket = this.closestSocket(x, y);
     const elementId = this.shot.elementId;
-    const gadget = this.shot.gadget;
+    const burner = this.shot.burner;
     this.shot = null;
     if (!socket) {
-      if (gadget) this.refund(gadget);
+      if (burner) this.burnerArmed = true;
+      return;
+    }
+    if (burner) {
+      this.burn(socket.col, socket.row);
       return;
     }
     const ball = createBall({ kind: "element", elementId, col: socket.col, row: socket.row });
     this.board.add(ball);
-    if (gadget) this.useGadget(gadget, ball, hit);
     this.burst(x, y, 8, getElement(elementId).visualStyle.glow);
     this.startChain(ball.id);
   }
 
+  private burn(col: number, row: number): void {
+    const point = cellCenter(col, row, this.layout, this.descent);
+    const targets = burnerTargets(this.board, col, row);
+    for (const ball of targets) this.board.remove(ball.id);
+    this.cooldowns.burner = GADGET_COOLDOWN.burner;
+    this.blast = { x: point.x, y: point.y, t: 0 };
+    this.shake = 8;
+    this.flash = 0.3;
+    this.burst(point.x, point.y, 34, "#ff9a4a");
+    this.burst(point.x, point.y, 14, "#ffe2a0");
+    this.audio.play("explode");
+    this.chainLive = true;
+    this.chainSteps = 0;
+    this.combo = 1;
+    this.focus = [];
+    this.queue = [];
+    this.lastSig = "";
+    this.armCatalyst();
+    if (targets.length === 0) return;
+    const points = Math.round(targets.length * 40 * this.chainBoost);
+    this.score += points;
+    this.stats.score = this.score;
+    this.stats.objectsDestroyed += targets.length;
+    this.floats.push({
+      x: point.x,
+      y: point.y - 8,
+      text: `+${points.toLocaleString("en-US")}`,
+      sub: "شعله",
+      life: 1.55,
+      max: 1.55,
+      color: "#ffb15a",
+      pop: 1.15,
+    });
+    this.emit();
+  }
+
   private descend(dt: number): void {
-    if (this.elapsed < 1.6) return;
+    if (this.elapsed < 6 || this.chill > 0) return;
     const factor = difficultyFactor(this.elapsed, this.score);
     this.descent += fallSpeed(factor) * dt;
     if (this.danger()) {
@@ -732,7 +824,7 @@ export class GameEngine {
     this.onDiscovery({
       id: `${reactionId}-${this.profile.discoveredReactions.length}`,
       reactionId,
-      formula: reactionFormula(reaction),
+      formula: reactionTex(reaction),
       product: reactionProductName(reaction),
     });
     void this.repo.savePlayer(this.profile);
@@ -751,6 +843,10 @@ export class GameEngine {
     this.shake = Math.max(0, this.shake - dt * 30);
     this.flash = Math.max(0, this.flash - dt * 1.4);
     this.bannerLife = Math.max(0, this.bannerLife - dt);
+    if (this.blast) {
+      this.blast.t += dt / 0.55;
+      if (this.blast.t >= 1) this.blast = null;
+    }
     this.particles = this.particles.filter((particle) => {
       particle.life -= dt;
       particle.x += particle.vx * dt;
@@ -917,43 +1013,17 @@ export class GameEngine {
         color: getMaterial(this.phase.cmd.materialId).visual.base,
       };
     }
+    if (this.blast) {
+      return {
+        x: this.blast.x,
+        y: this.blast.y,
+        r: this.layout.drawRadius * (1 + this.blast.t * 3.6),
+        t: this.blast.t,
+        massive: true,
+        color: "#ff9a4a",
+      };
+    }
     return null;
-  }
-
-  private useGadget(id: GadgetId, ball: Ball, hit?: Ball): void {
-    const point = cellCenter(ball.col, ball.row, this.layout, this.descent);
-    if (id === "frost") {
-      applyFrost(this.board, ball.col, ball.row);
-      this.burst(point.x, point.y, 16, "#bfefff");
-      return;
-    }
-    if (id === "void") {
-      if (hit && applyVoid(this.board, hit)) {
-        const gone = cellCenter(hit.col, hit.row, this.layout, this.descent);
-        this.burst(gone.x, gone.y, 14, "#d5deee");
-      }
-      return;
-    }
-    if (id === "magnet") {
-      applyMagnet(this.board, ball.col, ball.row);
-      this.burst(point.x, point.y, 14, "#e3a4ff");
-      return;
-    }
-    if (id === "spark") {
-      this.sparkSeeds = neighborCoords(ball.col, ball.row)
-        .map(([col, row]) => this.board.get(col, row)?.id)
-        .filter((seed): seed is string => !!seed);
-      this.burst(point.x, point.y, 18, "#ffe56a");
-      this.flash = Math.max(this.flash, 0.2);
-      return;
-    }
-    this.scoreBoost = 2;
-    this.burst(point.x, point.y, 12, "#b6e36a");
-  }
-
-  private refund(id: GadgetId): void {
-    this.charges[id] += 1;
-    this.emit();
   }
 
   private effectPoint(result: ReturnType<typeof applyCommand>): { x: number; y: number } {
@@ -975,7 +1045,7 @@ export class GameEngine {
     return {
       kind: "material",
       icon: material.id,
-      glyph: chemicalGlyph(material.formula),
+      glyph: materialTex(material.id),
       formula: materialName(material.id),
       style: material.visual,
     };
@@ -983,7 +1053,7 @@ export class GameEngine {
 
   private makeViewBall(id: string, kind: "element" | "material", x: number, y: number, scale: number): ViewBall {
     const style = kind === "element" ? getElement(id).visualStyle : getMaterial(id).visual;
-    const glyph = kind === "element" ? getElement(id).symbol : chemicalGlyph(getMaterial(id).formula);
+    const glyph = kind === "element" ? getElement(id).symbol : materialTex(id);
     const formula = kind === "element" ? getElement(id).symbol : materialName(id);
     return {
       x,
@@ -1025,23 +1095,39 @@ export class GameEngine {
       status: this.status,
       score: this.score,
       combo: this.combo,
-      name: this.profile?.name ?? "Reza",
-      avatar: this.profile?.avatar ?? "R",
+      name: this.profile?.name ?? "رضا",
+      avatar: this.profile?.avatar ?? "ر",
       level: this.profile?.level ?? 1,
       xp: this.profile?.xp ?? 0,
       bestScore: this.profile?.bestScore ?? 0,
       hint: !!this.profile && !this.profile.hintSeen && this.status === "playing",
       sound: this.profile?.sound ?? true,
       discovered: this.profile?.discoveredReactions ?? [],
-      armedGadget: this.armed ?? "",
-      gadgetCharges: encodeCharges(this.charges),
+      gadget: {
+        selected: this.selected,
+        burnerArmed: this.burnerArmed,
+        catalystReady: this.catalystReady || this.chainBoost > 1,
+        chill: Math.ceil(this.chill * 10) / 10,
+        cooldowns: {
+          nitrogen: Math.ceil(this.cooldowns.nitrogen * 10) / 10,
+          burner: Math.ceil(this.cooldowns.burner * 10) / 10,
+          catalyst: Math.ceil(this.cooldowns.catalyst * 10) / 10,
+        },
+      },
+      nearDanger: this.nearDanger(),
     };
+  }
+
+  private nearDanger(): boolean {
+    if (!this.ready) return false;
+    const limit = this.layout.dangerY - this.layout.ySpacing * 2;
+    return this.board.all().some((ball) => cellCenter(ball.col, ball.row, this.layout, this.descent).y >= limit);
   }
 
   private emit(): void {
     if (!this.profile) return;
     const hud = this.hud();
-    const sig = `${hud.status}|${hud.score}|${hud.combo}|${hud.name}|${hud.hint}|${hud.sound}|${hud.bestScore}|${hud.xp}|${hud.level}|${hud.armedGadget}|${hud.gadgetCharges}|${hud.discovered.join(",")}`;
+    const sig = `${hud.status}|${hud.score}|${hud.combo}|${hud.name}|${hud.hint}|${hud.sound}|${hud.bestScore}|${hud.xp}|${hud.level}|${JSON.stringify(hud.gadget)}|${hud.nearDanger}|${hud.discovered.join(",")}`;
     if (sig === this.hudSig) return;
     this.hudSig = sig;
     this.onHud(hud);

@@ -90,8 +90,8 @@ export function createDefaultProfile(): PlayerProfile {
   const id = globalThis.crypto?.randomUUID?.() ?? `player-${Date.now()}`;
   return {
     id,
-    name: "Reza",
-    avatar: "R",
+    name: "رضا",
+    avatar: "ر",
     xp: 0,
     level: 1,
     totalRuns: 0,

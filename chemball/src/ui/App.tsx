@@ -1,50 +1,92 @@
-import { Atom, Play, Trophy } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent, type PointerEvent } from "react";
+import { BookOpen, Pause, Play, Settings, Trophy } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type PointerEvent } from "react";
 import { AudioBus } from "../audio/sfx";
 import { GameEngine } from "../game/engine";
 import { makeLayout } from "../game/hex";
+import { faDigits } from "../game/labels";
 import { formatNumber } from "../game/score";
-import type { DiscoveryNotice, HudSnapshot, RunSummary } from "../game/types";
+import type { DiscoveryNotice, HudSnapshot, Layout, RunSummary } from "../game/types";
 import { renderFrame } from "../render/draw";
+import type { LeaderboardEntry } from "../save/models";
 import { LocalPlayerRepository } from "../save/localRepository";
-import { SIGNS, TIPS } from "./copy";
-import { GadgetSheet, Guide } from "./panels";
+import { Chem } from "./Chem";
+import { ChemSky } from "./ChemSky";
+import { TIPS, type TipId } from "./copy";
+import { GadgetButton, GadgetPicker } from "./GadgetButton";
+import { Avatar, GuidePage, LeaderboardPage, PauseSheet, SettingsPage } from "./pages";
 
 const EMPTY_HUD: HudSnapshot = {
   status: "playing",
   score: 0,
   combo: 1,
-  name: "Reza",
-  avatar: "R",
+  name: "رضا",
+  avatar: "ر",
   level: 1,
   xp: 0,
   bestScore: 0,
   hint: true,
   sound: true,
   discovered: [],
-  armedGadget: "",
-  gadgetCharges: "frost:2,void:1,magnet:2,spark:2,catalyst:2",
+  gadget: { selected: "nitrogen", burnerArmed: false, catalystReady: false, chill: 0, cooldowns: {} },
+  nearDanger: false,
 };
 
+const TIP_KEY = "chemball-tips-v2";
+const TIP_MS = 3600;
+
 type Mode = "home" | "play";
-type Sheet = "gadgets" | "guide" | null;
+type Page = "settings" | "guide" | "leaders" | null;
+
+function seenTips(): Set<string> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(TIP_KEY) ?? "[]") as string[]);
+  } catch {
+    return new Set();
+  }
+}
 
 export function App() {
   const phoneRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<GameEngine | null>(null);
   const repoRef = useRef(new LocalPlayerRepository());
+  const modeRef = useRef<Mode>("home");
+  const scoreRef = useRef(0);
   const [hud, setHud] = useState<HudSnapshot>(EMPTY_HUD);
+  const [layout, setLayout] = useState<Layout>(() => makeLayout(390, 844));
   const [summary, setSummary] = useState<RunSummary | null>(null);
   const [discovery, setDiscovery] = useState<DiscoveryNotice | null>(null);
   const [mode, setMode] = useState<Mode>("home");
-  const [sheet, setSheet] = useState<Sheet>(null);
-  const [naming, setNaming] = useState(false);
-  const [draftName, setDraftName] = useState("Reza");
-  const [tip, setTip] = useState(0);
+  const [page, setPage] = useState<Page>(null);
+  const [paused, setPaused] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const [leaders, setLeaders] = useState<LeaderboardEntry[]>([]);
   const [pop, setPop] = useState(0);
-  const scoreRef = useRef(0);
-  const modeRef = useRef<Mode>("home");
+  const [tip, setTip] = useState<{ id: TipId; key: number } | null>(null);
+  const tipQueue = useRef<TipId[]>([]);
+  const seen = useRef<Set<string>>(seenTips());
+
+  const showTip = useCallback((id: TipId, once = true) => {
+    if (once) {
+      if (seen.current.has(id)) return;
+      seen.current.add(id);
+      localStorage.setItem(TIP_KEY, JSON.stringify([...seen.current]));
+    }
+    setTip((current) => {
+      if (!current) return { id, key: Date.now() };
+      if (current.id !== id && !tipQueue.current.includes(id)) tipQueue.current.push(id);
+      return current;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!tip) return;
+    const timer = window.setTimeout(() => {
+      const next = tipQueue.current.shift();
+      setTip(next ? { id: next, key: Date.now() } : null);
+    }, TIP_MS);
+    return () => window.clearTimeout(timer);
+  }, [tip]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -63,11 +105,12 @@ export function App() {
       setDiscovery(notice);
       window.setTimeout(() => {
         setDiscovery((current) => (current?.id === notice.id ? null : current));
-      }, 1700);
+      }, 2200);
     };
     engine.onSummary = (next) => {
       setSummary(next);
-      setSheet(null);
+      setPaused(false);
+      setPicking(false);
     };
 
     let frame = 0;
@@ -77,10 +120,7 @@ export function App() {
       last = now;
       engine.update(dt);
       const ctx = canvas.getContext("2d");
-      if (ctx) {
-        const dpr = Math.min(2, window.devicePixelRatio || 1);
-        renderFrame(ctx, engine.snapshot(), dpr);
-      }
+      if (ctx) renderFrame(ctx, engine.snapshot(), Math.min(2, window.devicePixelRatio || 1));
       frame = requestAnimationFrame(loop);
     };
 
@@ -89,7 +129,9 @@ export function App() {
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       canvas.width = Math.max(1, Math.floor(rect.width * dpr));
       canvas.height = Math.max(1, Math.floor(rect.height * dpr));
-      engine.setLayout(makeLayout(rect.width, rect.height));
+      const next = makeLayout(rect.width, rect.height);
+      engine.setLayout(next);
+      setLayout(next);
     };
 
     resize();
@@ -108,20 +150,28 @@ export function App() {
     };
   }, []);
 
-  useEffect(() => {
-    if (mode !== "play" || hud.hint) return;
-    setTip((current) => Math.max(current, hud.score > 0 ? 2 : 1));
-  }, [mode, hud.hint, hud.score]);
+  const live = mode === "play" && !summary && !paused && !picking && !page;
 
   useEffect(() => {
-    if (mode !== "play" || summary || sheet) return;
-    const timer = window.setTimeout(() => {
-      setTip((current) => (current < TIPS.length - 1 ? current + 1 : current));
-    }, 3400);
+    if (mode !== "play") return;
+    if (!hud.hint) return;
+    const timer = window.setTimeout(() => showTip("aim"), 500);
     return () => window.clearTimeout(timer);
-  }, [mode, summary, sheet, tip]);
+  }, [mode, hud.hint, showTip]);
 
-  const live = mode === "play" && !sheet && !summary;
+  useEffect(() => {
+    if (mode === "play" && hud.discovered.length > 0 && !hud.hint) showTip("match");
+  }, [mode, hud.discovered.length, hud.hint, showTip]);
+
+  useEffect(() => {
+    if (mode === "play" && hud.nearDanger) showTip("danger");
+  }, [mode, hud.nearDanger, showTip]);
+
+  useEffect(() => {
+    if (!live) return;
+    const timer = window.setTimeout(() => showTip("gadget"), 22000);
+    return () => window.clearTimeout(timer);
+  }, [live, showTip]);
 
   const aim = (event: PointerEvent<HTMLCanvasElement>) => {
     if (!live) return;
@@ -129,42 +179,47 @@ export function App() {
     engineRef.current?.pointer(event.clientX - rect.left, event.clientY - rect.top);
   };
 
+  const resume = () => {
+    engineRef.current?.pause(false);
+    setPaused(false);
+    setPicking(false);
+  };
+
   const begin = () => {
     const engine = engineRef.current;
     if (!engine) return;
     engine.unlockAudio();
     modeRef.current = "play";
-    if (hud.status === "gameover") engine.restart();
-    else engine.pause(false);
+    engine.restart();
     setSummary(null);
-    setSheet(null);
-    setNaming(false);
-    setTip(0);
+    setPage(null);
+    setPaused(false);
     setMode("play");
   };
 
-  const openGadgets = () => {
+  const goHome = () => {
     engineRef.current?.pause(true);
-    setSheet("gadgets");
+    modeRef.current = "home";
+    setSummary(null);
+    setPaused(false);
+    setPicking(false);
+    setPage(null);
+    setTip(null);
+    setMode("home");
   };
 
-  const closeSheet = () => {
-    if (hud.status !== "gameover") engineRef.current?.pause(false);
-    setSheet(null);
+  const openLeaders = async () => {
+    const engine = engineRef.current;
+    if (engine) setLeaders(await engine.leaderboard());
+    setPage("leaders");
   };
 
-  const saveName = (event: FormEvent) => {
-    event.preventDefault();
-    void engineRef.current?.rename(draftName);
-    setNaming(false);
-  };
-
-  const charges = parseCharges(hud.gadgetCharges);
-  const chargeTotal = Object.values(charges).reduce((sum, value) => sum + value, 0);
-  const lesson = TIPS[tip] ?? TIPS[0];
+  const nextX = Math.max(46, layout.drawRadius + 28);
+  const dockStyle = { left: layout.width - nextX - 34, top: layout.launcherY + 10 - 34 };
+  const pickerStyle = { right: 12, bottom: layout.height - (layout.launcherY + 10 - 46) };
 
   return (
-    <div className="stage">
+    <div className="stage" dir="rtl">
       <div className="phone" ref={phoneRef}>
         <canvas
           ref={canvasRef}
@@ -179,160 +234,175 @@ export function App() {
             if (live) engineRef.current?.shoot();
           }}
         />
+
         {mode === "home" && (
           <div className="home">
-            <header className="home-bar">
-              <div className="best-chip">
-                <Trophy size={15} />
-                <span>
-                  <small>رکورد</small>
-                  <b>{formatNumber(hud.bestScore)}</b>
-                </span>
+            <ChemSky />
+            <header className="home-bar" dir="ltr">
+              <button className="player-pill" type="button" onClick={() => setPage("settings")}>
+                <Avatar name={hud.name} size={34} />
+                <span dir="auto">{hud.name}</span>
+              </button>
+              <div className="best" dir="rtl">
+                <small>بهترین امتیاز</small>
+                <b className="num">{formatNumber(hud.bestScore)}</b>
               </div>
-              {naming ? (
-                <form className="name-form" onSubmit={saveName}>
-                  <input
-                    aria-label="نام"
-                    value={draftName}
-                    maxLength={16}
-                    autoFocus
-                    onChange={(event) => setDraftName(event.target.value)}
-                    onBlur={() => {
-                      void engineRef.current?.rename(draftName);
-                      setNaming(false);
-                    }}
-                  />
-                </form>
-              ) : (
-                <button
-                  className="name-chip"
-                  type="button"
-                  onClick={() => {
-                    setDraftName(hud.name);
-                    setNaming(true);
-                  }}
-                >
-                  {hud.name}
-                </button>
-              )}
             </header>
-            <div className="field" aria-hidden>
-              {SIGNS.map((sign) => (
-                <span
-                  key={sign.s}
-                  className="sign"
-                  style={{
-                    left: sign.x,
-                    top: sign.y,
-                    width: sign.n,
-                    height: sign.n,
-                    color: sign.c,
-                    animationDelay: sign.d,
-                  }}
-                >
-                  {sign.s}
+            <div className="home-center">
+              <button className="play" type="button" aria-label="شروع بازی" onClick={begin}>
+                <span className="play-ring" />
+                <span className="play-ring late" />
+                <span className="play-face">
+                  <Play size={40} strokeWidth={2.2} fill="currentColor" />
                 </span>
-              ))}
+              </button>
             </div>
-            <button className="play" type="button" aria-label="شروع" onClick={begin}>
-              <span className="play-ring" />
-              <span className="play-ring late" />
-              <Play size={34} strokeWidth={2.4} className="play-icon" />
-            </button>
+            <nav className="home-foot">
+              <button type="button" onClick={() => setPage("settings")}>
+                <Settings size={20} />
+                <span>تنظیمات</span>
+              </button>
+              <button type="button" onClick={() => setPage("guide")}>
+                <BookOpen size={20} />
+                <span>راهنما</span>
+              </button>
+              <button type="button" onClick={() => void openLeaders()}>
+                <Trophy size={20} />
+                <span>رتبه‌بندی</span>
+              </button>
+            </nav>
           </div>
         )}
+
         {mode === "play" && (
-          <header className="hud">
-            <div className={pop > 0 ? "score pop" : "score"} key={pop}>
-              {formatNumber(hud.score)}
-            </div>
-            {hud.combo > 1 && !summary && <div className="combo">×{hud.combo}</div>}
-          </header>
+          <>
+            <header className="hud" dir="ltr">
+              <button
+                className="round-btn hud-pause"
+                type="button"
+                aria-label="توقف"
+                onClick={() => {
+                  engineRef.current?.pause(true);
+                  setPaused(true);
+                }}
+              >
+                <Pause size={18} />
+              </button>
+              <div className="hud-score">
+                <div className="score num pop" key={pop}>
+                  {formatNumber(hud.score)}
+                </div>
+                {hud.combo > 1 && !summary && <div className="combo num">x{hud.combo}</div>}
+              </div>
+              <span className="hud-spacer" />
+            </header>
+            {!summary && (
+              <GadgetButton
+                hud={hud.gadget}
+                style={dockStyle}
+                picking={picking}
+                onUse={() => {
+                  if (!live) return;
+                  if (!engineRef.current?.useGadget()) showTip("charging", false);
+                }}
+                onHold={() => {
+                  if (summary) return;
+                  engineRef.current?.pause(true);
+                  setPicking(true);
+                }}
+              />
+            )}
+          </>
         )}
-        {live && lesson && (
-          <div className="snack rtl" role="status">
-            <b>{lesson.k}</b>
-            <span>{lesson.t}</span>
+
+        {mode === "play" && tip && !summary && (
+          <div className="toast-tip" key={tip.key} role="status" style={{ ["--tint" as string]: TIPS[tip.id].tint }}>
+            <span className="toast-dot" />
+            <span>{TIPS[tip.id].text}</span>
           </div>
         )}
-        {mode === "play" && !summary && sheet !== "guide" && (
-          <button
-            className={hud.armedGadget ? "gadget-btn armed" : "gadget-btn"}
-            type="button"
-            aria-label="ابزارها"
-            onClick={openGadgets}
-          >
-            <Atom size={26} />
-            <em>{chargeTotal}</em>
-          </button>
-        )}
-        {discovery && mode === "play" && (
-          <div className="toast rtl" role="status">
-            <p className="kicker">واکنش تازه</p>
-            <strong dir="ltr">{discovery.formula}</strong>
-            <em>{discovery.product}</em>
+
+        {discovery && mode === "play" && !summary && (
+          <div className="discovery" role="status">
+            <small>واکنش تازه</small>
+            {discovery.formula.startsWith("|") ? (
+              <span className="found-words">{discovery.formula.slice(1)}</span>
+            ) : (
+              <Chem tex={discovery.formula} size={22} weight={14} />
+            )}
+            <strong>{discovery.product}</strong>
           </div>
         )}
+
+        {picking && (
+          <GadgetPicker
+            hud={hud.gadget}
+            style={pickerStyle}
+            onPick={(id) => {
+              engineRef.current?.selectGadget(id);
+              resume();
+            }}
+            onClose={resume}
+          />
+        )}
+
+        {paused && !summary && !page && (
+          <PauseSheet
+            sound={hud.sound}
+            onResume={resume}
+            onGuide={() => setPage("guide")}
+            onSound={() => void engineRef.current?.setSound(!hud.sound)}
+            onHome={goHome}
+          />
+        )}
+
         {summary && (
           <div className="overlay">
-            <section className="endcard rtl">
-              <p className="wordmark">شیمی‌بال</p>
-              <p className="record-label">رکورد این آزمایش</p>
-              <p className="record">{formatNumber(summary.score)}</p>
-              <p className="xp">+{formatNumber(summary.xpEarned)} تجربه</p>
-              {summary.isRecord && <div className="badge">رکورد تازه</div>}
-              <p className="best">بهترین {formatNumber(summary.bestScore)}</p>
-              <p className="stats">
-                {summary.reactionsCreated} واکنش · {summary.materialsMatched} جور · زنجیره {summary.highestChain}
-              </p>
-              <button
-                className="primary"
-                type="button"
-                onClick={() => {
-                  setSummary(null);
-                  setTip(0);
-                  engineRef.current?.restart();
-                }}
-              >
+            <section className="endcard">
+              <small className="end-kicker">پایان آزمایش</small>
+              <p className="record num">{formatNumber(summary.score)}</p>
+              {summary.isRecord ? <div className="badge">رکورد تازه!</div> : <p className="best-line">بهترین: <b className="num">{formatNumber(summary.bestScore)}</b></p>}
+              <div className="end-stats">
+                <span>
+                  <b>{faDigits(summary.reactionsCreated)}</b>
+                  واکنش
+                </span>
+                <span>
+                  <b>{faDigits(summary.materialsMatched)}</b>
+                  جورشدن
+                </span>
+                <span>
+                  <b>{faDigits(summary.highestChain)}</b>
+                  بلندترین زنجیره
+                </span>
+              </div>
+              <button className="cta" type="button" onClick={begin}>
+                <Play size={18} fill="currentColor" />
                 دوباره
               </button>
-              <button
-                className="ghost"
-                type="button"
-                onClick={() => {
-                  setSummary(null);
-                  setSheet(null);
-                  modeRef.current = "home";
-                  setMode("home");
-                }}
-              >
+              <button className="soft wide" type="button" onClick={goHome}>
                 خانه
               </button>
             </section>
           </div>
         )}
-        {sheet === "gadgets" && !summary && (
-          <GadgetSheet
-            charges={charges}
-            armed={hud.armedGadget}
+
+        {page === "settings" && (
+          <SettingsPage
+            name={hud.name}
             sound={hud.sound}
-            onArm={(id) => engineRef.current?.armGadget(id)}
+            onRename={(name) => void engineRef.current?.rename(name)}
             onSound={() => void engineRef.current?.setSound(!hud.sound)}
-            onGuide={() => setSheet("guide")}
-            onClose={closeSheet}
+            onResetTips={() => {
+              seen.current.clear();
+              localStorage.removeItem(TIP_KEY);
+            }}
+            onBack={() => setPage(null)}
           />
         )}
-        {sheet === "guide" && !summary && <Guide discovered={hud.discovered} onBack={() => setSheet("gadgets")} />}
+        {page === "guide" && <GuidePage discovered={hud.discovered} onBack={() => setPage(null)} />}
+        {page === "leaders" && <LeaderboardPage entries={leaders} onBack={() => setPage(null)} />}
       </div>
     </div>
   );
-}
-
-function parseCharges(raw: string): Record<string, number> {
-  const charges: Record<string, number> = {};
-  for (const part of raw.split(",")) {
-    const [id, count] = part.split(":");
-    if (id) charges[id] = Number(count) || 0;
-  }
-  return charges;
 }

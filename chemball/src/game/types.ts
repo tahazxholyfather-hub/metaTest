@@ -134,8 +134,16 @@ export interface HudSnapshot {
   hint: boolean;
   sound: boolean;
   discovered: string[];
-  armedGadget: string;
-  gadgetCharges: string;
+  gadget: GadgetHud;
+  nearDanger: boolean;
+}
+
+export interface GadgetHud {
+  selected: string;
+  burnerArmed: boolean;
+  catalystReady: boolean;
+  chill: number;
+  cooldowns: Record<string, number>;
 }
 
 export interface DiscoveryNotice {
