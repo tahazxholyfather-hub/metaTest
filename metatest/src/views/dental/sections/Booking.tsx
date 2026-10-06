@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { EASE, IMAGES, Icon, Img, Reveal, SectionHead } from "../ui";
+import { Img, Reveal, SectionHead } from "../ui";
+import { Icon } from "../icons";
+import { EASE, IMAGES } from "../data";
 
 const TIMES = ["09:00", "10:30", "12:00", "14:00", "15:30", "17:00"];
 const TREATMENTS = ["Consultation", "General check-up & hygiene", "Cosmetic dentistry", "Dental implants", "Orthodontics", "Root canal", "Teeth whitening"];

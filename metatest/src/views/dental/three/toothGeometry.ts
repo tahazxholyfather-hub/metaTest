@@ -84,18 +84,16 @@ export function createCrownGeometry(p: CrownParams): THREE.BufferGeometry {
 
 /** Tapered, gently curved root built from a lathe profile. */
 export function createRootGeometry(length: number, radius: number): THREE.BufferGeometry {
-  const pts: THREE.Vector2[] = [];
+  // Profile runs apex → neck so the lathe faces point outward.
+  const pts: THREE.Vector2[] = [new THREE.Vector2(0.0005, -length)];
   const n = 18;
-  for (let i = 0; i <= n; i++) {
+  for (let i = n; i >= 0; i--) {
     const t = i / n;
     // radius shrinks toward the apex
     const r = radius * (1 - 0.86 * Math.pow(t, 1.3));
     pts.push(new THREE.Vector2(Math.max(0.001, r), -t * length));
   }
-  pts.push(new THREE.Vector2(0.0005, -length));
-  const geo = new THREE.LatheGeometry(pts, 40);
-  geo.computeVertexNormals();
-  return geo;
+  return new THREE.LatheGeometry(pts, 40);
 }
 
 /** Soft, rounded gum ridge (superellipsoid). */

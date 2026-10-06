@@ -1,5 +1,7 @@
 import { motion, useReducedMotion } from "framer-motion";
-import { EASE, Icon, Reveal, SectionHead } from "../ui";
+import { Reveal, SectionHead } from "../ui";
+import { Icon } from "../icons";
+import { EASE } from "../data";
 
 const SERVICES = [
   {

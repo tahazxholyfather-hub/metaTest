@@ -1,7 +1,9 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
-import { AnimatePresence, animate, motion, useInView, useMotionValue, useReducedMotion, useScroll, useTransform } from "framer-motion";
-import { EASE, IMAGES, Icon, Img, Reveal, SectionHead, Stars } from "../ui";
-import { LazyCanvas } from "../three/common";
+import { AnimatePresence, animate, motion, useInView, useReducedMotion, useScroll, useTransform } from "framer-motion";
+import { Img, Reveal, SectionHead, Stars } from "../ui";
+import { Icon } from "../icons";
+import { EASE, IMAGES } from "../data";
+import { LazyCanvas } from "../three/LazyCanvas";
 
 const FloatingScene = lazy(() => import("../three/FloatingScene"));
 
@@ -155,25 +157,25 @@ export function Testimonials() {
    ========================================================= */
 
 function CountUp({ to, suffix = "", decimals = 0, start }: { to: number; suffix?: string; decimals?: number; start: boolean }) {
-  const mv = useMotionValue(0);
-  const [val, setVal] = useState("0");
+  const ref = useRef<HTMLSpanElement>(null);
   const reduced = useReducedMotion();
+  const format = (v: number) => v.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
   useEffect(() => {
-    if (!start) return;
-    if (reduced) {
-      setVal(to.toFixed(decimals));
-      return;
-    }
-    const controls = animate(mv, to, {
+    if (!start || reduced || !ref.current) return;
+    const el = ref.current;
+    const controls = animate(0, to, {
       duration: 2.2,
       ease: [0.16, 1, 0.3, 1],
-      onUpdate: (v: number) => setVal(v.toFixed(decimals)),
+      onUpdate: (v: number) => {
+        el.textContent = format(v);
+      },
     });
     return () => controls.stop();
-  }, [start, to, decimals, mv, reduced]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [start, to, decimals, reduced]);
   return (
     <>
-      {Number(val).toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}
+      <span ref={ref}>{reduced || !start ? format(reduced ? to : 0) : format(0)}</span>
       <sup>{suffix}</sup>
     </>
   );

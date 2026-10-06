@@ -1,7 +1,9 @@
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
-import { EASE, IMAGES, Icon, Img, Magnetic, Stars } from "../ui";
-import { LazyCanvas } from "../three/common";
+import { Img, Magnetic, Stars } from "../ui";
+import { Icon } from "../icons";
+import { EASE, IMAGES } from "../data";
+import { LazyCanvas } from "../three/LazyCanvas";
 
 const FloatingScene = lazy(() => import("../three/FloatingScene"));
 
@@ -34,8 +36,8 @@ function Rotator() {
     >
       <span className="dl-rotator-dot" aria-hidden />
       <span className="dl-rotator-text" aria-live="polite">
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.span key={i} initial={t.initial} animate={t.animate} exit={t.exit} transition={{ duration: 0.45, ease: EASE }}>
+        <AnimatePresence initial={false}>
+          <motion.span key={i} initial={t.initial} animate={t.animate} exit={t.exit} transition={{ duration: 0.5, ease: EASE }}>
             {MESSAGES[i]}
           </motion.span>
         </AnimatePresence>
@@ -159,7 +161,7 @@ export default function Hero() {
 
             <motion.div
               className="dl-float-card"
-              style={{ left: "clamp(-10px, -2vw, 0px)", top: "40%" }}
+              style={{ left: "clamp(-10px, -2vw, 0px)", top: "60%" }}
               initial={reduced ? false : { opacity: 0, x: -24 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 1, ease: EASE, delay: 1.4 }}

@@ -1,51 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import * as THREE from "three";
-import { Canvas, useFrame, useThree, type CanvasProps } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import { Environment, Lightformer } from "@react-three/drei";
 import { createCrownGeometry, createRootGeometry, type CrownParams } from "./toothGeometry";
-
-/* ---------- Materials ---------- */
-
-export const ENAMEL_PROPS = {
-  color: "#f8f5ef",
-  roughness: 0.2,
-  metalness: 0,
-  clearcoat: 1,
-  clearcoatRoughness: 0.1,
-  sheen: 0.5,
-  sheenColor: new THREE.Color("#dde7ff"),
-  sheenRoughness: 0.55,
-  envMapIntensity: 1.1,
-};
-
-export const CEMENTUM_PROPS = {
-  color: "#ecdcc3",
-  roughness: 0.55,
-  metalness: 0,
-  clearcoat: 0.2,
-  clearcoatRoughness: 0.5,
-  envMapIntensity: 0.7,
-};
-
-export const GUM_PROPS = {
-  color: "#e9a3ad",
-  roughness: 0.4,
-  metalness: 0,
-  clearcoat: 0.45,
-  clearcoatRoughness: 0.35,
-  sheen: 0.8,
-  sheenColor: new THREE.Color("#ffd9df"),
-  sheenRoughness: 0.5,
-  envMapIntensity: 0.8,
-};
-
-export function makeMaterial(props: Record<string, unknown>, transparent = false) {
-  const m = new THREE.MeshPhysicalMaterial(props as THREE.MeshPhysicalMaterialParameters);
-  m.transparent = transparent;
-  m.emissive = new THREE.Color("#5b8cff");
-  m.emissiveIntensity = 0;
-  return m;
-}
 
 /* ---------- Tooth ---------- */
 
@@ -132,61 +89,7 @@ export function StudioLights({ shadows = true }: { shadows?: boolean }) {
   );
 }
 
-/* ---------- Visibility-aware canvas: renders only while on screen ---------- */
-
-export function LazyCanvas({
-  children,
-  className,
-  style,
-  ...rest
-}: CanvasProps & { children: ReactNode; className?: string }) {
-  const wrap = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    const el = wrap.current;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      ([e]) => {
-        setVisible(e.isIntersecting);
-        if (e.isIntersecting) setMounted(true);
-      },
-      { rootMargin: "200px 0px" },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, []);
-
-  return (
-    <div ref={wrap} className={className} style={{ position: "absolute", inset: 0, ...style }}>
-      {mounted && (
-        <Canvas
-          frameloop={visible ? "always" : "never"}
-          dpr={[1, 1.75]}
-          gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
-          {...rest}
-        >
-          {children}
-        </Canvas>
-      )}
-    </div>
-  );
-}
-
 /* ---------- Helpers ---------- */
-
-export function useReducedMotion() {
-  const [reduced, setReduced] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const on = () => setReduced(mq.matches);
-    on();
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
-  }, []);
-  return reduced;
-}
 
 /** Gentle pointer parallax on a group. */
 export function PointerParallax({ children, amount = 0.08 }: { children: ReactNode; amount?: number }) {

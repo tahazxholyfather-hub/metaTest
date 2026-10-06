@@ -1,7 +1,8 @@
 import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import { useRef } from "react";
-import { EASE, IMAGES, Icon, Img, Logo, Reveal, SectionHead } from "../ui";
-import { NAV } from "./Header";
+import { Img, Logo, Reveal, SectionHead } from "../ui";
+import { Icon } from "../icons";
+import { EASE, IMAGES, NAV } from "../data";
 
 /* =========================================================
    About

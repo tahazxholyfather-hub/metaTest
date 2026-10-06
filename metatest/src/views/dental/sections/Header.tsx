@@ -1,14 +1,9 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { EASE, Icon, Logo } from "../ui";
+import { Logo } from "../ui";
+import { Icon } from "../icons";
+import { EASE, NAV } from "../data";
 
-export const NAV = [
-  { label: "Home", href: "#top" },
-  { label: "Services", href: "#services" },
-  { label: "About", href: "#about" },
-  { label: "Reviews", href: "#reviews" },
-  { label: "Contact", href: "#contact" },
-];
 
 export default function Header() {
   const [scrolled, setScrolled] = useState(false);

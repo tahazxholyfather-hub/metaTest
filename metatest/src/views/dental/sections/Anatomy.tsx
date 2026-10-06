@@ -1,8 +1,9 @@
 import { Suspense, lazy, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion, useScroll, useSpring } from "framer-motion";
-import { Icon, Reveal, SectionHead } from "../ui";
-import { LazyCanvas } from "../three/common";
-import { ANATOMY, type AnatomyKey } from "../three/AnatomyScene";
+import { Reveal, SectionHead } from "../ui";
+import { Icon } from "../icons";
+import { LazyCanvas } from "../three/LazyCanvas";
+import { ANATOMY, type AnatomyKey } from "../data";
 
 const AnatomyScene = lazy(() => import("../three/AnatomyScene"));
 
@@ -23,6 +24,7 @@ function CrossSection({ active }: { active: AnatomyKey | null }) {
 export default function Anatomy() {
   const [active, setActive] = useState<AnatomyKey | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const hotspotEls = useRef<Array<HTMLDivElement | null>>([]);
   const reduced = useReducedMotion();
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "end start"] });
   const scroll = useSpring(scrollYProgress, { stiffness: 60, damping: 20, mass: 0.6 });
@@ -45,9 +47,24 @@ export default function Anatomy() {
           <Reveal className="dl-anatomy-stage" amount={0.15} blur={false}>
             <LazyCanvas camera={{ position: [0.5, 1.1, 5.4], fov: 32 }} shadows style={{ position: "absolute", inset: 0 }}>
               <Suspense fallback={null}>
-                <AnatomyScene active={active} onSelect={setActive} scroll={scroll} reducedMotion={!!reduced} />
+                <AnatomyScene active={active} scroll={scroll} reducedMotion={!!reduced} hotspotEls={hotspotEls} />
               </Suspense>
             </LazyCanvas>
+            <div className="dl-hotspots">
+              {ANATOMY.map((a, i) => (
+                <div
+                  key={a.key}
+                  ref={(el) => {
+                    hotspotEls.current[i] = el;
+                  }}
+                  className={`dl-hotspot ${active === a.key ? "is-active" : ""}`}
+                >
+                  <button type="button" aria-label={a.label} className="dl-hotspot-dot" onClick={() => setActive(a.key)} />
+                  <span className="dl-hotspot-line" />
+                  <span className="dl-hotspot-label">{a.label}</span>
+                </div>
+              ))}
+            </div>
             <span className="dl-stage-badge">
               <i /> Live 3D model
             </span>
