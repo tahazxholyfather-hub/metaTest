@@ -544,7 +544,7 @@ export class GameEngine {
       this.stats.score = this.score;
       const point = this.effectPoint(result);
       const color = colorFor(result.scoreKind);
-      this.floats.push({
+      this.addFloat({
         x: point.x,
         y: point.y - 8,
         text: `+${points.toLocaleString("en-US")}`,
@@ -567,6 +567,16 @@ export class GameEngine {
     if (result.materialId) this.unlock(result.materialId);
   }
 
+  private addFloat(float: FloatText): void {
+    for (let pass = 0; pass < 4; pass += 1) {
+      const blocker = this.floats.find((other) => Math.abs(other.x - float.x) < 120 && Math.abs(other.y - float.y) < 76);
+      if (!blocker) break;
+      float.y = blocker.y - 80;
+    }
+    float.y = Math.max(90, float.y);
+    this.floats.push(float);
+  }
+
   private finishChain(): void {
     if (!this.chainLive) return;
     if (this.chainSteps >= 2) this.stats.chainCount += 1;
@@ -577,7 +587,7 @@ export class GameEngine {
       this.stats.score = this.score;
       this.banner = `زنجیرهٔ ${faDigits(this.chainSteps)}تایی`;
       this.bannerLife = 1.55;
-      this.floats.push({
+      this.addFloat({
         x: this.layout.width / 2,
         y: this.layout.height * 0.47,
         text: `+${bonus.toLocaleString("en-US")}`,
@@ -686,7 +696,7 @@ export class GameEngine {
     this.score += points;
     this.stats.score = this.score;
     this.stats.objectsDestroyed += targets.length;
-    this.floats.push({
+    this.addFloat({
       x: point.x,
       y: point.y - 8,
       text: `+${points.toLocaleString("en-US")}`,

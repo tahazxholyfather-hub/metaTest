@@ -13,7 +13,7 @@
   --good: #7ee08f;
   --warn: #ff9a4a;
   --danger: #ff5d6c;
-  --num: "Orbitron", "JetBrains Mono", ui-monospace, monospace;
+  --num: "Russo One", "JetBrains Mono", ui-monospace, monospace;
 }
 
 * { box-sizing: border-box; }
@@ -31,6 +31,7 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .num {
   font-family: var(--num);
   font-variant-numeric: tabular-nums;
+  font-weight: 400 !important;
   letter-spacing: 0.02em;
   direction: ltr;
   unicode-bidi: isolate;
@@ -394,7 +395,6 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
   place-items: center;
   font-family: var(--num);
   font-size: 19px;
-  font-weight: 800;
   color: #fff;
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
 }
@@ -532,7 +532,6 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .toast-tip {
   position: absolute;
   left: 50%;
-  bottom: calc(18px + env(safe-area-inset-bottom));
   z-index: 5;
   max-width: min(76%, 300px);
   display: flex;

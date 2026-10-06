@@ -316,7 +316,7 @@ export function App() {
         )}
 
         {mode === "play" && tip && !summary && (
-          <div className="toast-tip" key={tip.key} role="status" style={{ ["--tint" as string]: TIPS[tip.id].tint }}>
+          <div className="toast-tip" key={tip.key} role="status" style={{ ["--tint" as string]: TIPS[tip.id].tint, bottom: layout.height - layout.dangerY + 14 }}>
             <span className="toast-dot" />
             <span>{TIPS[tip.id].text}</span>
           </div>

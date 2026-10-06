@@ -15,7 +15,7 @@ import {
 import type { ViewBall, ViewState } from "../game/view";
 import { chemImage } from "./chem";
 
-const NUMBER_FONT = '"Orbitron", "JetBrains Mono", monospace';
+const NUMBER_FONT = '"Russo One", "JetBrains Mono", monospace';
 
 const MATERIAL_ICONS: Record<string, IconNode> = {
   water: Droplets,
@@ -454,11 +454,7 @@ function drawFloat(ctx: CanvasRenderingContext2D, float: ViewState["floats"][num
   ctx.scale(scale, scale);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.beginPath();
-  ctx.fillStyle = "rgba(8, 10, 20, 0.42)";
-  ctx.roundRect(-78, -32, 156, 72, 22);
-  ctx.fill();
-  ctx.font = `900 38px ${NUMBER_FONT}`;
+  ctx.font = `38px ${NUMBER_FONT}`;
   ctx.lineWidth = 8;
   ctx.strokeStyle = "rgba(6, 10, 20, 0.55)";
   ctx.strokeText(float.text, 0, -4);
