@@ -488,20 +488,33 @@ function drawBanner(ctx: CanvasRenderingContext2D, view: ViewState): void {
 
 function drawChill(ctx: CanvasRenderingContext2D, view: ViewState): void {
   const { width, height } = view;
-  const edge = ctx.createRadialGradient(width / 2, height * 0.42, height * 0.24, width / 2, height * 0.45, height * 0.7);
+  const edge = ctx.createRadialGradient(width / 2, height * 0.42, height * 0.16, width / 2, height * 0.45, height * 0.66);
   edge.addColorStop(0, "rgba(160, 220, 255, 0)");
-  edge.addColorStop(1, `rgba(170, 225, 255, ${0.32 * view.chill})`);
+  edge.addColorStop(1, `rgba(175, 228, 255, ${0.55 * view.chill})`);
   ctx.fillStyle = edge;
+  ctx.fillRect(0, 0, width, height);
+  ctx.fillStyle = `rgba(120, 200, 255, ${0.08 * view.chill})`;
   ctx.fillRect(0, 0, width, height);
   const time = performance.now() / 1000;
   ctx.save();
-  ctx.globalAlpha = 0.5 * view.chill;
-  ctx.fillStyle = "#e8f8ff";
-  for (let i = 0; i < 26; i += 1) {
+  ctx.globalAlpha = view.chill;
+  ctx.strokeStyle = "#bfefff";
+  ctx.lineWidth = 3;
+  ctx.shadowColor = "#7ed3f0";
+  ctx.shadowBlur = 14;
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.moveTo(14, view.dangerY);
+  ctx.lineTo(width - 14, view.dangerY);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 0.75 * view.chill;
+  ctx.fillStyle = "#f0fbff";
+  for (let i = 0; i < 40; i += 1) {
     const px = (i * 97.3 + Math.sin(time * 0.6 + i) * 14) % width;
-    const py = (i * 53.7 + time * (10 + (i % 4) * 4)) % (height * 0.8);
+    const py = (i * 53.7 + time * (12 + (i % 4) * 5)) % view.dangerY;
     ctx.beginPath();
-    ctx.arc(px, py, 1 + (i % 3) * 0.6, 0, Math.PI * 2);
+    ctx.arc(px, py, 1.2 + (i % 3) * 0.8, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.restore();
