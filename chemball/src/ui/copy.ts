@@ -1,59 +1,16 @@
-export type TipId = "aim" | "match" | "gadget" | "danger" | "charging";
+export type TipId = "match" | "danger" | "charging";
 
 export const TIPS: Record<TipId, { text: string; tint: string }> = {
-  aim: { text: "بکش تا نشانه بگیری، رها کن تا پرتاب شود", tint: "#8fd4ff" },
   match: { text: "سه مادهٔ همسان کنار هم، اثرشان را آزاد می‌کنند", tint: "#ffc15a" },
-  gadget: { text: "دکمهٔ ابزار را نگه دار تا ابزار دیگری برداری", tint: "#c9a8ff" },
   danger: { text: "ردیف‌ها نزدیک خط قرمزند؛ نیتروژن مایع کمک می‌کند", tint: "#ff8d8d" },
   charging: { text: "این ابزار هنوز در حال شارژ است", tint: "#c9d3e6" },
 };
-
-/** Formulas that drift through the start screen. */
-export const SKY_FORMULAS = [
-  "H2O",
-  "NaCl",
-  "CO2",
-  "O2",
-  "CH4",
-  "NH3",
-  "H2SO4",
-  "Fe2O3",
-  "Na+",
-  "Cl-",
-  "HCl",
-  "C6H12O6",
-  "H2 + O2 -> H2O",
-  "CaCO3",
-  "Mg^2+",
-  "OH-",
-];
 
 export interface ElementCard {
   symbol: string;
   number: number;
   mass: string;
 }
-
-/** Periodic-table tiles that surface out of the smoke on the start screen. */
-export const SKY_ELEMENTS: ElementCard[] = [
-  { symbol: "H", number: 1, mass: "1.008" },
-  { symbol: "He", number: 2, mass: "4.0026" },
-  { symbol: "C", number: 6, mass: "12.011" },
-  { symbol: "N", number: 7, mass: "14.007" },
-  { symbol: "O", number: 8, mass: "15.999" },
-  { symbol: "Na", number: 11, mass: "22.990" },
-  { symbol: "Mg", number: 12, mass: "24.305" },
-  { symbol: "S", number: 16, mass: "32.06" },
-  { symbol: "Cl", number: 17, mass: "35.45" },
-  { symbol: "K", number: 19, mass: "39.098" },
-  { symbol: "Ca", number: 20, mass: "40.078" },
-  { symbol: "Fe", number: 26, mass: "55.845" },
-  { symbol: "Cu", number: 29, mass: "63.546" },
-  { symbol: "Br", number: 35, mass: "79.904" },
-  { symbol: "Ba", number: 56, mass: "137.33" },
-];
-
-export const SKY_COLORS = ["#9be7a8", "#d8f28a", "#7fd6a4", "#c6f0b0"];
 
 export interface GadgetCopy {
   id: string;

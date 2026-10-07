@@ -87,6 +87,41 @@ export function renderFrame(ctx: CanvasRenderingContext2D, view: ViewState, dpr:
   ctx.fillRect(0, 0, view.width, view.height);
 }
 
+const SMOKE_SVG = `data:image/svg+xml,${encodeURIComponent(
+  "<svg xmlns='http://www.w3.org/2000/svg' width='600' height='600'><filter id='s' x='0' y='0' width='100%' height='100%'>" +
+    "<feTurbulence type='fractalNoise' baseFrequency='0.005 0.01' numOctaves='4' seed='7' stitchTiles='stitch'/>" +
+    "<feColorMatrix values='0 0 0 0 0.55  0 0 0 0 0.85  0 0 0 0 0.45  0 0 0 1.6 -0.62'/></filter>" +
+    "<rect width='100%' height='100%' filter='url(#s)'/></svg>",
+)}`;
+const SMOKE_SIZE = 600;
+let smoke: HTMLCanvasElement | null = null;
+let smokeRequested = false;
+
+function smokeTexture(): HTMLCanvasElement | null {
+  if (smoke || smokeRequested || typeof Image === "undefined") return smoke;
+  smokeRequested = true;
+  const image = new Image();
+  image.onload = () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = SMOKE_SIZE;
+    canvas.height = SMOKE_SIZE;
+    canvas.getContext("2d")?.drawImage(image, 0, 0);
+    smoke = canvas;
+  };
+  image.src = SMOKE_SVG;
+  return null;
+}
+
+function drawSmoke(ctx: CanvasRenderingContext2D, tex: HTMLCanvasElement, width: number, height: number, time: number, scale: number, speed: number, alpha: number): void {
+  const size = SMOKE_SIZE * scale;
+  const ox = -((time * speed * 0.35) % size);
+  const oy = -((time * speed) % size);
+  ctx.globalAlpha = alpha;
+  for (let x = ox; x < width; x += size) {
+    for (let y = oy; y < height; y += size) ctx.drawImage(tex, x, y, size, size);
+  }
+}
+
 function drawBackdrop(ctx: CanvasRenderingContext2D, width: number, height: number): void {
   const key = `${Math.round(width)}x${Math.round(height)}`;
   if (!backdrop || backdrop.key !== key) {
@@ -96,33 +131,48 @@ function drawBackdrop(ctx: CanvasRenderingContext2D, width: number, height: numb
     const g = canvas.getContext("2d");
     if (!g) return;
     const sky = g.createLinearGradient(0, 0, 0, height);
-    sky.addColorStop(0, "#121028");
-    sky.addColorStop(0.45, "#0c1022");
-    sky.addColorStop(1, "#160d22");
+    sky.addColorStop(0, "#0a1a10");
+    sky.addColorStop(0.5, "#06110a");
+    sky.addColorStop(1, "#0b160a");
     g.fillStyle = sky;
     g.fillRect(0, 0, width, height);
-    g.fillStyle = "rgba(120, 90, 255, 0.16)";
-    g.beginPath();
-    g.ellipse(width * 0.5, height * 0.15, width * 0.55, height * 0.18, 0, 0, Math.PI * 2);
-    g.fill();
-    g.fillStyle = "rgba(40, 120, 180, 0.08)";
-    g.beginPath();
-    g.ellipse(width * 0.2, height * 0.7, width * 0.4, height * 0.2, 0.4, 0, Math.PI * 2);
-    g.fill();
+    const top = g.createRadialGradient(width * 0.5, height * 0.12, 0, width * 0.5, height * 0.12, width * 0.8);
+    top.addColorStop(0, "rgba(70, 170, 90, 0.22)");
+    top.addColorStop(1, "rgba(70, 170, 90, 0)");
+    g.fillStyle = top;
+    g.fillRect(0, 0, width, height);
+    const low = g.createRadialGradient(width * 0.3, height * 0.78, 0, width * 0.3, height * 0.78, width * 0.7);
+    low.addColorStop(0, "rgba(150, 190, 60, 0.1)");
+    low.addColorStop(1, "rgba(150, 190, 60, 0)");
+    g.fillStyle = low;
+    g.fillRect(0, 0, width, height);
     backdrop = { key, canvas };
   }
   ctx.drawImage(backdrop.canvas, 0, 0, width, height);
   const time = performance.now() / 1000;
-  ctx.fillStyle = "rgba(210, 230, 255, 0.35)";
+  const tex = smokeTexture();
+  if (tex) {
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+    drawSmoke(ctx, tex, width, height, time, 1.5, 7, 0.22);
+    drawSmoke(ctx, tex, width, height, time + 40, 1, 12, 0.28);
+    ctx.restore();
+  }
+  ctx.fillStyle = "rgba(210, 255, 180, 0.4)";
   for (let i = 0; i < 18; i += 1) {
     const x = (width * (i * 0.17 + 0.05) + Math.sin(time * 0.15 + i) * 12) % width;
-    const y = (height * ((i * 0.37) % 1) + time * (6 + (i % 5))) % height;
+    const y = height - ((height * ((i * 0.37) % 1) + time * (6 + (i % 5))) % height);
     ctx.globalAlpha = 0.15 + (i % 4) * 0.05;
     ctx.beginPath();
     ctx.arc(x, y, 1.2 + (i % 3) * 0.4, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.globalAlpha = 1;
+  const shade = ctx.createRadialGradient(width / 2, height * 0.45, height * 0.25, width / 2, height * 0.5, height * 0.75);
+  shade.addColorStop(0, "rgba(0, 0, 0, 0)");
+  shade.addColorStop(1, "rgba(0, 0, 0, 0.45)");
+  ctx.fillStyle = shade;
+  ctx.fillRect(0, 0, width, height);
 }
 
 function drawDanger(ctx: CanvasRenderingContext2D, view: ViewState): void {

@@ -1,5 +1,6 @@
 import { BookOpen, Pause, Play, Settings, Trophy } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type PointerEvent } from "react";
+import { MusicPlayer, type MusicSettings } from "../audio/music";
 import { AudioBus } from "../audio/sfx";
 import { GameEngine } from "../game/engine";
 import { makeLayout } from "../game/hex";
@@ -11,6 +12,7 @@ import type { LeaderboardEntry } from "../save/models";
 import { LocalPlayerRepository } from "../save/localRepository";
 import { Chem } from "./Chem";
 import { ChemSky } from "./ChemSky";
+import { Coach, type CoachStep } from "./Coach";
 import { TIPS, type TipId } from "./copy";
 import { GadgetButton, GadgetPicker } from "./GadgetButton";
 import { HomeTitle } from "./HomeTitle";
@@ -33,6 +35,7 @@ const EMPTY_HUD: HudSnapshot = {
 };
 
 const TIP_KEY = "chemball-tips-v2";
+const COACH_KEY = "chemball-coach-v1";
 const TIP_MS = 3600;
 
 type Mode = "home" | "play";
@@ -66,6 +69,20 @@ export function App() {
   const [tip, setTip] = useState<{ id: TipId; key: number } | null>(null);
   const tipQueue = useRef<TipId[]>([]);
   const seen = useRef<Set<string>>(seenTips());
+  const [coach, setCoach] = useState(false);
+  const musicRef = useRef<MusicPlayer | null>(null);
+  const [music, setMusic] = useState<MusicSettings>({ enabled: true, volume: 0.6 });
+
+  useEffect(() => {
+    const player = new MusicPlayer();
+    musicRef.current = player;
+    player.onChange = setMusic;
+    setMusic(player.settings);
+    return () => {
+      player.dispose();
+      musicRef.current = null;
+    };
+  }, []);
 
   const showTip = useCallback((id: TipId, once = true) => {
     if (once) {
@@ -151,14 +168,15 @@ export function App() {
     };
   }, []);
 
-  const live = mode === "play" && !summary && !paused && !picking && !page;
+  const live = mode === "play" && !summary && !paused && !picking && !page && !coach;
 
   useEffect(() => {
-    if (mode !== "play") return;
-    if (!hud.hint) return;
-    const timer = window.setTimeout(() => showTip("aim"), 500);
-    return () => window.clearTimeout(timer);
-  }, [mode, hud.hint, showTip]);
+    musicRef.current?.setScene(mode === "home" ? "home" : "game");
+  }, [mode]);
+
+  useEffect(() => {
+    musicRef.current?.setDucked(Boolean(page) || (mode === "play" && (paused || picking || coach || Boolean(summary))));
+  }, [mode, page, paused, picking, coach, summary]);
 
   useEffect(() => {
     if (mode === "play" && hud.discovered.length > 0 && !hud.hint) showTip("match");
@@ -168,11 +186,6 @@ export function App() {
     if (mode === "play" && hud.nearDanger) showTip("danger");
   }, [mode, hud.nearDanger, showTip]);
 
-  useEffect(() => {
-    if (!live) return;
-    const timer = window.setTimeout(() => showTip("gadget"), 22000);
-    return () => window.clearTimeout(timer);
-  }, [live, showTip]);
 
   const aim = (event: PointerEvent<HTMLCanvasElement>) => {
     if (!live) return;
@@ -192,6 +205,10 @@ export function App() {
     engine.unlockAudio();
     modeRef.current = "play";
     engine.restart();
+    if (!localStorage.getItem(COACH_KEY)) {
+      engine.pause(true);
+      setCoach(true);
+    }
     setSummary(null);
     setPage(null);
     setPaused(false);
@@ -206,6 +223,7 @@ export function App() {
     setPicking(false);
     setPage(null);
     setTip(null);
+    setCoach(false);
     setMode("home");
   };
 
@@ -217,10 +235,42 @@ export function App() {
 
   const nextX = Math.max(46, layout.drawRadius + 28);
   const dockStyle = { left: layout.width - nextX - 34, top: layout.launcherY + 10 - 34 };
+  const finishCoach = () => {
+    localStorage.setItem(COACH_KEY, "1");
+    setCoach(false);
+    engineRef.current?.pause(false);
+  };
+  const ring = (x: number, y: number, r: number) => ({ x: x - r, y: y - r, w: r * 2, h: r * 2, radius: r });
+  const coachSteps: CoachStep[] = [
+    {
+      id: "launcher",
+      title: "پرتاب",
+      text: "انگشتت را روی صفحه بکش تا مسیر را ببینی؛ رها کن تا گوی پرتاب شود.",
+      target: ring(layout.launcherX, layout.launcherY, layout.drawRadius * 1.9),
+    },
+    {
+      id: "next",
+      title: "گوی بعدی",
+      text: "بعد از این پرتاب، نوبت این گوی است. از قبل برایش جا در نظر بگیر.",
+      target: { ...ring(nextX, layout.launcherY + 10, layout.drawRadius * 1.25 + 8), y: layout.launcherY + 10 - layout.drawRadius * 1.25 - 30, h: layout.drawRadius * 2.5 + 38 },
+    },
+    {
+      id: "gadget",
+      title: "ابزار",
+      text: "بزن تا ابزار کار کند. نگه دار تا بین نیتروژن، شعله و کاتالیزگر انتخاب کنی. هر ابزار بعد از استفاده شارژ می‌شود.",
+      target: { x: Math.min(layout.width - nextX - 40, layout.width - 84), y: layout.launcherY + 10 - 40, w: 80, h: 100, radius: 40 },
+    },
+    {
+      id: "danger",
+      title: "خط خطر",
+      text: "ردیف‌ها آرام پایین می‌آیند. اگر گوی‌ها به این خط برسند، آزمایش تمام می‌شود.",
+      target: { x: 8, y: layout.dangerY - 16, w: layout.width - 16, h: 32, radius: 16 },
+    },
+  ];
   const pickerStyle = { right: 12, bottom: layout.height - (layout.launcherY + 10 - 46) };
 
   return (
-    <div className="stage" dir="rtl">
+    <div className="stage" dir="rtl" onPointerDownCapture={() => musicRef.current?.unlock()}>
       <div className="phone" ref={phoneRef}>
         <canvas
           ref={canvasRef}
@@ -261,15 +311,21 @@ export function App() {
             </div>
             <nav className="home-foot">
               <button type="button" onClick={() => setPage("settings")}>
-                <Settings size={20} />
+                <span className="foot-icon">
+                  <Settings size={20} />
+                </span>
                 <span>تنظیمات</span>
               </button>
               <button type="button" onClick={() => setPage("guide")}>
-                <BookOpen size={20} />
+                <span className="foot-icon">
+                  <BookOpen size={20} />
+                </span>
                 <span>راهنما</span>
               </button>
               <button type="button" onClick={() => void openLeaders()}>
-                <Trophy size={20} />
+                <span className="foot-icon">
+                  <Trophy size={20} />
+                </span>
                 <span>رتبه‌بندی</span>
               </button>
             </nav>
@@ -348,6 +404,8 @@ export function App() {
           />
         )}
 
+        {coach && mode === "play" && !summary && <Coach steps={coachSteps} height={layout.height} onDone={finishCoach} />}
+
         {paused && !summary && !page && (
           <PauseSheet
             sound={hud.sound}
@@ -393,11 +451,15 @@ export function App() {
           <SettingsPage
             name={hud.name}
             sound={hud.sound}
+            music={music}
+            onMusic={() => musicRef.current?.setEnabled(!music.enabled)}
+            onVolume={(volume) => musicRef.current?.setVolume(volume)}
             onRename={(name) => void engineRef.current?.rename(name)}
             onSound={() => void engineRef.current?.setSound(!hud.sound)}
             onResetTips={() => {
               seen.current.clear();
               localStorage.removeItem(TIP_KEY);
+              localStorage.removeItem(COACH_KEY);
             }}
             onBack={() => setPage(null)}
           />

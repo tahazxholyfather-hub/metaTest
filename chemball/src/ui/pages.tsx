@@ -7,6 +7,7 @@ import {
   FlaskConical,
   Hand,
   Home,
+  Music,
   Play,
   RotateCcw,
   Send,
@@ -24,6 +25,7 @@ import { REACTIONS } from "../data/reactions";
 import { reactionProductName, reactionTex } from "../game/formula";
 import { faDigits } from "../game/labels";
 import { formatNumber } from "../game/score";
+import type { MusicSettings } from "../audio/music";
 import type { LeaderboardEntry } from "../save/models";
 import { Chem } from "./Chem";
 import { BEHAVIORS, GADGET_COPY, RECIPES, STEPS } from "./copy";
@@ -67,6 +69,9 @@ export function Avatar(props: { name: string; size?: number }) {
 export function SettingsPage(props: {
   name: string;
   sound: boolean;
+  music: MusicSettings;
+  onMusic: () => void;
+  onVolume: (volume: number) => void;
   onRename: (name: string) => void;
   onSound: () => void;
   onResetTips: () => void;
@@ -97,6 +102,31 @@ export function SettingsPage(props: {
           <span className="row-text">صدای بازی</span>
           <span className={props.sound ? "switch on" : "switch"} />
         </button>
+        <button className="row-btn" type="button" onClick={props.onMusic}>
+          <span className="row-icon">
+            <Music size={18} />
+          </span>
+          <span className="row-text">موسیقی</span>
+          <span className={props.music.enabled ? "switch on" : "switch"} />
+        </button>
+        <label className={props.music.enabled ? "row-btn volume" : "row-btn volume off"}>
+          <span className="row-icon">
+            <Volume2 size={18} />
+          </span>
+          <span className="row-text">بلندی موسیقی</span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={5}
+            dir="ltr"
+            value={Math.round(props.music.volume * 100)}
+            disabled={!props.music.enabled}
+            style={{ ["--fill" as string]: `${Math.round(props.music.volume * 100)}%` }}
+            onChange={(event) => props.onVolume(Number(event.target.value) / 100)}
+            aria-label="بلندی موسیقی"
+          />
+        </label>
         <button
           className="row-btn"
           type="button"
