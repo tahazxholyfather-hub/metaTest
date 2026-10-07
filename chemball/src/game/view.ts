@@ -33,6 +33,7 @@ export interface FloatText {
   life: number;
   max: number;
   color: string;
+  pop: number;
 }
 
 export interface ViewState {
@@ -54,7 +55,9 @@ export interface ViewState {
   flash: number;
   splash: Array<{ x1: number; y1: number; x2: number; y2: number }>;
   bolts: Array<{ x1: number; y1: number; x2: number; y2: number }>;
-  ring: { x: number; y: number; r: number; t: number; massive: boolean } | null;
+  ring: { x: number; y: number; r: number; t: number; massive: boolean; color: string } | null;
   banner: string;
   bannerLife: number;
+  armed: string;
+  chill: number;
 }
