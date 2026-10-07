@@ -13,6 +13,7 @@ import { Chem } from "./Chem";
 import { ChemSky } from "./ChemSky";
 import { TIPS, type TipId } from "./copy";
 import { GadgetButton, GadgetPicker } from "./GadgetButton";
+import { HomeTitle } from "./HomeTitle";
 import { Avatar, GuidePage, LeaderboardPage, PauseSheet, SettingsPage } from "./pages";
 
 const EMPTY_HUD: HudSnapshot = {
@@ -249,6 +250,7 @@ export function App() {
               </div>
             </header>
             <div className="home-center">
+              <HomeTitle />
               <button className="play" type="button" aria-label="شروع بازی" onClick={begin}>
                 <span className="play-ring" />
                 <span className="play-ring late" />

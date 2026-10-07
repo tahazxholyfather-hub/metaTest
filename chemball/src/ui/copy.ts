@@ -28,7 +28,32 @@ export const SKY_FORMULAS = [
   "OH-",
 ];
 
-export const SKY_COLORS = ["#8fd4ff", "#ff9d8a", "#ffd27a", "#b6e36a", "#c9a8ff", "#9fe8e0", "#f2c1ff"];
+export interface ElementCard {
+  symbol: string;
+  number: number;
+  mass: string;
+}
+
+/** Periodic-table tiles that surface out of the smoke on the start screen. */
+export const SKY_ELEMENTS: ElementCard[] = [
+  { symbol: "H", number: 1, mass: "1.008" },
+  { symbol: "He", number: 2, mass: "4.0026" },
+  { symbol: "C", number: 6, mass: "12.011" },
+  { symbol: "N", number: 7, mass: "14.007" },
+  { symbol: "O", number: 8, mass: "15.999" },
+  { symbol: "Na", number: 11, mass: "22.990" },
+  { symbol: "Mg", number: 12, mass: "24.305" },
+  { symbol: "S", number: 16, mass: "32.06" },
+  { symbol: "Cl", number: 17, mass: "35.45" },
+  { symbol: "K", number: 19, mass: "39.098" },
+  { symbol: "Ca", number: 20, mass: "40.078" },
+  { symbol: "Fe", number: 26, mass: "55.845" },
+  { symbol: "Cu", number: 29, mass: "63.546" },
+  { symbol: "Br", number: 35, mass: "79.904" },
+  { symbol: "Ba", number: 56, mass: "137.33" },
+];
+
+export const SKY_COLORS = ["#9be7a8", "#d8f28a", "#7fd6a4", "#c6f0b0"];
 
 export interface GadgetCopy {
   id: string;
