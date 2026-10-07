@@ -2,7 +2,7 @@
 
 const pool = require('../db');
 const { hashPassword } = require('../utils/password');
-const { SUPER_ADMIN_ID, publicAdmin } = require('../middleware/adminAuth');
+const { SUPER_ADMIN_ID, publicAdmin, isSuperAdmin } = require('../middleware/adminAuth');
 
 const ROLES = ['admin', 'selector', 'typing'];
 
@@ -65,6 +65,9 @@ const handleUpdateAdmin = async (req, res) => {
 
         const [[existing]] = await pool.query(`SELECT * FROM tam24_admins WHERE id = ? LIMIT 1`, [id]);
         if (!existing) return res.json({ success: false, message: 'Admin not found' });
+        if (id === SUPER_ADMIN_ID && !isSuperAdmin(req.admin)) {
+            return res.status(403).json({ success: false, message: 'Only the main admin can change that account.' });
+        }
 
         const updates = [];
         const params = [];

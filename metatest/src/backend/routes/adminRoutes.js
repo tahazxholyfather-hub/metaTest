@@ -5,6 +5,8 @@ const router = express.Router();
 const dashboard = require('./controllers/adminDashboardController');
 const staff = require('./controllers/adminStaffController');
 const ai = require('./controllers/adminAiController');
+const ops = require('./controllers/adminOpsController');
+const { requireSection, withSections } = require('./admin/access');
 const {
     requireAdminSession,
     requireSuperAdmin,
@@ -15,7 +17,6 @@ const {
     issueSession,
     clearAdminCookie,
     attachAdminIfPresent,
-    publicAdmin,
 } = require('./middleware/adminAuth');
 
 function wrap(handler) {
@@ -42,13 +43,15 @@ router.post('/auth/login', wrap(async (req, res) => {
     if (!result.ok) return res.json({ success: false, message: result.message });
     await recordLoginSuccess(result.admin.id, clientIp(req));
     const user = await issueSession(res, result.admin);
+    await withSections(user);
     return res.json({ success: true, user });
 }));
 
 router.get('/auth/me', wrap(async (req, res) => {
     const admin = await attachAdminIfPresent(req);
     if (!admin) return res.json({ success: false, message: 'No session found.' });
-    return res.json({ success: true, user: publicAdmin(admin) });
+    await withSections(admin);
+    return res.json({ success: true, user: admin });
 }));
 
 router.post('/auth/logout', wrap(async (_req, res) => {
@@ -59,59 +62,72 @@ router.post('/auth/logout', wrap(async (_req, res) => {
 // Everything below requires a valid admin session
 router.use(requireAdminSession);
 
-router.get('/dashboard', wrap(dashboard.handleGetDashboard));
+router.get('/dashboard', requireSection('dashboard'), wrap(dashboard.handleGetDashboard));
 
-// Admins manager + AI manager: main admin (id 1) only
-router.get('/admins', requireSuperAdmin, wrap(staff.handleListAdmins));
-router.post('/admins', requireSuperAdmin, wrap(staff.handleCreateAdmin));
-router.patch('/admins/:id', requireSuperAdmin, wrap(staff.handleUpdateAdmin));
-router.delete('/admins/:id', requireSuperAdmin, wrap(staff.handleDeleteAdmin));
+router.get('/words', requireSection('word-stats'), wrap(ops.handleWordStats));
 
-router.get('/ai/settings', requireSuperAdmin, wrap(ai.handleGetSettings));
-router.put('/ai/settings', requireSuperAdmin, wrap(ai.handleSaveSettings));
-router.get('/ai/stats', requireSuperAdmin, wrap(ai.handleAiStats));
-router.get('/ai/usage', requireSuperAdmin, wrap(ai.handleUsageLogs));
+router.get('/discounts', requireSection('discounts'), wrap(ops.handleListDiscounts));
+router.post('/discounts', requireSection('discounts'), wrap(ops.handleSaveDiscount));
+router.patch('/discounts/:id', requireSection('discounts'), wrap(ops.handleSaveDiscount));
+router.delete('/discounts/:id', requireSection('discounts'), wrap(ops.handleDeleteDiscount));
 
-router.get('/ai/subjects', requireSuperAdmin, wrap(ai.handleListSubjects));
-router.put('/ai/subjects/:key', requireSuperAdmin, wrap(ai.handleSaveSubject));
-router.post('/ai/subjects/:key/reset-prompts', requireSuperAdmin, wrap(ai.handleResetSubjectPrompts));
+router.get('/reports', requireSection('reports'), wrap(ops.handleListReports));
+router.patch('/reports/:id', requireSection('reports'), wrap(ops.handleUpdateReport));
 
-router.get('/ai/knowledge', requireSuperAdmin, wrap(ai.handleListKnowledge));
-router.get('/ai/knowledge/:id', requireSuperAdmin, wrap(ai.handleGetKnowledge));
-router.post('/ai/knowledge', requireSuperAdmin, wrap(ai.handleSaveKnowledge));
-router.put('/ai/knowledge/:id', requireSuperAdmin, wrap(ai.handleSaveKnowledge));
-router.delete('/ai/knowledge/:id', requireSuperAdmin, wrap(ai.handleDeleteKnowledge));
+// Section access stays with the main admin even if another admin can open Admins.
+router.get('/access', requireSuperAdmin, wrap(ops.handleListAccess));
+router.put('/access/:id', requireSuperAdmin, wrap(ops.handleSaveAccess));
 
-router.get('/ai/suggestions', requireSuperAdmin, wrap(ai.handleListSuggestions));
-router.post('/ai/suggestions', requireSuperAdmin, wrap(ai.handleSaveSuggestion));
-router.put('/ai/suggestions/:id', requireSuperAdmin, wrap(ai.handleSaveSuggestion));
-router.delete('/ai/suggestions/:id', requireSuperAdmin, wrap(ai.handleDeleteSuggestion));
+router.get('/admins', requireSection('admins'), wrap(staff.handleListAdmins));
+router.post('/admins', requireSection('admins'), wrap(staff.handleCreateAdmin));
+router.patch('/admins/:id', requireSection('admins'), wrap(staff.handleUpdateAdmin));
+router.delete('/admins/:id', requireSection('admins'), wrap(staff.handleDeleteAdmin));
 
-router.get('/ai/books', requireSuperAdmin, wrap(ai.handleListBooks));
-router.post('/ai/books', requireSuperAdmin, wrap(ai.handleSaveBook));
-router.put('/ai/books/:id', requireSuperAdmin, wrap(ai.handleSaveBook));
-router.delete('/ai/books/:id', requireSuperAdmin, wrap(ai.handleDeleteBook));
-router.post('/ai/books/:id/ingest', requireSuperAdmin, wrap(ai.handleIngestBook));
+router.get('/ai/settings', requireSection('ai-manager'), wrap(ai.handleGetSettings));
+router.put('/ai/settings', requireSection('ai-manager'), wrap(ai.handleSaveSettings));
+router.get('/ai/stats', requireSection('ai-manager'), wrap(ai.handleAiStats));
+router.get('/ai/usage', requireSection('ai-manager'), wrap(ai.handleUsageLogs));
 
-router.get('/ai/pricing', requireSuperAdmin, wrap(ai.handleListPricing));
-router.post('/ai/pricing', requireSuperAdmin, wrap(ai.handleSavePricing));
-router.put('/ai/pricing/:id', requireSuperAdmin, wrap(ai.handleSavePricing));
-router.delete('/ai/pricing/:id', requireSuperAdmin, wrap(ai.handleDeletePricing));
+router.get('/ai/subjects', requireSection('ai-manager'), wrap(ai.handleListSubjects));
+router.put('/ai/subjects/:key', requireSection('ai-manager'), wrap(ai.handleSaveSubject));
+router.post('/ai/subjects/:key/reset-prompts', requireSection('ai-manager'), wrap(ai.handleResetSubjectPrompts));
 
-router.get('/ai/wallets', requireSuperAdmin, wrap(ai.handleSearchWallets));
-router.post('/ai/wallets/:userId/adjust', requireSuperAdmin, wrap(ai.handleAdjustWallet));
+router.get('/ai/knowledge', requireSection('ai-manager'), wrap(ai.handleListKnowledge));
+router.get('/ai/knowledge/:id', requireSection('ai-manager'), wrap(ai.handleGetKnowledge));
+router.post('/ai/knowledge', requireSection('ai-manager'), wrap(ai.handleSaveKnowledge));
+router.put('/ai/knowledge/:id', requireSection('ai-manager'), wrap(ai.handleSaveKnowledge));
+router.delete('/ai/knowledge/:id', requireSection('ai-manager'), wrap(ai.handleDeleteKnowledge));
 
-router.get('/ai/memory', requireSuperAdmin, wrap(ai.handleListMemory));
-router.post('/ai/memory', requireSuperAdmin, wrap(ai.handleSaveMemory));
-router.put('/ai/memory/:id', requireSuperAdmin, wrap(ai.handleSaveMemory));
-router.delete('/ai/memory/:id', requireSuperAdmin, wrap(ai.handleDeleteMemory));
+router.get('/ai/suggestions', requireSection('ai-manager'), wrap(ai.handleListSuggestions));
+router.post('/ai/suggestions', requireSection('ai-manager'), wrap(ai.handleSaveSuggestion));
+router.put('/ai/suggestions/:id', requireSection('ai-manager'), wrap(ai.handleSaveSuggestion));
+router.delete('/ai/suggestions/:id', requireSection('ai-manager'), wrap(ai.handleDeleteSuggestion));
 
-router.get('/ai/conversations', requireSuperAdmin, wrap(ai.handleListConversations));
-router.get('/ai/conversations/:id', requireSuperAdmin, wrap(ai.handleGetConversation));
-router.delete('/ai/conversations/:id', requireSuperAdmin, wrap(ai.handleDeleteConversation));
+router.get('/ai/books', requireSection('ai-manager'), wrap(ai.handleListBooks));
+router.post('/ai/books', requireSection('ai-manager'), wrap(ai.handleSaveBook));
+router.put('/ai/books/:id', requireSection('ai-manager'), wrap(ai.handleSaveBook));
+router.delete('/ai/books/:id', requireSection('ai-manager'), wrap(ai.handleDeleteBook));
+router.post('/ai/books/:id/ingest', requireSection('ai-manager'), wrap(ai.handleIngestBook));
 
-router.get('/ai/user-settings/:userId', requireSuperAdmin, wrap(ai.handleGetUserSettings));
-router.put('/ai/user-settings/:userId', requireSuperAdmin, wrap(ai.handleSaveUserSettings));
+router.get('/ai/pricing', requireSection('ai-manager'), wrap(ai.handleListPricing));
+router.post('/ai/pricing', requireSection('ai-manager'), wrap(ai.handleSavePricing));
+router.put('/ai/pricing/:id', requireSection('ai-manager'), wrap(ai.handleSavePricing));
+router.delete('/ai/pricing/:id', requireSection('ai-manager'), wrap(ai.handleDeletePricing));
+
+router.get('/ai/wallets', requireSection('ai-manager'), wrap(ai.handleSearchWallets));
+router.post('/ai/wallets/:userId/adjust', requireSection('ai-manager'), wrap(ai.handleAdjustWallet));
+
+router.get('/ai/memory', requireSection('ai-manager'), wrap(ai.handleListMemory));
+router.post('/ai/memory', requireSection('ai-manager'), wrap(ai.handleSaveMemory));
+router.put('/ai/memory/:id', requireSection('ai-manager'), wrap(ai.handleSaveMemory));
+router.delete('/ai/memory/:id', requireSection('ai-manager'), wrap(ai.handleDeleteMemory));
+
+router.get('/ai/conversations', requireSection('ai-manager'), wrap(ai.handleListConversations));
+router.get('/ai/conversations/:id', requireSection('ai-manager'), wrap(ai.handleGetConversation));
+router.delete('/ai/conversations/:id', requireSection('ai-manager'), wrap(ai.handleDeleteConversation));
+
+router.get('/ai/user-settings/:userId', requireSection('ai-manager'), wrap(ai.handleGetUserSettings));
+router.put('/ai/user-settings/:userId', requireSection('ai-manager'), wrap(ai.handleSaveUserSettings));
 
 router.use((err, _req, res, _next) => {
     console.error('[admin] route error:', err);

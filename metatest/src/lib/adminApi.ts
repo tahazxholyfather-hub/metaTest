@@ -31,14 +31,18 @@ async function adminRequest<T = any>(path: string, options: RequestInit & { para
 
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-        if (
-            res.status === 401 &&
-            typeof window !== 'undefined' &&
-            path !== '/auth/login' &&
-            path !== '/auth/me' &&
-            path !== '/auth/logout'
-        ) {
-            window.dispatchEvent(new Event('admin-session-expired'));
+        if (typeof window !== 'undefined') {
+            if (
+                res.status === 401 &&
+                path !== '/auth/login' &&
+                path !== '/auth/me' &&
+                path !== '/auth/logout'
+            ) {
+                window.dispatchEvent(new Event('admin-session-expired'));
+            }
+            if (res.status === 403 && path !== '/auth/login') {
+                window.dispatchEvent(new Event('admin-access-denied'));
+            }
         }
         const err: any = new Error(data?.message || `Server error (${res.status})`);
         err.status = res.status;
@@ -140,4 +144,22 @@ export const adminApi = {
     aiUserSettings: (userId: number) => adminRequest<Json>(`/ai/user-settings/${userId}`),
     saveAiUserSettings: (userId: number, payload: Json) =>
         adminRequest<Json>(`/ai/user-settings/${userId}`, { method: 'PUT', body: JSON.stringify(payload) }),
+
+    wordStats: () => adminRequest<Json>('/words'),
+
+    listDiscounts: (q?: string) => adminRequest<Json>('/discounts', { params: q ? { q } : undefined }),
+    createDiscount: (payload: Json) =>
+        adminRequest<Json>('/discounts', { method: 'POST', body: JSON.stringify(payload) }),
+    updateDiscount: (id: number, payload: Json) =>
+        adminRequest<Json>(`/discounts/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+    deleteDiscount: (id: number) =>
+        adminRequest<Json>(`/discounts/${id}`, { method: 'DELETE' }),
+
+    listReports: (params?: Json) => adminRequest<Json>('/reports', { params }),
+    updateReport: (id: number, payload: Json) =>
+        adminRequest<Json>(`/reports/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+
+    listAccess: () => adminRequest<Json>('/access'),
+    saveAccess: (id: number, sections: Json) =>
+        adminRequest<Json>(`/access/${id}`, { method: 'PUT', body: JSON.stringify({ sections }) }),
 };

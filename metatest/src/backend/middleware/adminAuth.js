@@ -217,6 +217,13 @@ async function requireAdminSession(req, res, next) {
             return unauthorized(res, 'This admin account is disabled');
         }
         req.admin = publicAdmin(admin);
+        try {
+            const { loadSections, denyIfActionForbidden } = require('../admin/access');
+            req.admin.sections = await loadSections(req.admin.id);
+            if (denyIfActionForbidden(req, res)) return;
+        } catch (err) {
+            console.error('section access check failed:', err.message);
+        }
         return next();
     } catch {
         return unauthorized(res, 'Invalid admin session');
@@ -289,6 +296,8 @@ async function ensureAdminSchema() {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
     `);
 
+    const { ensureOpsSchema } = require('../admin/schema');
+    await ensureOpsSchema(pool);
     await ensureSuperAdmin();
 }
 

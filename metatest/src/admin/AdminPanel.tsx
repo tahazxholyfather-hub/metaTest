@@ -8,9 +8,14 @@ import CurriculumManager from './CurriculumManager';
 import PdfLibraryManager from './PdfLibraryManager';
 import AdminsManager from './AdminsManager';
 import AiManager from './AiManager';
+import WordStats from './WordStats';
+import DiscountManager from './DiscountManager';
+import ReportsManager from './ReportsManager';
+import AccessManager from './AccessManager';
 import AuthView, { type User } from './AuthView';
 import Spinner from './Spinner';
 import { adminApi } from '../lib/adminApi';
+import { ADMIN_NAV, canAccessSection, sectionTitle } from './access';
 
 export default function AdminPanel() {
     const [user, setUser] = useState<User | null>(null);
@@ -48,8 +53,23 @@ export default function AdminPanel() {
         verifySession();
 
         const onExpired = () => setUser(null);
+        const refreshAccess = async () => {
+            try {
+                const res = await adminApi.me();
+                if (res?.success && res?.user) setUser(res.user as User);
+            } catch {
+                // A 401 already clears the session through admin-session-expired.
+            }
+        };
+        const onDenied = () => { refreshAccess(); };
         window.addEventListener('admin-session-expired', onExpired);
-        return () => window.removeEventListener('admin-session-expired', onExpired);
+        window.addEventListener('admin-access-denied', onDenied);
+        window.addEventListener('focus', refreshAccess);
+        return () => {
+            window.removeEventListener('admin-session-expired', onExpired);
+            window.removeEventListener('admin-access-denied', onDenied);
+            window.removeEventListener('focus', refreshAccess);
+        };
     }, []);
 
     // Theme Management
@@ -63,11 +83,16 @@ export default function AdminPanel() {
         localStorage.setItem('AdminTheme', theme);
     }, [isDarkMode]);
 
-    const isSuper = user?.isSuper || user?.id === 1;
+    useEffect(() => {
+        if (!user) return;
+        if (canAccessSection(user, activeTab)) return;
+        const next = ADMIN_NAV.find((item) => canAccessSection(user, item.id));
+        setActiveTab(next?.id || 'dashboard');
+    }, [user, activeTab]);
 
     const handleTabChange = (tab: string) => {
-        if (tab === activeTab) return;
-        if ((tab === 'ai-manager' || tab === 'admins') && !isSuper) return;
+        if (!user || tab === activeTab) return;
+        if (!canAccessSection(user, tab)) return;
         setIsLoadingView(true);
         setActiveTab(tab);
         setTimeout(() => setIsLoadingView(false), 400);
@@ -121,15 +146,7 @@ export default function AdminPanel() {
                     toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
                     isDarkMode={isDarkMode}
                     toggleDarkMode={() => setIsDarkMode(!isDarkMode)}
-                    title={
-                        activeTab === 'dashboard' ? 'Overview'
-                            : activeTab === 'insert-questions' ? 'Insert Questions'
-                                : activeTab === 'curriculum' ? 'Curriculum'
-                                    : activeTab === 'pdf-library' ? 'PDF Library'
-                                        : activeTab === 'ai-manager' ? 'AI Manager'
-                                            : activeTab === 'admins' ? 'Admins'
-                                                : 'Repository'
-                    }
+                    title={activeTab === 'dashboard' ? 'Overview' : sectionTitle(activeTab)}
                 />
 
                 <main className="flex-1 overflow-y-auto relative scrollbar-hide">
@@ -143,13 +160,17 @@ export default function AdminPanel() {
                             </div>
                         ) : (
                             <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
-                                {activeTab === 'dashboard' && <Dashboard />}
-                                {activeTab === 'edit-questions' && <EditQuestions />}
-                                {activeTab === 'insert-questions' && <InsertQuestions />}
-                                {activeTab === 'curriculum' && <CurriculumManager user={user} />}
-                                {activeTab === 'pdf-library' && <PdfLibraryManager user={user} />}
-                                {activeTab === 'ai-manager' && isSuper && <AiManager />}
-                                {activeTab === 'admins' && isSuper && <AdminsManager currentUser={user} />}
+                                {activeTab === 'dashboard' && canAccessSection(user, 'dashboard') && <Dashboard />}
+                                {activeTab === 'edit-questions' && canAccessSection(user, 'edit-questions') && <EditQuestions />}
+                                {activeTab === 'insert-questions' && canAccessSection(user, 'insert-questions') && <InsertQuestions />}
+                                {activeTab === 'curriculum' && canAccessSection(user, 'curriculum') && <CurriculumManager user={user} />}
+                                {activeTab === 'pdf-library' && canAccessSection(user, 'pdf-library') && <PdfLibraryManager user={user} />}
+                                {activeTab === 'word-stats' && canAccessSection(user, 'word-stats') && <WordStats />}
+                                {activeTab === 'discounts' && canAccessSection(user, 'discounts') && <DiscountManager />}
+                                {activeTab === 'reports' && canAccessSection(user, 'reports') && <ReportsManager />}
+                                {activeTab === 'ai-manager' && canAccessSection(user, 'ai-manager') && <AiManager />}
+                                {activeTab === 'admins' && canAccessSection(user, 'admins') && <AdminsManager currentUser={user} />}
+                                {activeTab === 'access' && canAccessSection(user, 'access') && <AccessManager />}
                             </div>
                         )}
                     </div>

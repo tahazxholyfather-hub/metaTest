@@ -194,7 +194,15 @@ interface QuestionData {
 
 
 // --- MAIN COMPONENT ---
-export default function EditQuestions() {
+export default function EditQuestions({
+    focusQuestionId = null,
+    embedded = false,
+    startEditing = false,
+}: {
+    focusQuestionId?: number | null;
+    embedded?: boolean;
+    startEditing?: boolean;
+} = {}) {
     const [question, setQuestion] = useState<QuestionData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -370,6 +378,7 @@ export default function EditQuestions() {
             if (responseData.success && responseData.question) {
                 const mappedQuestion = mapQuestionData(responseData.question);
                 setQuestion(mappedQuestion);
+                if (embedded && startEditing) setIsEditing(true);
 
                 // --- History Management ---
                 const newId = mappedQuestion.id;
@@ -407,8 +416,14 @@ export default function EditQuestions() {
 
     // --- INITIAL LOAD ---
     useEffect(() => {
-        getQuestion({ resetHistory: true });
-    }, []);
+        if (focusQuestionId) {
+            getQuestion({ question_id: focusQuestionId, resetHistory: true });
+            return;
+        }
+        if (!embedded) getQuestion({ resetHistory: true });
+        // Reload only when the requested question id changes.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [focusQuestionId]);
 
     // --- NAVIGATION & ACTION HANDLERS ---
     const handleNext = async () => {
@@ -519,9 +534,11 @@ export default function EditQuestions() {
             <div className="flex flex-wrap items-center justify-between gap-4 bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl p-3 shadow-sm lg:sticky top-0 z-[40]">
                 {/* Navigation & Search */}
                 <div className="flex items-center gap-2 bg-[#f8f9fa] dark:bg-[#131314] rounded-xl px-2 py-1.5 border border-[#dadce0] dark:border-[#444746] flex-1 md:flex-none justify-between md:justify-start">
+                    {!embedded && (
                     <button onClick={handlePrev} disabled={isLoading || isEditing || (historyIndex === 0 && history.length === 1)} className="p-1.5 hover:bg-gray-200 dark:hover:bg-[#2d3748] rounded-lg transition-colors shrink-0 disabled:opacity-50">
                         <ChevronLeft size={18} />
                     </button>
+                    )}
 
                     <div className="flex-1 flex justify-center items-center min-w-[120px]">
                         {isSearching ? (
@@ -530,22 +547,24 @@ export default function EditQuestions() {
                                 <button onClick={() => setIsSearching(false)} className="shrink-0 hover:text-red-500 transition-colors"><X size={14} className="text-gray-400" /></button>
                             </div>
                         ) : (
-                            <div onClick={() => !isEditing && setIsSearching(true)} className={`flex items-center gap-2 cursor-pointer group px-2 py-1 rounded-lg transition-all ${isEditing ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-200 dark:hover:bg-[#2d3748]'}`}>
+                            <div onClick={() => !embedded && !isEditing && setIsSearching(true)} className={`flex items-center gap-2 group px-2 py-1 rounded-lg transition-all ${embedded || isEditing ? 'cursor-default' : 'cursor-pointer hover:bg-gray-200 dark:hover:bg-[#2d3748]'} ${isEditing ? 'opacity-50 cursor-not-allowed' : ''}`}>
                                 <Search size={14} className="text-gray-400 group-hover:text-[#1a73e8] transition-colors" />
                                 <span className="text-xs font-semibold tracking-tighter truncate">ID: {question?.id || '---'}</span>
                             </div>
                         )}
                     </div>
 
+                    {!embedded && (
                     <button onClick={handleNext} disabled={isLoading || isEditing} className="p-1.5 hover:bg-gray-200 dark:hover:bg-[#2d3748] rounded-lg transition-colors shrink-0 disabled:opacity-50">
                         <ChevronRight size={18} />
                     </button>
+                    )}
                 </div>
 
                 {/* Actions */}
                 <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-between md:justify-end">
                     <div className="flex items-center gap-3">
-                        <div className="relative">
+                        {!embedded && <div className="relative">
                             <button disabled={isEditing} onClick={() => setShowFilters(!showFilters)} className={`flex items-center gap-2 px-3 py-2.5 md:px-4 rounded-xl text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed ${showFilters ? 'bg-[#e8f0fe] text-[#1a73e8] dark:bg-[#1a73e8]/20' : 'bg-[#f8f9fa] dark:bg-[#131314] text-[#86868b] border border-[#dadce0] dark:border-[#444746] hover:text-gray-700 dark:hover:text-gray-200'}`}>
                                 <Filter size={14} /> <span className="hidden sm:inline">Filters</span>
                             </button>
@@ -567,9 +586,9 @@ export default function EditQuestions() {
                                     </button>
                                 </div>
                             )}
-                        </div>
+                        </div>}
 
-                        <div className="h-6 w-px bg-[#dadce0] dark:bg-[#444746]" />
+                        {!embedded && <div className="h-6 w-px bg-[#dadce0] dark:bg-[#444746]" />}
 
                         <button onClick={() => setIsEditing(!isEditing)} disabled={!question} className={`flex items-center gap-2 px-3 py-2.5 md:px-4 rounded-xl text-xs font-bold transition-all disabled:opacity-50 ${isEditing ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400' : 'text-[#86868b] hover:bg-gray-100 dark:hover:bg-[#2b2d2f]'}`}>
                             <Edit2 size={14} /> <span className="hidden sm:inline">{isEditing ? 'Editing Mode' : 'Read Mode'}</span>
@@ -578,9 +597,11 @@ export default function EditQuestions() {
                     </div>
 
                     <div className="flex items-center gap-3">
+                        {!embedded && (
                         <button onClick={toggleFullscreen} className="p-2.5 text-[#86868b] hover:bg-gray-100 dark:hover:bg-[#2b2d2f] rounded-xl transition-all">
                             {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
                         </button>
+                        )}
 
                         <button disabled={!isEditing || isSaving || !question} onClick={handleSave} className={`flex items-center gap-2 px-4 md:px-6 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md ${isEditing ? 'bg-[#1a73e8] hover:bg-[#1557b0] text-white cursor-pointer' : 'bg-gray-100 dark:bg-[#2b2d2f] text-gray-400 dark:text-gray-500 cursor-not-allowed shadow-none border border-[#dadce0] dark:border-[#333537]'}`}>
                             {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
@@ -592,7 +613,7 @@ export default function EditQuestions() {
             </div>
 
             {/* QUICK FILTERS BAR (Status / Images switches + text search) */}
-            <div className={`flex flex-wrap items-center justify-between gap-4 bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl px-4 py-3 shadow-sm ${isEditing ? 'opacity-50 pointer-events-none' : ''}`}>
+            {!embedded && <div className={`flex flex-wrap items-center justify-between gap-4 bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl px-4 py-3 shadow-sm ${isEditing ? 'opacity-50 pointer-events-none' : ''}`}>
                 <div className="flex flex-wrap items-center gap-4 md:gap-6">
                     <FilterSwitch
                         label="Status"
@@ -638,7 +659,7 @@ export default function EditQuestions() {
                         <Search size={14} />
                     </button>
                 </div>
-            </div>
+            </div>}
 
             {/* ERROR / MESSAGE DISPLAY */}
             {errorMessage && (

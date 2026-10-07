@@ -13,6 +13,7 @@ export interface User {
     status?: string;
     lastLogin?: string | null;
     createdAt?: string | null;
+    sections?: Record<string, boolean>;
 }
 
 interface AuthViewProps {

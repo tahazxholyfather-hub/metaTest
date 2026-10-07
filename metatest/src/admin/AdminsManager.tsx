@@ -107,7 +107,7 @@ export default function AdminsManager({ currentUser }: { currentUser: User }) {
             <div className="flex flex-wrap items-center justify-between bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl p-4 shadow-sm">
                 <div>
                     <h1 className="text-sm font-bold flex items-center gap-2"><Shield size={16} /> Admins</h1>
-                    <p className="text-xs text-[#86868b] mt-0.5">Only the main admin (id 1) can manage this list. Passwords are hashed in the database.</p>
+                    <p className="text-xs text-[#86868b] mt-0.5">Passwords are hashed in the database. The main admin chooses which sections each admin can open.</p>
                 </div>
                 <button onClick={load} className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746]">
                     <RefreshCw size={14} /> Refresh
