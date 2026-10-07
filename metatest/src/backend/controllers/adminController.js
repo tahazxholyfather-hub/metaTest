@@ -14,6 +14,8 @@ const {
     SUPER_ADMIN_ID,
     attachAdminIfPresent,
 } = require('../middleware/adminAuth');
+const { withSections } = require('../admin/access');
+const { countWords, recordWordEvent, measureEditDelta } = require('../admin/words');
 
 // --- PDF Library upload configuration ---
 // Defaults to the same web root used for avatar uploads in server.js
@@ -322,7 +324,9 @@ const handleAdminVerify = async (req, res) => {
     if (!admin) {
         return res.json({ success: false, message: 'No session found.' });
     }
-    return res.json({ success: true, user: publicAdmin(admin) });
+    const user = publicAdmin(admin);
+    await withSections(user);
+    return res.json({ success: true, user });
 };
 
 const handleAdminLogout = async (req, res) => {
@@ -343,6 +347,13 @@ const handleFullUpdateQuestion = async (req, res) => {
         if (!questionId) return;
 
         const { text, options, descriptiveAnswer, correct_option_id, subject_id, grade_id, chapter_id, topic_id, level, status } = req.body;
+
+        let editedWords = 0;
+        try {
+            editedWords = await measureEditDelta(questionId, { text, options, descriptiveAnswer });
+        } catch (err) {
+            console.error('word delta failed:', err.message);
+        }
 
         // 1. Update Question Text & Meta Info
         let updateFields = [];
@@ -385,6 +396,14 @@ const handleFullUpdateQuestion = async (req, res) => {
                 await pool.query("UPDATE options_tam24 SET is_correct = 1 WHERE id = ? AND question_id = ?", [correct_option_id, questionId]);
             }
         }
+
+        await recordWordEvent({
+            adminId,
+            action: 'edit',
+            questionId,
+            wordCount: editedWords,
+            source: 'live',
+        });
 
         res.json({ success: true, message: "Question fully updated successfully!" });
 
@@ -1003,6 +1022,17 @@ const handleAdminInsertQuestions = async (req, res) => {
                         [questionId, String(q.descriptive).trim()]
                     );
                 }
+
+                const insertedWords = countWords(q.text)
+                    + q.options.reduce((sum, option) => sum + countWords(option), 0)
+                    + countWords(q.descriptive);
+                await recordWordEvent({
+                    adminId,
+                    action: 'insert',
+                    questionId,
+                    wordCount: insertedWords,
+                    source: 'live',
+                });
 
                 insertedIds.push(questionId);
             } catch (insertError) {
