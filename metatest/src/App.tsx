@@ -44,6 +44,7 @@ import {PdfLibraryView} from "./views/documents";
 import {PlanSelectorView} from "./views/f";
 import PaymentResultPage from "./views/paymentResult";
 import { MetView } from "./views/met";
+import InviteLanding from "./views/InviteLanding";
 
 
 
@@ -693,6 +694,7 @@ const router = createBrowserRouter(
         { path: "/admin/*", element: <AdminPanel /> },
         { path: "/re/*", element: <PlanSelectorView /> },
         { path: "/payment/result/:token", element: <PaymentResultPage /> },
+        { path: "/invite/:code", element: <InviteLanding /> },
         { path: "/*", element: <MainApp /> },
     ]
 );

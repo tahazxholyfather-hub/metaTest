@@ -628,6 +628,8 @@ export function DashboardView({
     const [showVerificationConfirm, setShowVerificationConfirm] = useState(false);
     const [previewInviterData, setPreviewInviterData] = useState<{ name: string; phone: string } | null>(null);
 
+    const [referralCode, setReferralCode] = useState('');
+
     const [copied, setCopied] = useState(false);
     const [timeFilter, setTimeFilter] = useState<'7d' | '1m' | '1y'>('7d');
     const [renderCharts, setRenderCharts] = useState(false);
@@ -695,6 +697,12 @@ export function DashboardView({
     }, [startTour]);
 
     useEffect(() => {
+        flowApi.getMyReferralCode().then((res: any) => {
+            if (res?.success && res?.data?.referralCode) setReferralCode(res.data.referralCode);
+        }).catch(() => {});
+    }, []);
+
+    useEffect(() => {
         if (!isLoading) {
             const timer = setTimeout(() => setRenderCharts(true), 350);
             return () => clearTimeout(timer);
@@ -703,7 +711,8 @@ export function DashboardView({
 
     // Generate simple, shorter encrypted parameters for safety and UX
     const obfuscatedCode = useMemo(() => encryptPhoneNumber(user?.phone || user?.username || ''), [user]);
-    const inviteLink = `https://metatest.com/invite/${obfuscatedCode}`;
+    const inviteCode = referralCode || obfuscatedCode;
+    const inviteLink = `https://metatest.com/invite/${inviteCode}`;
 
     const handleCopy = () => {
         navigator.clipboard.writeText(inviteLink);

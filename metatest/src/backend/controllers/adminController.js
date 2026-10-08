@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
 const crypto = require('crypto');
+const walletController = require('./walletController');
 const {
     ensureQuestionTagTables,
     saveQuestionTags,
@@ -1308,6 +1309,121 @@ const handleAdminDeleteDiscountCode = async (req, res) => {
 };
 
 
+// ===================== Referral Settings =====================
+const handleAdminGetReferralSettings = async (req, res) => {
+    try {
+        const [rows] = await pool.query('SELECT * FROM tam24_referral_settings WHERE id = 1 LIMIT 1');
+        const s = rows[0] || { reward_type: 'percent', reward_percent: 30, reward_fixed_amount: 0, reward_token_amount: 0, is_active: 1 };
+        return res.json({
+            success: true,
+            data: {
+                rewardType: s.reward_type,
+                rewardPercent: Number(s.reward_percent || 0),
+                rewardFixedAmount: Number(s.reward_fixed_amount || 0),
+                rewardTokenAmount: Number(s.reward_token_amount || 0),
+                isActive: Number(s.is_active) === 1,
+            },
+        });
+    } catch (error) {
+        console.error('Admin_get_referral_settings error:', error);
+        return res.status(500).json({ success: false, message: 'خطا در دریافت تنظیمات دعوت.' });
+    }
+};
+
+const handleAdminUpdateReferralSettings = async (req, res) => {
+    const { rewardType, rewardPercent, rewardFixedAmount, rewardTokenAmount, isActive } = req.body;
+    if (!['percent', 'fixed', 'token'].includes(rewardType)) {
+        return res.json({ success: false, message: 'نوع پاداش نامعتبر است.' });
+    }
+    try {
+        await pool.query(
+            `INSERT INTO tam24_referral_settings (id, reward_type, reward_percent, reward_fixed_amount, reward_token_amount, is_active)
+             VALUES (1, ?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE
+                reward_type = VALUES(reward_type),
+                reward_percent = VALUES(reward_percent),
+                reward_fixed_amount = VALUES(reward_fixed_amount),
+                reward_token_amount = VALUES(reward_token_amount),
+                is_active = VALUES(is_active)`,
+            [rewardType, Number(rewardPercent) || 0, Number(rewardFixedAmount) || 0, Number(rewardTokenAmount) || 0, isActive ? 1 : 0]
+        );
+        return res.json({ success: true, message: 'تنظیمات دعوت ذخیره شد.' });
+    } catch (error) {
+        console.error('Admin_update_referral_settings error:', error);
+        return res.status(500).json({ success: false, message: 'خطا در ذخیره تنظیمات دعوت.' });
+    }
+};
+
+const handleAdminGetWithdrawalRequests = async (req, res) => {
+    try {
+        const [rows] = await pool.query(`
+            SELECT wr.id, wr.user_id, wr.amount, wr.status, wr.note, wr.created_at,
+                   u.first_name, u.last_name, u.username, u.phone
+            FROM tam24_withdrawal_requests wr
+            JOIN tam24_users u ON u.id = wr.user_id
+            ORDER BY wr.created_at DESC
+            LIMIT 200
+        `);
+        const list = rows.map((r) => ({
+            id: r.id,
+            userId: r.user_id,
+            name: [r.first_name, r.last_name].filter(Boolean).join(' ').trim() || r.username || r.phone,
+            phone: r.phone,
+            username: r.username,
+            amount: Number(r.amount),
+            status: r.status,
+            note: r.note,
+            createdAt: r.created_at,
+        }));
+        return res.json({ success: true, data: { list, pendingCount: list.filter(r => r.status === 'pending').length } });
+    } catch (error) {
+        console.error('Admin_get_withdrawal_requests error:', error);
+        return res.status(500).json({ success: false, message: 'خطا در دریافت درخواست‌های برداشت.' });
+    }
+};
+
+const handleAdminUpdateWithdrawalStatus = async (req, res) => {
+    const { id, status, note } = req.body;
+    if (!id || !['approved', 'rejected', 'paid'].includes(status)) {
+        return res.json({ success: false, message: 'پارامترهای نامعتبر.' });
+    }
+    const conn = await pool.getConnection();
+    try {
+        await conn.beginTransaction();
+        const [rows] = await conn.query('SELECT * FROM tam24_withdrawal_requests WHERE id = ? FOR UPDATE', [id]);
+        if (!rows.length) {
+            await conn.rollback();
+            return res.json({ success: false, message: 'درخواست یافت نشد.' });
+        }
+        const wr = rows[0];
+        if (wr.status !== 'pending') {
+            await conn.rollback();
+            return res.json({ success: false, message: 'این درخواست قبلاً پردازش شده است.' });
+        }
+
+        await conn.query('UPDATE tam24_withdrawal_requests SET status = ?, note = ? WHERE id = ?', [status, note || null, id]);
+
+        if (status === 'rejected') {
+            // Refund the reserved amount back to the wallet.
+            await walletController.creditTomanWallet(conn, wr.user_id, Number(wr.amount), {
+                type: 'withdrawal_refund',
+                description: 'بازگشت وجه درخواست برداشت ردشده',
+                referenceType: 'withdrawal',
+                referenceId: String(id),
+            });
+        }
+
+        await conn.commit();
+        return res.json({ success: true, message: 'وضعیت درخواست به‌روزرسانی شد.' });
+    } catch (error) {
+        await conn.rollback().catch(() => {});
+        console.error('Admin_update_withdrawal_status error:', error);
+        return res.status(500).json({ success: false, message: 'خطا در به‌روزرسانی وضعیت.' });
+    } finally {
+        conn.release();
+    }
+};
+
 module.exports = {
     handleUpdateQuestion,
     handleAdminLogin,
@@ -1335,4 +1451,8 @@ module.exports = {
     handleAdminSaveDiscountCode,
     handleAdminToggleDiscountCode,
     handleAdminDeleteDiscountCode,
+    handleAdminGetReferralSettings,
+    handleAdminUpdateReferralSettings,
+    handleAdminGetWithdrawalRequests,
+    handleAdminUpdateWithdrawalStatus,
 };

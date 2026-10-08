@@ -8,6 +8,7 @@ const jwt = require('jsonwebtoken');
 
 const { sendOtpSms } = require('../utils/sms');
 const { encodeResultId } = require('../utils/hash');
+const walletController = require('./walletController');
 
 // ===================== Native Crypto Password Helpers =====================
 const hashPassword = (password) => {
@@ -93,7 +94,7 @@ const handleGetUserInfo = async (req, res) => {
                     SELECT
                         id, password_hash, username, email, phone, first_name, last_name, avatar_url, bio,
                         social_links, xp_level, xp_points, trophies, current_plan, plan_expires_at,
-                        role, status, created_at, last_login, last_login_ip
+                        role, status, created_at, last_login, last_login_ip, referral_code
                     FROM tam24_users
                     WHERE id = ?`,
             [userId]
@@ -117,6 +118,14 @@ const handleGetUserInfo = async (req, res) => {
             ? JSON.parse(user.social_links)
             : (user.social_links || {});
 
+        let tomanBalance = 0;
+        try {
+            const [walletRows] = await db.query('SELECT balance FROM tam24_toman_wallets WHERE user_id = ?', [userId]);
+            tomanBalance = Number(walletRows[0]?.balance || 0);
+        } catch (err) {
+            console.error('toman wallet fetch warning:', err.message);
+        }
+
         res.json({
             success: true,
             data: {
@@ -125,7 +134,9 @@ const handleGetUserInfo = async (req, res) => {
                 days_remaining: daysRemaining,
                 password_set: !!user.password_hash,
                 password_hash: undefined,
-                plan_expires_at: undefined
+                plan_expires_at: undefined,
+                referral_code: user.referral_code || null,
+                toman_balance: tomanBalance
             }
         });
 
@@ -314,7 +325,7 @@ const handleSendOtp = async (req, res) => {
 };
 
 const handleVerifyOtp = async (req, res) => {
-    const { phone, code, password} = req.body;
+    const { phone, code, password, referral_code } = req.body;
 
     try {
         const [otps] = await db.query(
@@ -342,6 +353,15 @@ const handleVerifyOtp = async (req, res) => {
                 [phone, `user_${phone}`, firstName, lastName, hashedPassword, ip]
             );
             userId = insertResult.insertId;
+
+            // Attribute invite-link referral at registration (one-time).
+            if (referral_code) {
+                const inviter = await walletController.resolveInviter(db, referral_code);
+                if (inviter && inviter.id) {
+                    await db.query('UPDATE tam24_users SET referrer_code_submitted = ? WHERE id = ?', [inviter.phone || inviter.username, userId]);
+                }
+            }
+            await walletController.ensureReferralCode(db, userId);
         } else {
             userId = users[0].id;
             role = users[0].role;
@@ -1092,15 +1112,17 @@ const handleGetMyInvites = async (req, res) => {
 
         const [invites] = await db.query(`
             SELECT
-                id,
-                CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, '')) AS name,
-                phone      AS invited_phone,
-                status,
-                created_at AS createdAt
-            FROM tam24_users
-            WHERE referrer_code_submitted = ? OR referrer_code_submitted = ?
-            ORDER BY created_at DESC
-        `, [phone || '', username || '']);
+                u.id,
+                CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, '')) AS name,
+                u.phone      AS invited_phone,
+                u.status,
+                u.created_at AS createdAt,
+                (SELECT COUNT(*) FROM payments p WHERE p.user_id = u.id AND p.status = 'paid' AND p.final_price > 0) AS purchases_count,
+                COALESCE((SELECT SUM(r.reward_amount) FROM tam24_referral_rewards r WHERE r.inviter_id = ? AND r.invitee_id = u.id AND r.reward_type <> 'token'), 0) AS commission_earned
+            FROM tam24_users u
+            WHERE u.referrer_code_submitted = ? OR u.referrer_code_submitted = ?
+            ORDER BY u.created_at DESC
+        `, [userId, phone || '', username || '']);
 
         return res.json({
             success: true,

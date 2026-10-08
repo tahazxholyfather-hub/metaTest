@@ -115,9 +115,11 @@ export default function AuthView({ onSuccess }: AuthViewProps) {
         setIsLoading(true);
         setErrorMsg('');
         try {
-            const res: any = await flowApi.dispatch('verify_otp', { phone, code: otpString });
+            const referralCode = localStorage.getItem('invite_code') || undefined;
+            const res: any = await flowApi.dispatch('verify_otp', { phone, code: otpString, referral_code: referralCode });
 
             if (res.success) {
+                localStorage.removeItem('invite_code');
                 if (res.isComplete) {
                     handleLoginSuccess(res.token);
                 } else {
@@ -127,7 +129,8 @@ export default function AuthView({ onSuccess }: AuthViewProps) {
                         code: otpString,
                         firstName: 'کاربر',
                         lastName: 'مهمان',
-                        password: ''
+                        password: '',
+                        referral_code: referralCode
                     });
 
                     if (registerRes.success) {

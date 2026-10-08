@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const pool = require('../db');
 const zarinpal = require('../utils/zarinpal');
+const walletController = require('./walletController');
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -392,6 +393,82 @@ exports.createSubscriptionPayment = async (req, res) => {
 
         const pricing = calculatePricing(plan, coupon);
 
+        // ---- Pay with Toman wallet (no ZarinPal redirect) ----
+        if (req.body.paymentMethod === 'wallet') {
+            if (pricing.finalPrice <= 0) {
+                await connection.rollback();
+                return res.status(400).json({ success: false, message: 'این پلن رایگان است و نیازی به پرداخت ندارد.' });
+            }
+
+            try {
+                await walletController.debitTomanWallet(connection, userId, pricing.finalPrice, {
+                    type: 'purchase',
+                    description: `خرید اشتراک ${plan.name} از کیف پول`,
+                    referenceType: 'payment',
+                });
+            } catch (err) {
+                await connection.rollback();
+                if (err && err.code === 'INSUFFICIENT_BALANCE') {
+                    return res.status(400).json({ success: false, message: err.message });
+                }
+                throw err;
+            }
+
+            const walletPaymentId = await createPaidPaymentRecord(connection, {
+                userId,
+                planId: plan.id,
+                discountCodeId: coupon ? coupon.id : null,
+                ...pricing,
+                currency: 'IRR',
+                status: 'paid',
+                gateway: 'wallet',
+                description: `اشتراک ${plan.name} - پرداخت با کیف پول`,
+                requestPayload: { planId, discountCode: discountCode || null, metadata: metadata || null, paymentMethod: 'wallet' },
+                clientIp: getClientIp(req),
+                userAgent: req.headers['user-agent'] || null,
+            });
+
+            const { newExpireDate: walletExpireDate } = calculateNewPlanExpiry(plan.days);
+
+            await connection.execute(
+                `UPDATE tam24_users SET current_plan = ?, plan_expires_at = ?, updated_at = NOW() WHERE id = ?`,
+                [plan.id, walletExpireDate, userId]
+            );
+
+            if (coupon) {
+                await connection.execute(
+                    `UPDATE discount_codes SET used_count = used_count + 1, updated_at = NOW() WHERE id = ? AND (max_uses IS NULL OR used_count < max_uses)`,
+                    [coupon.id]
+                );
+            }
+
+            await connection.execute(
+                `UPDATE payments SET paid_at = NOW(), verified_at = NOW(), updated_at = NOW() WHERE id = ?`,
+                [walletPaymentId]
+            );
+
+            await connection.commit();
+
+            // Referral reward for the inviter (first purchase only) — post-commit.
+            await walletController.awardReferralRewardForPayment(walletPaymentId);
+
+            const walletResultToken = createPaymentResultToken(walletPaymentId);
+            return res.json({
+                success: true,
+                message: 'پلن با موفقیت با کیف پول فعال شد',
+                data: {
+                    directActivated: true,
+                    walletPaid: true,
+                    paymentId: walletPaymentId,
+                    resultToken: walletResultToken,
+                    resultUrl: `/payment/result/${walletResultToken}`,
+                    plan: { id: plan.id, name: plan.name, days: plan.days },
+                    pricing,
+                    expiresAt: walletExpireDate,
+                },
+            });
+        }
+
         if (pricing.finalPrice <= 0) {
             const user = await lockUser(connection, userId);
             if (!user) {
@@ -693,6 +770,9 @@ exports.handleZarinpalCallback = async (req, res) => {
         );
 
         await connection.commit();
+
+        // Award referral reward for the inviter (first purchase only) — post-commit.
+        await walletController.awardReferralRewardForPayment(paymentId);
 
         return redirectToResult(paymentId);
     } catch (error) {
