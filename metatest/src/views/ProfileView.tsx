@@ -178,6 +178,8 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
     const [withdrawOpen, setWithdrawOpen] = useState(false);
     const [withdrawAmount, setWithdrawAmount] = useState('');
     const [withdrawSubmitting, setWithdrawSubmitting] = useState(false);
+    const [referralCode, setReferralCode] = useState('');
+    const [inviteUrl, setInviteUrl] = useState('');
 
     const fetchPayments = useCallback(async () => {
         setPaymentsLoading(true);
@@ -262,6 +264,26 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
             fetchWallet();
         }
     }, [activeTab, paymentsData, paymentsLoading, invitesData, invitesLoading, fetchPayments, fetchInvites, walletData, walletLoading, fetchWallet]);
+
+    useEffect(() => {
+        flowApi.getMyReferralCode().then((res: any) => {
+            if (res?.success && res?.data) {
+                setReferralCode(res.data.referralCode || '');
+                setInviteUrl(res.data.inviteUrl || '');
+            }
+        }).catch(() => {});
+    }, []);
+
+    const copyInviteLink = async () => {
+        const link = inviteUrl || (referralCode ? `https://metatest.com/invite/${referralCode}` : '');
+        if (!link) return;
+        try {
+            await navigator.clipboard.writeText(link);
+            toast.success('لینک دعوت کپی شد.');
+        } catch {
+            toast.error('کپی نشد؛ لطفاً دستی کپی کنید.');
+        }
+    };
 
     useEffect(() => {
         if (user) {
@@ -1022,6 +1044,27 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
                                         </div>
                                     ) : (
                                         <>
+                                            {/* Invite link */}
+                                            <div className="p-4 rounded-2xl bg-[var(--bg-elevated)]/60 border border-[var(--accent)]/30 space-y-3">
+                                                <span className="text-xs font-bold text-[var(--accent)]">لینک دعوت اختصاصی شما</span>
+                                                <div className="flex items-center gap-2">
+                                                    <input
+                                                        readOnly
+                                                        dir="ltr"
+                                                        value={inviteUrl || (referralCode ? `https://metatest.com/invite/${referralCode}` : '')}
+                                                        className="flex-1 min-w-0 bg-[var(--bg-card)] border border-[var(--border)] rounded-lg px-3 py-2 text-[11px] text-[var(--text-primary)] outline-none"
+                                                    />
+                                                    <button
+                                                        onClick={copyInviteLink}
+                                                        disabled={!inviteUrl && !referralCode}
+                                                        className="shrink-0 px-4 py-2 rounded-lg bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 disabled:opacity-40 transition-opacity"
+                                                    >
+                                                        کپی لینک
+                                                    </button>
+                                                </div>
+                                                <p className="text-[10px] text-[var(--text-muted)] leading-5">با ارسال این لینک، هرکس ثبت‌نام کند و اولین پکیج را بخرد، پاداش آن به کیف پول تومانی شما واریز می‌شود.</p>
+                                            </div>
+
                                             {/* Summary */}
                                             <div className="grid grid-cols-2 gap-3">
                                                 <div className="p-4 rounded-2xl bg-[var(--bg-elevated)]/60 border border-[var(--border)] text-center">
