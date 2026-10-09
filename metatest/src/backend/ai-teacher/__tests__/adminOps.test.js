@@ -30,6 +30,9 @@ test('section defaults and super override', () => {
     assert.equal(staff.dashboard, true);
     assert.equal(staff['edit-questions'], true);
     assert.equal(staff.discounts, true);
+    assert.equal(staff['discount-codes'], true);
+    assert.equal(staff['referral-settings'], true);
+    assert.equal(staff.withdrawals, true);
     assert.equal(staff.reports, true);
     assert.equal(staff['word-stats'], true);
     assert.equal(staff['ai-manager'], false);
