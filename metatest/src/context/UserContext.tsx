@@ -16,7 +16,9 @@ export type UserData = {
     bio?: string | null;
     password_set?: boolean;
     current_plan?: string;
-    days_remaining?: number;
+    previous_plan?: string | null;
+    days_remaining?: number | null;
+    plan_unlimited?: boolean;
     role?: 'user' | 'guest' | 'admin' | 'developer';
     status?: string;
     trophies?: number;

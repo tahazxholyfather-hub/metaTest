@@ -6,6 +6,7 @@ const dashboard = require('../controllers/adminDashboardController');
 const staff = require('../controllers/adminStaffController');
 const ai = require('../controllers/adminAiController');
 const ops = require('../controllers/adminOpsController');
+const subscriptions = require('../controllers/adminSubscriptionController');
 const { requireSection, withSections } = require('../admin/access');
 const {
     requireAdminSession,
@@ -70,6 +71,11 @@ router.get('/reports', requireSection('reports'), wrap(ops.handleListReports));
 router.patch('/reports/:id', requireSection('reports'), wrap(ops.handleUpdateReport));
 
 // Section access stays with the main admin even if another admin can open Admins.
+router.get('/subscriptions', requireSuperAdmin, wrap(subscriptions.handleGetCatalog));
+router.put('/subscriptions/settings', requireSuperAdmin, wrap(subscriptions.handleSaveSettings));
+router.put('/subscriptions/plans/:id', requireSuperAdmin, wrap(subscriptions.handleSavePlan));
+router.put('/subscriptions/loyalty', requireSuperAdmin, wrap(subscriptions.handleSaveLoyalty));
+
 router.get('/access', requireSuperAdmin, wrap(ops.handleListAccess));
 router.put('/access/:id', requireSuperAdmin, wrap(ops.handleSaveAccess));
 

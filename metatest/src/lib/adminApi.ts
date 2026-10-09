@@ -154,4 +154,12 @@ export const adminApi = {
     listAccess: () => adminRequest<Json>('/access'),
     saveAccess: (id: number, sections: Json) =>
         adminRequest<Json>(`/access/${id}`, { method: 'PUT', body: JSON.stringify({ sections }) }),
+
+    subscriptionCatalog: () => adminRequest<Json>('/subscriptions'),
+    saveSubscriptionSettings: (payload: Json) =>
+        adminRequest<Json>('/subscriptions/settings', { method: 'PUT', body: JSON.stringify(payload) }),
+    saveSubscriptionPlan: (id: string, payload: Json) =>
+        adminRequest<Json>(`/subscriptions/plans/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(payload) }),
+    saveLoyaltyRules: (rules: Json[]) =>
+        adminRequest<Json>('/subscriptions/loyalty', { method: 'PUT', body: JSON.stringify({ rules }) }),
 };

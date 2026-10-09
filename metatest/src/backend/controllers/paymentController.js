@@ -6,6 +6,7 @@ const { COIN_PACKAGES, coinPackageById } = require('../subscription/limits');
 const entitlements = require('../subscription/entitlements');
 const usage = require('../subscription/usage');
 const coinWallet = require('../ai-teacher/services/coinWallet');
+const policy = require('../subscription/policy');
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -35,34 +36,28 @@ function toRial(toman) {
     return Math.round(Number(toman) * 10);
 }
 
-function calculatePricing(plan, coupon) {
-    const basePrice = Number(plan.price); // Toman
-    const planDiscountPercent = Number(plan.plan_discount_percent || 0);
-    const planDiscountAmount = Math.round((basePrice * planDiscountPercent) / 100);
-    const priceAfterPlanDiscount = Math.max(0, basePrice - planDiscountAmount);
+function calculatePricing(plan, coupon, loyaltyPercent = 0) {
+    return policy.calculatePricing(plan, coupon, loyaltyPercent);
+}
 
-    const couponPercent = coupon ? Number(coupon.percent || 0) : 0;
-    const couponDiscountAmount = Math.round((priceAfterPlanDiscount * couponPercent) / 100);
-    const finalPrice = Math.max(0, priceAfterPlanDiscount - couponDiscountAmount);
+function rejectUnbuyablePlan(plan) {
+    if (!plan || Number(plan.is_active) !== 1) return 'پلن معتبر نیست';
+    if (Number(plan.purchasable) === 0) return 'این اشتراک فعلاً قابل خرید نیست';
+    return null;
+}
 
+function describePurchase(plan, pricing, suffix) {
+    const loyalty = Number(pricing.loyaltyPercent) > 0 ? ` - تخفیف وفاداری ${pricing.loyaltyPercent}٪` : '';
+    return `اشتراک ${plan.name}${suffix || ''}${loyalty}`;
+}
+
+function loyaltyPayload(pricing, loyalty) {
     return {
-        basePrice,
-        planDiscountPercent,
-        planDiscountAmount,
-        priceAfterPlanDiscount,
-        couponPercent,
-        couponDiscountAmount,
-        finalPrice,
+        loyaltyPercent: pricing.loyaltyPercent || 0,
+        loyaltyDiscountAmount: pricing.loyaltyDiscountAmount || 0,
+        loyaltyFromPlan: loyalty?.fromPlanId || null,
     };
 }
-
-function calculateNewPlanExpiry(planDays) {
-    const now = new Date();
-    const newExpireDate = new Date(now);
-    newExpireDate.setDate(newExpireDate.getDate() + Number(planDays));
-    return { startDate: now, newExpireDate };
-}
-
 
 function getPaymentResultSecret() {
     return process.env.PAYMENT_RESULT_SECRET || process.env.JWT_SECRET || 'change-me-payment-result-secret';
@@ -144,9 +139,9 @@ function verifyPaymentResultToken(token) {
 
 async function fetchActivePlan(connection, planId) {
     const [rows] = await connection.execute(
-        `SELECT id, name, days, price, plan_discount_percent
+        `SELECT id, name, days, price, plan_discount_percent, is_active, purchasable
          FROM subscription_plans
-         WHERE id = ? AND is_active = 1
+         WHERE id = ?
          LIMIT 1`,
         [planId]
     );
@@ -266,28 +261,22 @@ async function createPaidPaymentRecord(connection, payload) {
 
 // ─── Controllers ─────────────────────────────────────────────────────────────
 
-/** The shop only lists is_active = 1. Diamond was turned off on 2026-10-01. */
-exports.ensureDiamondPlanActive = async () => {
-    try {
-        const [result] = await pool.query(
-            `UPDATE subscription_plans SET is_active = 1 WHERE id = 'diamond' AND is_active = 0`
-        );
-        if (result && result.affectedRows) {
-            console.log('[plans] اشتراک الماسی دوباره فعال شد');
-        }
-    } catch (err) {
-        if (err && err.code === 'ER_NO_SUCH_TABLE') return;
-        console.error('[plans] diamond activate', err.message);
-    }
-};
+/** Visible shop rows, purchasable flag, queue and loyalty settings. Runs once per process. */
+exports.ensureDiamondPlanActive = () => policy.ensureSubscriptionCatalog();
 
 exports.getSubscriptionPlans = async (req, res) => {
     const connection = await pool.getConnection();
 
     try {
+        await policy.ensureSubscriptionCatalog();
+        if (req.user?.id) {
+            try { await policy.promoteDueReservations(req.user.id); } catch (err) {
+                console.error('[plans] promote', err.message);
+            }
+        }
         const [rows] = await connection.execute(
             `SELECT
-                 id, name, days, price, plan_discount_percent,
+                 id, name, days, price, plan_discount_percent, purchasable,
                  icon_primary, icon_secondary, shimmer_class,
                  active_shadow, active_border, popular
              FROM subscription_plans
@@ -295,23 +284,22 @@ exports.getSubscriptionPlans = async (req, res) => {
              ORDER BY sort_order ASC, price ASC`
         );
 
-        const plans = rows.map((row) => ({
-            id: row.id,
-            name: row.name,
-            days: Number(row.days),
-            price: Number(row.price),
-            planDiscountPercent: Number(row.plan_discount_percent || 0),
-            iconColors: {
-                primary: row.icon_primary,
-                secondary: row.icon_secondary,
-            },
-            shimmerClass: row.shimmer_class,
-            activeShadow: row.active_shadow,
-            activeBorder: row.active_border,
-            popular: Boolean(row.popular),
-        }));
+        const loyalty = req.user?.id
+            ? await policy.loyaltyContext(connection, req.user.id)
+            : { open: false, queueEnabled: (await policy.loadSettings(connection)).queueEnabled, rules: {}, hoursLeft: null, fromPlanName: null, enabled: false, windowHours: 72 };
+        const plans = rows.map((row) => policy.publicPlan(row, loyalty.rules?.[row.id]));
 
-        return res.json({ success: true, data: plans });
+        return res.json({
+            success: true,
+            data: plans,
+            meta: {
+                queueEnabled: loyalty.queueEnabled !== false,
+                loyaltyOpen: Boolean(loyalty.open),
+                loyaltyFromPlanName: loyalty.fromPlanName || null,
+                loyaltyHoursLeft: loyalty.hoursLeft,
+                loyaltyWindowHours: loyalty.windowHours,
+            },
+        });
     } catch (error) {
         console.error('getSubscriptionPlans error:', error);
         return res.status(500).json({ success: false, message: 'خطا در دریافت پلن‌ها' });
@@ -331,8 +319,9 @@ exports.validateDiscountCode = async (req, res) => {
         }
 
         const plan = await fetchActivePlan(connection, planId);
-        if (!plan) {
-            return res.status(400).json({ success: false, message: 'پلن معتبر نیست' });
+        const block = rejectUnbuyablePlan(plan);
+        if (block) {
+            return res.status(400).json({ success: false, message: block });
         }
 
         const coupon = await fetchCoupon(connection, code);
@@ -349,7 +338,8 @@ exports.validateDiscountCode = async (req, res) => {
             return res.status(400).json({ success: false, message: 'شما قبلاً از این کد تخفیف استفاده کرده‌اید' });
         }
 
-        const pricing = calculatePricing(plan, coupon);
+        const loyalty = req.user?.id ? await policy.loyaltyContext(connection, req.user.id) : { rules: {} };
+        const pricing = calculatePricing(plan, coupon, loyalty.rules?.[plan.id]);
 
         return res.json({
             success: true,
@@ -383,11 +373,18 @@ exports.createSubscriptionPayment = async (req, res) => {
         }
 
         const plan = await fetchActivePlan(connection, planId);
-        if (!plan) {
-            return res.status(400).json({ success: false, message: 'پلن معتبر نیست' });
+        const block = rejectUnbuyablePlan(plan);
+        if (block) {
+            return res.status(400).json({ success: false, message: block });
         }
 
         await connection.beginTransaction();
+
+        const gate = await policy.assertCanPurchase(connection, userId);
+        if (!gate.ok) {
+            await connection.rollback();
+            return res.status(gate.status || 400).json({ success: false, message: gate.message });
+        }
 
         let coupon = null;
         if (discountCode && String(discountCode).trim()) {
@@ -410,7 +407,8 @@ exports.createSubscriptionPayment = async (req, res) => {
             }
         }
 
-        const pricing = calculatePricing(plan, coupon);
+        const loyalty = await policy.loyaltyContext(connection, userId);
+        const pricing = calculatePricing(plan, coupon, loyalty.rules?.[plan.id]);
 
         // ---- Pay with Toman wallet (no ZarinPal redirect) ----
         if (req.body.paymentMethod === 'wallet') {
@@ -441,18 +439,17 @@ exports.createSubscriptionPayment = async (req, res) => {
                 currency: 'IRR',
                 status: 'paid',
                 gateway: 'wallet',
-                description: `اشتراک ${plan.name} - پرداخت با کیف پول`,
-                requestPayload: { planId, discountCode: discountCode || null, metadata: metadata || null, paymentMethod: 'wallet' },
+                description: describePurchase(plan, pricing, ' - پرداخت با کیف پول'),
+                requestPayload: { planId, discountCode: discountCode || null, metadata: metadata || null, paymentMethod: 'wallet', ...loyaltyPayload(pricing, loyalty) },
                 clientIp: getClientIp(req),
                 userAgent: req.headers['user-agent'] || null,
             });
 
-            const { newExpireDate: walletExpireDate } = calculateNewPlanExpiry(plan.days);
-
-            await connection.execute(
-                `UPDATE tam24_users SET current_plan = ?, plan_expires_at = ?, updated_at = NOW() WHERE id = ?`,
-                [plan.id, walletExpireDate, userId]
-            );
+            const walletAssignment = await policy.applyPaidPlan(connection, {
+                userId,
+                plan,
+                paymentId: walletPaymentId,
+            });
 
             if (coupon) {
                 await connection.execute(
@@ -474,16 +471,20 @@ exports.createSubscriptionPayment = async (req, res) => {
             const walletResultToken = createPaymentResultToken(walletPaymentId);
             return res.json({
                 success: true,
-                message: 'پلن با موفقیت با کیف پول فعال شد',
+                message: walletAssignment.queued
+                    ? 'پلن در صف رزرو ثبت شد و پس از پایان اشتراک فعلی فعال می‌شود.'
+                    : 'پلن با موفقیت با کیف پول فعال شد',
                 data: {
                     directActivated: true,
+                    queued: walletAssignment.queued,
                     walletPaid: true,
                     paymentId: walletPaymentId,
                     resultToken: walletResultToken,
                     resultUrl: `/payment/result/${walletResultToken}`,
-                    plan: { id: plan.id, name: plan.name, days: plan.days },
+                    plan: { id: plan.id, name: plan.name, days: plan.days, unlimited: plan.days == null },
                     pricing,
-                    expiresAt: walletExpireDate,
+                    startsAt: walletAssignment.startsAt,
+                    expiresAt: walletAssignment.queued ? walletAssignment.endsAt : walletAssignment.expiresAt,
                 },
             });
         }
@@ -495,8 +496,6 @@ exports.createSubscriptionPayment = async (req, res) => {
                 return res.status(404).json({ success: false, message: 'کاربر یافت نشد' });
             }
 
-            const { newExpireDate } = calculateNewPlanExpiry(plan.days);
-
             const paymentId = await createPaidPaymentRecord(connection, {
                 userId,
                 planId: plan.id,
@@ -505,23 +504,23 @@ exports.createSubscriptionPayment = async (req, res) => {
                 currency: 'IRR',
                 status: 'paid',
                 gateway: 'zarinpal',
-                description: `اشتراک ${plan.name} - direct activation`,
+                description: describePurchase(plan, pricing, ' - فعال‌سازی مستقیم'),
                 requestPayload: {
                     planId,
                     discountCode: discountCode || null,
                     metadata: metadata || null,
                     directActivation: true,
+                    ...loyaltyPayload(pricing, loyalty),
                 },
                 clientIp: getClientIp(req),
                 userAgent: req.headers['user-agent'] || null,
             });
 
-            await connection.execute(
-                `UPDATE tam24_users
-                 SET current_plan = ?, plan_expires_at = ?, updated_at = NOW()
-                 WHERE id = ?`,
-                [plan.id, newExpireDate, userId]
-            );
+            const directAssignment = await policy.applyPaidPlan(connection, {
+                userId,
+                plan,
+                paymentId,
+            });
 
             if (coupon) {
                 const [usedResult] = await connection.execute(
@@ -549,15 +548,19 @@ exports.createSubscriptionPayment = async (req, res) => {
 
             return res.json({
                 success: true,
-                message: 'پلن با موفقیت فعال شد',
+                message: directAssignment.queued
+                    ? 'پلن در صف رزرو ثبت شد و پس از پایان اشتراک فعلی فعال می‌شود.'
+                    : 'پلن با موفقیت فعال شد',
                 data: {
                     directActivated: true,
+                    queued: directAssignment.queued,
                     paymentId,
                     resultToken,
                     resultUrl: `/payment/result/${resultToken}`,
-                    plan: { id: plan.id, name: plan.name, days: plan.days },
+                    plan: { id: plan.id, name: plan.name, days: plan.days, unlimited: plan.days == null },
                     pricing,
-                    expiresAt: newExpireDate,
+                    startsAt: directAssignment.startsAt,
+                    expiresAt: directAssignment.queued ? directAssignment.endsAt : directAssignment.expiresAt,
                 },
             });
         }
@@ -570,11 +573,12 @@ exports.createSubscriptionPayment = async (req, res) => {
             currency: 'IRR',
             status: 'pending',
             gateway: 'zarinpal',
-            description: `اشتراک ${plan.name}`,
+            description: describePurchase(plan, pricing),
             requestPayload: {
                 planId,
                 discountCode: discountCode || null,
                 metadata: metadata || null,
+                ...loyaltyPayload(pricing, loyalty),
             },
             clientIp: getClientIp(req),
             userAgent: req.headers['user-agent'] || null,
@@ -633,7 +637,10 @@ exports.createSubscriptionPayment = async (req, res) => {
             },
         });
     } catch (error) {
-        await connection.rollback();
+        try { await connection.rollback(); } catch (_) { /* no open transaction */ }
+        if (error && error.expose) {
+            return res.status(error.status || 400).json({ success: false, message: error.message });
+        }
         console.error('createSubscriptionPayment error:', error);
 
         if (error.response) {
@@ -747,20 +754,11 @@ exports.handleZarinpalCallback = async (req, res) => {
             return res.status(500).send('Plan not found');
         }
 
-        const user = await lockUser(connection, lockedPayment.user_id);
-        if (!user) {
-            await connection.rollback();
-            return res.status(500).send('User not found');
-        }
-
-        const { newExpireDate } = calculateNewPlanExpiry(plan.days);
-
-        await connection.execute(
-            `UPDATE tam24_users
-             SET current_plan = ?, plan_expires_at = ?, updated_at = NOW()
-             WHERE id = ?`,
-            [plan.id, newExpireDate, user.id]
-        );
+        await policy.applyPaidPlan(connection, {
+            userId: lockedPayment.user_id,
+            plan,
+            paymentId,
+        });
 
         if (lockedPayment.discount_code_id) {
             await connection.execute(
@@ -885,6 +883,17 @@ exports.getPaymentResult = async (req, res) => {
             return res.status(404).json({ success: false, message: 'پرداخت یافت نشد' });
         }
 
+        let reservation = null;
+        try {
+            const [reserved] = await connection.execute(
+                `SELECT starts_at, ends_at, status FROM subscription_reservations WHERE payment_id = ? ORDER BY id DESC LIMIT 1`,
+                [paymentId]
+            );
+            reservation = reserved[0] || null;
+        } catch (err) {
+            if (!err || err.code !== 'ER_NO_SUCH_TABLE') throw err;
+        }
+
         return res.json({
             success: true,
             data: {
@@ -918,6 +927,10 @@ exports.getPaymentResult = async (req, res) => {
                     id: row.plan_id,
                     name: row.plan_name,
                     days: row.plan_days ? Number(row.plan_days) : null,
+                    unlimited: row.plan_days == null,
+                    queued: reservation?.status === 'queued',
+                    startsAt: reservation?.starts_at || null,
+                    endsAt: reservation?.ends_at || null,
                 },
                 user: row.user_id_ref
                     ? {
@@ -957,39 +970,13 @@ exports.getPaymentResult = async (req, res) => {
 
 
 exports.getMySubscriptionStatus = async (req, res) => {
-    const connection = await pool.getConnection();
-
     try {
-        const userId = req.user.id;
-
-        const [rows] = await connection.execute(
-            `SELECT id, username, current_plan, plan_expires_at
-             FROM tam24_users
-             WHERE id = ?
-                 LIMIT 1`,
-            [userId]
-        );
-
-        const user = rows[0];
-        if (!user) {
-            return res.status(404).json({ success: false, message: 'کاربر یافت نشد' });
-        }
-
-        const isActive = user.plan_expires_at && new Date(user.plan_expires_at).getTime() > Date.now();
-
-        return res.json({
-            success: true,
-            data: {
-                currentPlan: isActive ? user.current_plan : 'free',
-                planExpiresAt: isActive ? user.plan_expires_at : null,
-                isActive: Boolean(isActive),
-            },
-        });
+        const data = await policy.subscriptionSnapshot(req.user.id);
+        if (!data) return res.status(404).json({ success: false, message: 'کاربر یافت نشد' });
+        return res.json({ success: true, data });
     } catch (error) {
         console.error('getMySubscriptionStatus error:', error);
         return res.status(500).json({ success: false, message: 'خطا در دریافت وضعیت اشتراک' });
-    } finally {
-        connection.release();
     }
 };
 

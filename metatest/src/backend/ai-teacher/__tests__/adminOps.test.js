@@ -32,6 +32,7 @@ test('section defaults and super override', () => {
     assert.equal(staff.reports, true);
     assert.equal(staff['word-stats'], true);
     assert.equal(staff['discount-codes'], undefined);
+    assert.equal(staff['subscription-plans'], undefined);
     assert.equal(staff['referral-settings'], undefined);
     assert.equal(staff.withdrawals, undefined);
     assert.equal(staff['ai-manager'], false);

@@ -6,10 +6,16 @@ const {
     FREE_LIMITS, isPaidPlan, subjectBucket, subjectLabel,
 } = require('./limits');
 const usage = require('./usage');
+const policy = require('./policy');
 
 async function loadPlan(userId) {
     const id = Number(userId);
     if (!id) return { userId: null, planKey: 'free', expiresAt: null, paid: false };
+    try {
+        await policy.promoteDueReservations(id);
+    } catch (err) {
+        console.error('[plans] promote', err.message);
+    }
     const [rows] = await pool.query(
         `SELECT current_plan, plan_expires_at FROM tam24_users WHERE id = ? LIMIT 1`,
         [id]

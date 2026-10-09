@@ -14,6 +14,7 @@ import { getCroppedImg } from "../lib/cropImage";
 
 // --- FIX 2: Import your custom ResponsiveModal component ---
 import { ResponsiveModal } from "../components/ResponsiveModal"; // Adjust the path if necessary
+import PlanSelectionModal from "../components/PlanSelectionModal";
 
 // --- Icons (no changes) ---
 const Icons = {
@@ -167,6 +168,7 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
     const [paymentsData, setPaymentsData] = useState<{ payments: any[]; subscription: any } | null>(null);
     const [paymentsLoading, setPaymentsLoading] = useState(false);
     const [paymentsError, setPaymentsError] = useState<string | null>(null);
+    const [planModalOpen, setPlanModalOpen] = useState(false);
 
     const [invitesData, setInvitesData] = useState<{ list: any[]; totalInvited: number; activeInvites: number } | null>(null);
     const [invitesLoading, setInvitesLoading] = useState(false);
@@ -877,9 +879,12 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
                                             const planKey = (sub?.currentPlan === 'epic' ? 'diamond' : sub?.currentPlan) || 'free';
                                             const meta = PLAN_META[planKey] || PLAN_META.free;
                                             const PlanIcon = meta.icon;
-                                            const daysRemaining = sub?.daysRemaining || 0;
-                                            const progress = meta.totalDays > 0 ? Math.min(100, Math.max(0, (daysRemaining / meta.totalDays) * 100)) : 0;
+                                            const unlimited = Boolean(sub?.unlimited);
+                                            const daysRemaining = unlimited ? null : (sub?.daysRemaining || 0);
+                                            const progress = !unlimited && meta.totalDays > 0 ? Math.min(100, Math.max(0, ((daysRemaining || 0) / meta.totalDays) * 100)) : 0;
                                             const paidPayments = (paymentsData?.payments || []).filter((p: any) => p.status === 'paid');
+                                            const expired = sub?.expiredPlan;
+                                            const queue = Array.isArray(sub?.queue) ? sub.queue : [];
 
                                             return (
                                                 <>
@@ -894,19 +899,25 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
                                                                     <h4 className={`text-base font-black ${meta.colorClass}`}>{meta.label}</h4>
                                                                     <p className="text-xs text-[var(--text-muted)] mt-0.5">
                                                                         {planKey === 'free'
-                                                                            ? 'شما در حال حاضر اشتراک فعالی ندارید.'
-                                                                            : `اعتبار تا ${formatDate(sub?.planExpiresAt)}`}
+                                                                            ? (expired
+                                                                                ? `اشتراک ${expired.name || 'قبلی'} در ${formatDate(expired.expiredAt)} به پایان رسیده است.`
+                                                                                : 'شما در حال حاضر اشتراک فعالی ندارید.')
+                                                                            : unlimited
+                                                                                ? 'این اشتراک نامحدود است.'
+                                                                                : `اعتبار تا ${formatDate(sub?.planExpiresAt)}`}
                                                                     </p>
                                                                 </div>
                                                             </div>
                                                             {planKey !== 'free' && (
                                                                 <div className="text-center px-4 py-2 rounded-xl bg-[var(--bg-card)] border border-[var(--border)]">
-                                                                    <span className="block text-2xl font-black text-[var(--text-primary)] leading-none">{daysRemaining.toLocaleString('fa-IR')}</span>
-                                                                    <span className="text-[10px] text-[var(--text-muted)]">روز باقی‌مانده</span>
+                                                                    <span className="block text-2xl font-black text-[var(--text-primary)] leading-none">
+                                                                        {unlimited ? '∞' : (daysRemaining || 0).toLocaleString('fa-IR')}
+                                                                    </span>
+                                                                    <span className="text-[10px] text-[var(--text-muted)]">{unlimited ? 'نامحدود' : 'روز باقی‌مانده'}</span>
                                                                 </div>
                                                             )}
                                                         </div>
-                                                        {planKey !== 'free' && meta.totalDays > 0 && (
+                                                        {planKey !== 'free' && !unlimited && meta.totalDays > 0 && (
                                                             <div className="mt-4 h-2 w-full bg-[var(--bg-element)] rounded-full overflow-hidden border border-[var(--border)]/60">
                                                                 <motion.div
                                                                     initial={{ width: 0 }}
@@ -914,6 +925,27 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
                                                                     transition={{ duration: 0.9, ease: "easeOut" }}
                                                                     className="h-full rounded-full bg-[var(--accent)]"
                                                                 />
+                                                            </div>
+                                                        )}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setPlanModalOpen(true)}
+                                                            className="mt-4 w-full rounded-xl bg-[var(--accent)] py-3 text-xs font-black text-white"
+                                                        >
+                                                            {planKey === 'free' ? 'خرید اشتراک' : 'ارتقای پلن'}
+                                                        </button>
+                                                        {queue.length > 0 && (
+                                                            <div className="mt-4 space-y-2">
+                                                                <p className="text-[11px] font-bold text-[var(--text-muted)]">صف رزرو</p>
+                                                                {queue.map((item: any) => (
+                                                                    <div key={item.id} className="flex items-center justify-between rounded-xl border border-[var(--border)] px-3 py-2 text-[11px]">
+                                                                        <span className="font-bold text-[var(--text-primary)]">{item.planName}</span>
+                                                                        <span className="text-[var(--text-muted)]">
+                                                                            از {formatDate(item.startsAt)}
+                                                                            {item.unlimited ? ' • نامحدود' : ` تا ${formatDate(item.endsAt)}`}
+                                                                        </span>
+                                                                    </div>
+                                                                ))}
                                                             </div>
                                                         )}
                                                     </div>
@@ -940,7 +972,7 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
                                                                                 <span className="block text-xs font-bold text-[var(--text-primary)] truncate">{p.planName}</span>
                                                                                 <span className="flex items-center gap-1 text-[10px] text-[var(--text-muted)] mt-0.5">
                                                                                     <Calendar size={10} /> {formatDate(p.paidAt || p.requestedAt)}
-                                                                                    {p.planDays ? ` • ${p.planDays} روزه` : ''}
+                                                                                    {p.planDays == null ? ' • نامحدود' : p.planDays ? ` • ${p.planDays} روزه` : ''}
                                                                                 </span>
                                                                             </div>
                                                                         </div>
@@ -1281,6 +1313,11 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
 
                 </div>
             </div>
+            <PlanSelectionModal
+                isOpen={planModalOpen}
+                onClose={() => setPlanModalOpen(false)}
+                onActivated={fetchPayments}
+            />
         </div>
     );
 }

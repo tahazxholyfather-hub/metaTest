@@ -11,7 +11,10 @@ import { ResponsiveModal } from './ResponsiveModal';
 type Plan = {
     id: string;
     name: string;
-    days: number;
+    days: number | null;
+    unlimited?: boolean;
+    purchasable?: boolean;
+    loyaltyPercent?: number;
     price: number;
     iconColors: {
         primary: string;
@@ -24,6 +27,13 @@ type Plan = {
     planDiscountPercent?: number;
 };
 
+type ShopMeta = {
+    queueEnabled?: boolean;
+    loyaltyOpen?: boolean;
+    loyaltyFromPlanName?: string | null;
+    loyaltyHoursLeft?: number | null;
+};
+
 type CouponState = {
     code: string;
     percent: number;
@@ -34,6 +44,12 @@ type CouponState = {
 interface PlanSelectionModalProps {
     isOpen: boolean;
     onClose: () => void;
+    onActivated?: () => void;
+}
+
+function durationLabel(plan: Plan) {
+    if (plan.unlimited || plan.days === null) return 'نامحدود';
+    return `دوره ${plan.days} روزه`;
 }
 
 const LordIcon = ({
@@ -93,7 +109,10 @@ function mapBackendPlan(plan: any): Plan {
     return {
         id: String(plan.id),
         name: plan.name,
-        days: Number(plan.days || 30),
+        days: plan.unlimited === true || plan.days === null ? null : Number(plan.days || 30),
+        unlimited: plan.unlimited === true || plan.days === null,
+        purchasable: plan.purchasable !== false,
+        loyaltyPercent: Number(plan.loyaltyPercent || 0),
         price: Number(plan.price || 0),
         planDiscountPercent: Number(plan.planDiscountPercent || plan.discountPercent || 0),
         popular: Boolean(plan.popular || plan.isPopular),
@@ -113,6 +132,8 @@ function getPricingDetails(plan: Plan | undefined, coupon: CouponState | null) {
             priceAfterPlanDiscount: 0,
             couponUsed: false,
             couponCode: null as string | null,
+            loyaltyPercent: 0,
+            loyaltyDiscountAmount: 0,
             couponPercent: 0,
             couponDiscountAmount: 0,
             finalPrice: 0,
@@ -124,35 +145,42 @@ function getPricingDetails(plan: Plan | undefined, coupon: CouponState | null) {
     const planDiscountPercent = plan.planDiscountPercent ?? 0;
     const planDiscountAmount = Math.round((basePrice * planDiscountPercent) / 100);
     const priceAfterPlanDiscount = basePrice - planDiscountAmount;
+    const loyaltyPercent = plan.loyaltyPercent ?? 0;
+    const loyaltyDiscountAmount = Math.round((priceAfterPlanDiscount * loyaltyPercent) / 100);
+    const priceAfterLoyalty = priceAfterPlanDiscount - loyaltyDiscountAmount;
 
     const couponUsed = !!coupon;
     const couponPercent = coupon?.percent ?? 0;
-    const couponDiscountAmount = Math.round((priceAfterPlanDiscount * couponPercent) / 100);
-    const finalPrice = priceAfterPlanDiscount - couponDiscountAmount;
+    const couponDiscountAmount = Math.round((priceAfterLoyalty * couponPercent) / 100);
+    const finalPrice = priceAfterLoyalty - couponDiscountAmount;
 
     return {
         basePrice,
         planDiscountPercent,
         planDiscountAmount,
         priceAfterPlanDiscount,
+        loyaltyPercent,
+        loyaltyDiscountAmount,
         couponUsed,
         couponCode: coupon?.code ?? null,
         couponPercent,
         couponDiscountAmount,
         finalPrice,
-        hasAnyDiscount: planDiscountPercent > 0 || couponUsed,
+        hasAnyDiscount: planDiscountPercent > 0 || loyaltyPercent > 0 || couponUsed,
     };
 }
 
 export default function PlanSelectionModal({
                                                isOpen,
                                                onClose,
+                                               onActivated,
                                            }: PlanSelectionModalProps) {
-    const { user } = useUser(); // گرفتن اطلاعات کاربر از کانتکست
+    const { user, setUser } = useUser();
 
     const [plans, setPlans] = useState<Plan[]>([]);
     const [isLoadingPlans, setIsLoadingPlans] = useState(false);
     const [plansError, setPlansError] = useState('');
+    const [shopMeta, setShopMeta] = useState<ShopMeta | null>(null);
 
     const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
     const [discountCode, setDiscountCode] = useState('');
@@ -188,11 +216,11 @@ export default function PlanSelectionModal({
                 if (res.success && Array.isArray(res.data)) {
                     const formattedPlans = res.data.map(mapBackendPlan);
                     setPlans(formattedPlans);
+                    setShopMeta((res as any).meta || null);
 
-                    const defaultPlan = formattedPlans.find((p) => p.popular) || formattedPlans[0];
-                    if (defaultPlan) {
-                        setSelectedPlanId(defaultPlan.id);
-                    }
+                    const defaultPlan = formattedPlans.find((p) => p.purchasable !== false && p.popular)
+                        || formattedPlans.find((p) => p.purchasable !== false);
+                    setSelectedPlanId(defaultPlan ? defaultPlan.id : null);
                 } else {
                     const errMsg = res.message || 'خطا در دریافت لیست پلن‌ها از سرور.';
                     setPlansError(errMsg);
@@ -233,6 +261,7 @@ export default function PlanSelectionModal({
         setIsPaying(false);
         setPayWithWallet(false);
         setPlansError('');
+        setShopMeta(null);
     };
 
     const handleClose = () => {
@@ -304,7 +333,7 @@ export default function PlanSelectionModal({
     };
 
     const handlePay = async () => {
-        if (!selectedPlan || isPaying) {
+        if (!selectedPlan || selectedPlan.purchasable === false || isPaying) {
             return;
         }
 
@@ -338,7 +367,14 @@ export default function PlanSelectionModal({
             }
 
             if (res.data?.directActivated) {
-                toast.success(res.message || 'اشتراک شما با موفقیت فعال شد.', { id: toastId });
+                toast.success(res.message || (res.data?.queued ? 'پلن در صف رزرو ثبت شد.' : 'اشتراک شما با موفقیت فعال شد.'), { id: toastId });
+                try {
+                    const info = await flowApi.getUserInfo();
+                    if (info?.success && info.data) setUser(info.data);
+                } catch {
+                    // The purchase already landed; the next page load refreshes the plan chip.
+                }
+                onActivated?.();
                 handleClose();
                 return;
             }
@@ -397,7 +433,7 @@ export default function PlanSelectionModal({
                     </label>
                     <button
                         onClick={handlePay}
-                        disabled={isPaying || !selectedPlan || isLoadingPlans}
+                        disabled={isPaying || !selectedPlan || selectedPlan.purchasable === false || isLoadingPlans}
                         className="flex w-full items-center justify-center gap-3 rounded-xl bg-[var(--accent)] py-4 text-sm font-black text-white shadow-[0_10px_24px_-12px_color-mix(in_srgb,var(--accent)_70%,transparent)] disabled:opacity-60"
                     >
                         {isPaying ? (
@@ -455,6 +491,21 @@ export default function PlanSelectionModal({
                     <p className="mb-4 text-xs text-[var(--text-muted)]">
                         دسترسی کامل را انتخاب کنید
                     </p>
+                    {shopMeta?.queueEnabled && (Number(user?.days_remaining) > 0 || user?.plan_unlimited) && (
+                        <div className="mb-4 rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-[11px] leading-6 text-sky-700 dark:text-sky-300">
+                            اشتراک فعلی‌ات هنوز تمام نشده. پلن تازه‌ای که بخری در صف رزرو می‌ماند و به محض پایان این اشتراک فعال می‌شود.
+                        </div>
+                    )}
+                    {shopMeta && shopMeta.queueEnabled === false && (Number(user?.days_remaining) > 0 || user?.plan_unlimited) && (
+                        <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-[11px] leading-6 text-amber-700 dark:text-amber-300">
+                            خرید جدید از همین لحظه جایگزین اشتراک فعلی می‌شود.
+                        </div>
+                    )}
+                    {shopMeta?.loyaltyOpen && (
+                        <div className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-[11px] leading-6 text-emerald-700 dark:text-emerald-300">
+                            تا {shopMeta.loyaltyHoursLeft ?? ''} ساعت دیگر، به‌خاطر پایان {shopMeta.loyaltyFromPlanName || 'اشتراک قبلی'} تخفیف تمدید روی پلن‌های مشخص‌شده اعمال می‌شود.
+                        </div>
+                    )}
                     <div className="space-y-3">
                             {plansError && (
                                 <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-4 text-center text-sm text-rose-400">
@@ -472,7 +523,8 @@ export default function PlanSelectionModal({
                                     {/* Desktop View */}
                                     <div className="hidden gap-4 sm:grid sm:grid-cols-4">
                                         {plans.map((plan) => {
-                                            const isSelected = selectedPlanId === plan.id;
+                                            const locked = plan.purchasable === false;
+                                            const isSelected = !locked && selectedPlanId === plan.id;
                                             const {
                                                 originalPrice,
                                                 discountedPrice,
@@ -484,14 +536,26 @@ export default function PlanSelectionModal({
                                                 <motion.button
                                                     key={plan.id}
                                                     type="button"
-                                                    onClick={() => setSelectedPlanId(plan.id)}
-                                                    whileHover={{ y: -4 }}
+                                                    disabled={locked}
+                                                    onClick={() => {
+                                                        if (!locked) setSelectedPlanId(plan.id);
+                                                    }}
+                                                    whileHover={locked ? undefined : { y: -4 }}
                                                     className={`relative flex h-48 flex-col items-center rounded-2xl border p-5 transition-all duration-300 ${
-                                                        isSelected
+                                                        locked
+                                                            ? 'cursor-not-allowed border-slate-500/40 bg-slate-500/10 grayscale'
+                                                            : isSelected
                                                             ? `${plan.activeShadow} ${plan.activeBorder} bg-[var(--bg-elevated)]`
                                                             : 'border-[var(--border)]/50 bg-[var(--bg-elevated)]/20 hover:bg-[var(--bg-elevated)]/40'
                                                     }`}
                                                 >
+                                                    {locked && (
+                                                        <span className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-slate-950/55">
+                                                            <span className="rounded-full bg-slate-200 px-3 py-1 text-[10px] font-black text-slate-700 shadow-lg">
+                                                                غیرقابل خرید
+                                                            </span>
+                                                        </span>
+                                                    )}
                                                     {plan.popular && (
                                                         <span className="absolute -top-2 rounded-full bg-gradient-to-r from-amber-500 to-orange-600 px-3 py-0.5 text-[10px] font-black text-white shadow-lg">
                                                             محبوب‌ترین
@@ -507,7 +571,7 @@ export default function PlanSelectionModal({
                                                     </h3>
 
                                                     <p className="mb-auto text-[10px] text-[var(--text-muted)]">
-                                                        دوره {plan.days} روزه
+                                                        {durationLabel(plan)}
                                                     </p>
 
                                                     <div className="mt-4">
@@ -546,7 +610,8 @@ export default function PlanSelectionModal({
                                     {/* Mobile View */}
                                     <div className="flex flex-col gap-3 sm:hidden">
                                         {plans.map((plan) => {
-                                            const isSelected = selectedPlanId === plan.id;
+                                            const locked = plan.purchasable === false;
+                                            const isSelected = !locked && selectedPlanId === plan.id;
                                             const {
                                                 originalPrice,
                                                 discountedPrice,
@@ -557,13 +622,23 @@ export default function PlanSelectionModal({
                                                 <button
                                                     key={plan.id}
                                                     type="button"
-                                                    onClick={() => setSelectedPlanId(plan.id)}
-                                                    className={`flex items-center justify-between rounded-xl border p-4 transition-all ${
-                                                        isSelected
+                                                    disabled={locked}
+                                                    onClick={() => {
+                                                        if (!locked) setSelectedPlanId(plan.id);
+                                                    }}
+                                                    className={`relative flex items-center justify-between overflow-hidden rounded-xl border p-4 transition-all ${
+                                                        locked
+                                                            ? 'cursor-not-allowed border-slate-500/40 bg-slate-500/15 grayscale'
+                                                            : isSelected
                                                             ? `${plan.activeBorder} bg-[var(--bg-elevated)] shadow-lg`
                                                             : 'border-[var(--border)]/40 bg-[var(--bg-elevated)]/20'
                                                     }`}
                                                 >
+                                                    {locked && (
+                                                        <span className="absolute inset-0 z-10 flex items-center justify-center bg-slate-950/50 text-[10px] font-black text-slate-100">
+                                                            غیرقابل خرید
+                                                        </span>
+                                                    )}
                                                     <div className="flex items-center gap-3">
                                                         <LordIcon colors={plan.iconColors} size={40} />
                                                         <div className="text-right">
@@ -571,7 +646,7 @@ export default function PlanSelectionModal({
                                                                 {plan.name}
                                                             </h3>
                                                             <p className="text-[10px] text-[var(--text-muted)]">
-                                                                دوره {plan.days} روزه
+                                                                {durationLabel(plan)}
                                                             </p>
                                                         </div>
                                                     </div>

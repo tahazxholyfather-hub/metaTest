@@ -14,6 +14,7 @@ import AiManager from './AiManager';
 import WordStats from './WordStats';
 import ReportsManager from './ReportsManager';
 import AccessManager from './AccessManager';
+import SubscriptionManager from './SubscriptionManager';
 import AuthView, { type User } from './AuthView';
 import Spinner from './Spinner';
 import { adminApi } from '../lib/adminApi';
@@ -167,6 +168,7 @@ export default function AdminPanel() {
                                 {activeTab === 'insert-questions' && canAccessSection(user, 'insert-questions') && <InsertQuestions />}
                                 {activeTab === 'curriculum' && canAccessSection(user, 'curriculum') && <CurriculumManager user={user} />}
                                 {activeTab === 'pdf-library' && canAccessSection(user, 'pdf-library') && <PdfLibraryManager user={user} />}
+                                {activeTab === 'subscription-plans' && canAccessSection(user, 'subscription-plans') && <SubscriptionManager />}
                                 {activeTab === 'discount-codes' && canAccessSection(user, 'discount-codes') && <DiscountCodesManager user={user} />}
                                 {activeTab === 'referral-settings' && canAccessSection(user, 'referral-settings') && <ReferralSettings user={user} />}
                                 {activeTab === 'withdrawals' && canAccessSection(user, 'withdrawals') && <WithdrawalRequests user={user} />}

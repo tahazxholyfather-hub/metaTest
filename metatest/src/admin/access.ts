@@ -12,6 +12,7 @@ export const ADMIN_NAV: { id: string; label: string; superOnly?: boolean }[] = [
     { id: 'insert-questions', label: 'افزودن سوال' },
     { id: 'curriculum', label: 'سرفصل‌ها' },
     { id: 'pdf-library', label: 'کتابخانه PDF' },
+    { id: 'subscription-plans', label: 'مدیریت اشتراک‌ها', superOnly: true },
     { id: 'discount-codes', label: 'کد تخفیف', superOnly: true },
     { id: 'referral-settings', label: 'تنظیمات دعوت', superOnly: true },
     { id: 'withdrawals', label: 'برداشت‌ها', superOnly: true },

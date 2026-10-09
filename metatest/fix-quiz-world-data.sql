@@ -25,8 +25,11 @@ WHERE q.topic_id = 62 AND qg.grade_id = 1;
 INSERT IGNORE INTO question_grades_tam24 (question_id, grade_id)
 SELECT id, 2 FROM questions_tam24 WHERE topic_id = 62 AND grade_id = 2;
 
--- اشتراک الماسی در دامپ ۱ مهر غیرفعال شده بود (is_active = 0) و فروشگاه فقط پلن فعال را نشان می‌دهد.
-UPDATE subscription_plans SET is_active = 1 WHERE id = 'diamond' AND is_active = 0;
+-- اشتراک الماسی دیده می‌شود، نامحدود و ۱۰٬۰۰۰٬۰۰۰ تومان است، ولی قابل خرید نیست.
+-- ستون purchasable را سرور هنگام بالا آمدن می‌سازد و همین مقدار را هم اعمال می‌کند.
+UPDATE subscription_plans
+SET is_active = 1, days = NULL, price = 10000000
+WHERE id = 'diamond';
 
 -- Note: topics 69 and 70 (شیمی فصل دو/سه یازدهم) have zero usable questions
 -- in the current dump, so those cards still will not appear until questions exist.

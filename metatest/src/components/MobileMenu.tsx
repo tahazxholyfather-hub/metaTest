@@ -93,7 +93,9 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
     const daysLeft = user?.days_remaining || 0;
     const totalDays = planDetails.totalDays;
     const isPro = currentPlanKey !== 'free';
+    const unlimited = Boolean(user?.plan_unlimited);
     const hasDaysLeft = isPro && daysLeft > 0;
+    const planActive = isPro && (unlimited || hasDaysLeft);
     const progressPercentage = hasDaysLeft && totalDays > 0 ? Math.min(100, Math.max(0, (daysLeft / totalDays) * 100)) : 0;
 
     // Stats Mapping
@@ -184,19 +186,18 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
                                     </div>
 
                                     {/* Action Right Side */}
-                                    {hasDaysLeft ? (
-                                        <CircularProgress progress={progressPercentage} days={daysLeft} colorClass={planDetails.colorClass} />
-                                    ) : (
-                                        !isPro && (
-                                            <button
-                                                onClick={() => setIsPlanModalOpen(true)}
-                                                className="flex flex-col items-center justify-center w-14 h-14 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-500 hover:bg-amber-500/20 transition-colors shrink-0"
-                                            >
-                                                <Crown size={18} className="mb-0.5" />
-                                                <span className="text-[9px] font-bold">ارتقا</span>
-                                            </button>
-                                        )
-                                    )}
+                                    <div className="flex items-center gap-2">
+                                        {planActive && !unlimited && (
+                                            <CircularProgress progress={progressPercentage} days={daysLeft} colorClass={planDetails.colorClass} />
+                                        )}
+                                        <button
+                                            onClick={() => setIsPlanModalOpen(true)}
+                                            className="flex flex-col items-center justify-center w-14 h-14 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-500 hover:bg-amber-500/20 transition-colors shrink-0"
+                                        >
+                                            <Crown size={18} className="mb-0.5" />
+                                            <span className="text-[9px] font-bold">{planActive ? 'رزرو' : 'ارتقا'}</span>
+                                        </button>
+                                    </div>
                                 </div>
 
                                 {/* Bottom: Trophies & XP (Side by Side) */}

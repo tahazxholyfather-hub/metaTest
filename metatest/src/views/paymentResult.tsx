@@ -34,7 +34,11 @@ type PaymentResultData = {
     plan: {
         id: string;
         name: string;
-        days: number;
+        days: number | null;
+        unlimited?: boolean;
+        queued?: boolean;
+        startsAt?: string | null;
+        endsAt?: string | null;
     };
     user: {
         firstName: string;
@@ -65,6 +69,12 @@ function formatPersianDate(date?: string | null, withTime = true) {
         options.minute = "2-digit";
     }
     return new Intl.DateTimeFormat("fa-IR-u-ca-persian", options).format(new Date(date));
+}
+
+function planValue(plan?: PaymentResultData["plan"] | null) {
+    if (!plan?.name) return "-";
+    const duration = plan.unlimited || plan.days == null ? "نامحدود" : `${toPersianDigits(plan.days)} روز`;
+    return plan.queued ? `${plan.name} – ${duration}، در صف رزرو` : `${plan.name} – ${duration}`;
 }
 
 function getStatusMeta(status: string) {
@@ -374,7 +384,9 @@ export default function PaymentResultPage() {
                             transition={{ delay: 0.6 }}
                             className="text-sm text-zinc-500 dark:text-zinc-400 max-w-xs"
                         >
-                            {statusMeta.subtitle}
+                            {paymentData?.plan?.queued && paymentData.payment.status === "paid"
+                                ? "پرداخت ثبت شد و این پلن بعد از پایان اشتراک فعلی فعال می‌شود"
+                                : statusMeta.subtitle}
                         </motion.p>
                     </div>
 
@@ -405,7 +417,7 @@ export default function PaymentResultPage() {
                             <InfoRow icon={<UserRound size={16} />} label="نام کاربر" value={fullName} />
                             <InfoRow icon={<Phone size={16} />} label="موبایل" value={toPersianDigits(user.phone || "-")} />
                             <InfoRow icon={<ShieldCheck size={16} />} label="مبلغ" value={formatMoney(payment.finalPrice, payment.currency)} />
-                            <InfoRow icon={<CreditCard size={16} />} label="پلن" value={`${plan.name} – ${toPersianDigits(plan.days)} روز`} />
+                            <InfoRow icon={<CreditCard size={16} />} label="پلن" value={planValue(plan)} />
                             {payment.gateway && (
                                 <InfoRow icon={<CreditCard size={16} />} label="درگاه" value={payment.gateway} />
                             )}
@@ -488,7 +500,9 @@ export default function PaymentResultPage() {
                                 {statusMeta.title}
                             </h1>
                             <p className="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                                {statusMeta.subtitle}
+                                {paymentData?.plan?.queued && paymentData.payment.status === "paid"
+                                ? "پرداخت ثبت شد و این پلن بعد از پایان اشتراک فعلی فعال می‌شود"
+                                : statusMeta.subtitle}
                             </p>
                         </motion.div>
 
@@ -533,7 +547,7 @@ export default function PaymentResultPage() {
                             <InfoRow icon={<UserRound size={17} />} label="نام کاربر" value={fullName} />
                             <InfoRow icon={<Phone size={17} />} label="شماره موبایل" value={toPersianDigits(user.phone || "-")} />
                             <InfoRow icon={<ShieldCheck size={17} />} label="مبلغ پرداخت" value={formatMoney(payment.finalPrice, payment.currency)} />
-                            <InfoRow icon={<CreditCard size={17} />} label="پلن اشتراک" value={`${plan.name} – ${toPersianDigits(plan.days)} روز`} />
+                            <InfoRow icon={<CreditCard size={17} />} label="پلن اشتراک" value={planValue(plan)} />
                             {payment.gateway && (
                                 <InfoRow icon={<CreditCard size={17} />} label="درگاه پرداخت" value={payment.gateway} />
                             )}

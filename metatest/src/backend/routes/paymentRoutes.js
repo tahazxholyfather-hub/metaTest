@@ -1,11 +1,11 @@
 const express = require('express');
 const paymentController = require('../controllers/paymentController');
 
-const { requireToken } = require('../middleware/auth');
+const { requireToken, attachUserIfPresent } = require('../middleware/auth');
 
 const router = express.Router();
 
-router.get('/plans', paymentController.getSubscriptionPlans);
+router.get('/plans', attachUserIfPresent, paymentController.getSubscriptionPlans);
 router.get('/entitlements', requireToken, paymentController.getEntitlements);
 router.get('/coin-packages', requireToken, paymentController.getCoinPackages);
 router.post('/coins/create', requireToken, paymentController.createCoinPayment);

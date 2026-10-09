@@ -9,6 +9,7 @@ const jwt = require('jsonwebtoken');
 const { sendOtpSms } = require('../utils/sms');
 const { encodeResultId } = require('../utils/hash');
 const walletController = require('./walletController');
+const policy = require('../subscription/policy');
 
 // ===================== Native Crypto Password Helpers =====================
 const hashPassword = (password) => {
@@ -89,6 +90,11 @@ const handleGetUserInfo = async (req, res) => {
 
     try {
         const userId = req.user.id;
+        try {
+            await policy.promoteDueReservations(userId);
+        } catch (err) {
+            console.error('[plans] promote', err.message);
+        }
 
         const [rows] = await db.query(`
                     SELECT
@@ -106,11 +112,12 @@ const handleGetUserInfo = async (req, res) => {
 
         const user = rows[0];
 
+        const planActive = policy.planIsActive(user.current_plan, user.plan_expires_at);
+        const planUnlimited = policy.isUnlimitedActive(user.current_plan, user.plan_expires_at);
+        const storedPlanKey = policy.normalizePlanKey(user.current_plan);
         let daysRemaining = 0;
-        if (user.plan_expires_at) {
-            const now = new Date();
-            const expires = new Date(user.plan_expires_at);
-            const diffMs = expires - now;
+        if (planActive && user.plan_expires_at) {
+            const diffMs = new Date(user.plan_expires_at) - new Date();
             daysRemaining = diffMs > 0 ? Math.ceil(diffMs / (1000 * 60 * 60 * 24)) : 0;
         }
 
@@ -131,7 +138,10 @@ const handleGetUserInfo = async (req, res) => {
             data: {
                 ...user,
                 social_links: socialLinks,
-                days_remaining: daysRemaining,
+                current_plan: planActive ? user.current_plan : 'free',
+                previous_plan: !planActive && storedPlanKey !== 'free' ? user.current_plan : null,
+                days_remaining: planUnlimited ? null : daysRemaining,
+                plan_unlimited: planUnlimited,
                 password_set: !!user.password_hash,
                 password_hash: undefined,
                 plan_expires_at: undefined,
@@ -1066,31 +1076,13 @@ const handleGetPaymentHistory = async (req, res) => {
             ORDER BY p.created_at DESC
         `, [userId]);
 
-        // Current plan snapshot for the subscription tab
-        const [userRows] = await db.query(
-            'SELECT current_plan, plan_expires_at FROM tam24_users WHERE id = ?',
-            [userId]
-        );
-
-        let currentPlan = 'free';
-        let planExpiresAt = null;
-        let daysRemaining = 0;
-
-        if (userRows.length > 0) {
-            const u = userRows[0];
-            const isActive = u.plan_expires_at && new Date(u.plan_expires_at).getTime() > Date.now();
-            if (isActive) {
-                currentPlan = u.current_plan || 'free';
-                planExpiresAt = u.plan_expires_at;
-                daysRemaining = Math.ceil((new Date(u.plan_expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-            }
-        }
+        const subscription = await policy.subscriptionSnapshot(userId);
 
         return res.json({
             success: true,
             data: {
                 payments: rows,
-                subscription: { currentPlan, planExpiresAt, daysRemaining }
+                subscription,
             }
         });
     } catch (error) {

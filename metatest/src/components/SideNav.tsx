@@ -97,7 +97,9 @@ export const SideNav = ({ activeView, onNavigate, theme, onToggleTheme, isCollap
     const daysLeft = user?.days_remaining || 0;
     const totalDays = planDetails.totalDays;
     const isPro = currentPlanKey !== 'free';
+    const unlimited = Boolean(user?.plan_unlimited);
     const hasDaysLeft = isPro && daysLeft > 0;
+    const planActive = isPro && (unlimited || hasDaysLeft);
     const progressPercentage = hasDaysLeft && totalDays > 0 ? Math.min(100, Math.max(0, (daysLeft / totalDays) * 100)) : 0;
 
     const PlanIcon = planDetails.icon;
@@ -255,13 +257,13 @@ export const SideNav = ({ activeView, onNavigate, theme, onToggleTheme, isCollap
                 {/* --- User Plan Progress Section --- */}
                 {isCollapsed ? (
                     <div className="flex flex-col items-center w-full pb-2 border-b border-[var(--border)]">
-                        {hasDaysLeft ? (
+                        {planActive && !unlimited ? (
                             <CircularProgress
                                 progress={progressPercentage}
                                 days={daysLeft}
                                 colorClass={planDetails.colorClass}
                             />
-                        ) : isPro ? (
+                        ) : planActive ? (
                             <div
                                 className={`p-2 rounded-xl ${planDetails.bgLight}`}
                                 title={planDetails.label}
@@ -271,7 +273,18 @@ export const SideNav = ({ activeView, onNavigate, theme, onToggleTheme, isCollap
                                     className={planDetails.colorClass}
                                 />
                             </div>
-                        ) : (
+                        ) : null}
+                        {planActive && (
+                            <button
+                                type="button"
+                                onClick={() => setIsPlanModalOpen(true)}
+                                className="mt-2 flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--accent)] text-white"
+                                title="ارتقای پلن"
+                            >
+                                <Rocket size={14} strokeWidth={2.2} />
+                            </button>
+                        )}
+                        {!planActive && (
                             <button
                                 onClick={() => setIsPlanModalOpen(true)}
                                 className="
@@ -303,7 +316,7 @@ export const SideNav = ({ activeView, onNavigate, theme, onToggleTheme, isCollap
                         )}
                     </div>
                 ) : (
-                    isPro ? (
+                    planActive ? (
                         <div className="bg-[var(--bg-element)] rounded-2xl p-3 border border-[var(--border)] shadow-sm flex flex-col gap-3">
                             <div className="flex items-center justify-between">
                                 <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg ${planDetails.bgLight}`}>
@@ -319,7 +332,7 @@ export const SideNav = ({ activeView, onNavigate, theme, onToggleTheme, isCollap
                                 )}
                             </div>
 
-                            {hasDaysLeft && (
+                            {hasDaysLeft && !unlimited && (
                                 <div className="h-1.5 w-full bg-[var(--hover-overlay)] rounded-full overflow-hidden border border-[var(--border)]/50">
                                     <motion.div
                                         initial={{ width: 0 }}
@@ -330,6 +343,16 @@ export const SideNav = ({ activeView, onNavigate, theme, onToggleTheme, isCollap
                                     />
                                 </div>
                             )}
+                            {unlimited && (
+                                <span className="text-[10px] font-bold text-[var(--text-muted)]">نامحدود</span>
+                            )}
+                            <button
+                                type="button"
+                                onClick={() => setIsPlanModalOpen(true)}
+                                className="w-full rounded-xl bg-[var(--accent)] py-2 text-[11px] font-extrabold text-white"
+                            >
+                                ارتقای پلن
+                            </button>
                         </div>
                     ) : (
                         <button
@@ -348,7 +371,7 @@ export const SideNav = ({ activeView, onNavigate, theme, onToggleTheme, isCollap
                                         طرح رایگان
                                     </span>
                                     <span className="mt-0.5 block truncate text-[10px] leading-tight text-[var(--text-muted)]">
-                                        دسترسی کامل
+                                        {user?.previous_plan ? 'اشتراک قبلی تمام شده' : 'دسترسی کامل'}
                                     </span>
                                 </span>
 

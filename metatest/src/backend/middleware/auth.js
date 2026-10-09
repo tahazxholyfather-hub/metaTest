@@ -119,4 +119,18 @@ const requireToken = async (req, res, next) => {
     }
 };
 
-module.exports = { requireToken };
+async function attachUserIfPresent(req, _res, next) {
+    try {
+        let token = req.headers['authorization'] || req.headers['x-app-token'];
+        if (!token || process.env.DEV_MODE === 'true') return next();
+        if (String(token).startsWith('Bearer ')) token = String(token).slice(7).trim();
+        if (!token || !process.env.JWT_SECRET) return next();
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        if (!(await isSessionReplaced(decoded))) req.user = decoded;
+    } catch (_) {
+        // Shop listing stays public when the token is missing or stale.
+    }
+    return next();
+}
+
+module.exports = { requireToken, attachUserIfPresent };
