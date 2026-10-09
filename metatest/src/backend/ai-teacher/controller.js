@@ -22,6 +22,7 @@ const suggestionsService = require('./services/suggestionsService');
 const referencesService = require('./services/referencesService');
 const { logUsage } = require('./services/usageLogger');
 const questionContext = require('./services/questionContext');
+const { normalizeSettings } = require('./services/promptBuilder');
 
 const fail = (res, status, code, message) => res.status(status).json({ success: false, code, message: message || userMessageForError(code) });
 const idParam = (v) => { const n = Number(v); return Number.isInteger(n) && n > 0 ? n : null; };
@@ -34,10 +35,19 @@ const getBootstrap = async (req, res) => {
         if (!user) return fail(res, 404, 'NOT_FOUND', 'کاربر یافت نشد.');
 
         const [wallet, subjectRows, settings, latestConversation] = await Promise.all([
-            walletSnapshot(userId, user.current_plan, user.plan_expires_at),
+            walletSnapshot(userId, user.current_plan, user.plan_expires_at).catch((err) => {
+                console.error('[met] walletSnapshot', err);
+                return { daily: 0, purchased: 0, total: 0, balance: 0, dailyQuota: 0, grantedToday: false, grantAmount: 0, nextResetAt: null };
+            }),
             listSubjectsFromDb(),
-            ensureSettings(userId),
-            conversationService.getLatestConversation(db, userId),
+            ensureSettings(userId).catch((err) => {
+                console.error('[met] ensureSettings', err);
+                return normalizeSettings(null);
+            }),
+            conversationService.getLatestConversation(db, userId).catch((err) => {
+                console.error('[met] getLatestConversation', err);
+                return null;
+            }),
         ]);
         pricing.loadPricingTable(db).catch(() => {});
 
@@ -54,7 +64,7 @@ const getBootstrap = async (req, res) => {
             },
         });
     } catch (err) {
-        console.error('[met] getBootstrap', err);
+        console.error('[met] getBootstrap', err && err.code, err && (err.sqlMessage || err.message));
         return fail(res, 500, 'SERVER_ERROR', 'خطا در بارگذاری مِت.');
     }
 };

@@ -12,10 +12,18 @@ UPDATE questions_tam24 SET grade_id = 1 WHERE id = 651 AND topic_id = 14 AND gra
 UPDATE questions_tam24 SET grade_id = 2 WHERE id = 776 AND topic_id = 19 AND grade_id IS NULL;
 UPDATE questions_tam24 SET grade_id = 1 WHERE id = 786 AND topic_id = 13 AND grade_id IS NULL;
 
--- ریاضی «قدر مطلق و جزء صحیح» (topic 62) is یازدهم; one question was tagged دهم.
+-- ریاضی «قدر مطلق و جزء صحیح» (topic 62) is یازدهم. Questions whose primary
+-- grade was دهم (including 4224) made the chapter card show up under دهم.
 UPDATE questions_tam24
 SET grade_id = 2
-WHERE id = 4224 AND topic_id = 62 AND grade_id = 1;
+WHERE topic_id = 62 AND grade_id = 1;
+
+DELETE qg FROM question_grades_tam24 qg
+INNER JOIN questions_tam24 q ON q.id = qg.question_id
+WHERE q.topic_id = 62 AND qg.grade_id = 1;
+
+INSERT IGNORE INTO question_grades_tam24 (question_id, grade_id)
+SELECT id, 2 FROM questions_tam24 WHERE topic_id = 62 AND grade_id = 2;
 
 -- Note: topics 69 and 70 (شیمی فصل دو/سه یازدهم) have zero usable questions
 -- in the current dump, so those cards still will not appear until questions exist.

@@ -85,11 +85,16 @@ function publicFeatures() {
 }
 
 async function loadUserRow(userId) {
-    const [[user]] = await db.query(
-        `SELECT id, first_name, last_name, current_plan, plan_expires_at, ai_last_subject FROM tam24_users WHERE id = ?`,
-        [userId]
-    );
-    return user || null;
+    const full = `SELECT id, first_name, last_name, current_plan, plan_expires_at, ai_last_subject FROM tam24_users WHERE id = ?`;
+    const basic = `SELECT id, first_name, last_name, current_plan, plan_expires_at FROM tam24_users WHERE id = ?`;
+    try {
+        const [[user]] = await db.query(full, [userId]);
+        return user || null;
+    } catch (err) {
+        if (!err || err.code !== 'ER_BAD_FIELD_ERROR') throw err;
+        const [[user]] = await db.query(basic, [userId]);
+        return user ? { ...user, ai_last_subject: null } : null;
+    }
 }
 
 async function ensureSettings(userId) {
@@ -110,21 +115,46 @@ function coinPlanKey(planKey, expiresAt) {
     return isPaidPlan(planKey, expiresAt) ? (planKey || 'free') : 'free';
 }
 
+function emptyWallet(planKey) {
+    return {
+        daily: 0, purchased: 0, total: 0, balance: 0,
+        dailyQuota: dailyCoinsForPlan(planKey),
+        grantedToday: false, grantAmount: 0, nextResetAt: nextResetAtIso(),
+    };
+}
+
 /** Apply the idempotent daily grant and return the wallet as the UI sees it. */
 async function walletSnapshot(userId, planKey, expiresAt) {
     const key = coinPlanKey(planKey, expiresAt);
-    const grant = await coinWallet.applyDailyGrant(db, userId, key);
-    const w = grant.wallet;
-    return {
-        daily: w.daily,
-        purchased: w.purchased,
-        total: w.total,
-        balance: w.total,
-        dailyQuota: dailyCoinsForPlan(key),
-        grantedToday: grant.granted,
-        grantAmount: grant.amount,
-        nextResetAt: nextResetAtIso(),
-    };
+    try {
+        const grant = await coinWallet.applyDailyGrant(db, userId, key);
+        const w = grant.wallet;
+        return {
+            daily: w.daily,
+            purchased: w.purchased,
+            total: w.total,
+            balance: w.total,
+            dailyQuota: dailyCoinsForPlan(key),
+            grantedToday: grant.granted,
+            grantAmount: grant.amount,
+            nextResetAt: nextResetAtIso(),
+        };
+    } catch (err) {
+        // A ledger/schema failure must not take the whole tutor offline.
+        // Show the coins already on the row; the page can still open.
+        console.error('[met] walletSnapshot', err && err.code, err && err.sqlMessage ? err.sqlMessage : err && err.message);
+        try {
+            const w = await coinWallet.getWallet(db, userId);
+            return {
+                daily: w.daily, purchased: w.purchased, total: w.total, balance: w.total,
+                dailyQuota: dailyCoinsForPlan(key),
+                grantedToday: false, grantAmount: 0, nextResetAt: nextResetAtIso(),
+            };
+        } catch (readErr) {
+            console.error('[met] wallet read', readErr && readErr.code, readErr && readErr.message);
+            return emptyWallet(key);
+        }
+    }
 }
 
 function walletFromBuckets(w, planKey, expiresAt) {

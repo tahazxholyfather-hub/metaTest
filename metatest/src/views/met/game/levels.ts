@@ -77,7 +77,9 @@ export const LEVELS: LevelDef[] = [
         spawn: { x: 80, y: 460 },
         solids: [
             ground(0, 500, 380),
-            { x: 170, y: 336, w: 150, h: 16 },
+            // 82px above the floor. A full jump clears about 95px, so this ledge
+            // is reachable from a run-up and is not a ceiling over the spawn.
+            { x: 210, y: 418, w: 150, h: 16 },
             ground(520, 500, 260),
             { x: 860, y: 420, w: 160, h: 24 },
             ground(1100, 500, 520),
@@ -88,9 +90,9 @@ export const LEVELS: LevelDef[] = [
         movers: [{ id: 'ferry', x: 390, y: 468, w: 100, h: 18, axis: 'x', range: 130, speed: 46 }],
         items: [
             { id: 'star-ledge', x: 910, y: 372, kind: 'star', name: 'ستاره ایوان' },
-            { id: 'star-secret', x: 250, y: 300, kind: 'star', name: 'ستاره پنهان' },
+            { id: 'star-secret', x: 268, y: 370, kind: 'star', name: 'ستاره پنهان' },
         ],
-        secrets: [{ id: 'alcove', x: 180, y: 280, w: 150, h: 36, hint: 'بالای شروع، یک طاقچه پنهان است.' }],
+        secrets: [{ id: 'alcove', x: 200, y: 368, w: 170, h: 52, hint: 'بالای شروع، یک طاقچه پنهان است. کمی بدو و بپر.' }],
         riddles: [
             {
                 id: 'stone',
@@ -128,24 +130,24 @@ export const LEVELS: LevelDef[] = [
         solids: [
             ground(0, 720, 300),
             { x: 360, y: 640, w: 140, h: 22 },
-            { x: 560, y: 540, w: 140, h: 22 },
-            { x: 760, y: 440, w: 160, h: 22 },
+            { x: 560, y: 568, w: 140, h: 22 },
+            { x: 760, y: 496, w: 160, h: 22 },
             ground(980, 720, 280),
             { x: 1320, y: 600, w: 180, h: 22 },
             ground(1680, 720, 400),
             { x: 2140, y: 560, w: 120, h: 22 },
             ground(2360, 720, 840),
-            { x: 200, y: 520, w: 90, h: 18 },
+            { x: 330, y: 548, w: 100, h: 18 },
         ],
         movers: [
             { id: 'lift', x: 430, y: 680, w: 90, h: 16, axis: 'y', range: 180, speed: 50 },
             { id: 'span', x: 1280, y: 690, w: 110, h: 16, axis: 'x', range: 220, speed: 55 },
         ],
         items: [
-            { id: 'lantern', x: 820, y: 392, kind: 'lantern', name: 'فانوس مه' },
-            { id: 'scroll', x: 230, y: 472, kind: 'scroll', name: 'طومار دالان' },
+            { id: 'lantern', x: 820, y: 448, kind: 'lantern', name: 'فانوس مه' },
+            { id: 'scroll', x: 350, y: 500, kind: 'scroll', name: 'طومار دالان' },
         ],
-        secrets: [{ id: 'false-wall', x: 168, y: 500, w: 150, h: 80, hint: 'دیوار چپ، بالاتر از زمین، فقط نقش است. از میانش رد شو.' }],
+        secrets: [{ id: 'false-wall', x: 320, y: 490, w: 140, h: 70, hint: 'سمت چپ بالابر، وقتی بالا آمد، یک سکوی کوتاه هست.' }],
         riddles: [],
         plates: [],
         portal: { x: 2920, y: 648 },
@@ -167,7 +169,7 @@ export const LEVELS: LevelDef[] = [
         world: { w: 3400, h: 720 },
         spawn: { x: 80, y: 540 },
         solids: [
-            ground(0, 580, 180),
+            ground(0, 580, 180, 22),
             ground(0, 680, 420, 40),
             { x: 250, y: 630, w: 70, h: 16 },
             { x: 330, y: 580, w: 90, h: 16 },
@@ -183,8 +185,8 @@ export const LEVELS: LevelDef[] = [
             { id: 'gap', x: 190, y: 548, w: 100, h: 16, axis: 'x', range: 300, speed: 62 },
             { id: 'high', x: 2060, y: 540, w: 88, h: 16, axis: 'y', range: 90, speed: 40 },
         ],
-        items: [{ id: 'star-tunnel', x: 180, y: 632, kind: 'star', name: 'ستاره تونل' }],
-        secrets: [{ id: 'tunnel', x: 60, y: 620, w: 280, h: 70, hint: 'زیر زمین شروع، تونلی کوتاه پنهان شده.' }],
+        items: [{ id: 'star-tunnel', x: 90, y: 640, kind: 'star', name: 'ستاره تونل' }],
+        secrets: [{ id: 'tunnel', x: 40, y: 610, w: 160, h: 70, hint: 'زیر سکوی شروع، تونلی کوتاه پنهان شده. از لبه بیفت و به چپ برگرد.' }],
         riddles: [],
         plates: [
             { id: 'moon', x: 700, y: 556, w: 54, h: 14, order: 0 },

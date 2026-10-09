@@ -62,6 +62,21 @@ async function ensureQuestionTagTables() {
         for (const sql of BACKFILL_SQL) {
             await pool.query(sql);
         }
+        // «قدر مطلق و جزء صحیح» (topic 62) is یازدهم. Questions stored as دهم
+        // made the chapter card show up under دهم. Move those primary tags,
+        // then drop the stale دهم rows the backfill just copied.
+        await pool.query(
+            `UPDATE questions_tam24 SET grade_id = 2 WHERE topic_id = 62 AND grade_id = 1`
+        );
+        await pool.query(
+            `DELETE qg FROM question_grades_tam24 qg
+             INNER JOIN questions_tam24 q ON q.id = qg.question_id
+             WHERE q.topic_id = 62 AND qg.grade_id = 1`
+        );
+        await pool.query(
+            `INSERT IGNORE INTO question_grades_tam24 (question_id, grade_id)
+             SELECT id, 2 FROM questions_tam24 WHERE topic_id = 62 AND grade_id = 2`
+        );
         ensured = true;
     } catch (error) {
         console.error('❌ Failed to ensure question tag tables:', error.message);
@@ -206,6 +221,9 @@ function gradesFromTopicTitle(title) {
     if (t.includes('یازدهم')) found.add(2);
     const stripped = t.replace(/دوازدهم/g, '\0').replace(/یازدهم/g, '\0');
     if (stripped.includes('دهم')) found.add(1);
+    // ریاضی ۲: «قدر مطلق و جزء صحیح» پایهٔ یازدهم است، حتی اگر عنوانش «یازدهم» نداشته باشد.
+    const compact = t.replace(/\s+/g, '');
+    if (compact.includes('قدرمطلق') || compact.includes('جزءصحیح')) found.add(2);
     return found;
 }
 
