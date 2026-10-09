@@ -1,5 +1,5 @@
 // src/App.tsx
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Toaster, toast } from "sonner";
 import type { View } from "./types";
@@ -45,6 +45,8 @@ import {PlanSelectorView} from "./views/f";
 import PaymentResultPage from "./views/paymentResult";
 import { MetView } from "./views/met";
 import InviteLanding from "./views/InviteLanding";
+
+const DentalLandingPage = lazy(() => import("./views/dental/DentalLandingPage"));
 
 
 
@@ -695,6 +697,14 @@ const router = createBrowserRouter(
         { path: "/re/*", element: <PlanSelectorView /> },
         { path: "/payment/result/:token", element: <PaymentResultPage /> },
         { path: "/invite/:code", element: <InviteLanding /> },
+        {
+            path: "/dental",
+            element: (
+                <Suspense fallback={<div style={{ minHeight: "100vh", background: "#fff" }} />}>
+                    <DentalLandingPage />
+                </Suspense>
+            ),
+        },
         { path: "/*", element: <MainApp /> },
     ]
 );
