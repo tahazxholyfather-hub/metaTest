@@ -3,6 +3,7 @@ import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
 import http from 'http';
 import { env } from '../config/env';
+import { corsOptions } from '../config/cors';
 import { logger } from '../config/logger';
 import { socketAuthMiddleware } from './middlewares/auth.middleware';
 import { registerLobbyHandlers } from './handlers/lobby.handler';
@@ -21,10 +22,7 @@ export function createSocketServer(server: http.Server) {
     getStorage();
 
     const io = new Server(server, {
-        cors: {
-            origin: env.CORS_ORIGINS,
-            credentials: true,
-        },
+        cors: corsOptions,
         pingTimeout: env.SOCKET_PING_TIMEOUT,
         pingInterval: env.SOCKET_PING_INTERVAL,
         maxHttpBufferSize: 512 * 1024,
@@ -33,6 +31,7 @@ export function createSocketServer(server: http.Server) {
             skipMiddlewares: false,
         },
         transports: ['websocket', 'polling'],
+        allowEIO3: true,
     });
 
     if (env.STORAGE_DRIVER === 'redis') {

@@ -28,7 +28,7 @@ const envSchema = z.object({
 
     CORS_ORIGIN: z
         .string()
-        .default('http://localhost:5173,http://127.0.0.1:5173,https://metatest.app'),
+        .default('http://localhost:5173,http://127.0.0.1:5173,https://metatest.app,https://www.metatest.app'),
 
     JWT_SECRET: z.string().min(16),
     JWT_AUDIENCE: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
@@ -62,17 +62,20 @@ const envSchema = z.object({
 
 const parsed = envSchema.parse(process.env);
 
-const trimmedBackendUrl = parsed.MAIN_BACKEND_URL.replace(/\/$/, '');
+const trimmedBackendUrl = parsed.MAIN_BACKEND_URL.replace(/\/+$/, '');
 const backendOrigin = trimmedBackendUrl.replace(/\/api$/i, '');
+const apiBase = /\/api$/i.test(trimmedBackendUrl)
+    ? trimmedBackendUrl
+    : `${backendOrigin}/api`;
 
 export const env = {
     ...parsed,
     CORS_ORIGINS: parsed.CORS_ORIGIN.split(',').map((v) => v.trim()).filter(Boolean),
     MAIN_BACKEND_ORIGIN: backendOrigin,
     MAIN_BACKEND_FLOW_URL: (
-        parsed.MAIN_BACKEND_FLOW_URL || `${backendOrigin}/api/flow`
-    ).replace(/\/$/, ''),
+        parsed.MAIN_BACKEND_FLOW_URL || `${apiBase}/flow`
+    ).replace(/\/+$/, ''),
     MAIN_BACKEND_INTERNAL_BASE_URL: (
-        parsed.MAIN_BACKEND_INTERNAL_BASE || `${trimmedBackendUrl}/internal`
-    ).replace(/\/$/, ''),
+        parsed.MAIN_BACKEND_INTERNAL_BASE || `${apiBase}/internal`
+    ).replace(/\/+$/, ''),
 };
