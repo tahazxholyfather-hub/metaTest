@@ -38,10 +38,10 @@ interface FormState {
 const EMPTY_FORM: FormState = { id: null, title: '', parent_id: null, icon: '' };
 
 const TYPE_CONFIG: Record<CurriculumType, { label: string; singular: string; icon: React.ElementType; parentLabel?: string }> = {
-    subject: { label: 'Subjects', singular: 'Subject', icon: BookOpen },
-    grade: { label: 'Grades', singular: 'Grade', icon: GraduationCap },
-    topic: { label: 'Chapters (Topics)', singular: 'Chapter', icon: Layers, parentLabel: 'Subject' },
-    chapter: { label: 'Mabahes', singular: 'Mabhas', icon: ListTree, parentLabel: 'Chapter (Topic)' },
+    subject: { label: 'درس‌ها', singular: 'درس', icon: BookOpen },
+    grade: { label: 'پایه‌ها', singular: 'پایه', icon: GraduationCap },
+    topic: { label: 'فصل‌ها', singular: 'فصل', icon: Layers, parentLabel: 'درس' },
+    chapter: { label: 'مباحث', singular: 'مبحث', icon: ListTree, parentLabel: 'فصل' },
 };
 
 interface CurriculumManagerProps {
@@ -79,11 +79,11 @@ export default function CurriculumManager({ user }: CurriculumManagerProps) {
                     chapters: res.chapters || [],
                 });
             } else {
-                setErrorMessage(res.message || 'Failed to load curriculum data.');
+                setErrorMessage(res.message || 'بارگذاری سرفصل‌ها ناموفق بود.');
             }
         } catch (error) {
             console.error('Fetch curriculum error:', error);
-            setErrorMessage('An error occurred while communicating with the server.');
+            setErrorMessage('ارتباط با سرور برقرار نشد.');
         } finally {
             setIsLoading(false);
         }
@@ -166,8 +166,8 @@ export default function CurriculumManager({ user }: CurriculumManagerProps) {
     };
 
     const handleSave = async () => {
-        if (!form.title.trim()) { setErrorMessage('Title is required.'); return; }
-        if (hasParent && !form.parent_id) { setErrorMessage(`Please select a ${config.parentLabel}.`); return; }
+        if (!form.title.trim()) { setErrorMessage('عنوان الزامی است.'); return; }
+        if (hasParent && !form.parent_id) { setErrorMessage(`یک ${config.parentLabel} انتخاب کن.`); return; }
 
         setIsSaving(true);
         setErrorMessage(null);
@@ -188,11 +188,11 @@ export default function CurriculumManager({ user }: CurriculumManagerProps) {
                 setSuccessMessage(form.id ? `${config.singular} updated successfully.` : `${config.singular} created successfully.`);
                 await fetchCurriculum();
             } else {
-                setErrorMessage(res.message || 'Failed to save the item.');
+                setErrorMessage(res.message || 'ذخیره ناموفق بود.');
             }
         } catch (error) {
             console.error('Save curriculum item error:', error);
-            setErrorMessage('An error occurred while saving.');
+            setErrorMessage('هنگام ذخیره خطایی رخ داد.');
         } finally {
             setIsSaving(false);
         }
@@ -200,7 +200,7 @@ export default function CurriculumManager({ user }: CurriculumManagerProps) {
 
     const handleDelete = async (item: CurriculumItem) => {
         if (!canDelete) return;
-        if (!window.confirm(`Delete "${item.title}" (ID: ${item.id})? This cannot be undone.`)) return;
+        if (!window.confirm(`«${item.title}» (شناسه ${item.id}) حذف شود؟ این کار برگشت‌پذیر نیست.`)) return;
 
         setDeletingId(item.id);
         setErrorMessage(null);
@@ -212,11 +212,11 @@ export default function CurriculumManager({ user }: CurriculumManagerProps) {
                 setSuccessMessage(`${config.singular} deleted successfully.`);
                 await fetchCurriculum();
             } else {
-                setErrorMessage(res.message || 'Failed to delete the item.');
+                setErrorMessage(res.message || 'حذف ناموفق بود.');
             }
         } catch (error) {
             console.error('Delete curriculum item error:', error);
-            setErrorMessage('An error occurred while deleting.');
+            setErrorMessage('هنگام حذف خطایی رخ داد.');
         } finally {
             setDeletingId(null);
         }
@@ -255,7 +255,7 @@ export default function CurriculumManager({ user }: CurriculumManagerProps) {
                             type="text"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            placeholder={`Search ${config.label.toLowerCase()}...`}
+                            placeholder={`جستجوی ${config.label}...`}
                             className="w-full bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-xl pr-9 pl-4 py-2.5 text-xs font-medium outline-none focus:border-[#1a73e8] transition-all"
                             dir="auto"
                         />
@@ -266,8 +266,8 @@ export default function CurriculumManager({ user }: CurriculumManagerProps) {
                     </button>
 
                     <button onClick={openAddModal} className="flex items-center gap-2 bg-[#1a73e8] hover:bg-[#1557b0] text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md">
-                        <Plus size={16} /> <span className="hidden sm:inline">Add {config.singular}</span>
-                        <span className="sm:hidden">Add</span>
+                        <Plus size={16} /> <span className="hidden sm:inline">افزودن {config.singular}</span>
+                        <span className="sm:hidden">افزودن</span>
                     </button>
                 </div>
             </div>
@@ -297,10 +297,10 @@ export default function CurriculumManager({ user }: CurriculumManagerProps) {
 
                 {/* Table header */}
                 <div className="grid grid-cols-12 gap-4 px-6 py-4 border-b border-[#dadce0] dark:border-[#333537] text-[10px] font-bold text-[#86868b] uppercase tracking-wider">
-                    <div className="col-span-1">ID</div>
-                    <div className={hasParent ? 'col-span-4' : 'col-span-8'}>Title</div>
+                    <div className="col-span-1">شناسه</div>
+                    <div className={hasParent ? 'col-span-4' : 'col-span-8'}>عنوان</div>
                     {hasParent && <div className="col-span-4">{config.parentLabel}</div>}
-                    <div className="col-span-3 text-left">Actions</div>
+                    <div className="col-span-3 text-start">عملیات</div>
                 </div>
 
                 {filteredItems.map((item) => (
@@ -319,7 +319,7 @@ export default function CurriculumManager({ user }: CurriculumManagerProps) {
                                 onClick={() => openEditModal(item)}
                                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold text-[#1a73e8] bg-[#e8f0fe] dark:bg-[#1a73e8]/10 hover:bg-[#d2e3fc] dark:hover:bg-[#1a73e8]/20 transition-all"
                             >
-                                <Edit2 size={12} /> Edit
+                                <Edit2 size={12} /> ویرایش
                             </button>
                             {canDelete && (
                                 <button
@@ -327,7 +327,7 @@ export default function CurriculumManager({ user }: CurriculumManagerProps) {
                                     disabled={deletingId === item.id}
                                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold text-red-600 bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 transition-all disabled:opacity-50"
                                 >
-                                    {deletingId === item.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />} Delete
+                                    {deletingId === item.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />} حذف
                                 </button>
                             )}
                         </div>
@@ -336,7 +336,7 @@ export default function CurriculumManager({ user }: CurriculumManagerProps) {
 
                 {!isLoading && filteredItems.length === 0 && (
                     <div className="py-16 text-center text-xs font-medium text-gray-400">
-                        No {config.label.toLowerCase()} found.
+                        موردی در {config.label} نیست.
                     </div>
                 )}
             </div>
@@ -348,7 +348,7 @@ export default function CurriculumManager({ user }: CurriculumManagerProps) {
                     <div className="relative w-full max-w-md bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-[2rem] p-8 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
                         <div className="flex justify-between items-center mb-6">
                             <span className="text-sm font-bold text-gray-800 dark:text-gray-200">
-                                {form.id ? `Edit ${config.singular} #${form.id}` : `Add New ${config.singular}`}
+                                {form.id ? `ویرایش ${config.singular} #${form.id}` : `افزودن ${config.singular}`}
                             </span>
                             <button onClick={() => !isSaving && setIsModalOpen(false)} className="p-1.5 bg-gray-100 dark:bg-[#2d3748] rounded-full hover:text-red-500 transition-colors">
                                 <X size={14} />
@@ -362,12 +362,12 @@ export default function CurriculumManager({ user }: CurriculumManagerProps) {
                                     value={form.parent_id}
                                     options={parentOptions}
                                     onChange={(v) => setForm(prev => ({ ...prev, parent_id: v as number | null }))}
-                                    placeholder={`Select ${config.parentLabel}...`}
+                                    placeholder={`انتخاب ${config.parentLabel}...`}
                                 />
                             )}
 
                             <div className="space-y-1.5 w-full">
-                                <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider px-1">Title</label>
+                                <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider px-1">عنوان</label>
                                 <input
                                     type="text"
                                     value={form.title}
@@ -382,12 +382,12 @@ export default function CurriculumManager({ user }: CurriculumManagerProps) {
 
                             {activeType === 'subject' && (
                                 <div className="space-y-1.5 w-full">
-                                    <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider px-1">Icon (optional)</label>
+                                    <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider px-1">آیکون (اختیاری)</label>
                                     <input
                                         type="text"
                                         value={form.icon}
                                         onChange={(e) => setForm(prev => ({ ...prev, icon: e.target.value }))}
-                                        placeholder="Icon name or URL..."
+                                        placeholder="نام آیکون یا آدرس..."
                                         className="w-full bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-xl px-4 py-3 text-xs font-medium outline-none focus:border-[#1a73e8] transition-all"
                                         dir="ltr"
                                     />
@@ -401,7 +401,7 @@ export default function CurriculumManager({ user }: CurriculumManagerProps) {
                             className="w-full flex items-center justify-center gap-2 bg-[#1a73e8] hover:bg-[#1557b0] disabled:bg-[#1a73e8]/70 text-white py-3 rounded-xl text-xs font-bold transition-all shadow-md"
                         >
                             {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
-                            {isSaving ? 'Saving...' : form.id ? 'Save Changes' : `Create ${config.singular}`}
+                            {isSaving ? 'در حال ذخیره...' : form.id ? 'ذخیره تغییرات' : `ساخت ${config.singular}`}
                         </button>
                     </div>
                 </div>

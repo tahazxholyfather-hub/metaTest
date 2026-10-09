@@ -104,7 +104,7 @@ export default function WithdrawalRequests({ user }: Props) {
                                             <span>{new Date(r.createdAt).toLocaleDateString('fa-IR')}</span>
                                         </div>
                                     </div>
-                                    <div className="shrink-0 text-left">
+                                    <div className="shrink-0 text-start">
                                         <div className="text-lg font-black text-gray-800 dark:text-gray-100" dir="rtl">{formatMoney(r.amount)}</div>
                                     </div>
                                 </div>

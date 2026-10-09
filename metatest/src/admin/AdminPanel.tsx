@@ -118,7 +118,7 @@ export default function AdminPanel() {
             <div className="h-screen w-full flex flex-col items-center justify-center bg-[#f8f9fa] dark:bg-[#0e0e0e]">
                 <Spinner />
                 <p className="mt-6 text-[11px] font-medium tracking-[0.2em] text-[#86868b] uppercase animate-pulse">
-                    Verifying Session
+                    در حال بررسی نشست
                 </p>
             </div>
         );
@@ -148,7 +148,7 @@ export default function AdminPanel() {
                     toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
                     isDarkMode={isDarkMode}
                     toggleDarkMode={() => setIsDarkMode(!isDarkMode)}
-                    title={activeTab === 'dashboard' ? 'Overview' : sectionTitle(activeTab)}
+                    title={activeTab === 'dashboard' ? 'نمای کلی' : sectionTitle(activeTab)}
                 />
 
                 <main className="flex-1 overflow-y-auto relative scrollbar-hide">

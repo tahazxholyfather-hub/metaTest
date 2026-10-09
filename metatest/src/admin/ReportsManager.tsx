@@ -17,18 +17,18 @@ interface ReportRow {
 }
 
 const STATUSES = [
-    { id: 'all', title: 'All' },
-    { id: 'pending', title: 'Pending' },
-    { id: 'investigating', title: 'Investigating' },
-    { id: 'resolved', title: 'Resolved' },
-    { id: 'rejected', title: 'Rejected' },
+    { id: 'all', title: 'همه' },
+    { id: 'pending', title: 'در انتظار' },
+    { id: 'investigating', title: 'در حال بررسی' },
+    { id: 'resolved', title: 'حل‌شده' },
+    { id: 'rejected', title: 'ردشده' },
 ];
 
 const ISSUE_LABELS: Record<string, string> = {
-    technical: 'Technical',
-    appearance: 'Appearance',
-    wrong_info: 'Wrong info',
-    other: 'Other',
+    technical: 'فنی',
+    appearance: 'ظاهری',
+    wrong_info: 'اطلاعات غلط',
+    other: 'سایر',
 };
 
 export default function ReportsManager() {
@@ -53,13 +53,13 @@ export default function ReportsManager() {
                 q: nextQuery,
                 page: nextPage,
             });
-            if (!res.success) throw new Error(res.message || 'Failed to load reports');
+            if (!res.success) throw new Error(res.message || 'بارگذاری گزارش‌ها ناموفق بود');
             const rows = (res.reports || []) as ReportRow[];
             setReports(rows);
             setTotal(Number(res.total) || 0);
             setNotes(Object.fromEntries(rows.map((row) => [row.id, row.note || ''])));
         } catch (err: unknown) {
-            setError(err instanceof Error ? err.message : 'Failed to load reports');
+            setError(err instanceof Error ? err.message : 'بارگذاری گزارش‌ها ناموفق بود');
         } finally {
             setLoading(false);
         }
@@ -90,8 +90,8 @@ export default function ReportsManager() {
 
     const update = async (report: ReportRow, patch: { status?: string; note?: string }) => {
         const res = await adminApi.updateReport(report.id, patch);
-        if (!res.success) { setError(res.message || 'Failed to update report'); return; }
-        setSuccess('Report updated');
+        if (!res.success) { setError(res.message || 'به‌روزرسانی گزارش ناموفق بود'); return; }
+        setSuccess('گزارش به‌روز شد');
         setReports((prev) => prev.map((row) => row.id === report.id ? { ...row, ...patch, note: patch.note ?? row.note } : row));
     };
 
@@ -102,11 +102,11 @@ export default function ReportsManager() {
         <div className="flex flex-col gap-6 w-full">
             <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl p-4 shadow-sm">
                 <div>
-                    <h1 className="text-sm font-bold flex items-center gap-2"><Flag size={16} /> Reports</h1>
-                    <p className="text-xs text-[#86868b] mt-0.5">Review question reports, leave a note, and edit the question that was reported.</p>
+                    <h1 className="text-sm font-bold flex items-center gap-2"><Flag size={16} /> گزارش‌ها</h1>
+                    <p className="text-xs text-[#86868b] mt-0.5">گزارش سوال‌ها را ببین، یادداشت بگذار و همان سوال را ویرایش کن.</p>
                 </div>
                 <button onClick={() => load()} className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746]">
-                    <RefreshCw size={14} /> Refresh
+                    <RefreshCw size={14} /> بروزرسانی
                 </button>
             </div>
 
@@ -138,7 +138,7 @@ export default function ReportsManager() {
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && applySearch()}
-                        placeholder="Search report or question id"
+                        placeholder="جستجوی گزارش یا شناسه سوال"
                         className="admin-input"
                     />
                     <button onClick={applySearch} className="p-3 bg-[#1a73e8] text-white rounded-xl"><Search size={14} /></button>
@@ -155,7 +155,7 @@ export default function ReportsManager() {
                                 <div className="flex flex-wrap items-start justify-between gap-3">
                                     <div className="min-w-0 flex-1">
                                         <p className="text-xs font-bold">
-                                            #{report.id} · question {report.questionId} · {ISSUE_LABELS[report.issue] || report.issue}
+                                            #{report.id} · سوال {report.questionId} · {ISSUE_LABELS[report.issue] || report.issue}
                                         </p>
                                         <p className="text-[11px] text-[#86868b] mt-1">
                                             {report.reporterName} · {report.reporter} · {report.date ? new Date(report.date).toLocaleString() : '—'}
@@ -178,36 +178,36 @@ export default function ReportsManager() {
                                         <textarea
                                             value={notes[report.id] ?? ''}
                                             onChange={(e) => setNotes((prev) => ({ ...prev, [report.id]: e.target.value }))}
-                                            placeholder="Admin note"
+                                            placeholder="یادداشت ادمین"
                                             className="admin-input min-h-16 resize-y"
                                         />
                                         <div className="flex gap-2">
                                             <button onClick={() => update(report, { note: notes[report.id] || '' })} className="flex-1 px-3 py-2 rounded-xl text-[11px] font-bold bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746]">
-                                                Save note
+                                                ذخیره یادداشت
                                             </button>
                                             <button
                                                 onClick={() => setEditingQuestionId(report.questionId)}
                                                 className="flex-1 px-3 py-2 rounded-xl text-[11px] font-bold bg-[#1a73e8] text-white"
                                             >
-                                                Edit question
+                                                ویرایش سوال
                                             </button>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         ))}
-                        {reports.length === 0 && <p className="p-8 text-center text-xs text-[#86868b]">No reports match this filter.</p>}
+                        {reports.length === 0 && <p className="p-8 text-center text-xs text-[#86868b]">گزارشی با این فیلتر نیست.</p>}
                     </div>
                 )}
                 <div className="flex items-center justify-between p-4 text-xs">
-                    <span className="text-[#86868b]">{total} report{total === 1 ? '' : 's'}</span>
+                    <span className="text-[#86868b]">{total.toLocaleString('fa-IR')} گزارش</span>
                     <div className="flex items-center gap-2">
                         <button
                             disabled={page <= 1 || loading}
                             onClick={() => { const next = page - 1; setPage(next); load(next); }}
                             className="px-3 py-1.5 rounded-lg border border-[#dadce0] dark:border-[#444746] disabled:opacity-40"
                         >
-                            Previous
+                            قبلی
                         </button>
                         <span>{page} / {pages}</span>
                         <button
@@ -215,7 +215,7 @@ export default function ReportsManager() {
                             onClick={() => { const next = page + 1; setPage(next); load(next); }}
                             className="px-3 py-1.5 rounded-lg border border-[#dadce0] dark:border-[#444746] disabled:opacity-40"
                         >
-                            Next
+                            بعدی
                         </button>
                     </div>
                 </div>
@@ -224,8 +224,8 @@ export default function ReportsManager() {
             {editingQuestionId && (
                 <div className="bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-[2rem] p-4 shadow-sm">
                     <div className="flex items-center justify-between px-2 pb-2">
-                        <h2 className="text-sm font-bold">Edit question {editingQuestionId}</h2>
-                        <button onClick={() => setEditingQuestionId(null)} className="text-xs font-bold text-[#86868b]">Close</button>
+                        <h2 className="text-sm font-bold">ویرایش سوال {editingQuestionId}</h2>
+                        <button onClick={() => setEditingQuestionId(null)} className="text-xs font-bold text-[#86868b]">بستن</button>
                     </div>
                     <EditQuestions key={editingQuestionId} focusQuestionId={editingQuestionId} embedded startEditing />
                 </div>

@@ -27,7 +27,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 const fmt = (n: number | undefined | null) => Number(n || 0).toLocaleString();
-const fmtIrr = (n: number | undefined | null) => `${Number(n || 0).toLocaleString()} IRR`;
+const fmtIrr = (n: number | undefined | null) => `${Number(n || 0).toLocaleString('fa-IR')} تومان`;
 
 export default function Dashboard() {
     const [data, setData] = useState<any>(null);
@@ -39,10 +39,10 @@ export default function Dashboard() {
         setError(null);
         try {
             const res = await adminApi.dashboard();
-            if (!res.success) throw new Error(res.message || 'Failed to load dashboard');
+            if (!res.success) throw new Error(res.message || 'بارگذاری داشبورد ناموفق بود');
             setData(res);
         } catch (err: any) {
-            setError(err.message || 'Failed to load dashboard');
+            setError(err.message || 'بارگذاری داشبورد ناموفق بود');
         } finally {
             setLoading(false);
         }
@@ -52,25 +52,25 @@ export default function Dashboard() {
 
     const stats = data?.stats;
     const cards = stats ? [
-        { label: 'Total Users', value: fmt(stats.users.total), hint: `+${fmt(stats.users.new7d)} this week`, icon: Users, color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-500/10' },
-        { label: 'Active Questions', value: fmt(stats.questions.active), hint: `${fmt(stats.questions.total)} total`, icon: BookOpen, color: 'text-green-500', bg: 'bg-green-50 dark:bg-green-500/10' },
-        { label: 'Logged in (7d)', value: fmt(stats.users.login7d), hint: `${fmt(stats.users.login24h)} in 24h`, icon: Activity, color: 'text-purple-500', bg: 'bg-purple-50 dark:bg-purple-500/10' },
-        { label: 'Paid Revenue', value: fmtIrr(stats.commerce.revenue), hint: `${fmt(stats.commerce.paid)} paid`, icon: CreditCard, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-500/10' },
-        { label: 'AI Conversations', value: fmt(stats.ai.conversations), hint: `${fmt(stats.ai.messages)} messages`, icon: Bot, color: 'text-indigo-500', bg: 'bg-indigo-50 dark:bg-indigo-500/10' },
-        { label: 'Open Reports', value: fmt(stats.content.reportsPending), hint: `${fmt(stats.content.reportsTotal)} total`, icon: FileWarning, color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-500/10' },
+        { label: 'کل کاربران', value: fmt(stats.users.total), hint: `+${fmt(stats.users.new7d)} این هفته`, icon: Users, color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-500/10' },
+        { label: 'سوال‌های فعال', value: fmt(stats.questions.active), hint: `${fmt(stats.questions.total)} در کل`, icon: BookOpen, color: 'text-green-500', bg: 'bg-green-50 dark:bg-green-500/10' },
+        { label: 'ورود ۷ روز اخیر', value: fmt(stats.users.login7d), hint: `${fmt(stats.users.login24h)} در ۲۴ ساعت`, icon: Activity, color: 'text-purple-500', bg: 'bg-purple-50 dark:bg-purple-500/10' },
+        { label: 'درآمد پرداخت‌شده', value: fmtIrr(stats.commerce.revenue), hint: `${fmt(stats.commerce.paid)} پرداخت موفق`, icon: CreditCard, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-500/10' },
+        { label: 'گفتگوهای هوش مصنوعی', value: fmt(stats.ai.conversations), hint: `${fmt(stats.ai.messages)} پیام`, icon: Bot, color: 'text-indigo-500', bg: 'bg-indigo-50 dark:bg-indigo-500/10' },
+        { label: 'گزارش‌های باز', value: fmt(stats.content.reportsPending), hint: `${fmt(stats.content.reportsTotal)} در کل`, icon: FileWarning, color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-500/10' },
     ] : [];
 
     return (
         <div className="flex flex-col gap-6 w-full">
             <div className="flex flex-wrap items-center justify-between bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl p-4 shadow-sm sticky top-0 z-[40]">
                 <div>
-                    <h1 className="text-sm font-bold text-gray-800 dark:text-gray-200">System Overview</h1>
+                    <h1 className="text-sm font-bold text-gray-800 dark:text-gray-200">نمای کلی سامانه</h1>
                     <p className="text-xs text-[#86868b] mt-0.5">
-                        Live metrics from the database{data?.generatedAt ? ` · ${new Date(data.generatedAt).toLocaleString()}` : ''}
+                        آمار زنده از پایگاه داده{data?.generatedAt ? ` · ${new Date(data.generatedAt).toLocaleString()}` : ''}
                     </p>
                 </div>
                 <button onClick={load} disabled={loading} className="flex items-center gap-2 bg-[#1a73e8] hover:bg-[#1557b0] disabled:opacity-70 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md">
-                    {loading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />} Refresh
+                    {loading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />} بروزرسانی
                 </button>
             </div>
 
@@ -102,14 +102,14 @@ export default function Dashboard() {
 
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         {[
-                            ['Guests', fmt(stats.users.guests)],
-                            ['Banned', fmt(stats.users.banned)],
-                            ['Answer accuracy', `${stats.learning.accuracy}%`],
-                            ['Quizzes created', fmt(stats.learning.quizzes)],
-                            ['Quiz results', fmt(stats.learning.quizResults)],
-                            ['PDF downloads', fmt(stats.content.pdfDownloads)],
-                            ['Page views (7d)', fmt(stats.content.visitors7d)],
-                            ['AI coins spent', fmt(stats.ai.coinsSpent)],
+                            ['مهمان‌ها', fmt(stats.users.guests)],
+                            ['مسدود', fmt(stats.users.banned)],
+                            ['دقت پاسخ', `${stats.learning.accuracy}%`],
+                            ['آزمون‌های ساخته‌شده', fmt(stats.learning.quizzes)],
+                            ['نتایج آزمون', fmt(stats.learning.quizResults)],
+                            ['دانلود PDF', fmt(stats.content.pdfDownloads)],
+                            ['بازدید ۷ روز', fmt(stats.content.visitors7d)],
+                            ['سکه مصرف‌شده هوش مصنوعی', fmt(stats.ai.coinsSpent)],
                         ].map(([label, value]) => (
                             <div key={String(label)} className="bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl p-4">
                                 <p className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider">{label}</p>
@@ -120,7 +120,7 @@ export default function Dashboard() {
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div className="bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-[2rem] p-6 md:p-8 shadow-sm flex flex-col min-h-[360px]">
-                            <label className="text-[11px] font-bold text-[#86868b] uppercase tracking-[0.15em] mb-8">New users (14 days)</label>
+                            <label className="text-[11px] font-bold text-[#86868b] uppercase tracking-[0.15em] mb-8">کاربران جدید (۱۴ روز)</label>
                             <div className="flex-1 w-full h-[260px]">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <AreaChart data={data.charts.userGrowth} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
@@ -134,14 +134,14 @@ export default function Dashboard() {
                                         <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#86868b' }} dy={10} />
                                         <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#86868b' }} />
                                         <Tooltip content={<CustomTooltip />} />
-                                        <Area type="monotone" dataKey="count" name="New users" stroke="#1a73e8" strokeWidth={3} fillOpacity={1} fill="url(#colorUsers)" />
+                                        <Area type="monotone" dataKey="count" name="کاربران جدید" stroke="#1a73e8" strokeWidth={3} fillOpacity={1} fill="url(#colorUsers)" />
                                     </AreaChart>
                                 </ResponsiveContainer>
                             </div>
                         </div>
 
                         <div className="bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-[2rem] p-6 md:p-8 shadow-sm flex flex-col min-h-[360px]">
-                            <label className="text-[11px] font-bold text-[#86868b] uppercase tracking-[0.15em] mb-8">Questions by subject</label>
+                            <label className="text-[11px] font-bold text-[#86868b] uppercase tracking-[0.15em] mb-8">سوال‌ها بر اساس درس</label>
                             <div className="flex-1 w-full h-[260px]">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <BarChart data={stats.questions.bySubject} margin={{ top: 10, right: 0, left: -20, bottom: 0 }} barSize={28}>
@@ -149,7 +149,7 @@ export default function Dashboard() {
                                         <XAxis dataKey="subject" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#86868b' }} dy={10} />
                                         <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#86868b' }} />
                                         <Tooltip content={<CustomTooltip />} cursor={{ fill: '#86868b', opacity: 0.1 }} />
-                                        <Bar dataKey="count" name="Questions" radius={[6, 6, 6, 6]}>
+                                        <Bar dataKey="count" name="سوال‌ها" radius={[6, 6, 6, 6]}>
                                             {(stats.questions.bySubject || []).map((_: any, index: number) => (
                                                 <Cell key={index} fill={index % 2 === 0 ? '#1a73e8' : '#8ab4f8'} />
                                             ))}
@@ -162,7 +162,7 @@ export default function Dashboard() {
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div className="bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-[2rem] p-6 md:p-8 shadow-sm flex flex-col min-h-[360px]">
-                            <label className="text-[11px] font-bold text-[#86868b] uppercase tracking-[0.15em] mb-8">Page views (14 days)</label>
+                            <label className="text-[11px] font-bold text-[#86868b] uppercase tracking-[0.15em] mb-8">بازدید صفحات (۱۴ روز)</label>
                             <div className="flex-1 w-full h-[260px]">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <AreaChart data={data.charts.visitors} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
@@ -176,13 +176,13 @@ export default function Dashboard() {
                                         <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#86868b' }} dy={10} />
                                         <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#86868b' }} />
                                         <Tooltip content={<CustomTooltip />} />
-                                        <Area type="monotone" dataKey="count" name="Views" stroke="#8ab4f8" strokeWidth={3} fillOpacity={1} fill="url(#colorVisitors)" />
+                                        <Area type="monotone" dataKey="count" name="بازدید" stroke="#8ab4f8" strokeWidth={3} fillOpacity={1} fill="url(#colorVisitors)" />
                                     </AreaChart>
                                 </ResponsiveContainer>
                             </div>
                         </div>
                         <div className="bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-[2rem] p-6 md:p-8 shadow-sm flex flex-col min-h-[360px]">
-                            <label className="text-[11px] font-bold text-[#86868b] uppercase tracking-[0.15em] mb-8">AI usage (14 days)</label>
+                            <label className="text-[11px] font-bold text-[#86868b] uppercase tracking-[0.15em] mb-8">مصرف هوش مصنوعی (۱۴ روز)</label>
                             <div className="flex-1 w-full h-[260px]">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <AreaChart data={data.charts.aiUsage} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
@@ -196,7 +196,7 @@ export default function Dashboard() {
                                         <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#86868b' }} dy={10} />
                                         <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#86868b' }} />
                                         <Tooltip content={<CustomTooltip />} />
-                                        <Area type="monotone" dataKey="count" name="Operations" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorAi)" />
+                                        <Area type="monotone" dataKey="count" name="عملیات" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorAi)" />
                                     </AreaChart>
                                 </ResponsiveContainer>
                             </div>
@@ -205,7 +205,7 @@ export default function Dashboard() {
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div className="bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-[2rem] p-6 shadow-sm">
-                            <label className="text-[11px] font-bold text-[#86868b] uppercase tracking-[0.15em] mb-4 block">Users by plan</label>
+                            <label className="text-[11px] font-bold text-[#86868b] uppercase tracking-[0.15em] mb-4 block">کاربران بر اساس پلن</label>
                             <div className="space-y-2">
                                 {(stats.users.byPlan || []).map((p: any) => (
                                     <div key={p.name} className="flex items-center justify-between bg-[#f8f9fa] dark:bg-[#131314] rounded-xl px-3 py-2.5">
@@ -216,7 +216,7 @@ export default function Dashboard() {
                             </div>
                         </div>
                         <div className="bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-[2rem] p-6 shadow-sm">
-                            <label className="text-[11px] font-bold text-[#86868b] uppercase tracking-[0.15em] mb-4 block">Questions by level</label>
+                            <label className="text-[11px] font-bold text-[#86868b] uppercase tracking-[0.15em] mb-4 block">سوال‌ها بر اساس سطح</label>
                             <div className="space-y-2">
                                 {(stats.questions.byLevel || []).map((p: any) => (
                                     <div key={p.level} className="flex items-center justify-between bg-[#f8f9fa] dark:bg-[#131314] rounded-xl px-3 py-2.5">
@@ -229,13 +229,13 @@ export default function Dashboard() {
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <RecentCard title="Recent users" rows={(data.recent.users || []).map((u: any) => ({
+                        <RecentCard title="کاربران اخیر" rows={(data.recent.users || []).map((u: any) => ({
                             k: u.id, title: u.username, meta: `${u.role} · ${u.current_plan || 'free'}`,
                         }))} />
-                        <RecentCard title="Recent payments" rows={(data.recent.payments || []).map((p: any) => ({
+                        <RecentCard title="پرداخت‌های اخیر" rows={(data.recent.payments || []).map((p: any) => ({
                             k: p.id, title: p.username || `user #${p.user_id}`, meta: `${p.status} · ${fmt(p.final_price)}`,
                         }))} />
-                        <RecentCard title="Recent reports" rows={(data.recent.reports || []).map((r: any) => ({
+                        <RecentCard title="گزارش‌های اخیر" rows={(data.recent.reports || []).map((r: any) => ({
                             k: r.id, title: r.issue, meta: `${r.status} · Q${r.question_id}`,
                         }))} />
                     </div>
@@ -250,7 +250,7 @@ function RecentCard({ title, rows }: { title: string; rows: { k: any; title: str
         <div className="bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-[2rem] p-6 shadow-sm">
             <label className="text-[11px] font-bold text-[#86868b] uppercase tracking-[0.15em]">{title}</label>
             <div className="mt-4 space-y-3">
-                {rows.length === 0 && <p className="text-xs text-[#86868b]">No rows yet</p>}
+                {rows.length === 0 && <p className="text-xs text-[#86868b]">موردی نیست</p>}
                 {rows.map((r) => (
                     <div key={r.k} className="flex items-center justify-between gap-3 bg-[#f8f9fa] dark:bg-[#131314] rounded-xl px-3 py-2.5">
                         <span className="text-xs font-semibold truncate">{r.title}</span>

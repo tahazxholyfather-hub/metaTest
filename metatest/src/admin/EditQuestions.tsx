@@ -16,7 +16,7 @@ import { MathRenderer } from '../components/ui/MathRenderer';
 // bar that filters the option list (used for subjects, chapters, mabahes, …).
 export interface SelectOption { id: number | string; title: string; }
 
-export const CustomSelect = ({ label, value, options, onChange, placeholder = "Select...", disabled = false, searchable = true }: {
+export const CustomSelect = ({ label, value, options, onChange, placeholder = "انتخاب...", disabled = false, searchable = true }: {
     label?: string, value: number | string | null, options: SelectOption[], onChange: (id: number | string | null) => void, placeholder?: string, disabled?: boolean, searchable?: boolean
 }) => {
     const [isOpen, setIsOpen] = useState(false);
@@ -78,7 +78,7 @@ export const CustomSelect = ({ label, value, options, onChange, placeholder = "S
                 <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider px-1 flex justify-between">
                     <span>{label}</span>
                     {value !== null && !disabled && (
-                        <button type="button" onClick={(e) => { e.stopPropagation(); onChange(null); }} className="text-red-500 hover:underline">Clear</button>
+                        <button type="button" onClick={(e) => { e.stopPropagation(); onChange(null); }} className="text-red-500 hover:underline">پاک کردن</button>
                     )}
                 </label>
             )}
@@ -115,7 +115,7 @@ export const CustomSelect = ({ label, value, options, onChange, placeholder = "S
                                         if (e.key === 'Escape') setIsOpen(false);
                                         if (e.key === 'Enter' && filtered[0]) pick(filtered[0].id);
                                     }}
-                                    placeholder="Search options..."
+                                    placeholder="جستجو..."
                                     className="w-full bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-lg pl-9 pr-3 py-2 text-xs outline-none focus:border-[#1a73e8]"
                                     dir="auto"
                                 />
@@ -139,7 +139,7 @@ export const CustomSelect = ({ label, value, options, onChange, placeholder = "S
                         ))}
                         {filtered.length === 0 && (
                             <div className="px-4 py-3 text-xs text-gray-400 text-center">
-                                {options.length === 0 ? 'No items available' : 'No matching options'}
+                                {options.length === 0 ? 'موردی نیست' : 'موردی پیدا نشد'}
                             </div>
                         )}
                     </div>
@@ -150,7 +150,7 @@ export const CustomSelect = ({ label, value, options, onChange, placeholder = "S
 };
 
 
-export const CustomMultiSelect = ({ label, values, options, onChange, placeholder = "Select...", disabled = false }: {
+export const CustomMultiSelect = ({ label, values, options, onChange, placeholder = "انتخاب...", disabled = false }: {
     label?: string;
     values: Array<number | string>;
     options: SelectOption[];
@@ -199,7 +199,7 @@ export const CustomMultiSelect = ({ label, values, options, onChange, placeholde
                 <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider px-1 flex justify-between">
                     <span>{label}</span>
                     {values.length > 0 && !disabled && (
-                        <button type="button" onClick={(e) => { e.stopPropagation(); onChange([]); }} className="text-red-500 hover:underline">Clear</button>
+                        <button type="button" onClick={(e) => { e.stopPropagation(); onChange([]); }} className="text-red-500 hover:underline">پاک کردن</button>
                     )}
                 </label>
             )}
@@ -256,7 +256,7 @@ export const CustomMultiSelect = ({ label, values, options, onChange, placeholde
                             );
                         })}
                         {options.length === 0 && (
-                            <div className="px-4 py-3 text-xs text-gray-400 text-center">No items available</div>
+                            <div className="px-4 py-3 text-xs text-gray-400 text-center">موردی نیست</div>
                         )}
                     </div>
                 </div>
@@ -369,14 +369,14 @@ export default function EditQuestions({
         { id: 'آرشیو', title: 'آرشیو' },
     ];
     const statusSwitchOptions = [
-        { id: null, title: 'All' },
+        { id: null, title: 'همه' },
         { id: 'فعال', title: 'فعال' },
         { id: 'غیرفعال', title: 'غیرفعال' },
     ];
     const imageSwitchOptions = [
-        { id: null, title: 'All' },
-        { id: 'with', title: 'With Image' },
-        { id: 'without', title: 'No Image' },
+        { id: null, title: 'همه' },
+        { id: 'with', title: 'با تصویر' },
+        { id: 'without', title: 'بدون تصویر' },
     ];
 
     // --- HELPER & LIFECYCLE HOOKS ---
@@ -578,13 +578,13 @@ export default function EditQuestions({
                 return newId;
             } else {
                 setQuestion(null);
-                setErrorMessage(responseData.message || "No question found matching the criteria.");
+                setErrorMessage(responseData.message || "سوالی با این مشخصات پیدا نشد.");
                 return null;
             }
         } catch (error) {
             console.error("Fetch question error:", error);
             setQuestion(null);
-            setErrorMessage("An error occurred while communicating with the server.");
+            setErrorMessage("ارتباط با سرور برقرار نشد.");
             return null;
         } finally {
             setIsLoading(false);
@@ -699,11 +699,11 @@ export default function EditQuestions({
             if (responseData.success) {
                 setIsEditing(false);
             } else {
-                setErrorMessage(responseData.message || "Failed to update the question.");
+                setErrorMessage(responseData.message || "به‌روزرسانی سوال ناموفق بود.");
             }
         } catch (error) {
             console.error("Save error:", error);
-            setErrorMessage("An error occurred while saving the question.");
+            setErrorMessage("ذخیره سوال ناموفق بود.");
         } finally {
             setIsSaving(false);
         }
@@ -724,13 +724,13 @@ export default function EditQuestions({
                     <div className="flex-1 flex justify-center items-center min-w-[120px]">
                         {isSearching ? (
                             <div className="flex items-center gap-2 animate-in fade-in zoom-in-95 w-full px-2">
-                                <input autoFocus type="text" placeholder="ID or question text..." className="w-full bg-transparent outline-none text-xs font-bold text-center disabled:opacity-50" value={searchId} onChange={(e) => setSearchId(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearch()} disabled={isEditing} />
+                                <input autoFocus type="text" placeholder="شناسه یا متن سوال..." className="w-full bg-transparent outline-none text-xs font-bold text-center disabled:opacity-50" value={searchId} onChange={(e) => setSearchId(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearch()} disabled={isEditing} />
                                 <button onClick={() => setIsSearching(false)} className="shrink-0 hover:text-red-500 transition-colors"><X size={14} className="text-gray-400" /></button>
                             </div>
                         ) : (
                             <div onClick={() => !embedded && !isEditing && setIsSearching(true)} className={`flex items-center gap-2 group px-2 py-1 rounded-lg transition-all ${embedded || isEditing ? 'cursor-default' : 'cursor-pointer hover:bg-gray-200 dark:hover:bg-[#2d3748]'} ${isEditing ? 'opacity-50 cursor-not-allowed' : ''}`}>
                                 <Search size={14} className="text-gray-400 group-hover:text-[#1a73e8] transition-colors" />
-                                <span className="text-xs font-semibold tracking-tighter truncate">ID: {question?.id || '---'}</span>
+                                <span className="text-xs font-semibold tracking-tighter truncate">شناسه: {question?.id || '---'}</span>
                             </div>
                         )}
                     </div>
@@ -747,23 +747,23 @@ export default function EditQuestions({
                     <div className="flex items-center gap-3">
                         {!embedded && <div className="relative">
                             <button disabled={isEditing} onClick={() => setShowFilters(!showFilters)} className={`flex items-center gap-2 px-3 py-2.5 md:px-4 rounded-xl text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed ${showFilters ? 'bg-[#e8f0fe] text-[#1a73e8] dark:bg-[#1a73e8]/20' : 'bg-[#f8f9fa] dark:bg-[#131314] text-[#86868b] border border-[#dadce0] dark:border-[#444746] hover:text-gray-700 dark:hover:text-gray-200'}`}>
-                                <Filter size={14} /> <span className="hidden sm:inline">Filters</span>
+                                <Filter size={14} /> <span className="hidden sm:inline">فیلترها</span>
                             </button>
 
                             {showFilters && !isEditing && (
                                 <div className="absolute top-[calc(100%+12px)] right-0 md:left-0 md:right-auto w-[280px] md:w-[320px] bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-[2rem] p-6 shadow-2xl z-[100] animate-in slide-in-from-top-2">
                                     <div className="flex justify-between items-center mb-6">
-                                        <span className="text-[11px] font-bold text-[#86868b] uppercase tracking-wider">Search Filters</span>
+                                        <span className="text-[11px] font-bold text-[#86868b] uppercase tracking-wider">فیلتر جستجو</span>
                                         <button onClick={() => setShowFilters(false)} className="p-1.5 bg-gray-100 dark:bg-[#2d3748] rounded-full hover:text-red-500 transition-colors"><X size={14}/></button>
                                     </div>
                                     <div className="flex flex-col gap-4 mb-4">
-                                        <CustomSelect label="Subject" value={filters.subject_id} options={lists.subjects} onChange={(v) => handleFilterChange('subject_id', v)} placeholder="Select Subject..." />
-                                        <CustomSelect label="Grade" value={filters.grade_id} options={lists.grades} onChange={(v) => handleFilterChange('grade_id', v)} placeholder="Select Grade..." disabled={!filters.subject_id} />
-                                        <CustomSelect label="Chapter (Topic)" value={filters.topic_id} options={lists.chapters} onChange={(v) => handleFilterChange('topic_id', v)} placeholder="Select Chapter..." disabled={!filters.subject_id} />
-                                        <CustomSelect label="Mabhas (Chapter)" value={filters.chapter_id} options={lists.mabahes} onChange={(v) => handleFilterChange('chapter_id', v)} placeholder="Select Mabhas..." disabled={!filters.topic_id} />
+                                        <CustomSelect label="درس" value={filters.subject_id} options={lists.subjects} onChange={(v) => handleFilterChange('subject_id', v)} placeholder="انتخاب درس..." />
+                                        <CustomSelect label="پایه" value={filters.grade_id} options={lists.grades} onChange={(v) => handleFilterChange('grade_id', v)} placeholder="انتخاب پایه..." disabled={!filters.subject_id} />
+                                        <CustomSelect label="فصل" value={filters.topic_id} options={lists.chapters} onChange={(v) => handleFilterChange('topic_id', v)} placeholder="انتخاب فصل..." disabled={!filters.subject_id} />
+                                        <CustomSelect label="مبحث" value={filters.chapter_id} options={lists.mabahes} onChange={(v) => handleFilterChange('chapter_id', v)} placeholder="انتخاب مبحث..." disabled={!filters.topic_id} />
                                     </div>
                                     <button onClick={handleApplyFilters} className="w-full bg-[#1a73e8] hover:bg-[#1557b0] text-white py-2.5 rounded-xl text-xs font-bold transition-all">
-                                        Apply & Fetch
+                                        اعمال و دریافت
                                     </button>
                                 </div>
                             )}
@@ -772,8 +772,8 @@ export default function EditQuestions({
                         {!embedded && <div className="h-6 w-px bg-[#dadce0] dark:bg-[#444746]" />}
 
                         <button onClick={() => setIsEditing(!isEditing)} disabled={!question} className={`flex items-center gap-2 px-3 py-2.5 md:px-4 rounded-xl text-xs font-bold transition-all disabled:opacity-50 ${isEditing ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400' : 'text-[#86868b] hover:bg-gray-100 dark:hover:bg-[#2b2d2f]'}`}>
-                            <Edit2 size={14} /> <span className="hidden sm:inline">{isEditing ? 'Editing Mode' : 'Read Mode'}</span>
-                            <span className="sm:hidden">{isEditing ? 'Edit' : 'Read'}</span>
+                            <Edit2 size={14} /> <span className="hidden sm:inline">{isEditing ? 'حالت ویرایش' : 'حالت مشاهده'}</span>
+                            <span className="sm:hidden">{isEditing ? 'ویرایش' : 'مشاهده'}</span>
                         </button>
                     </div>
 
@@ -786,8 +786,8 @@ export default function EditQuestions({
 
                         <button disabled={!isEditing || isSaving || !question} onClick={handleSave} className={`flex items-center gap-2 px-4 md:px-6 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md ${isEditing ? 'bg-[#1a73e8] hover:bg-[#1557b0] text-white cursor-pointer' : 'bg-gray-100 dark:bg-[#2b2d2f] text-gray-400 dark:text-gray-500 cursor-not-allowed shadow-none border border-[#dadce0] dark:border-[#333537]'}`}>
                             {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                            <span className="hidden sm:inline">{isSaving ? 'Saving...' : 'Save Changes'}</span>
-                            <span className="sm:hidden">Save</span>
+                            <span className="hidden sm:inline">{isSaving ? 'در حال ذخیره...' : 'ذخیره تغییرات'}</span>
+                            <span className="sm:hidden">ذخیره</span>
                         </button>
                     </div>
                 </div>
@@ -797,14 +797,14 @@ export default function EditQuestions({
             {!embedded && <div className={`flex flex-wrap items-center justify-between gap-4 bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl px-4 py-3 shadow-sm ${isEditing ? 'opacity-50 pointer-events-none' : ''}`}>
                 <div className="flex flex-wrap items-center gap-4 md:gap-6">
                     <FilterSwitch
-                        label="Status"
+                        label="وضعیت"
                         value={filters.status}
                         options={statusSwitchOptions}
                         onChange={(v) => handleQuickFilterChange('status', v)}
                         disabled={isLoading}
                     />
                     <FilterSwitch
-                        label="Images"
+                        label="تصویر"
                         value={filters.has_image}
                         options={imageSwitchOptions}
                         onChange={(v) => handleQuickFilterChange('has_image', v)}
@@ -819,7 +819,7 @@ export default function EditQuestions({
                             value={filters.search_text}
                             onChange={(e) => handleFilterChange('search_text', e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handleTextSearchApply()}
-                            placeholder="Search in question text..."
+                            placeholder="جستجو در متن سوال..."
                             className="w-full bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-xl pr-4 pl-9 py-2.5 text-xs font-medium outline-none focus:border-[#1a73e8] transition-all"
                             dir="auto"
                         />
@@ -865,7 +865,7 @@ export default function EditQuestions({
                         <div className="lg:col-span-2 flex flex-col gap-6">
                             {/* Question Text */}
                             <div className="bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl p-6">
-                                <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider mb-3 block">Question Text</label>
+                                <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider mb-3 block">متن سوال</label>
                                 {isEditing ? (
                                     <textarea value={question.text} onChange={(e) => handleUpdate('text', e.target.value)} className="w-full h-40 bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-xl p-4 text-sm font-medium leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-[#1a73e8] custom-scrollbar" />
                                 ) : (
@@ -877,7 +877,7 @@ export default function EditQuestions({
 
                             {/* Options */}
                             <div className="bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl p-6">
-                                <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider mb-3 block">Options</label>
+                                <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider mb-3 block">گزینه‌ها</label>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {question.options.map((option) => (
                                         <div key={option.id} className="flex items-start gap-3">
@@ -900,7 +900,7 @@ export default function EditQuestions({
 
                             {/* Descriptive Answer */}
                             <div className="bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl p-6">
-                                <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider mb-3 block">Descriptive Answer</label>
+                                <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider mb-3 block">پاسخ تشریحی</label>
                                 {isEditing ? (
                                     <textarea value={question.descriptiveAnswer} onChange={(e) => handleUpdate('descriptiveAnswer', e.target.value)} className="w-full h-32 bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-xl p-4 text-sm font-medium leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-[#1a73e8] custom-scrollbar" />
                                 ) : (
@@ -920,32 +920,32 @@ export default function EditQuestions({
                                 </label>
                                 {isEditing ? (
                                     <div className="flex flex-col gap-4">
-                                        <CustomSelect label="Subject" value={question.subject} options={curriculum.subjects.length ? curriculum.subjects : lists.subjects} onChange={(v) => handleMetaChange('subject', v)} placeholder="Select Subject..." />
+                                        <CustomSelect label="درس" value={question.subject} options={curriculum.subjects.length ? curriculum.subjects : lists.subjects} onChange={(v) => handleMetaChange('subject', v)} placeholder="انتخاب درس..." />
                                         <CustomMultiSelect
-                                            label="Grades"
+                                            label="پایه‌ها"
                                             values={question.grade_ids}
                                             options={curriculum.grades.length ? curriculum.grades : lists.grades}
                                             onChange={(ids) => handleMetaChange('grade_ids', ids.map(Number))}
-                                            placeholder="Select one or more grades..."
+                                            placeholder="یک یا چند پایه..."
                                         />
                                         <CustomMultiSelect
-                                            label="Chapters (Topics)"
+                                            label="فصل‌ها"
                                             values={question.chapter_ids}
                                             options={editTopicOptions}
                                             onChange={(ids) => handleMetaChange('chapter_ids', ids.map(Number))}
-                                            placeholder="Select one or more chapters..."
+                                            placeholder="یک یا چند فصل..."
                                             disabled={!question.subject}
                                         />
                                         <CustomMultiSelect
-                                            label="Mabhas"
+                                            label="مباحث"
                                             values={question.mabhas_ids}
                                             options={editMabhasOptions}
                                             onChange={(ids) => handleMetaChange('mabhas_ids', ids.map(Number))}
-                                            placeholder="Select one or more mabhas..."
+                                            placeholder="یک یا چند مبحث..."
                                             disabled={!question.subject}
                                         />
-                                        <CustomSelect label="Level" value={question.level} options={levelOptions} onChange={(v) => handleUpdate('level', v)} placeholder="Select Level..." />
-                                        <CustomSelect label="Status" value={question.status} options={statusOptions} onChange={(v) => handleUpdate('status', v)} placeholder="Select Status..." />
+                                        <CustomSelect label="سطح" value={question.level} options={levelOptions} onChange={(v) => handleUpdate('level', v)} placeholder="انتخاب سطح..." />
+                                        <CustomSelect label="وضعیت" value={question.status} options={statusOptions} onChange={(v) => handleUpdate('status', v)} placeholder="انتخاب وضعیت..." />
                                         <p className="text-[10px] text-[#86868b] leading-relaxed">
                                             A question can belong to several grades, chapters, and mabhas. Subject stays single.
                                         </p>
@@ -953,16 +953,16 @@ export default function EditQuestions({
                                 ) : (
                                     <div className="space-y-3 text-xs font-medium">
                                         {[
-                                            { label: 'Subject', value: question.subject_title },
-                                            { label: 'Grades', value: (question.grade_titles.length ? question.grade_titles : [question.grade_title]).filter(Boolean).join('، ') },
-                                            { label: 'Chapters', value: (question.chapter_titles.length ? question.chapter_titles : [question.chapter_title]).filter(Boolean).join('، ') },
-                                            { label: 'Mabhas', value: (question.mabhas_titles.length ? question.mabhas_titles : [question.mabhas_title]).filter(Boolean).join('، ') },
-                                            { label: 'Level', value: question.level },
-                                            { label: 'Status', value: question.status }
+                                            { label: 'درس', value: question.subject_title },
+                                            { label: 'پایه‌ها', value: (question.grade_titles.length ? question.grade_titles : [question.grade_title]).filter(Boolean).join('، ') },
+                                            { label: 'فصل‌ها', value: (question.chapter_titles.length ? question.chapter_titles : [question.chapter_title]).filter(Boolean).join('، ') },
+                                            { label: 'مباحث', value: (question.mabhas_titles.length ? question.mabhas_titles : [question.mabhas_title]).filter(Boolean).join('، ') },
+                                            { label: 'سطح', value: question.level },
+                                            { label: 'وضعیت', value: question.status }
                                         ].map(item => (
                                             <div key={item.label} className="flex justify-between items-start gap-3 bg-[#f8f9fa] dark:bg-[#131314] p-3 rounded-lg">
                                                 <span className="text-gray-500 dark:text-gray-400 shrink-0">{item.label}:</span>
-                                                <span className="font-semibold text-gray-800 dark:text-gray-200 text-left" dir="auto">{item.value || '----'}</span>
+                                                <span className="font-semibold text-gray-800 dark:text-gray-200 text-start" dir="auto">{item.value || '----'}</span>
                                             </div>
                                         ))}
                                     </div>

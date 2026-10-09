@@ -19,7 +19,7 @@ const handleListAdmins = async (req, res) => {
         return res.json({ success: true, admins: rows.map(publicAdmin) });
     } catch (error) {
         console.error('List admins error:', error);
-        return res.status(500).json({ success: false, message: 'Failed to list admins' });
+        return res.status(500).json({ success: false, message: 'بارگذاری ادمین‌ها ناموفق بود' });
     }
 };
 
@@ -31,10 +31,10 @@ const handleCreateAdmin = async (req, res) => {
         const role = ROLES.includes(req.body.role) ? req.body.role : 'admin';
 
         if (!validUsername(username)) {
-            return res.json({ success: false, message: 'Username must be 3–50 letters, numbers, dots, underscores or hyphens.' });
+            return res.json({ success: false, message: 'نام کاربری باید ۳ تا ۵۰ حرف، عدد، نقطه، خط زیر یا خط تیره باشد.' });
         }
         if (password.length < 8) {
-            return res.json({ success: false, message: 'Password must be at least 8 characters.' });
+            return res.json({ success: false, message: 'رمز باید حداقل ۸ کاراکتر باشد.' });
         }
 
         const hashed = await hashPassword(password);
@@ -49,10 +49,10 @@ const handleCreateAdmin = async (req, res) => {
         return res.json({ success: true, admin: created });
     } catch (error) {
         if (error && (error.code === 'ER_DUP_ENTRY' || error.errno === 1062)) {
-            return res.json({ success: false, message: 'That username is already taken.' });
+            return res.json({ success: false, message: 'این نام کاربری قبلاً گرفته شده.' });
         }
         console.error('Create admin error:', error);
-        return res.status(500).json({ success: false, message: 'Failed to create admin' });
+        return res.status(500).json({ success: false, message: 'ساخت ادمین ناموفق بود' });
     }
 };
 
@@ -60,13 +60,13 @@ const handleUpdateAdmin = async (req, res) => {
     try {
         const id = Number(req.params.id);
         if (!Number.isInteger(id) || id <= 0) {
-            return res.json({ success: false, message: 'Invalid admin id' });
+            return res.json({ success: false, message: 'شناسه ادمین نامعتبر است' });
         }
 
         const [[existing]] = await pool.query(`SELECT * FROM tam24_admins WHERE id = ? LIMIT 1`, [id]);
-        if (!existing) return res.json({ success: false, message: 'Admin not found' });
+        if (!existing) return res.json({ success: false, message: 'ادمین پیدا نشد' });
         if (id === SUPER_ADMIN_ID && !isSuperAdmin(req.admin)) {
-            return res.status(403).json({ success: false, message: 'Only the main admin can change that account.' });
+            return res.status(403).json({ success: false, message: 'فقط مدیر اصلی می‌تواند این حساب را تغییر دهد.' });
         }
 
         const updates = [];
@@ -80,7 +80,7 @@ const handleUpdateAdmin = async (req, res) => {
         if (req.body.username != null) {
             const username = String(req.body.username).trim();
             if (!validUsername(username)) {
-                return res.json({ success: false, message: 'Invalid username' });
+                return res.json({ success: false, message: 'نام کاربری نامعتبر است' });
             }
             updates.push('username = ?');
             params.push(username);
@@ -103,7 +103,7 @@ const handleUpdateAdmin = async (req, res) => {
         if (req.body.status != null) {
             const status = req.body.status === 'disabled' ? 'disabled' : 'active';
             if (id === SUPER_ADMIN_ID && status === 'disabled') {
-                return res.json({ success: false, message: 'The main admin cannot be disabled.' });
+                return res.json({ success: false, message: 'مدیر اصلی را نمی‌توان غیرفعال کرد.' });
             }
             updates.push('status = ?');
             params.push(status);
@@ -111,7 +111,7 @@ const handleUpdateAdmin = async (req, res) => {
 
         if (req.body.password) {
             if (String(req.body.password).length < 8) {
-                return res.json({ success: false, message: 'Password must be at least 8 characters.' });
+                return res.json({ success: false, message: 'رمز باید حداقل ۸ کاراکتر باشد.' });
             }
             updates.push('password = ?');
             params.push(await hashPassword(String(req.body.password)));
@@ -129,10 +129,10 @@ const handleUpdateAdmin = async (req, res) => {
         return res.json({ success: true, admin: publicAdmin(row) });
     } catch (error) {
         if (error && (error.code === 'ER_DUP_ENTRY' || error.errno === 1062)) {
-            return res.json({ success: false, message: 'That username is already taken.' });
+            return res.json({ success: false, message: 'این نام کاربری قبلاً گرفته شده.' });
         }
         console.error('Update admin error:', error);
-        return res.status(500).json({ success: false, message: 'Failed to update admin' });
+        return res.status(500).json({ success: false, message: 'به‌روزرسانی ادمین ناموفق بود' });
     }
 };
 
@@ -140,22 +140,22 @@ const handleDeleteAdmin = async (req, res) => {
     try {
         const id = Number(req.params.id);
         if (!Number.isInteger(id) || id <= 0) {
-            return res.json({ success: false, message: 'Invalid admin id' });
+            return res.json({ success: false, message: 'شناسه ادمین نامعتبر است' });
         }
         if (id === SUPER_ADMIN_ID) {
-            return res.json({ success: false, message: 'The main admin cannot be deleted.' });
+            return res.json({ success: false, message: 'مدیر اصلی را نمی‌توان حذف کرد.' });
         }
         if (id === req.admin.id) {
-            return res.json({ success: false, message: 'You cannot delete your own account.' });
+            return res.json({ success: false, message: 'نمی‌توانی حساب خودت را حذف کنی.' });
         }
         const [result] = await pool.query(`DELETE FROM tam24_admins WHERE id = ?`, [id]);
         if (result.affectedRows === 0) {
-            return res.json({ success: false, message: 'Admin not found' });
+            return res.json({ success: false, message: 'ادمین پیدا نشد' });
         }
         return res.json({ success: true });
     } catch (error) {
         console.error('Delete admin error:', error);
-        return res.status(500).json({ success: false, message: 'Failed to delete admin' });
+        return res.status(500).json({ success: false, message: 'حذف ادمین ناموفق بود' });
     }
 };
 

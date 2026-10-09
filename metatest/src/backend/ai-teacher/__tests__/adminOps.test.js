@@ -29,20 +29,20 @@ test('section defaults and super override', () => {
     const staff = resolveSections(4, []);
     assert.equal(staff.dashboard, true);
     assert.equal(staff['edit-questions'], true);
-    assert.equal(staff['discount-codes'], true);
-    assert.equal(staff['referral-settings'], true);
-    assert.equal(staff.withdrawals, true);
     assert.equal(staff.reports, true);
     assert.equal(staff['word-stats'], true);
+    assert.equal(staff['discount-codes'], undefined);
+    assert.equal(staff['referral-settings'], undefined);
+    assert.equal(staff.withdrawals, undefined);
     assert.equal(staff['ai-manager'], false);
     assert.equal(staff.admins, false);
     assert.equal(staff.access, false);
 
     const saved = resolveSections(4, [
-        { section_key: 'discount-codes', allowed: 0 },
+        { section_key: 'reports', allowed: 0 },
         { section_key: 'ai-manager', allowed: 1 },
     ]);
-    assert.equal(saved['discount-codes'], false);
+    assert.equal(saved.reports, false);
     assert.equal(saved['ai-manager'], true);
     assert.equal(saved.dashboard, true);
 

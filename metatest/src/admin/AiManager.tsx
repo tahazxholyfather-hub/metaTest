@@ -8,21 +8,63 @@ import { adminApi } from '../lib/adminApi';
 type Tab = 'overview' | 'settings' | 'subjects' | 'knowledge' | 'suggestions' | 'books' | 'pricing' | 'wallets' | 'memory' | 'chats';
 
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
-    { id: 'overview', label: 'Overview', icon: BarChart3 },
-    { id: 'settings', label: 'Settings', icon: Settings },
-    { id: 'subjects', label: 'Subjects', icon: Bot },
-    { id: 'knowledge', label: 'Knowledge', icon: BookOpen },
-    { id: 'suggestions', label: 'Suggestions', icon: Lightbulb },
-    { id: 'books', label: 'Books', icon: Library },
-    { id: 'pricing', label: 'Pricing', icon: Coins },
-    { id: 'wallets', label: 'Wallets', icon: Wallet },
-    { id: 'memory', label: 'Memory', icon: Brain },
-    { id: 'chats', label: 'Chats', icon: MessageSquare },
+    { id: 'overview', label: 'نمای کلی', icon: BarChart3 },
+    { id: 'settings', label: 'تنظیمات', icon: Settings },
+    { id: 'subjects', label: 'درس‌ها', icon: Bot },
+    { id: 'knowledge', label: 'دانش', icon: BookOpen },
+    { id: 'suggestions', label: 'پیشنهادها', icon: Lightbulb },
+    { id: 'books', label: 'کتاب‌ها', icon: Library },
+    { id: 'pricing', label: 'قیمت‌ها', icon: Coins },
+    { id: 'wallets', label: 'کیف پول‌ها', icon: Wallet },
+    { id: 'memory', label: 'حافظه', icon: Brain },
+    { id: 'chats', label: 'گفتگوها', icon: MessageSquare },
 ];
 
 const inputCls = 'w-full bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-xl px-3 py-2.5 text-xs outline-none focus:border-[#1a73e8]';
 const areaCls = `${inputCls} min-h-[120px] resize-y`;
 const labelCls = 'text-[10px] font-bold text-[#86868b] uppercase tracking-wider mb-1.5 block';
+
+const FA_LABELS: Record<string, string> = {
+    aiEnabled: 'فعال بودن هوش مصنوعی',
+    aiAvailable: 'در دسترس بودن',
+    chat: 'گفتگو',
+    vision: 'دیدن تصویر',
+    imageGeneration: 'ساخت تصویر',
+    stt: 'گفتار به متن',
+    tts: 'متن به گفتار',
+    pdfReferences: 'ارجاع PDF',
+    memory: 'حافظه',
+    knowledgeBase: 'پایگاه دانش',
+    tools: 'ابزارها',
+    suggestions: 'پیشنهادها',
+    embeddings: 'جاسازی',
+    free: 'رایگان',
+    bronze: 'برنزی',
+    silver: 'نقره‌ای',
+    golden: 'طلایی',
+    diamond: 'الماسی',
+    epic: 'حماسی',
+    premium: 'ویژه',
+    minCharge: 'حداقل کسر',
+    minBalanceToStart: 'حداقل موجودی برای شروع',
+    defaultReservation: 'رزرو پیش‌فرض',
+    usdToIrr: 'نرخ دلار به ریال',
+    irrPerCoin: 'ریال هر سکه',
+    image: 'تصویر',
+    pdfIndex: 'فهرست PDF',
+    low_coin_mode: 'حالت سکه کم',
+    always_examples: 'همیشه با مثال',
+    concise_responses: 'پاسخ کوتاه',
+    step_by_step: 'گام‌به‌گام',
+    voice_replies: 'پاسخ صوتی',
+    memory_enabled: 'حافظه فعال',
+    knowledge_enabled: 'دانش فعال',
+    pdf_references_enabled: 'ارجاع PDF فعال',
+};
+
+function faLabel(key: string) {
+    return FA_LABELS[key] || key;
+}
 
 function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
     return (
@@ -50,8 +92,8 @@ export default function AiManager() {
         <div className="flex flex-col gap-6 w-full">
             <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl p-3 shadow-sm sticky top-0 z-[40]">
                 <div>
-                    <h1 className="text-sm font-bold">AI Manager</h1>
-                    <p className="text-[11px] text-[#86868b]">Configure Met — subjects, knowledge, coins, models. API keys stay on the server.</p>
+                    <h1 className="text-sm font-bold">مدیریت هوش مصنوعی</h1>
+                    <p className="text-[11px] text-[#86868b]">تنظیم مت: درس‌ها، دانش، سکه و مدل‌ها. کلید API روی سرور می‌ماند.</p>
                 </div>
                 <div className="flex flex-wrap gap-1 bg-[#f8f9fa] dark:bg-[#131314] rounded-full p-1">
                     {TABS.map((t) => (
@@ -111,9 +153,9 @@ function Overview({ onError }: { onError: (s: string) => void }) {
         <div className="flex flex-col gap-6">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {[
-                    ['Conversations', o.conversations], ['Messages', o.messages], ['AI users', o.users],
-                    ['Coins spent', o.coins_spent], ['Knowledge items', o.knowledge_items],
-                    ['Suggestions', o.suggestions], ['Books', o.books], ['Cost (IRR)', o.cost_irr],
+                    ['گفتگوها', o.conversations], ['پیام‌ها', o.messages], ['کاربران هوش مصنوعی', o.users],
+                    ['سکه مصرف‌شده', o.coins_spent], ['موارد دانش', o.knowledge_items],
+                    ['پیشنهادها', o.suggestions], ['کتاب‌ها', o.books], ['هزینه (تومان)', o.cost_irr],
                 ].map(([l, v]) => (
                     <div key={String(l)} className="bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl p-4">
                         <p className={labelCls}>{l}</p>
@@ -121,48 +163,48 @@ function Overview({ onError }: { onError: (s: string) => void }) {
                     </div>
                 ))}
             </div>
-            <Card title="Effective capabilities">
+            <Card title="قابلیت‌های فعال">
                 <div className="flex flex-wrap gap-2">
                     {Object.entries(features).filter(([, v]) => typeof v === 'boolean').map(([k, v]) => (
-                        <span key={k} className={`px-3 py-1 rounded-full text-[11px] font-bold ${v ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>{k}{v ? '' : ' off'}</span>
+                        <span key={k} className={`px-3 py-1 rounded-full text-[11px] font-bold ${v ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>{faLabel(k)}{v ? '' : ' خاموش'}</span>
                     ))}
                 </div>
-                {data?.settings?.unavailableReason && <p className="text-xs text-amber-600 mt-3">Unavailable: {data.settings.unavailableReason}</p>}
-                <p className="text-[11px] text-[#86868b] mt-3">Provider: {data?.settings?.settings?.provider?.name} · key {data?.settings?.settings?.provider?.apiKeyConfigured ? 'configured' : 'missing'}</p>
+                {data?.settings?.unavailableReason && <p className="text-xs text-amber-600 mt-3">در دسترس نیست: {data.settings.unavailableReason}</p>}
+                <p className="text-[11px] text-[#86868b] mt-3">سرویس‌دهنده: {data?.settings?.settings?.provider?.name} · کلید {data?.settings?.settings?.provider?.apiKeyConfigured ? 'تنظیم شده' : 'نیست'}</p>
             </Card>
-            <Card title="Recent usage">
+            <Card title="مصرف اخیر">
                 <table className="w-full text-xs">
-                    <thead className="text-[#86868b]"><tr><th className="text-left py-2">When</th><th className="text-left">Op</th><th className="text-left">Model</th><th className="text-right">Coins</th></tr></thead>
+                    <thead className="text-[#86868b]"><tr><th className="text-start py-2">زمان</th><th className="text-start">عملیات</th><th className="text-start">مدل</th><th className="text-end">سکه</th></tr></thead>
                     <tbody>
                         {(data?.usage?.items || []).slice(0, 15).map((r: any) => (
                             <tr key={r.id} className="border-t border-[#dadce0] dark:border-[#333537]">
                                 <td className="py-2">{r.created_at ? new Date(r.created_at).toLocaleString() : ''}</td>
                                 <td>{r.operation_type}</td>
                                 <td className="font-mono">{r.model}</td>
-                                <td className="text-right">{r.coin_cost}</td>
+                                <td className="text-end">{r.coin_cost}</td>
                             </tr>
                         ))}
                     </tbody>
                 </table>
             </Card>
             <div className="grid lg:grid-cols-2 gap-6">
-                <Card title="By subject">
+                <Card title="بر اساس درس">
                     {(data?.stats?.bySubject || []).map((r: any) => (
                         <div key={r.subject_key} className="flex justify-between text-xs py-1.5 border-b border-[#dadce0] dark:border-[#333537] last:border-0">
                             <span className="font-semibold">{r.subject_key || '—'}</span>
-                            <span className="text-[#86868b]">{Number(r.conversations || 0).toLocaleString()} conv · {Number(r.messages || 0).toLocaleString()} msg</span>
+                            <span className="text-[#86868b]">{Number(r.conversations || 0).toLocaleString()} گفتگو · {Number(r.messages || 0).toLocaleString()} پیام</span>
                         </div>
                     ))}
-                    {(data?.stats?.bySubject || []).length === 0 && <p className="text-xs text-[#86868b]">No conversations yet</p>}
+                    {(data?.stats?.bySubject || []).length === 0 && <p className="text-xs text-[#86868b]">هنوز گفتگویی نیست</p>}
                 </Card>
-                <Card title="By operation">
+                <Card title="بر اساس عملیات">
                     {(data?.stats?.byOp || []).map((r: any) => (
                         <div key={r.operation_type} className="flex justify-between text-xs py-1.5 border-b border-[#dadce0] dark:border-[#333537] last:border-0">
                             <span className="font-semibold">{r.operation_type}</span>
-                            <span className="text-[#86868b]">{Number(r.count || 0).toLocaleString()} · {Number(r.coins || 0).toLocaleString()} coins</span>
+                            <span className="text-[#86868b]">{Number(r.count || 0).toLocaleString()} · {Number(r.coins || 0).toLocaleString()} سکه</span>
                         </div>
                     ))}
-                    {(data?.stats?.byOp || []).length === 0 && <p className="text-xs text-[#86868b]">No usage logs yet</p>}
+                    {(data?.stats?.byOp || []).length === 0 && <p className="text-xs text-[#86868b]">هنوز گزارشی از مصرف نیست</p>}
                 </Card>
             </div>
         </div>
@@ -194,7 +236,7 @@ function SettingsPanel({ onError, onSuccess }: { onError: (s: string) => void; o
             });
             if (!res.success) throw new Error(res.message);
             setSettings(res.settings);
-            onSuccess('AI settings saved. Flags, models and coin rules apply immediately.');
+            onSuccess('تنظیمات هوش مصنوعی ذخیره شد و همین حالا اعمال می‌شود.');
         } catch (e: any) { onError(e.message); }
         finally { setSaving(false); }
     };
@@ -202,46 +244,46 @@ function SettingsPanel({ onError, onSuccess }: { onError: (s: string) => void; o
         <div className="flex flex-col gap-6">
             <div className="flex justify-end">
                 <button onClick={save} disabled={saving} className="flex items-center gap-2 bg-[#1a73e8] text-white px-5 py-2.5 rounded-xl text-xs font-bold">
-                    {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save settings
+                    {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} ذخیره تنظیمات
                 </button>
             </div>
-            <Card title="Feature flags">
+            <Card title="کلیدهای قابلیت">
                 <div className="grid sm:grid-cols-2 gap-2">
                     {Object.entries(settings.flags || {}).map(([k, v]) => (
-                        <Toggle key={k} label={k} checked={!!v} onChange={(nv) => patch('flags', k, nv)} />
+                        <Toggle key={k} label={faLabel(k)} checked={!!v} onChange={(nv) => patch('flags', k, nv)} />
                     ))}
                 </div>
             </Card>
-            <Card title="Models (no API keys)">
+            <Card title="مدل‌ها (بدون کلید API)">
                 <div className="grid sm:grid-cols-2 gap-3">
                     {Object.entries(settings.models || {}).map(([k, v]) => (
-                        <div key={k}><label className={labelCls}>{k}</label><input className={inputCls} value={String(v ?? '')} onChange={(e) => patch('models', k, e.target.value)} /></div>
+                        <div key={k}><label className={labelCls}>{faLabel(k)}</label><input className={inputCls} value={String(v ?? '')} onChange={(e) => patch('models', k, e.target.value)} /></div>
                     ))}
                 </div>
             </Card>
-            <Card title="Daily coins by plan">
+            <Card title="سکه روزانه هر پلن">
                 <div className="grid sm:grid-cols-3 gap-3">
                     {Object.entries(settings.dailyCoins || {}).map(([k, v]) => (
-                        <div key={k}><label className={labelCls}>{k}</label><input type="number" className={inputCls} value={Number(v)} onChange={(e) => patch('dailyCoins', k, Number(e.target.value))} /></div>
+                        <div key={k}><label className={labelCls}>{faLabel(k)}</label><input type="number" className={inputCls} value={Number(v)} onChange={(e) => patch('dailyCoins', k, Number(e.target.value))} /></div>
                     ))}
                 </div>
             </Card>
             <div className="grid lg:grid-cols-2 gap-6">
-                <Card title="Coin pricing">
+                <Card title="قیمت سکه">
                     {Object.entries(settings.coinPricing || {}).filter(([k]) => k !== 'uploadRoot').map(([k, v]) => (
-                        <div key={k} className="mb-3"><label className={labelCls}>{k}</label><input type="number" className={inputCls} value={Number(v)} onChange={(e) => patch('coinPricing', k, Number(e.target.value))} /></div>
+                        <div key={k} className="mb-3"><label className={labelCls}>{faLabel(k)}</label><input type="number" className={inputCls} value={Number(v)} onChange={(e) => patch('coinPricing', k, Number(e.target.value))} /></div>
                     ))}
                 </Card>
-                <Card title="Flat coin costs">
+                <Card title="هزینه ثابت سکه">
                     {Object.entries(settings.flatCosts || {}).map(([k, v]) => (
-                        <div key={k} className="mb-3"><label className={labelCls}>{k}</label><input type="number" className={inputCls} value={Number(v)} onChange={(e) => patch('flatCosts', k, Number(e.target.value))} /></div>
+                        <div key={k} className="mb-3"><label className={labelCls}>{faLabel(k)}</label><input type="number" className={inputCls} value={Number(v)} onChange={(e) => patch('flatCosts', k, Number(e.target.value))} /></div>
                     ))}
                 </Card>
             </div>
-            <Card title="Context / rate / file limits">
+            <Card title="محدودیت زمینه، نرخ و فایل">
                 <div className="grid sm:grid-cols-3 gap-3">
                     {Object.entries({ ...settings.contextLimits, ...settings.rateLimits, ...Object.fromEntries(Object.entries(settings.fileLimits || {}).filter(([k]) => k !== 'uploadRoot')) }).map(([k, v]) => (
-                        <div key={k}><label className={labelCls}>{k}</label><input type="number" className={inputCls} value={Number(v)} onChange={(e) => {
+                        <div key={k}><label className={labelCls}>{faLabel(k)}</label><input type="number" className={inputCls} value={Number(v)} onChange={(e) => {
                             if (k in (settings.contextLimits || {})) patch('contextLimits', k, Number(e.target.value));
                             else if (k in (settings.rateLimits || {})) patch('rateLimits', k, Number(e.target.value));
                             else patch('fileLimits', k, Number(e.target.value));
@@ -273,7 +315,7 @@ function SubjectsPanel({ onError, onSuccess }: { onError: (s: string) => void; o
         try {
             const res = await adminApi.saveAiSubject(sel.key, sel);
             if (!res.success) throw new Error(res.message);
-            onSuccess('Subject saved');
+            onSuccess('درس ذخیره شد');
             load();
         } catch (e: any) { onError(e.message); }
     };
@@ -283,7 +325,7 @@ function SubjectsPanel({ onError, onSuccess }: { onError: (s: string) => void; o
         try {
             await adminApi.saveAiSubject(key, { key, name_fa: key, name_en: key, is_active: 1, sort_order: 50 });
             setNewKey('');
-            onSuccess('Subject created');
+            onSuccess('درس ساخته شد');
             load();
         } catch (e: any) { onError(e.message); }
     };
@@ -292,19 +334,19 @@ function SubjectsPanel({ onError, onSuccess }: { onError: (s: string) => void; o
         try {
             const res = await adminApi.resetAiSubjectPrompts(sel.key);
             setSel({ ...sel, general_prompt: res.general_prompt, reference_instructions: res.reference_instructions });
-            onSuccess('Prompts reset to code defaults');
+            onSuccess('پرامپت‌ها به حالت پیش‌فرض برگشت');
         } catch (e: any) { onError(e.message); }
     };
     return (
         <div className="grid lg:grid-cols-3 gap-6">
-            <Card title="Subjects">
+            <Card title="درس‌ها">
                 <div className="flex gap-2 mb-3">
-                    <input className={inputCls} value={newKey} onChange={(e) => setNewKey(e.target.value)} placeholder="new key e.g. geology" />
+                    <input className={inputCls} value={newKey} onChange={(e) => setNewKey(e.target.value)} placeholder="کلید جدید، مثلاً geology" />
                     <button onClick={add} className="px-3 rounded-xl bg-[#1a73e8] text-white"><Plus size={14} /></button>
                 </div>
                 <div className="space-y-1 max-h-[60vh] overflow-y-auto">
                     {items.map((s) => (
-                        <button key={s.key} onClick={() => setSel(s)} className={`w-full text-left px-3 py-2 rounded-xl text-xs ${sel?.key === s.key ? 'bg-[#e8f0fe] text-[#1a73e8] font-bold' : 'hover:bg-[#f8f9fa] dark:hover:bg-[#131314]'}`}>
+                        <button key={s.key} onClick={() => setSel(s)} className={`w-full text-start px-3 py-2 rounded-xl text-xs ${sel?.key === s.key ? 'bg-[#e8f0fe] text-[#1a73e8] font-bold' : 'hover:bg-[#f8f9fa] dark:hover:bg-[#131314]'}`}>
                             {s.name_fa} <span className="text-[#86868b]">({s.key})</span>
                         </button>
                     ))}
@@ -312,22 +354,22 @@ function SubjectsPanel({ onError, onSuccess }: { onError: (s: string) => void; o
             </Card>
             {sel && (
                 <div className="lg:col-span-2 flex flex-col gap-4">
-                    <Card title={`Edit ${sel.key}`}>
+                    <Card title={`ویرایش ${sel.key}`}>
                         <div className="grid sm:grid-cols-2 gap-3">
-                            <Field label="name_fa" value={sel.name_fa} onChange={(v) => setSel({ ...sel, name_fa: v })} />
-                            <Field label="name_en" value={sel.name_en} onChange={(v) => setSel({ ...sel, name_en: v })} />
-                            <Field label="icon" value={sel.icon} onChange={(v) => setSel({ ...sel, icon: v })} />
-                            <Field label="color" value={sel.color} onChange={(v) => setSel({ ...sel, color: v })} />
-                            <Field label="model override" value={sel.model || ''} onChange={(v) => setSel({ ...sel, model: v })} />
-                            <Field label="max output tokens" type="number" value={sel.max_output_tokens} onChange={(v) => setSel({ ...sel, max_output_tokens: Number(v) })} />
-                            <Field label="sort order" type="number" value={sel.sort_order} onChange={(v) => setSel({ ...sel, sort_order: Number(v) })} />
-                            <Toggle label="active" checked={!!sel.is_active} onChange={(v) => setSel({ ...sel, is_active: v ? 1 : 0 })} />
+                            <Field label="نام فارسی" value={sel.name_fa} onChange={(v) => setSel({ ...sel, name_fa: v })} />
+                            <Field label="نام انگلیسی" value={sel.name_en} onChange={(v) => setSel({ ...sel, name_en: v })} />
+                            <Field label="آیکون" value={sel.icon} onChange={(v) => setSel({ ...sel, icon: v })} />
+                            <Field label="رنگ" value={sel.color} onChange={(v) => setSel({ ...sel, color: v })} />
+                            <Field label="مدل اختصاصی" value={sel.model || ''} onChange={(v) => setSel({ ...sel, model: v })} />
+                            <Field label="حداکثر توکن خروجی" type="number" value={sel.max_output_tokens} onChange={(v) => setSel({ ...sel, max_output_tokens: Number(v) })} />
+                            <Field label="ترتیب" type="number" value={sel.sort_order} onChange={(v) => setSel({ ...sel, sort_order: Number(v) })} />
+                            <Toggle label="فعال" checked={!!sel.is_active} onChange={(v) => setSel({ ...sel, is_active: v ? 1 : 0 })} />
                         </div>
-                        <div className="mt-4"><label className={labelCls}>general_prompt</label><textarea className={areaCls} value={sel.general_prompt || ''} onChange={(e) => setSel({ ...sel, general_prompt: e.target.value })} /></div>
-                        <div className="mt-4"><label className={labelCls}>reference_instructions</label><textarea className={areaCls} value={sel.reference_instructions || ''} onChange={(e) => setSel({ ...sel, reference_instructions: e.target.value })} /></div>
+                        <div className="mt-4"><label className={labelCls}>پرامپت عمومی</label><textarea className={areaCls} value={sel.general_prompt || ''} onChange={(e) => setSel({ ...sel, general_prompt: e.target.value })} /></div>
+                        <div className="mt-4"><label className={labelCls}>دستور مرجع</label><textarea className={areaCls} value={sel.reference_instructions || ''} onChange={(e) => setSel({ ...sel, reference_instructions: e.target.value })} /></div>
                         <div className="flex gap-2 mt-4">
-                            <button onClick={save} className="flex items-center gap-2 bg-[#1a73e8] text-white px-4 py-2 rounded-xl text-xs font-bold"><Save size={14} /> Save</button>
-                            <button onClick={reset} className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border border-[#dadce0]"><RotateCcw size={14} /> Reset prompts</button>
+                            <button onClick={save} className="flex items-center gap-2 bg-[#1a73e8] text-white px-4 py-2 rounded-xl text-xs font-bold"><Save size={14} /> ذخیره</button>
+                            <button onClick={reset} className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border border-[#dadce0]"><RotateCcw size={14} /> بازنشانی پرامپت‌ها</button>
                         </div>
                     </Card>
                 </div>
@@ -355,22 +397,22 @@ function KnowledgePanel({ onError, onSuccess }: { onError: (s: string) => void; 
         try {
             const res = await adminApi.saveAiKnowledge(form, form.id);
             if (!res.success) throw new Error(res.message);
-            onSuccess('Knowledge saved');
+            onSuccess('دانش ذخیره شد');
             setForm({ subject_key: form.subject_key, title: '', content: '', is_active: 1 });
             load();
         } catch (e: any) { onError(e.message); }
     };
     return (
         <div className="grid lg:grid-cols-2 gap-6">
-            <Card title="Items">
+            <Card title="موارد">
                 <div className="flex gap-2 mb-3">
-                    <input className={inputCls} value={q} onChange={(e) => setQ(e.target.value)} placeholder="search..." />
+                    <input className={inputCls} value={q} onChange={(e) => setQ(e.target.value)} placeholder="جستجو..." />
                     <button onClick={load} className="px-3 rounded-xl bg-[#1a73e8] text-white"><RefreshCw size={14} /></button>
                 </div>
                 <div className="space-y-2 max-h-[70vh] overflow-y-auto">
                     {items.map((it) => (
                         <div key={it.id} className="flex items-start gap-2 p-3 rounded-xl bg-[#f8f9fa] dark:bg-[#131314]">
-                            <button className="flex-1 text-left" onClick={() => edit(it.id)}>
+                            <button className="flex-1 text-start" onClick={() => edit(it.id)}>
                                 <p className="text-xs font-bold">{it.title}</p>
                                 <p className="text-[10px] text-[#86868b]">{it.subject_key} · {it.chapter || '—'} · {it.grade || '—'}</p>
                             </button>
@@ -379,23 +421,23 @@ function KnowledgePanel({ onError, onSuccess }: { onError: (s: string) => void; 
                     ))}
                 </div>
             </Card>
-            <Card title={form.id ? `Edit #${form.id}` : 'New knowledge'}>
+            <Card title={form.id ? `ویرایش #${form.id}` : 'دانش جدید'}>
                 <div className="grid sm:grid-cols-2 gap-3">
-                    <Field label="subject_key" value={form.subject_key} onChange={(v) => setForm({ ...form, subject_key: v })} />
-                    <Field label="grade" value={form.grade || ''} onChange={(v) => setForm({ ...form, grade: v })} />
-                    <Field label="chapter" value={form.chapter || ''} onChange={(v) => setForm({ ...form, chapter: v })} />
-                    <Field label="topic" value={form.topic || ''} onChange={(v) => setForm({ ...form, topic: v })} />
-                    <div className="sm:col-span-2"><Field label="title" value={form.title} onChange={(v) => setForm({ ...form, title: v })} /></div>
-                    <Field label="keywords" value={form.keywords || ''} onChange={(v) => setForm({ ...form, keywords: v })} />
-                    <Field label="source" value={form.source || ''} onChange={(v) => setForm({ ...form, source: v })} />
+                    <Field label="کلید درس" value={form.subject_key} onChange={(v) => setForm({ ...form, subject_key: v })} />
+                    <Field label="پایه" value={form.grade || ''} onChange={(v) => setForm({ ...form, grade: v })} />
+                    <Field label="فصل" value={form.chapter || ''} onChange={(v) => setForm({ ...form, chapter: v })} />
+                    <Field label="مبحث" value={form.topic || ''} onChange={(v) => setForm({ ...form, topic: v })} />
+                    <div className="sm:col-span-2"><Field label="عنوان" value={form.title} onChange={(v) => setForm({ ...form, title: v })} /></div>
+                    <Field label="کلیدواژه‌ها" value={form.keywords || ''} onChange={(v) => setForm({ ...form, keywords: v })} />
+                    <Field label="منبع" value={form.source || ''} onChange={(v) => setForm({ ...form, source: v })} />
                 </div>
-                <div className="mt-3"><label className={labelCls}>content</label><textarea className={areaCls} value={form.content || ''} onChange={(e) => setForm({ ...form, content: e.target.value })} /></div>
-                <div className="mt-3"><label className={labelCls}>key points</label><textarea className={areaCls} value={form.key_points || ''} onChange={(e) => setForm({ ...form, key_points: e.target.value })} /></div>
-                <div className="mt-3"><label className={labelCls}>examples</label><textarea className={areaCls} value={form.examples || ''} onChange={(e) => setForm({ ...form, examples: e.target.value })} /></div>
+                <div className="mt-3"><label className={labelCls}>محتوا</label><textarea className={areaCls} value={form.content || ''} onChange={(e) => setForm({ ...form, content: e.target.value })} /></div>
+                <div className="mt-3"><label className={labelCls}>نکات کلیدی</label><textarea className={areaCls} value={form.key_points || ''} onChange={(e) => setForm({ ...form, key_points: e.target.value })} /></div>
+                <div className="mt-3"><label className={labelCls}>نمونه‌ها</label><textarea className={areaCls} value={form.examples || ''} onChange={(e) => setForm({ ...form, examples: e.target.value })} /></div>
                 <div className="flex items-center gap-3 mt-4">
-                    <Toggle label="active" checked={!!form.is_active} onChange={(v) => setForm({ ...form, is_active: v ? 1 : 0 })} />
-                    <button onClick={save} className="flex items-center gap-2 bg-[#1a73e8] text-white px-4 py-2 rounded-xl text-xs font-bold"><Save size={14} /> Save</button>
-                    {form.id && <button onClick={() => setForm({ subject_key: 'math', title: '', content: '', is_active: 1 })} className="text-xs">New</button>}
+                    <Toggle label="فعال" checked={!!form.is_active} onChange={(v) => setForm({ ...form, is_active: v ? 1 : 0 })} />
+                    <button onClick={save} className="flex items-center gap-2 bg-[#1a73e8] text-white px-4 py-2 rounded-xl text-xs font-bold"><Save size={14} /> ذخیره</button>
+                    {form.id && <button onClick={() => setForm({ subject_key: 'math', title: '', content: '', is_active: 1 })} className="text-xs">جدید</button>}
                 </div>
             </Card>
         </div>
@@ -414,37 +456,37 @@ function SuggestionsPanel({ onError, onSuccess }: { onError: (s: string) => void
         try {
             const res = await adminApi.saveAiSuggestion(form, form.id);
             if (!res.success) throw new Error(res.message);
-            onSuccess('Suggestion saved');
+            onSuccess('پیشنهاد ذخیره شد');
             setForm({ subject_key: form.subject_key, title: '', prompt: '', is_active: 1, source: 'seed' });
             load();
         } catch (e: any) { onError(e.message); }
     };
     return (
         <div className="grid lg:grid-cols-2 gap-6">
-            <Card title="Pool">
+            <Card title="فهرست">
                 <div className="space-y-2 max-h-[70vh] overflow-y-auto">
                     {items.map((it) => (
                         <div key={it.id} className="flex gap-2 p-3 rounded-xl bg-[#f8f9fa] dark:bg-[#131314]">
-                            <button className="flex-1 text-left" onClick={() => setForm(it)}>
+                            <button className="flex-1 text-start" onClick={() => setForm(it)}>
                                 <p className="text-xs font-bold">{it.title}</p>
-                                <p className="text-[10px] text-[#86868b]">{it.subject_key} · used {it.use_count}</p>
+                                <p className="text-[10px] text-[#86868b]">{it.subject_key} · استفاده {it.use_count}</p>
                             </button>
                             <button onClick={async () => { await adminApi.deleteAiSuggestion(it.id); load(); }} className="text-red-500"><Trash2 size={14} /></button>
                         </div>
                     ))}
                 </div>
             </Card>
-            <Card title={form.id ? `Edit #${form.id}` : 'New suggestion'}>
-                <Field label="subject_key" value={form.subject_key} onChange={(v) => setForm({ ...form, subject_key: v })} />
-                <div className="mt-3"><Field label="title" value={form.title} onChange={(v) => setForm({ ...form, title: v })} /></div>
-                <div className="mt-3"><label className={labelCls}>prompt</label><textarea className={areaCls} value={form.prompt} onChange={(e) => setForm({ ...form, prompt: e.target.value })} /></div>
+            <Card title={form.id ? `ویرایش #${form.id}` : 'پیشنهاد جدید'}>
+                <Field label="کلید درس" value={form.subject_key} onChange={(v) => setForm({ ...form, subject_key: v })} />
+                <div className="mt-3"><Field label="عنوان" value={form.title} onChange={(v) => setForm({ ...form, title: v })} /></div>
+                <div className="mt-3"><label className={labelCls}>پرامپت</label><textarea className={areaCls} value={form.prompt} onChange={(e) => setForm({ ...form, prompt: e.target.value })} /></div>
                 <div className="grid sm:grid-cols-2 gap-3 mt-3">
-                    <Field label="hint" value={form.hint || ''} onChange={(v) => setForm({ ...form, hint: v })} />
-                    <Field label="icon" value={form.icon || ''} onChange={(v) => setForm({ ...form, icon: v })} />
+                    <Field label="راهنما" value={form.hint || ''} onChange={(v) => setForm({ ...form, hint: v })} />
+                    <Field label="آیکون" value={form.icon || ''} onChange={(v) => setForm({ ...form, icon: v })} />
                 </div>
                 <div className="flex gap-3 mt-4">
-                    <Toggle label="active" checked={!!form.is_active} onChange={(v) => setForm({ ...form, is_active: v ? 1 : 0 })} />
-                    <button onClick={save} className="flex items-center gap-2 bg-[#1a73e8] text-white px-4 py-2 rounded-xl text-xs font-bold"><Save size={14} /> Save</button>
+                    <Toggle label="فعال" checked={!!form.is_active} onChange={(v) => setForm({ ...form, is_active: v ? 1 : 0 })} />
+                    <button onClick={save} className="flex items-center gap-2 bg-[#1a73e8] text-white px-4 py-2 rounded-xl text-xs font-bold"><Save size={14} /> ذخیره</button>
                 </div>
             </Card>
         </div>
@@ -465,17 +507,17 @@ function BooksPanel({ onError, onSuccess }: { onError: (s: string) => void; onSu
         try {
             const res = await adminApi.saveAiBook(form, form.id);
             if (!res.success) throw new Error(res.message);
-            onSuccess('Book saved');
+            onSuccess('کتاب ذخیره شد');
             load();
         } catch (e: any) { onError(e.message); }
     };
     const ingest = async () => {
-        if (!form.id) { onError('Save the book first'); return; }
+        if (!form.id) { onError('اول کتاب را ذخیره کن'); return; }
         setIngesting(true);
         try {
             const res = await adminApi.ingestAiBook(form.id, { contentText: ingestText });
             if (!res.success) throw new Error(res.message);
-            onSuccess(`Ingested ${res.totalChunks} chunks (${res.embedded} embedded, ${res.skipped} skipped)`);
+            onSuccess(`${res.totalChunks} بخش پردازش شد (${res.embedded} جاسازی شد، ${res.skipped} رد شد)`);
             setIngestText('');
             load();
         } catch (e: any) { onError(e.message); }
@@ -486,12 +528,12 @@ function BooksPanel({ onError, onSuccess }: { onError: (s: string) => void; onSu
         if (!f) return;
         const reader = new FileReader();
         reader.onload = async () => {
-            if (!form.id) { onError('Save the book first'); return; }
+            if (!form.id) { onError('اول کتاب را ذخیره کن'); return; }
             setIngesting(true);
             try {
                 const res = await adminApi.ingestAiBook(form.id, { fileData: reader.result });
                 if (!res.success) throw new Error(res.message);
-                onSuccess(`Ingested ${res.totalChunks} chunks`);
+                onSuccess(`${res.totalChunks} بخش پردازش شد`);
                 load();
             } catch (err: any) { onError(err.message); }
             finally { setIngesting(false); }
@@ -500,38 +542,38 @@ function BooksPanel({ onError, onSuccess }: { onError: (s: string) => void; onSu
     };
     return (
         <div className="grid lg:grid-cols-2 gap-6">
-            <Card title="Catalog">
+            <Card title="فهرست کتاب‌ها">
                 {items.map((b) => (
-                    <button key={b.id} onClick={() => setForm(b)} className={`w-full text-left p-3 rounded-xl mb-2 ${form.id === b.id ? 'bg-[#e8f0fe]' : 'bg-[#f8f9fa] dark:bg-[#131314]'}`}>
+                    <button key={b.id} onClick={() => setForm(b)} className={`w-full text-start p-3 rounded-xl mb-2 ${form.id === b.id ? 'bg-[#e8f0fe]' : 'bg-[#f8f9fa] dark:bg-[#131314]'}`}>
                         <p className="text-xs font-bold">{b.title}</p>
-                        <p className="text-[10px] text-[#86868b]">{b.subject_key} · {b.chunk_count || 0} chunks · {(b.content_chars || 0).toLocaleString()} chars</p>
+                        <p className="text-[10px] text-[#86868b]">{b.subject_key} · {b.chunk_count || 0} بخش · {(b.content_chars || 0).toLocaleString()} نویسه</p>
                     </button>
                 ))}
-                <button onClick={() => setForm({ title: '', is_active: 1, sort_order: 100 })} className="text-xs font-bold text-[#1a73e8]">+ New book</button>
+                <button onClick={() => setForm({ title: '', is_active: 1, sort_order: 100 })} className="text-xs font-bold text-[#1a73e8]">+ کتاب جدید</button>
             </Card>
-            <Card title={form.id ? `Edit #${form.id}` : 'New book'}>
-                <Field label="title" value={form.title || ''} onChange={(v) => setForm({ ...form, title: v })} />
+            <Card title={form.id ? `ویرایش #${form.id}` : 'کتاب جدید'}>
+                <Field label="عنوان" value={form.title || ''} onChange={(v) => setForm({ ...form, title: v })} />
                 <div className="grid sm:grid-cols-2 gap-3 mt-3">
-                    <Field label="subject_key" value={form.subject_key || ''} onChange={(v) => setForm({ ...form, subject_key: v })} />
-                    <Field label="subject" value={form.subject || ''} onChange={(v) => setForm({ ...form, subject: v })} />
-                    <Field label="grade" value={form.grade || ''} onChange={(v) => setForm({ ...form, grade: v })} />
-                    <Field label="publisher" value={form.publisher || ''} onChange={(v) => setForm({ ...form, publisher: v })} />
-                    <Field label="pdf_url" value={form.pdf_url || ''} onChange={(v) => setForm({ ...form, pdf_url: v })} />
-                    <Field label="sort_order" type="number" value={form.sort_order || 100} onChange={(v) => setForm({ ...form, sort_order: Number(v) })} />
+                    <Field label="کلید درس" value={form.subject_key || ''} onChange={(v) => setForm({ ...form, subject_key: v })} />
+                    <Field label="درس" value={form.subject || ''} onChange={(v) => setForm({ ...form, subject: v })} />
+                    <Field label="پایه" value={form.grade || ''} onChange={(v) => setForm({ ...form, grade: v })} />
+                    <Field label="ناشر" value={form.publisher || ''} onChange={(v) => setForm({ ...form, publisher: v })} />
+                    <Field label="آدرس PDF" value={form.pdf_url || ''} onChange={(v) => setForm({ ...form, pdf_url: v })} />
+                    <Field label="ترتیب" type="number" value={form.sort_order || 100} onChange={(v) => setForm({ ...form, sort_order: Number(v) })} />
                 </div>
-                <div className="mt-3"><label className={labelCls}>summary</label><textarea className={areaCls} value={form.content_summary || ''} onChange={(e) => setForm({ ...form, content_summary: e.target.value })} /></div>
-                <Toggle label="active" checked={!!form.is_active} onChange={(v) => setForm({ ...form, is_active: v ? 1 : 0 })} />
+                <div className="mt-3"><label className={labelCls}>خلاصه</label><textarea className={areaCls} value={form.content_summary || ''} onChange={(e) => setForm({ ...form, content_summary: e.target.value })} /></div>
+                <Toggle label="فعال" checked={!!form.is_active} onChange={(v) => setForm({ ...form, is_active: v ? 1 : 0 })} />
                 <div className="flex gap-2 mt-3">
-                    <button onClick={save} className="flex items-center gap-2 bg-[#1a73e8] text-white px-4 py-2 rounded-xl text-xs font-bold"><Save size={14} /> Save</button>
-                    {form.id && <button onClick={async () => { await adminApi.deleteAiBook(form.id); setForm({ title: '', is_active: 1 }); load(); }} className="text-red-500 text-xs font-bold">Delete</button>}
+                    <button onClick={save} className="flex items-center gap-2 bg-[#1a73e8] text-white px-4 py-2 rounded-xl text-xs font-bold"><Save size={14} /> ذخیره</button>
+                    {form.id && <button onClick={async () => { await adminApi.deleteAiBook(form.id); setForm({ title: '', is_active: 1 }); load(); }} className="text-red-500 text-xs font-bold">حذف</button>}
                 </div>
                 {form.id && (
                     <div className="mt-6 pt-4 border-t border-[#dadce0] dark:border-[#333537]">
-                        <p className={labelCls}>Ingest textbook (chunk + embed)</p>
+                        <p className={labelCls}>ورود متن کتاب (تکه‌تکه و جاسازی)</p>
                         <input type="file" accept="application/pdf,.txt" onChange={onFile} className="text-xs mb-3" />
-                        <textarea className={areaCls} placeholder="Or paste extracted text..." value={ingestText} onChange={(e) => setIngestText(e.target.value)} />
+                        <textarea className={areaCls} placeholder="یا متن استخراج‌شده را بچسبان..." value={ingestText} onChange={(e) => setIngestText(e.target.value)} />
                         <button onClick={ingest} disabled={ingesting} className="mt-2 flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border">
-                            {ingesting ? <Loader2 size={14} className="animate-spin" /> : <Library size={14} />} Ingest text
+                            {ingesting ? <Loader2 size={14} className="animate-spin" /> : <Library size={14} />} پردازش متن
                         </button>
                     </div>
                 )}
@@ -552,34 +594,34 @@ function PricingPanel({ onError, onSuccess }: { onError: (s: string) => void; on
         try {
             const res = await adminApi.saveAiPricing(form, form.id);
             if (!res.success) throw new Error(res.message);
-            onSuccess('Pricing saved');
+            onSuccess('قیمت ذخیره شد');
             load();
         } catch (e: any) { onError(e.message); }
     };
     return (
         <div className="grid lg:grid-cols-2 gap-6">
-            <Card title="Model prices">
+            <Card title="قیمت مدل‌ها">
                 {items.map((p) => (
-                    <button key={p.id} onClick={() => setForm(p)} className="w-full text-left p-3 rounded-xl bg-[#f8f9fa] dark:bg-[#131314] mb-2 text-xs">
+                    <button key={p.id} onClick={() => setForm(p)} className="w-full text-start p-3 rounded-xl bg-[#f8f9fa] dark:bg-[#131314] mb-2 text-xs">
                         <span className="font-bold">{p.model}</span> · {p.operation_type} · in {p.input_usd_per_1m} / out {p.output_usd_per_1m}
                     </button>
                 ))}
-                <button onClick={() => setForm({ provider: 'gapgpt', model: '', operation_type: 'chat', is_active: 1 })} className="text-xs font-bold text-[#1a73e8]">+ New row</button>
+                <button onClick={() => setForm({ provider: 'gapgpt', model: '', operation_type: 'chat', is_active: 1 })} className="text-xs font-bold text-[#1a73e8]">+ ردیف جدید</button>
             </Card>
-            <Card title={form.id ? `Edit #${form.id}` : 'New price'}>
+            <Card title={form.id ? `ویرایش #${form.id}` : 'قیمت جدید'}>
                 <div className="grid sm:grid-cols-2 gap-3">
-                    <Field label="provider" value={form.provider} onChange={(v) => setForm({ ...form, provider: v })} />
-                    <Field label="model" value={form.model} onChange={(v) => setForm({ ...form, model: v })} />
-                    <Field label="operation_type" value={form.operation_type} onChange={(v) => setForm({ ...form, operation_type: v })} />
-                    <Field label="input USD / 1M" type="number" value={form.input_usd_per_1m || 0} onChange={(v) => setForm({ ...form, input_usd_per_1m: Number(v) })} />
-                    <Field label="cached USD / 1M" type="number" value={form.cached_usd_per_1m || 0} onChange={(v) => setForm({ ...form, cached_usd_per_1m: Number(v) })} />
-                    <Field label="output USD / 1M" type="number" value={form.output_usd_per_1m || 0} onChange={(v) => setForm({ ...form, output_usd_per_1m: Number(v) })} />
-                    <Field label="unit USD" type="number" value={form.unit_usd || 0} onChange={(v) => setForm({ ...form, unit_usd: Number(v) })} />
-                    <Field label="flat coins" type="number" value={form.flat_coin_cost ?? ''} onChange={(v) => setForm({ ...form, flat_coin_cost: v === '' ? null : Number(v) })} />
+                    <Field label="سرویس‌دهنده" value={form.provider} onChange={(v) => setForm({ ...form, provider: v })} />
+                    <Field label="مدل" value={form.model} onChange={(v) => setForm({ ...form, model: v })} />
+                    <Field label="نوع عملیات" value={form.operation_type} onChange={(v) => setForm({ ...form, operation_type: v })} />
+                    <Field label="دلار ورودی / یک میلیون" type="number" value={form.input_usd_per_1m || 0} onChange={(v) => setForm({ ...form, input_usd_per_1m: Number(v) })} />
+                    <Field label="دلار کش / یک میلیون" type="number" value={form.cached_usd_per_1m || 0} onChange={(v) => setForm({ ...form, cached_usd_per_1m: Number(v) })} />
+                    <Field label="دلار خروجی / یک میلیون" type="number" value={form.output_usd_per_1m || 0} onChange={(v) => setForm({ ...form, output_usd_per_1m: Number(v) })} />
+                    <Field label="دلار هر واحد" type="number" value={form.unit_usd || 0} onChange={(v) => setForm({ ...form, unit_usd: Number(v) })} />
+                    <Field label="سکه ثابت" type="number" value={form.flat_coin_cost ?? ''} onChange={(v) => setForm({ ...form, flat_coin_cost: v === '' ? null : Number(v) })} />
                 </div>
                 <div className="flex gap-2 mt-4">
-                    <button onClick={save} className="flex items-center gap-2 bg-[#1a73e8] text-white px-4 py-2 rounded-xl text-xs font-bold"><Save size={14} /> Save</button>
-                    {form.id && <button onClick={async () => { await adminApi.deleteAiPricing(form.id); setForm({ provider: 'gapgpt', model: '', operation_type: 'chat' }); load(); }} className="text-red-500 text-xs font-bold">Delete</button>}
+                    <button onClick={save} className="flex items-center gap-2 bg-[#1a73e8] text-white px-4 py-2 rounded-xl text-xs font-bold"><Save size={14} /> ذخیره</button>
+                    {form.id && <button onClick={async () => { await adminApi.deleteAiPricing(form.id); setForm({ provider: 'gapgpt', model: '', operation_type: 'chat' }); load(); }} className="text-red-500 text-xs font-bold">حذف</button>}
                 </div>
             </Card>
         </div>
@@ -602,7 +644,7 @@ function WalletsPanel({ onError, onSuccess }: { onError: (s: string) => void; on
         try {
             const res = await adminApi.adjustAiWallet(userId, { delta: sign * Math.abs(Number(delta) || 0), reason });
             if (!res.success) throw new Error(res.message);
-            onSuccess('Wallet updated');
+            onSuccess('کیف پول به‌روز شد');
             search();
         } catch (e: any) { onError(e.message); }
     };
@@ -622,47 +664,47 @@ function WalletsPanel({ onError, onSuccess }: { onError: (s: string) => void; on
         try {
             const res = await adminApi.saveAiUserSettings(settingsUser, settings);
             if (!res.success) throw new Error(res.message);
-            onSuccess('Student AI settings saved');
+            onSuccess('تنظیمات هوش مصنوعی دانش‌آموز ذخیره شد');
             setSettings(res.settings);
         } catch (e: any) { onError(e.message); }
     };
     return (
         <div className="flex flex-col gap-6">
-            <Card title="Student coin wallets">
+            <Card title="کیف سکه دانش‌آموزان">
                 <div className="flex flex-wrap gap-2 mb-4">
-                    <input className={`${inputCls} flex-1 min-w-[180px]`} value={q} onChange={(e) => setQ(e.target.value)} placeholder="search username, phone, id..." />
-                    <button onClick={search} className="px-4 rounded-xl bg-[#1a73e8] text-white text-xs font-bold">Search</button>
+                    <input className={`${inputCls} flex-1 min-w-[180px]`} value={q} onChange={(e) => setQ(e.target.value)} placeholder="جستجوی نام کاربری، موبایل یا شناسه..." />
+                    <button onClick={search} className="px-4 rounded-xl bg-[#1a73e8] text-white text-xs font-bold">جستجو</button>
                     <input className={`${inputCls} w-28`} type="number" value={delta} onChange={(e) => setDelta(e.target.value)} />
-                    <input className={`${inputCls} w-48`} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="reason" />
+                    <input className={`${inputCls} w-48`} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="دلیل" />
                 </div>
                 <div className="space-y-2">
                     {items.map((u) => (
                         <div key={u.id} className="flex flex-wrap items-center gap-3 p-3 rounded-xl bg-[#f8f9fa] dark:bg-[#131314] text-xs">
                             <div className="flex-1 min-w-[140px]">
                                 <p className="font-bold">{u.username} <span className="text-[#86868b]">#{u.id}</span></p>
-                                <p className="text-[#86868b]">{u.current_plan} · daily {u.daily_balance ?? 0} · purchased {u.purchased_balance ?? 0}</p>
+                                <p className="text-[#86868b]">{u.current_plan} · روزانه {u.daily_balance ?? 0} · خریداری‌شده {u.purchased_balance ?? 0}</p>
                             </div>
-                            <button onClick={() => openSettings(u.id)} className="px-3 py-1.5 rounded-lg bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#444746] font-bold">Settings</button>
-                            <button onClick={() => adjust(u.id, 1)} className="px-3 py-1.5 rounded-lg bg-green-50 text-green-700 font-bold">+ coins</button>
-                            <button onClick={() => adjust(u.id, -1)} className="px-3 py-1.5 rounded-lg bg-red-50 text-red-600 font-bold">− coins</button>
+                            <button onClick={() => openSettings(u.id)} className="px-3 py-1.5 rounded-lg bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#444746] font-bold">تنظیمات</button>
+                            <button onClick={() => adjust(u.id, 1)} className="px-3 py-1.5 rounded-lg bg-green-50 text-green-700 font-bold">+ سکه</button>
+                            <button onClick={() => adjust(u.id, -1)} className="px-3 py-1.5 rounded-lg bg-red-50 text-red-600 font-bold">− سکه</button>
                         </div>
                     ))}
                 </div>
             </Card>
             {settings && settingsUser && (
-                <Card title={`AI settings for user #${settingsUser}`}>
+                <Card title={`تنظیمات هوش مصنوعی کاربر #${settingsUser}`}>
                     <div className="grid sm:grid-cols-3 gap-3">
-                        <Field label="tone" value={settings.tone} onChange={(v) => setSettings({ ...settings, tone: v })} />
-                        <Field label="reasoning_level" value={settings.reasoning_level} onChange={(v) => setSettings({ ...settings, reasoning_level: v })} />
-                        <Field label="verbosity" value={settings.verbosity} onChange={(v) => setSettings({ ...settings, verbosity: v })} />
-                        <Field label="creativity" type="number" value={settings.creativity} onChange={(v) => setSettings({ ...settings, creativity: Number(v) })} />
+                        <Field label="لحن" value={settings.tone} onChange={(v) => setSettings({ ...settings, tone: v })} />
+                        <Field label="سطح استدلال" value={settings.reasoning_level} onChange={(v) => setSettings({ ...settings, reasoning_level: v })} />
+                        <Field label="میزان توضیح" value={settings.verbosity} onChange={(v) => setSettings({ ...settings, verbosity: v })} />
+                        <Field label="خلاقیت" type="number" value={settings.creativity} onChange={(v) => setSettings({ ...settings, creativity: Number(v) })} />
                     </div>
                     <div className="grid sm:grid-cols-2 gap-2 mt-3">
                         {(['low_coin_mode', 'always_examples', 'concise_responses', 'step_by_step', 'voice_replies', 'memory_enabled', 'knowledge_enabled', 'pdf_references_enabled'] as const).map((k) => (
-                            <Toggle key={k} label={k} checked={!!settings[k]} onChange={(v) => setSettings({ ...settings, [k]: v ? 1 : 0 })} />
+                            <Toggle key={k} label={faLabel(k)} checked={!!settings[k]} onChange={(v) => setSettings({ ...settings, [k]: v ? 1 : 0 })} />
                         ))}
                     </div>
-                    <button onClick={saveSettings} className="mt-4 flex items-center gap-2 bg-[#1a73e8] text-white px-4 py-2 rounded-xl text-xs font-bold"><Save size={14} /> Save student settings</button>
+                    <button onClick={saveSettings} className="mt-4 flex items-center gap-2 bg-[#1a73e8] text-white px-4 py-2 rounded-xl text-xs font-bold"><Save size={14} /> ذخیره تنظیمات دانش‌آموز</button>
                 </Card>
             )}
         </div>
@@ -682,22 +724,22 @@ function MemoryPanel({ onError, onSuccess }: { onError: (s: string) => void; onS
         try {
             const res = await adminApi.saveAiMemory({ ...form, user_id: Number(form.user_id) }, form.id);
             if (!res.success) throw new Error(res.message);
-            onSuccess('Memory saved');
+            onSuccess('حافظه ذخیره شد');
             setForm({ user_id: form.user_id, memory_type: 'important_fact', content: '', importance: 5, confidence: 70, is_active: 1 });
             load();
         } catch (e: any) { onError(e.message); }
     };
     return (
         <div className="grid lg:grid-cols-2 gap-6">
-            <Card title="Student memory">
+            <Card title="حافظه دانش‌آموز">
                 <div className="flex gap-2 mb-3">
-                    <input className={inputCls} value={q} onChange={(e) => setQ(e.target.value)} placeholder="search user, subject, text..." />
+                    <input className={inputCls} value={q} onChange={(e) => setQ(e.target.value)} placeholder="جستجوی کاربر، درس یا متن..." />
                     <button onClick={load} className="px-3 rounded-xl bg-[#1a73e8] text-white"><RefreshCw size={14} /></button>
                 </div>
                 <div className="space-y-2 max-h-[70vh] overflow-y-auto">
                     {items.map((it) => (
                         <div key={it.id} className="flex gap-2 p-3 rounded-xl bg-[#f8f9fa] dark:bg-[#131314]">
-                            <button className="flex-1 text-left" onClick={() => setForm(it)}>
+                            <button className="flex-1 text-start" onClick={() => setForm(it)}>
                                 <p className="text-xs font-bold">{it.username || `user #${it.user_id}`} · {it.memory_type}</p>
                                 <p className="text-[10px] text-[#86868b] line-clamp-2">{it.content}</p>
                             </button>
@@ -706,19 +748,19 @@ function MemoryPanel({ onError, onSuccess }: { onError: (s: string) => void; onS
                     ))}
                 </div>
             </Card>
-            <Card title={form.id ? `Edit #${form.id}` : 'New memory'}>
+            <Card title={form.id ? `ویرایش #${form.id}` : 'حافظه جدید'}>
                 <div className="grid sm:grid-cols-2 gap-3">
-                    <Field label="user_id" value={form.user_id} onChange={(v) => setForm({ ...form, user_id: v })} />
-                    <Field label="memory_type" value={form.memory_type} onChange={(v) => setForm({ ...form, memory_type: v })} />
-                    <Field label="subject_key" value={form.subject_key || ''} onChange={(v) => setForm({ ...form, subject_key: v })} />
-                    <Field label="source" value={form.source || 'admin'} onChange={(v) => setForm({ ...form, source: v })} />
-                    <Field label="importance 1-10" type="number" value={form.importance} onChange={(v) => setForm({ ...form, importance: Number(v) })} />
-                    <Field label="confidence 0-100" type="number" value={form.confidence} onChange={(v) => setForm({ ...form, confidence: Number(v) })} />
+                    <Field label="شناسه کاربر" value={form.user_id} onChange={(v) => setForm({ ...form, user_id: v })} />
+                    <Field label="نوع حافظه" value={form.memory_type} onChange={(v) => setForm({ ...form, memory_type: v })} />
+                    <Field label="کلید درس" value={form.subject_key || ''} onChange={(v) => setForm({ ...form, subject_key: v })} />
+                    <Field label="منبع" value={form.source || 'admin'} onChange={(v) => setForm({ ...form, source: v })} />
+                    <Field label="اهمیت ۱ تا ۱۰" type="number" value={form.importance} onChange={(v) => setForm({ ...form, importance: Number(v) })} />
+                    <Field label="اطمینان ۰ تا ۱۰۰" type="number" value={form.confidence} onChange={(v) => setForm({ ...form, confidence: Number(v) })} />
                 </div>
-                <div className="mt-3"><label className={labelCls}>content</label><textarea className={areaCls} value={form.content || ''} onChange={(e) => setForm({ ...form, content: e.target.value })} /></div>
+                <div className="mt-3"><label className={labelCls}>محتوا</label><textarea className={areaCls} value={form.content || ''} onChange={(e) => setForm({ ...form, content: e.target.value })} /></div>
                 <div className="flex gap-3 mt-4">
-                    <Toggle label="active" checked={!!form.is_active} onChange={(v) => setForm({ ...form, is_active: v ? 1 : 0 })} />
-                    <button onClick={save} className="flex items-center gap-2 bg-[#1a73e8] text-white px-4 py-2 rounded-xl text-xs font-bold"><Save size={14} /> Save</button>
+                    <Toggle label="فعال" checked={!!form.is_active} onChange={(v) => setForm({ ...form, is_active: v ? 1 : 0 })} />
+                    <button onClick={save} className="flex items-center gap-2 bg-[#1a73e8] text-white px-4 py-2 rounded-xl text-xs font-bold"><Save size={14} /> ذخیره</button>
                 </div>
             </Card>
         </div>
@@ -740,31 +782,31 @@ function ChatsPanel({ onError, onSuccess }: { onError: (s: string) => void; onSu
     };
     return (
         <div className="grid lg:grid-cols-2 gap-6">
-            <Card title="Conversations">
+            <Card title="گفتگوها">
                 <div className="flex gap-2 mb-3">
-                    <input className={inputCls} value={q} onChange={(e) => setQ(e.target.value)} placeholder="search title, user, id..." />
+                    <input className={inputCls} value={q} onChange={(e) => setQ(e.target.value)} placeholder="جستجوی عنوان، کاربر یا شناسه..." />
                     <button onClick={load} className="px-3 rounded-xl bg-[#1a73e8] text-white"><RefreshCw size={14} /></button>
                 </div>
                 <div className="space-y-2 max-h-[70vh] overflow-y-auto">
                     {items.map((c) => (
                         <div key={c.id} className="flex gap-2 p-3 rounded-xl bg-[#f8f9fa] dark:bg-[#131314]">
-                            <button className="flex-1 text-left" onClick={() => view(c.id)}>
+                            <button className="flex-1 text-start" onClick={() => view(c.id)}>
                                 <p className="text-xs font-bold">{c.title}</p>
-                                <p className="text-[10px] text-[#86868b]">{c.username || `#${c.user_id}`} · {c.subject_key} · {c.message_count} msgs</p>
+                                <p className="text-[10px] text-[#86868b]">{c.username || `#${c.user_id}`} · {c.subject_key} · {c.message_count} پیام</p>
                             </button>
                             <button onClick={async () => {
-                                if (!window.confirm('Delete this conversation?')) return;
+                                if (!window.confirm('این گفتگو حذف شود؟')) return;
                                 await adminApi.deleteAiConversation(c.id);
                                 if (open?.conversation?.id === c.id) setOpen(null);
-                                onSuccess('Conversation deleted');
+                                onSuccess('گفتگو حذف شد');
                                 load();
                             }} className="text-red-500"><Trash2 size={14} /></button>
                         </div>
                     ))}
                 </div>
             </Card>
-            <Card title={open?.conversation ? `#${open.conversation.id} · ${open.conversation.title}` : 'Messages'}>
-                {!open && <p className="text-xs text-[#86868b]">Select a conversation</p>}
+            <Card title={open?.conversation ? `#${open.conversation.id} · ${open.conversation.title}` : 'پیام‌ها'}>
+                {!open && <p className="text-xs text-[#86868b]">یک گفتگو را انتخاب کن</p>}
                 {open && (
                     <div className="space-y-2 max-h-[70vh] overflow-y-auto">
                         {(open.messages || []).map((m: any) => (

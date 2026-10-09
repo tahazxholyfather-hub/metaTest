@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { adminApi } from '../lib/adminApi';
 import {
-    ArrowRight, Lock, Mail, Hexagon, Eye, EyeOff, AlertCircle, Loader2
+    ArrowLeft, Lock, Mail, Hexagon, Eye, EyeOff, AlertCircle, Loader2
 } from 'lucide-react';
 
 export interface User {
@@ -40,18 +40,18 @@ const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
                 // set by the backend for security.
                 onLogin(res.user);
             } else {
-                setError(res?.message || "Invalid credentials");
+                setError(res?.message || "نام کاربری یا رمز اشتباه است");
                 setIsLoading(false);
             }
         } catch (err) {
             console.error('Login error:', err);
-            setError('Unable to reach server. Please try again.');
+            setError('ارتباط با سرور برقرار نشد. دوباره تلاش کن.');
             setIsLoading(false);
         }
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-[#131314] p-6 font-sans">
+        <div dir="rtl" className="min-h-screen flex items-center justify-center bg-[#f8f9fa] dark:bg-[#131314] p-6 font-sans">
             <div className="w-full max-w-[420px] space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
 
                 {/* Header Logo & Title */}
@@ -61,10 +61,10 @@ const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
                     </div>
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight text-gray-800 dark:text-gray-100">
-                            Admin Panel
+                            پنل ادمین
                         </h1>
                         <p className="text-sm font-medium text-[#86868b] mt-1">
-                            Separate admin sign-in — not your student account
+                            ورود جداگانه ادمین — این حساب دانش‌آموزی نیست
                         </p>
                     </div>
                 </div>
@@ -77,16 +77,16 @@ const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
                     <div className="space-y-5">
                         {/* Username Input */}
                         <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold uppercase tracking-[0.1em] text-[#86868b] px-1">Username</label>
+                            <label className="text-[10px] font-bold uppercase tracking-[0.1em] text-[#86868b] px-1">نام کاربری</label>
                             <div className="relative group">
-                                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-[#86868b] group-focus-within:text-[#1a73e8] transition-colors" size={18} />
+                                <Mail className="absolute right-4 top-1/2 -translate-y-1/2 text-[#86868b] group-focus-within:text-[#1a73e8] transition-colors" size={18} />
                                 <input
                                     type="text"
                                     required
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
-                                    className="w-full bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] text-gray-800 dark:text-gray-200 rounded-xl pl-12 pr-4 py-3.5 text-sm outline-none focus:border-[#1a73e8] focus:ring-4 focus:ring-[#1a73e8]/10 transition-all"
-                                    placeholder="username"
+                                    className="w-full bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] text-gray-800 dark:text-gray-200 rounded-xl pr-12 pl-4 py-3.5 text-sm outline-none focus:border-[#1a73e8] focus:ring-4 focus:ring-[#1a73e8]/10 transition-all"
+                                    placeholder="نام کاربری"
                                     autoComplete="username"
                                     disabled={isLoading}
                                 />
@@ -95,15 +95,15 @@ const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
 
                         {/* Password Input */}
                         <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold uppercase tracking-[0.1em] text-[#86868b] px-1">Password</label>
+                            <label className="text-[10px] font-bold uppercase tracking-[0.1em] text-[#86868b] px-1">رمز عبور</label>
                             <div className="relative group">
-                                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-[#86868b] group-focus-within:text-[#1a73e8] transition-colors" size={18} />
+                                <Lock className="absolute right-4 top-1/2 -translate-y-1/2 text-[#86868b] group-focus-within:text-[#1a73e8] transition-colors" size={18} />
                                 <input
                                     type={showPassword ? "text" : "password"}
                                     required
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
-                                    className="w-full bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] text-gray-800 dark:text-gray-200 rounded-xl pl-12 pr-12 py-3.5 text-sm outline-none focus:border-[#1a73e8] focus:ring-4 focus:ring-[#1a73e8]/10 transition-all"
+                                    className="w-full bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] text-gray-800 dark:text-gray-200 rounded-xl pr-12 pl-12 py-3.5 text-sm outline-none focus:border-[#1a73e8] focus:ring-4 focus:ring-[#1a73e8]/10 transition-all"
                                     placeholder="••••••••"
                                     autoComplete="current-password"
                                     disabled={isLoading}
@@ -111,7 +111,7 @@ const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-[#86868b] hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                                    className="absolute left-4 top-1/2 -translate-y-1/2 text-[#86868b] hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                                 >
                                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                                 </button>
@@ -137,8 +137,8 @@ const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
                             <Loader2 size={18} className="animate-spin" />
                         ) : (
                             <>
-                                Secure Sign In
-                                <ArrowRight size={16} />
+                                ورود امن
+                                <ArrowLeft size={16} />
                             </>
                         )}
                     </button>
@@ -146,7 +146,7 @@ const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
 
                 {/* Footer */}
                 <p className="text-center text-xs text-[#86868b] font-medium">
-                    Made by SOLTECH
+                    ساخته‌شده توسط سول‌تک
                 </p>
             </div>
         </div>

@@ -159,20 +159,20 @@ async function recordLoginFailure(adminId) {
 
 async function authenticateAdmin(username, password) {
     const admin = await loadAdminByUsername(String(username || '').trim());
-    if (!admin) return { ok: false, message: 'Invalid credentials' };
+    if (!admin) return { ok: false, message: 'نام کاربری یا رمز اشتباه است' };
 
     if (String(admin.status || 'active') !== 'active') {
-        return { ok: false, message: 'This admin account is disabled' };
+        return { ok: false, message: 'این حساب ادمین غیرفعال است' };
     }
 
     if (admin.locked_until && new Date(admin.locked_until).getTime() > Date.now()) {
-        return { ok: false, message: 'Account temporarily locked. Try again later.' };
+        return { ok: false, message: 'حساب موقتاً قفل شده. کمی بعد دوباره تلاش کن.' };
     }
 
     const result = await verifyAdminPassword(admin, password);
     if (!result.ok) {
         await recordLoginFailure(admin.id);
-        return { ok: false, message: 'Invalid credentials' };
+        return { ok: false, message: 'نام کاربری یا رمز اشتباه است' };
     }
 
     if (result.upgrade) {
@@ -214,7 +214,7 @@ async function requireAdminSession(req, res, next) {
         const admin = await loadAdminById(decoded.id);
         if (!admin) return unauthorized(res, 'Invalid admin session');
         if (String(admin.status || 'active') !== 'active') {
-            return unauthorized(res, 'This admin account is disabled');
+            return unauthorized(res, 'این حساب ادمین غیرفعال است');
         }
         req.admin = publicAdmin(admin);
         try {
@@ -235,7 +235,7 @@ function requireSuperAdmin(req, res, next) {
     if (!isSuperAdmin(req.admin)) {
         return res.status(403).json({
             success: false,
-            message: 'Only the main admin (id 1) can access this section.',
+            message: 'فقط مدیر اصلی به این بخش دسترسی دارد.',
         });
     }
     return next();

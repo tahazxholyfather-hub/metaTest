@@ -38,7 +38,7 @@ function denyIfActionForbidden(req, res) {
     if (isActionAllowed(req.admin, action)) return false;
     res.status(403).json({
         success: false,
-        message: 'You do not have access to this section.',
+        message: 'به این بخش دسترسی نداری.',
     });
     return true;
 }
@@ -48,7 +48,7 @@ function requireSection(...keys) {
         if (sectionAllowed(req.admin, keys)) return next();
         return res.status(403).json({
             success: false,
-            message: 'You do not have access to this section.',
+            message: 'به این بخش دسترسی نداری.',
         });
     };
 }
@@ -73,18 +73,18 @@ async function listAccess() {
 async function saveSections(adminId, input, updatedBy) {
     const id = Number(adminId);
     if (!Number.isInteger(id) || id <= 0) {
-        return { ok: false, status: 400, message: 'Invalid admin id' };
+        return { ok: false, status: 400, message: 'شناسه ادمین نامعتبر است' };
     }
     if (id === SUPER_ADMIN_ID) {
-        return { ok: false, status: 400, message: 'The main admin always has full access.' };
+        return { ok: false, status: 400, message: 'مدیر اصلی همیشه دسترسی کامل دارد.' };
     }
     const patch = sanitizeSectionPatch(input);
     if (!patch) {
-        return { ok: false, status: 400, message: 'No section permissions were provided.' };
+        return { ok: false, status: 400, message: 'دسترسی بخشی ارسال نشده.' };
     }
 
     const [[existing]] = await pool.query(`SELECT id FROM tam24_admins WHERE id = ? LIMIT 1`, [id]);
-    if (!existing) return { ok: false, status: 404, message: 'Admin not found' };
+    if (!existing) return { ok: false, status: 404, message: 'ادمین پیدا نشد' };
 
     const connection = await pool.getConnection();
     try {

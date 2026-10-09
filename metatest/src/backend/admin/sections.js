@@ -5,18 +5,15 @@
 const SUPER_ADMIN_ID = 1;
 
 const ASSIGNABLE_SECTIONS = [
-    { key: 'dashboard', label: 'Dashboard', defaultAllowed: true },
-    { key: 'edit-questions', label: 'Edit Questions', defaultAllowed: true },
-    { key: 'insert-questions', label: 'Insert Questions', defaultAllowed: true },
-    { key: 'curriculum', label: 'Curriculum', defaultAllowed: true },
-    { key: 'pdf-library', label: 'PDF Library', defaultAllowed: true },
-    { key: 'discount-codes', label: 'کد تخفیف', defaultAllowed: true },
-    { key: 'referral-settings', label: 'تنظیمات دعوت', defaultAllowed: true },
-    { key: 'withdrawals', label: 'برداشت‌ها', defaultAllowed: true },
-    { key: 'word-stats', label: 'Word Activity', defaultAllowed: true },
-    { key: 'reports', label: 'Reports', defaultAllowed: true },
-    { key: 'ai-manager', label: 'AI Manager', defaultAllowed: false },
-    { key: 'admins', label: 'Admins', defaultAllowed: false },
+    { key: 'dashboard', label: 'داشبورد', defaultAllowed: true },
+    { key: 'edit-questions', label: 'ویرایش سوال‌ها', defaultAllowed: true },
+    { key: 'insert-questions', label: 'افزودن سوال', defaultAllowed: true },
+    { key: 'curriculum', label: 'سرفصل‌ها', defaultAllowed: true },
+    { key: 'pdf-library', label: 'کتابخانه PDF', defaultAllowed: true },
+    { key: 'word-stats', label: 'فعالیت واژه‌ها', defaultAllowed: true },
+    { key: 'reports', label: 'گزارش‌ها', defaultAllowed: true },
+    { key: 'ai-manager', label: 'مدیریت هوش مصنوعی', defaultAllowed: false },
+    { key: 'admins', label: 'ادمین‌ها', defaultAllowed: false },
 ];
 
 const ASSIGNABLE_KEYS = new Set(ASSIGNABLE_SECTIONS.map((section) => section.key));

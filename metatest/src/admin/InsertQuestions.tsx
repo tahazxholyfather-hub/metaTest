@@ -131,8 +131,8 @@ export default function InsertQuestions() {
     };
 
     const handleManualSubmit = async () => {
-        if (!manual.text.trim()) { setErrorMessage('Question text is required.'); return; }
-        if (manual.options.some(o => !o.trim())) { setErrorMessage('All 4 options are required.'); return; }
+        if (!manual.text.trim()) { setErrorMessage('متن سوال الزامی است.'); return; }
+        if (manual.options.some(o => !o.trim())) { setErrorMessage('هر ۴ گزینه الزامی است.'); return; }
 
         setIsSavingManual(true);
         setErrorMessage(null);
@@ -159,15 +159,15 @@ export default function InsertQuestions() {
             const res = response.data || response;
 
             if (res.success) {
-                setSuccessMessage(`Question inserted successfully (ID: ${res.inserted_ids?.[0] ?? '—'}). New questions are inactive until reviewed.`);
+                setSuccessMessage(`سوال ثبت شد (شناسه: ${res.inserted_ids?.[0] ?? '—'}). سوال‌های جدید تا بازبینی غیرفعال می‌مانند.`);
                 // Keep metadata selections for faster batch entry, reset the content
                 setManual(EMPTY_MANUAL);
             } else {
-                setErrorMessage(res.message || 'Failed to insert the question.');
+                setErrorMessage(res.message || 'ثبت سوال ناموفق بود.');
             }
         } catch (error) {
             console.error('Manual insert error:', error);
-            setErrorMessage('An error occurred while inserting the question.');
+            setErrorMessage('هنگام ثبت سوال خطایی رخ داد.');
         } finally {
             setIsSavingManual(false);
         }
@@ -179,19 +179,19 @@ export default function InsertQuestions() {
         if (!selected) return;
 
         if (!selected.name.toLowerCase().endsWith('.docx')) {
-            setErrorMessage('Only Word (.docx) files are supported.');
+            setErrorMessage('فقط فایل ورد (.docx) پشتیبانی می‌شود.');
             e.target.value = '';
             return;
         }
 
         const reader = new FileReader();
         reader.onload = () => setFile({ data: reader.result as string, name: selected.name });
-        reader.onerror = () => setErrorMessage('Failed to read the selected file.');
+        reader.onerror = () => setErrorMessage('خواندن فایل ناموفق بود.');
         reader.readAsDataURL(selected);
     };
 
     const handleParse = async () => {
-        if (!file) { setErrorMessage('Please select a Word (.docx) file first.'); return; }
+        if (!file) { setErrorMessage('اول یک فایل ورد (.docx) انتخاب کن.'); return; }
 
         setIsParsing(true);
         setErrorMessage(null);
@@ -208,14 +208,14 @@ export default function InsertQuestions() {
                 setParsed((res.questions || []).map((q: any) => ({ ...q, checked: true })));
                 setParseWarnings(res.errors || []);
                 if ((res.questions || []).length === 0) {
-                    setErrorMessage('No valid questions could be extracted from the file.');
+                    setErrorMessage('سوال معتبری از فایل استخراج نشد.');
                 }
             } else {
-                setErrorMessage(res.message || 'Failed to parse the Word file.');
+                setErrorMessage(res.message || 'خواندن فایل ورد ناموفق بود.');
             }
         } catch (error) {
             console.error('Parse docx error:', error);
-            setErrorMessage('An error occurred while parsing the file.');
+            setErrorMessage('هنگام پردازش فایل خطایی رخ داد.');
         } finally {
             setIsParsing(false);
         }
@@ -235,7 +235,7 @@ export default function InsertQuestions() {
 
     const handleAutoSubmit = async () => {
         const selected = parsed.filter(q => q.checked);
-        if (selected.length === 0) { setErrorMessage('No questions selected.'); return; }
+        if (selected.length === 0) { setErrorMessage('سوالی انتخاب نشده.'); return; }
 
         setIsSubmitting(true);
         setErrorMessage(null);
@@ -263,17 +263,17 @@ export default function InsertQuestions() {
             const res = response.data || response;
 
             if (res.success) {
-                setSuccessMessage(`${res.inserted_ids?.length ?? selected.length} question(s) inserted successfully as inactive.`);
+                setSuccessMessage(`${res.inserted_ids?.length ?? selected.length} سوال به‌صورت غیرفعال ثبت شد.`);
                 // Keep only unchecked questions in the review table
                 setParsed(prev => prev.filter(q => !q.checked));
                 setFile(null);
                 if (fileInputRef.current) fileInputRef.current.value = '';
             } else {
-                setErrorMessage(res.message || 'Failed to insert the selected questions.');
+                setErrorMessage(res.message || 'ثبت سوال‌های انتخاب‌شده ناموفق بود.');
             }
         } catch (error) {
             console.error('Auto insert error:', error);
-            setErrorMessage('An error occurred while inserting the questions.');
+            setErrorMessage('هنگام ثبت سوال‌ها خطایی رخ داد.');
         } finally {
             setIsSubmitting(false);
         }
@@ -291,7 +291,7 @@ export default function InsertQuestions() {
                             mode === 'manual' ? 'bg-[#1a73e8] text-white shadow-sm' : 'text-[#86868b] hover:text-gray-700 dark:hover:text-gray-200'
                         }`}
                     >
-                        <PenLine size={14} /> Manual
+                        <PenLine size={14} /> دستی
                     </button>
                     <button
                         onClick={() => setMode('auto')}
@@ -299,7 +299,7 @@ export default function InsertQuestions() {
                             mode === 'auto' ? 'bg-[#1a73e8] text-white shadow-sm' : 'text-[#86868b] hover:text-gray-700 dark:hover:text-gray-200'
                         }`}
                     >
-                        <FileUp size={14} /> Auto (Word)
+                        <FileUp size={14} /> خودکار (ورد)
                     </button>
                 </div>
 
@@ -311,8 +311,8 @@ export default function InsertQuestions() {
                         className="flex items-center gap-2 bg-[#1a73e8] hover:bg-[#1557b0] disabled:bg-[#1a73e8]/70 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md"
                     >
                         {isSavingManual ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
-                        <span className="hidden sm:inline">{isSavingManual ? 'Inserting...' : 'Insert Question'}</span>
-                        <span className="sm:hidden">Insert</span>
+                        <span className="hidden sm:inline">{isSavingManual ? 'در حال ثبت...' : 'ثبت سوال'}</span>
+                        <span className="sm:hidden">ثبت</span>
                     </button>
                 ) : (
                     <button
@@ -321,8 +321,8 @@ export default function InsertQuestions() {
                         className="flex items-center gap-2 bg-[#1a73e8] hover:bg-[#1557b0] disabled:bg-gray-200 disabled:text-gray-400 dark:disabled:bg-[#2b2d2f] dark:disabled:text-gray-500 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md"
                     >
                         {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                        <span className="hidden sm:inline">{isSubmitting ? 'Submitting...' : `Submit Selected (${checkedCount})`}</span>
-                        <span className="sm:hidden">Submit ({checkedCount})</span>
+                        <span className="hidden sm:inline">{isSubmitting ? 'در حال ارسال...' : `ثبت انتخاب‌شده‌ها (${checkedCount})`}</span>
+                        <span className="sm:hidden">ثبت ({checkedCount})</span>
                     </button>
                 )}
             </div>
@@ -349,11 +349,11 @@ export default function InsertQuestions() {
                     <div className="lg:col-span-2 flex flex-col gap-6">
                         {/* Question Text */}
                         <div className="bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl p-6">
-                            <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider mb-3 block">Question Text *</label>
+                            <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider mb-3 block">متن سوال *</label>
                             <textarea
                                 value={manual.text}
                                 onChange={(e) => setManual(prev => ({ ...prev, text: e.target.value }))}
-                                placeholder="Write the question text here..."
+                                placeholder="متن سوال را بنویس..."
                                 className="w-full h-40 bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-xl p-4 text-sm font-medium leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-[#1a73e8] custom-scrollbar"
                                 dir="auto"
                             />
@@ -375,7 +375,7 @@ export default function InsertQuestions() {
                                         <textarea
                                             value={optionText}
                                             onChange={(e) => handleManualOptionChange(index, e.target.value)}
-                                            placeholder={`Option ${index + 1}...`}
+                                            placeholder={`گزینه ${index + 1}...`}
                                             className="w-full h-24 bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-xl p-3 text-xs font-medium resize-y focus:outline-none focus:ring-2 focus:ring-[#1a73e8] custom-scrollbar"
                                             dir="auto"
                                         />
@@ -386,11 +386,11 @@ export default function InsertQuestions() {
 
                         {/* Descriptive Answer */}
                         <div className="bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl p-6">
-                            <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider mb-3 block">Descriptive Answer (optional)</label>
+                            <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider mb-3 block">پاسخ تشریحی (اختیاری)</label>
                             <textarea
                                 value={manual.descriptive}
                                 onChange={(e) => setManual(prev => ({ ...prev, descriptive: e.target.value }))}
-                                placeholder="Explanation / detailed solution..."
+                                placeholder="توضیح یا راه‌حل تشریحی..."
                                 className="w-full h-32 bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-xl p-4 text-sm font-medium leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-[#1a73e8] custom-scrollbar"
                                 dir="auto"
                             />
@@ -400,16 +400,16 @@ export default function InsertQuestions() {
                     {/* RIGHT COLUMN: metadata */}
                     <div className="lg:col-span-1 flex flex-col gap-6 lg:sticky lg:top-28 self-start w-full">
                         <div className="bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl p-6">
-                            <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider mb-4 block">Question Metadata</label>
+                            <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider mb-4 block">مشخصات سوال</label>
                             <div className="flex flex-col gap-4">
-                                <CustomSelect label="Subject" value={meta.subject_id} options={curriculum.subjects.map(s => ({ id: s.id, title: s.title }))} onChange={(v) => handleMetaChange('subject_id', v)} placeholder="Select Subject..." />
-                                <CustomMultiSelect label="Grades" values={meta.grade_ids} options={curriculum.grades.map(g => ({ id: g.id, title: g.title }))} onChange={(ids) => handleMetaChange('grade_ids', ids.map(Number))} placeholder="Select one or more grades..." />
-                                <CustomMultiSelect label="Chapters (Topics)" values={meta.topic_ids} options={topicOptions} onChange={(ids) => handleMetaChange('topic_ids', ids.map(Number))} placeholder="Select one or more chapters..." disabled={!meta.subject_id} />
-                                <CustomMultiSelect label="Mabhas" values={meta.chapter_ids} options={chapterOptions} onChange={(ids) => handleMetaChange('chapter_ids', ids.map(Number))} placeholder="Select one or more mabhas..." disabled={!meta.subject_id} />
-                                <CustomSelect label="Level" value={meta.level} options={LEVEL_OPTIONS} onChange={(v) => handleMetaChange('level', v || 'متوسط')} placeholder="Select Level..." />
+                                <CustomSelect label="درس" value={meta.subject_id} options={curriculum.subjects.map(s => ({ id: s.id, title: s.title }))} onChange={(v) => handleMetaChange('subject_id', v)} placeholder="انتخاب درس..." />
+                                <CustomMultiSelect label="پایه‌ها" values={meta.grade_ids} options={curriculum.grades.map(g => ({ id: g.id, title: g.title }))} onChange={(ids) => handleMetaChange('grade_ids', ids.map(Number))} placeholder="یک یا چند پایه..." />
+                                <CustomMultiSelect label="فصل‌ها" values={meta.topic_ids} options={topicOptions} onChange={(ids) => handleMetaChange('topic_ids', ids.map(Number))} placeholder="یک یا چند فصل..." disabled={!meta.subject_id} />
+                                <CustomMultiSelect label="مباحث" values={meta.chapter_ids} options={chapterOptions} onChange={(ids) => handleMetaChange('chapter_ids', ids.map(Number))} placeholder="یک یا چند مبحث..." disabled={!meta.subject_id} />
+                                <CustomSelect label="سطح" value={meta.level} options={LEVEL_OPTIONS} onChange={(v) => handleMetaChange('level', v || 'متوسط')} placeholder="انتخاب سطح..." />
                             </div>
                             <p className="text-[10px] text-[#86868b] mt-4 leading-relaxed">
-                                Tag a question with several grades, chapters, and mabhas. Subject stays single (a math question cannot also be physics). New questions are inserted as <span className="font-bold">غیرفعال (inactive)</span>.
+                                می‌توانی چند پایه، فصل و مبحث بگذاری. درس فقط یکی است. سوال‌های جدید به‌صورت <span className="font-bold">غیرفعال</span> ثبت می‌شوند.
                             </p>
                         </div>
                     </div>
@@ -421,7 +421,7 @@ export default function InsertQuestions() {
                 <div className="flex flex-col gap-6">
                     {/* Upload Card */}
                     <div className="bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl p-6">
-                        <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider mb-3 block">Word File (.docx)</label>
+                        <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider mb-3 block">فایل ورد (.docx)</label>
                         <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
                             <input ref={fileInputRef} type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={handleFileSelect} className="hidden" />
                             <button
@@ -429,7 +429,7 @@ export default function InsertQuestions() {
                                 className="flex-1 flex items-center justify-center gap-2 border-2 border-dashed border-[#dadce0] dark:border-[#444746] hover:border-[#1a73e8] rounded-xl px-4 py-5 text-xs font-bold text-[#86868b] hover:text-[#1a73e8] transition-all"
                             >
                                 <FileText size={16} />
-                                {file ? file.name : 'Click to select a Word (.docx) file'}
+                                {file ? file.name : 'برای انتخاب فایل ورد (.docx) کلیک کن'}
                             </button>
                             <button
                                 onClick={handleParse}
@@ -437,7 +437,7 @@ export default function InsertQuestions() {
                                 className="flex items-center justify-center gap-2 bg-[#1a73e8] hover:bg-[#1557b0] disabled:bg-gray-200 disabled:text-gray-400 dark:disabled:bg-[#2b2d2f] dark:disabled:text-gray-500 text-white px-6 py-4 rounded-xl text-xs font-bold transition-all shadow-md shrink-0"
                             >
                                 {isParsing ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-                                {isParsing ? 'Extracting...' : 'Upload & Extract'}
+                                {isParsing ? 'در حال استخراج...' : 'بارگذاری و استخراج'}
                             </button>
                         </div>
                         <p className="text-[10px] text-[#86868b] mt-3 leading-relaxed" dir="ltr">
@@ -449,22 +449,22 @@ export default function InsertQuestions() {
                     <div className="bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl p-6">
                         <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
                             <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider">
-                                Batch Metadata (optional — applied to all extracted questions)
+                                مشخصات دسته‌ای (اختیاری — روی همه سوال‌های استخراج‌شده اعمال می‌شود)
                             </label>
                             {(meta.subject_id || meta.grade_ids.length || meta.topic_ids.length || meta.chapter_ids.length) && (
                                 <button
                                     onClick={() => setMeta(prev => ({ ...prev, subject_id: null, grade_ids: [], topic_ids: [], chapter_ids: [] }))}
                                     className="text-[10px] font-bold text-red-500 hover:underline"
                                 >
-                                    Clear All
+                                    پاک کردن همه
                                 </button>
                             )}
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-                            <CustomSelect label="Subject" value={meta.subject_id} options={curriculum.subjects.map(s => ({ id: s.id, title: s.title }))} onChange={(v) => handleMetaChange('subject_id', v)} placeholder="Select Subject..." />
-                            <CustomMultiSelect label="Grades" values={meta.grade_ids} options={curriculum.grades.map(g => ({ id: g.id, title: g.title }))} onChange={(ids) => handleMetaChange('grade_ids', ids.map(Number))} placeholder="One or more grades..." />
-                            <CustomMultiSelect label="Chapters" values={meta.topic_ids} options={topicOptions} onChange={(ids) => handleMetaChange('topic_ids', ids.map(Number))} placeholder="One or more chapters..." disabled={!meta.subject_id} />
-                            <CustomMultiSelect label="Mabhas" values={meta.chapter_ids} options={chapterOptions} onChange={(ids) => handleMetaChange('chapter_ids', ids.map(Number))} placeholder="One or more mabhas..." disabled={!meta.subject_id} />
+                            <CustomSelect label="درس" value={meta.subject_id} options={curriculum.subjects.map(s => ({ id: s.id, title: s.title }))} onChange={(v) => handleMetaChange('subject_id', v)} placeholder="انتخاب درس..." />
+                            <CustomMultiSelect label="پایه‌ها" values={meta.grade_ids} options={curriculum.grades.map(g => ({ id: g.id, title: g.title }))} onChange={(ids) => handleMetaChange('grade_ids', ids.map(Number))} placeholder="یک یا چند پایه..." />
+                            <CustomMultiSelect label="فصل‌ها" values={meta.topic_ids} options={topicOptions} onChange={(ids) => handleMetaChange('topic_ids', ids.map(Number))} placeholder="یک یا چند فصل..." disabled={!meta.subject_id} />
+                            <CustomMultiSelect label="مباحث" values={meta.chapter_ids} options={chapterOptions} onChange={(ids) => handleMetaChange('chapter_ids', ids.map(Number))} placeholder="یک یا چند مبحث..." disabled={!meta.subject_id} />
                         </div>
                     </div>
 
@@ -491,7 +491,7 @@ export default function InsertQuestions() {
                                     </span>
                                     {(meta.subject_id || meta.grade_ids.length || meta.topic_ids.length || meta.chapter_ids.length) && (
                                         <div className="flex flex-wrap items-center gap-1.5">
-                                            <span className="text-[10px] font-bold text-[#86868b]">Will be applied to all:</span>
+                                            <span className="text-[10px] font-bold text-[#86868b]">روی همه اعمال می‌شود:</span>
                                             {[
                                                 curriculum.subjects.find(s => s.id === meta.subject_id)?.title,
                                                 ...meta.grade_ids.map(id => curriculum.grades.find(g => g.id === id)?.title),
@@ -510,7 +510,7 @@ export default function InsertQuestions() {
                                     className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-[#1a73e8] bg-[#e8f0fe] dark:bg-[#1a73e8]/10 hover:bg-[#d2e3fc] dark:hover:bg-[#1a73e8]/20 transition-all"
                                 >
                                     {allChecked ? <Square size={14} /> : <CheckSquare size={14} />}
-                                    {allChecked ? 'Uncheck All' : 'Check All'}
+                                    {allChecked ? 'لغو انتخاب همه' : 'انتخاب همه'}
                                 </button>
                             </div>
 
@@ -559,7 +559,7 @@ export default function InsertQuestions() {
 
                                         {q.descriptive && (
                                             <div className="text-xs font-medium text-gray-500 dark:text-gray-400 bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-lg p-3" dir="auto">
-                                                <span className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider block mb-1">Descriptive Answer</span>
+                                                <span className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider block mb-1">پاسخ تشریحی</span>
                                                 <MathRenderer text={q.descriptive} subject={meta.subject_id ?? undefined} />
                                             </div>
                                         )}
@@ -575,7 +575,7 @@ export default function InsertQuestions() {
                                     className="flex items-center gap-2 bg-[#1a73e8] hover:bg-[#1557b0] disabled:bg-gray-200 disabled:text-gray-400 dark:disabled:bg-[#2b2d2f] dark:disabled:text-gray-500 text-white px-6 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md"
                                 >
                                     {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                                    {isSubmitting ? 'Submitting...' : `Submit Selected (${checkedCount})`}
+                                    {isSubmitting ? 'در حال ارسال...' : `ثبت انتخاب‌شده‌ها (${checkedCount})`}
                                 </button>
                             </div>
                         </div>

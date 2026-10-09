@@ -26,11 +26,11 @@ export default function AccessManager() {
         setError(null);
         try {
             const res = await adminApi.listAccess();
-            if (!res.success) throw new Error(res.message || 'Failed to load access');
+            if (!res.success) throw new Error(res.message || 'بارگذاری دسترسی‌ها ناموفق بود');
             setAdmins((res.admins || []) as AccessAdmin[]);
             setCatalog(res.catalog || []);
         } catch (err: unknown) {
-            setError(err instanceof Error ? err.message : 'Failed to load access');
+            setError(err instanceof Error ? err.message : 'بارگذاری دسترسی‌ها ناموفق بود');
         } finally {
             setLoading(false);
         }
@@ -53,11 +53,11 @@ export default function AccessManager() {
         setAdmins((prev) => prev.map((row) => row.id === admin.id ? { ...row, sections: { ...row.sections, [key]: payload[key] } } : row));
         try {
             const res = await adminApi.saveAccess(admin.id, payload);
-            if (!res.success) throw new Error(res.message || 'Failed to save access');
+            if (!res.success) throw new Error(res.message || 'ذخیره دسترسی ناموفق بود');
             setAdmins((prev) => prev.map((row) => row.id === admin.id ? { ...row, sections: res.sections || payload } : row));
-            setSuccess(`${admin.username} updated`);
+            setSuccess(`دسترسی ${admin.username} ذخیره شد`);
         } catch (err: unknown) {
-            setError(err instanceof Error ? err.message : 'Failed to save access');
+            setError(err instanceof Error ? err.message : 'ذخیره دسترسی ناموفق بود');
             await load();
         } finally {
             setSavingId(null);
@@ -68,13 +68,13 @@ export default function AccessManager() {
         <div className="flex flex-col gap-6 w-full">
             <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl p-4 shadow-sm">
                 <div>
-                    <h1 className="text-sm font-bold flex items-center gap-2"><KeyRound size={16} /> Access</h1>
+                    <h1 className="text-sm font-bold flex items-center gap-2"><KeyRound size={16} /> دسترسی‌ها</h1>
                     <p className="text-xs text-[#86868b] mt-0.5 max-w-2xl">
-                        Only the main admin can open this section. Turn sections on or off for each other admin. The main admin always keeps full access.
+                        فقط مدیر اصلی این بخش را می‌بیند. از اینجا دسترسی بقیه ادمین‌ها را روشن یا خاموش کن. مدیر اصلی همیشه دسترسی کامل دارد.
                     </p>
                 </div>
                 <button onClick={load} className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746]">
-                    <RefreshCw size={14} /> Refresh
+                    <RefreshCw size={14} /> بروزرسانی
                 </button>
             </div>
 
@@ -101,11 +101,11 @@ export default function AccessManager() {
                                     <div>
                                         <p className="text-sm font-bold">{admin.fullName || admin.username}</p>
                                         <p className="text-[11px] text-[#86868b]">
-                                            {admin.username} · {locked ? 'super admin' : admin.role} · {admin.status || 'active'}
-                                            {savingId === admin.id ? ' · saving' : ''}
+                                            {admin.username} · {locked ? 'مدیر اصلی' : (admin.role === 'selector' ? 'سلکتور' : admin.role === 'typing' ? 'تایپ' : 'مدیر')} · {admin.status === 'disabled' ? 'غیرفعال' : 'فعال'}
+                                            {savingId === admin.id ? ' · در حال ذخیره' : ''}
                                         </p>
                                     </div>
-                                    {locked && <span className="text-[11px] font-bold text-[#1a73e8]">Full access</span>}
+                                    {locked && <span className="text-[11px] font-bold text-[#1a73e8]">دسترسی کامل</span>}
                                 </div>
                                 <div className="flex flex-wrap gap-2">
                                     {catalog.map((section) => {

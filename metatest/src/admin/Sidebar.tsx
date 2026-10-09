@@ -51,7 +51,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpen, setI
                     <div className="p-1.5 bg-[#1a73e8] rounded-lg shadow-inner">
                         <Hexagon size={18} className="text-white" fill="currentColor" />
                     </div>
-                    <span className="font-semibold text-[#1f1f1f] dark:text-[#e3e3e3] tracking-tight">Admin Panel</span>
+                    <span className="font-semibold text-[#1f1f1f] dark:text-[#e3e3e3] tracking-tight">پنل ادمین</span>
                 </div>
 
                 <nav className="flex-1 px-3 py-4 space-y-1">
@@ -82,7 +82,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpen, setI
                         </div>
                         <div className="flex-1 min-w-0">
                             <p className="text-xs font-semibold truncate uppercase tracking-tighter">{user.fullName || user.username}</p>
-                            <p className="text-[10px] text-[#86868b] truncate">{user.isSuper ? 'super admin' : user.role}</p>
+                            <p className="text-[10px] text-[#86868b] truncate">{user.isSuper ? 'مدیر اصلی' : (user.role === 'selector' ? 'سلکتور' : user.role === 'typing' ? 'تایپ' : user.role === 'admin' ? 'مدیر' : user.role)}</p>
                         </div>
                         <button onClick={onLogout} className="p-2 text-[#86868b] hover:text-red-500 transition-colors">
                             <LogOut size={14} />
