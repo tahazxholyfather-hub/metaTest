@@ -3,7 +3,7 @@ import { flowApi } from '../lib/authApi';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Heart, Archive, AlertTriangle, Timer, Power, LogOut, Bookmark, ArrowRight, ArrowLeft,
-    MoreVertical, FileText, ChevronRight, ChevronLeft, CheckCircle2, XCircle, X, Check, Sparkles, Volume2, VolumeX
+    MoreVertical, FileText, ChevronRight, ChevronLeft, CheckCircle2, XCircle, X, Check, Volume2, VolumeX, Lock
 } from 'lucide-react';
 
 import { useAudio } from '../hooks/useAudio';
@@ -29,6 +29,10 @@ import QuestionStatsDisplay, { type StatItem } from '../components/QuestionStats
 import { QuizCountdown } from '../components/QuizCountdown';
 import { MathRenderer } from '../components/ui/MathRenderer';
 import {GameRewardToast} from '../components/GameRewardToast';
+import { Met } from '../components/met';
+import { QuizMetPanel } from './met/QuizMetPanel';
+import { PremiumUpgrade } from '../components/PremiumUpgrade';
+import PlanSelectionModal from '../components/PlanSelectionModal';
 
 import React from 'react';
 
@@ -84,6 +88,7 @@ type HistoryEntry = {
     isCorrect: boolean | null;
     correctOptionId: number | null;
     descriptiveAnswer: string | null;
+    solutionLocked?: boolean;
     optionStats: Stats[];
     totalQuestions: number;
     currentQuestionCount: number;
@@ -148,6 +153,111 @@ const QuizSkeleton = () => (
     </div>
 );
 
+const ASK_MET_PROMPTS = [
+    'از من بپرس اگه متوجه جواب نشدی',
+    'میخوای بیشتر توضیح بدم؟',
+    'جواب ساده میخوای؟',
+    'مثال بیشتر ...؟',
+    'از من بپرس',
+] as const;
+
+function useIsDarkTheme() {
+    const [isDark, setIsDark] = useState(() =>
+        typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
+    );
+    useEffect(() => {
+        const observer = new MutationObserver(() => {
+            setIsDark(document.documentElement.classList.contains('dark'));
+        });
+        observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+        return () => observer.disconnect();
+    }, []);
+    return isDark;
+}
+
+function AskMetCta({ onClick }: { onClick: () => void }) {
+    const isDark = useIsDarkTheme();
+    const [line, setLine] = useState(0);
+    const [isDesktop, setIsDesktop] = useState(false);
+    const [expanded, setExpanded] = useState(false);
+    const metColor = isDark ? '#F4F1FA' : '#16121F';
+    const eyeColor = isDark ? '#16121F' : '#F4F1FA';
+
+    useEffect(() => {
+        const media = window.matchMedia('(min-width: 768px)');
+        let intervalId: number | undefined;
+        let expandId: number | undefined;
+
+        const sync = () => {
+            const desktop = media.matches;
+            setIsDesktop(desktop);
+            if (!desktop) {
+                setExpanded(true);
+                if (intervalId != null) {
+                    window.clearInterval(intervalId);
+                    intervalId = undefined;
+                }
+                return;
+            }
+            if (intervalId == null) {
+                intervalId = window.setInterval(() => {
+                    setLine((n) => (n + 1) % ASK_MET_PROMPTS.length);
+                }, 3600);
+            }
+            if (expandId == null) {
+                expandId = window.setTimeout(() => setExpanded(true), 70);
+            }
+        };
+
+        sync();
+        media.addEventListener('change', sync);
+        return () => {
+            if (intervalId != null) window.clearInterval(intervalId);
+            if (expandId != null) window.clearTimeout(expandId);
+            media.removeEventListener('change', sync);
+        };
+    }, []);
+
+    return (
+        <motion.button
+            type="button"
+            onClick={onClick}
+            layout
+            initial={{ opacity: 0, scale: 0.86, y: 8 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{
+                layout: { type: 'spring', stiffness: 380, damping: 32, mass: 0.65 },
+                opacity: { duration: 0.28, ease: [0.22, 1, 0.36, 1] },
+                scale: { type: 'spring', stiffness: 420, damping: 26, mass: 0.65 },
+                y: { type: 'spring', stiffness: 420, damping: 26, mass: 0.65 },
+            }}
+            className={`inline-flex items-center justify-center gap-2 flex-1 py-3 px-3 rounded-[14px] border border-[var(--border)] bg-[var(--bg-element)] text-[var(--text-primary)] font-bold text-base overflow-hidden md:flex-none md:h-10 md:py-0 md:pl-1 md:rounded-full md:bg-[var(--bg-card)] md:text-[13px] hover:bg-[var(--bg-elevated)] active:scale-[0.98] ${expanded ? 'md:pr-3.5' : 'md:pr-1'}`}
+            aria-label="از مِت بپرس"
+        >
+            <span className="w-7 h-7 shrink-0 pointer-events-none" aria-hidden="true">
+                <Met size="100%" state="idle" color={metColor} eyeColor={eyeColor} glow={false} />
+            </span>
+            <span className="md:hidden" aria-hidden="true">از مِت بپرس</span>
+            <AnimatePresence initial={false} mode="popLayout">
+                {isDesktop && expanded ? (
+                    <motion.span
+                        key={ASK_MET_PROMPTS[line]}
+                        layout
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -6 }}
+                        transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
+                        className="font-bold whitespace-nowrap"
+                        aria-hidden="true"
+                    >
+                        {ASK_MET_PROMPTS[line]}
+                    </motion.span>
+                ) : null}
+            </AnimatePresence>
+        </motion.button>
+    );
+}
+
 export function QuizView({
                              config,
                              resumeId,
@@ -187,6 +297,8 @@ export function QuizView({
     const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
     const [correctOptionId, setCorrectOptionId] = useState<number | null>(null);
     const [descriptiveAnswer, setDescriptiveAnswer] = useState<string | null>(null);
+    const [solutionLocked, setSolutionLocked] = useState(false);
+    const [plansOpen, setPlansOpen] = useState(false);
     const [optionStats, setOptionStats] = useState<Stats[]>([]);
 
     // Action States
@@ -196,6 +308,11 @@ export function QuizView({
     // UI State
     const [showButtons, setShowButtons] = useState(true);
     const [resultState, setResultState] = useState<'correct' | 'wrong' | null>(null);
+    const [metOpen, setMetOpen] = useState(false);
+
+    useEffect(() => {
+        if (!isAnswered) setMetOpen(false);
+    }, [isAnswered]);
 
     // Modals State
     const [isExitModalOpen, setIsExitModalOpen] = useState(false);
@@ -293,6 +410,7 @@ export function QuizView({
         setIsCorrect(entry.isCorrect);
         setCorrectOptionId(entry.correctOptionId);
         setDescriptiveAnswer(entry.descriptiveAnswer);
+        setSolutionLocked(!!entry.solutionLocked);
         setOptionStats(entry.optionStats);
         setTotalQuestions(entry.totalQuestions);
         setCurrentQuestionCount(entry.currentQuestionCount);
@@ -377,6 +495,7 @@ export function QuizView({
         setIsCorrect(saved.isCorrect ?? null);
         setCorrectOptionId(saved.correctOptionId ?? null);
         setDescriptiveAnswer(saved.descriptiveAnswer ?? null);
+        setSolutionLocked(!!(saved.history?.[saved.historyIndex ?? -1] as HistoryEntry | undefined)?.solutionLocked);
         setOptionStats(saved.optionStats ?? []);
 
         setIsFavorite(saved.isFavorite ?? false);
@@ -395,6 +514,7 @@ export function QuizView({
         setIsCorrect(null);
         setCorrectOptionId(null);
         setDescriptiveAnswer(null);
+        setSolutionLocked(false);
         setOptionStats([]);
         setIsFavorite(false);
         setIsReviewLater(false);
@@ -440,6 +560,7 @@ export function QuizView({
                     isCorrect: null,
                     correctOptionId: null,
                     descriptiveAnswer: null,
+                    solutionLocked: false,
                     optionStats: [],
                     totalQuestions: totalQ,
                     currentQuestionCount: currQCount,
@@ -644,11 +765,13 @@ export function QuizView({
             const fetchedCorrectOptionId = response.correct_option_id ?? null;
             const fetchedDescAnswer = response.descriptive_answer ? decodeHtmlEntities(response.descriptive_answer) : null;
             const fetchedOptionStats = response.option_stats ?? [];
+            const locked = !!response.solution_access?.locked;
 
             // Update local state
             setIsCorrect(response.is_correct);
             setCorrectOptionId(fetchedCorrectOptionId);
             setDescriptiveAnswer(fetchedDescAnswer);
+            setSolutionLocked(locked);
             setOptionStats(fetchedOptionStats);
             setIsAnswered(true);
 
@@ -659,6 +782,7 @@ export function QuizView({
                 isCorrect: response.is_correct,
                 correctOptionId: fetchedCorrectOptionId,
                 descriptiveAnswer: fetchedDescAnswer,
+                solutionLocked: locked,
                 optionStats: fetchedOptionStats
             });
 
@@ -1248,6 +1372,18 @@ export function QuizView({
                                             </motion.div>
                                         )}
                                     </AnimatePresence>
+
+                                    {isAnswered && solutionLocked && !descriptiveAnswer && (
+                                        <div className="mt-8">
+                                            <PremiumUpgrade
+                                                icon={Lock}
+                                                title="پاسخ تشریحی این درس قفل شد"
+                                                description="با اشتراک رایگان، برای هر درس یک پاسخ تشریحی باز می‌شود."
+                                                actionLabel="اشتراک ویژه"
+                                                onAction={() => setPlansOpen(true)}
+                                            />
+                                        </div>
+                                    )}
                                 </motion.div>
                             ) : (
                                 <div className="flex items-center justify-center h-full text-[var(--text-muted)] mt-20">خطا در دریافت سوال</div>
@@ -1267,6 +1403,14 @@ export function QuizView({
                                             <QuestionStatsDisplay stats={currentStats} minimal={true} />
                                         )}
                                     </div>
+
+                                    {isAnswered && showButtons && (
+                                        <div className="pointer-events-none absolute inset-0 hidden md:flex items-center justify-center">
+                                            <div className="pointer-events-auto">
+                                                <AskMetCta onClick={() => setMetOpen(true)} />
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {/* LEFT SIDE (Desktop) / CENTER (Mobile): Action Buttons & Result */}
                                     <div className="flex flex-1 items-center justify-center md:justify-end transition-all duration-500 ease-out w-full">
@@ -1291,13 +1435,19 @@ export function QuizView({
                                                         <span className="hidden md:inline text-sm font-medium">قبلی</span>
                                                     </button>
 
-                                                    <button
-                                                        onClick={handleCheckAnswer}
-                                                        disabled={!selectedOptionId || isChecking || isAnswered}
-                                                        className="action-btn flex-1 md:flex-none flex items-center justify-center py-3 md:py-2 text-base md:text-sm shadow-md disabled:opacity-50"
-                                                    >
-                                                        ثبت پاسخ
-                                                    </button>
+                                                    {isAnswered ? (
+                                                        <div className="flex flex-1 md:hidden">
+                                                            <AskMetCta onClick={() => setMetOpen(true)} />
+                                                        </div>
+                                                    ) : (
+                                                        <button
+                                                            onClick={handleCheckAnswer}
+                                                            disabled={!selectedOptionId || isChecking}
+                                                            className="action-btn flex-1 md:flex-none flex items-center justify-center py-3 md:py-2 text-base md:text-sm shadow-md disabled:opacity-50"
+                                                        >
+                                                            ثبت پاسخ
+                                                        </button>
+                                                    )}
 
                                                     <button
                                                         onClick={handleNext}
@@ -1349,6 +1499,13 @@ export function QuizView({
                         data={rewardData}
                         isOpen={isRewardToastOpen}
                         onClose={() => setIsRewardToastOpen(false)}
+                    />
+
+                    <QuizMetPanel
+                        key={isAnswered && question ? `quiz-met-${question.id}` : 'quiz-met-idle'}
+                        open={metOpen}
+                        onClose={() => setMetOpen(false)}
+                        questionId={isAnswered && question ? question.id : null}
                     />
 
                 </>
@@ -1410,6 +1567,8 @@ export function QuizView({
                     </button>
                 </div>
             </ResponsiveModal>
+
+            <PlanSelectionModal isOpen={plansOpen} onClose={() => setPlansOpen(false)} />
 
             {/* Note Modal */}
             <ResponsiveModal

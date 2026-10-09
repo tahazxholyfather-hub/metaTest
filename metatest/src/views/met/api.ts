@@ -11,6 +11,8 @@ import {
     type MetSubject,
     type MetSuggestion,
     type MetWallet,
+    type QuizIntent,
+    type QuizQuestionContext,
     type SubjectKey,
     type TranscribeResult,
     type UploadedImage,
@@ -118,6 +120,16 @@ export const metApi = {
 
     deleteConversation: (id: number) => request<{ success: true }>(`/conversations/${id}`, { method: 'DELETE' }),
 
+    questionConversation: (questionId: number) =>
+        request<Ok<{
+            conversation: MetConversation;
+            messages: MetMessage[];
+            hasMore: boolean;
+            context: QuizQuestionContext;
+            intents: QuizIntent[];
+            wallet: MetWallet;
+        }>>(`/questions/${questionId}/conversation`).then((r) => r.data),
+
     wallet: () => request<Ok<MetWallet>>('/wallet').then((r) => r.data),
 
     ledger: (params: { limit?: number; offset?: number } = {}) => {
@@ -183,6 +195,8 @@ export const metApi = {
             attachments?: { fileId: number }[];
             regenerateMessageId?: number | null;
             inputMode?: 'text' | 'voice';
+            questionId?: number | null;
+            intent?: string | null;
         },
         onEvent: (event: ChatStreamEvent) => void,
         signal?: AbortSignal

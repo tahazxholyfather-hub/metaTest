@@ -79,6 +79,9 @@
     --error:         #B91C1C;
     --info:          #0369A1;
 
+    /* Floating mobile bottom nav (icon + label + dock inset + safe area) */
+    --app-bottom-nav-space: calc(5.1rem + env(safe-area-inset-bottom, 0px));
+
     /* Interactive overlays */
     --hover-overlay:  rgba(15, 23, 42, 0.05);
     --active-overlay: rgba(15, 23, 42, 0.10);
@@ -88,6 +91,7 @@
     --accent:         var(--color-primary-600);
     --icon-color:     var(--color-primary-700);
     --icon-bg:        var(--color-primary-50);
+    --coin:           #C8960C;
 
     /* Misc */
     --shadow-1: 0 6px 18px rgba(16,24,40,0.08);
@@ -136,10 +140,17 @@
     --accent:         var(--color-primary-500);
     --icon-color:     var(--color-primary-400);
     --icon-bg:        var(--bg-elevated);
+    --coin:           #F5C542;
 
     /* shadows subtle in dark */
     --shadow-1: 0 6px 18px rgba(0,0,0,0.55);
     --shadow-2: 0 12px 32px rgba(0,0,0,0.65);
+}
+
+@media (min-width: 768px) {
+    :root, .dark {
+        --app-bottom-nav-space: 0px;
+    }
 }
 
 /* ---------------------------
@@ -261,7 +272,7 @@
 
     ::selection {
         background: var(--accent);
-        color: var(--text-inverse);
+        color: #fff;
     }
 
     .card {
@@ -390,7 +401,7 @@
 
     .btn-primary {
         background: var(--accent);
-        color: var(--text-inverse);
+        color: #fff;
         box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 35%, transparent);
         border-color: color-mix(in srgb, var(--accent) 70%, #000 30%);
     }
@@ -727,29 +738,54 @@ mjx-container[display="true"] {
     mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%);
 }
 
-/* AI Teacher — thin chat scrollbar (override global 8px scrollbar) */
-.ai-teacher-root .chat-scrollbar {
-    scrollbar-width: thin !important;
-    scrollbar-color: rgba(120, 120, 128, 0.26) transparent !important;
+/* Met chat / chips — hide native bars; overlay thumb only on fine pointers */
+.chat-scrollbar,
+.chat-scrollbar-x {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
 }
-.ai-teacher-root .chat-scrollbar::-webkit-scrollbar {
-    width: 2px !important;
-    height: 2px !important;
+.chat-scrollbar::-webkit-scrollbar,
+.chat-scrollbar-x::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
     background: transparent !important;
 }
-.ai-teacher-root .chat-scrollbar::-webkit-scrollbar-track,
-.ai-teacher-root .chat-scrollbar::-webkit-scrollbar-corner {
-    background: transparent !important;
-    box-shadow: none !important;
-}
-.ai-teacher-root .chat-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(120, 120, 128, 0.3) !important;
-    border-radius: 999px !important;
-    border: none !important;
-    box-shadow: none !important;
-}
-.ai-teacher-root .chat-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: rgba(120, 120, 128, 0.45) !important;
+
+@media (hover: hover) and (pointer: fine) {
+    .chat-scrollbar {
+        scrollbar-width: thin !important;
+        scrollbar-color: color-mix(in srgb, var(--text-muted) 32%, transparent) transparent !important;
+    }
+    .chat-scrollbar::-webkit-scrollbar {
+        display: block !important;
+        width: 3px !important;
+        height: 0 !important;
+        background: transparent !important;
+    }
+    .chat-scrollbar::-webkit-scrollbar-track,
+    .chat-scrollbar::-webkit-scrollbar-corner {
+        background: transparent !important;
+        box-shadow: none !important;
+    }
+    .chat-scrollbar::-webkit-scrollbar-thumb {
+        background: color-mix(in srgb, var(--text-muted) 38%, transparent) !important;
+        border-radius: 999px !important;
+        border: none !important;
+        box-shadow: none !important;
+    }
+    .chat-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: color-mix(in srgb, var(--text-muted) 55%, transparent) !important;
+    }
+    /* Chip rows stay fully bar-less even on desktop */
+    .chat-scrollbar-x {
+        scrollbar-width: none !important;
+    }
+    .chat-scrollbar-x::-webkit-scrollbar {
+        display: none !important;
+        width: 0 !important;
+        height: 0 !important;
+    }
 }
 
 /* Premium composer surface */
@@ -794,15 +830,32 @@ mjx-container[display="true"] {
     animation: ai-text-shimmer 2.6s ease-in-out infinite;
 }
 
+.premium-title-shimmer {
+    background-image: linear-gradient(
+            100deg,
+            var(--text-primary) 0%,
+            var(--text-primary) 36%,
+            color-mix(in srgb, var(--text-primary) 55%, white) 50%,
+            var(--text-primary) 64%,
+            var(--text-primary) 100%
+    );
+    background-size: 220% 100%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    animation: ai-text-shimmer 3.4s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
     .ai-teacher-root .ai-composer-shell,
     .ai-teacher-root [role="status"] {
         animation: none !important;
     }
-    .ai-text-shimmer {
+    .ai-text-shimmer,
+    .premium-title-shimmer {
         animation: none !important;
         background: none;
-        color: var(--text-muted);
+        color: var(--text-primary);
         -webkit-background-clip: unset;
         background-clip: unset;
     }
