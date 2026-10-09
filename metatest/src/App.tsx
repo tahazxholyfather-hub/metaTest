@@ -45,6 +45,7 @@ import {PlanSelectorView} from "./views/f";
 import PaymentResultPage from "./views/paymentResult";
 import { MetView } from "./views/met";
 import InviteLanding from "./views/InviteLanding";
+import { LudoApp } from "./games/ludo";
 
 const DentalLandingPage = lazy(() => import("./views/dental/DentalLandingPage"));
 const BounceApp = lazy(() => import("./bounce/ui/BounceApp").then((mod) => ({ default: mod.BounceApp })));
@@ -696,6 +697,7 @@ const router = createBrowserRouter(
     [
         { path: "/admin/*", element: <AdminPanel /> },
         { path: "/bounce/*", element: <Suspense fallback={<div style={{ position: "fixed", inset: 0, background: "#9fd4f2" }} />}><BounceApp /></Suspense> },
+        { path: "/ludo/*", element: <LudoApp /> },
         { path: "/re/*", element: <PlanSelectorView /> },
         { path: "/payment/result/:token", element: <PaymentResultPage /> },
         { path: "/invite/:code", element: <InviteLanding /> },
