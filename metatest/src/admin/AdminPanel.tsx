@@ -12,7 +12,6 @@ import WithdrawalRequests from './WithdrawalRequests';
 import AdminsManager from './AdminsManager';
 import AiManager from './AiManager';
 import WordStats from './WordStats';
-import DiscountManager from './DiscountManager';
 import ReportsManager from './ReportsManager';
 import AccessManager from './AccessManager';
 import AuthView, { type User } from './AuthView';
@@ -172,7 +171,6 @@ export default function AdminPanel() {
                                 {activeTab === 'referral-settings' && canAccessSection(user, 'referral-settings') && <ReferralSettings user={user} />}
                                 {activeTab === 'withdrawals' && canAccessSection(user, 'withdrawals') && <WithdrawalRequests user={user} />}
                                 {activeTab === 'word-stats' && canAccessSection(user, 'word-stats') && <WordStats />}
-                                {activeTab === 'discounts' && canAccessSection(user, 'discounts') && <DiscountManager />}
                                 {activeTab === 'reports' && canAccessSection(user, 'reports') && <ReportsManager />}
                                 {activeTab === 'ai-manager' && canAccessSection(user, 'ai-manager') && <AiManager />}
                                 {activeTab === 'admins' && canAccessSection(user, 'admins') && <AdminsManager currentUser={user} />}

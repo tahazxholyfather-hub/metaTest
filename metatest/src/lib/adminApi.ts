@@ -147,14 +147,6 @@ export const adminApi = {
 
     wordStats: () => adminRequest<Json>('/words'),
 
-    listDiscounts: (q?: string) => adminRequest<Json>('/discounts', { params: q ? { q } : undefined }),
-    createDiscount: (payload: Json) =>
-        adminRequest<Json>('/discounts', { method: 'POST', body: JSON.stringify(payload) }),
-    updateDiscount: (id: number, payload: Json) =>
-        adminRequest<Json>(`/discounts/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
-    deleteDiscount: (id: number) =>
-        adminRequest<Json>(`/discounts/${id}`, { method: 'DELETE' }),
-
     listReports: (params?: Json) => adminRequest<Json>('/reports', { params }),
     updateReport: (id: number, payload: Json) =>
         adminRequest<Json>(`/reports/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),

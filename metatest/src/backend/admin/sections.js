@@ -14,7 +14,6 @@ const ASSIGNABLE_SECTIONS = [
     { key: 'referral-settings', label: 'تنظیمات دعوت', defaultAllowed: true },
     { key: 'withdrawals', label: 'برداشت‌ها', defaultAllowed: true },
     { key: 'word-stats', label: 'Word Activity', defaultAllowed: true },
-    { key: 'discounts', label: 'Discount Codes', defaultAllowed: true },
     { key: 'reports', label: 'Reports', defaultAllowed: true },
     { key: 'ai-manager', label: 'AI Manager', defaultAllowed: false },
     { key: 'admins', label: 'Admins', defaultAllowed: false },

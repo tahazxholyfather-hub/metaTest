@@ -3,7 +3,6 @@
 const pool = require('../db');
 const { publicAdmin } = require('../middleware/adminAuth');
 const { backfillInsertedWords } = require('../admin/words');
-const { validateDiscountPayload, parsePlanIds, expiryToInput } = require('../admin/discounts');
 const { catalog, listAccess, saveSections } = require('../admin/access');
 const { resolveSections } = require('../admin/sections');
 
@@ -98,144 +97,6 @@ const handleWordStats = async (req, res) => {
         })),
         backfill,
     });
-};
-
-async function loadPlans() {
-    try {
-        const [plans] = await pool.query(
-            `SELECT id, name, price, is_active, sort_order
-             FROM subscription_plans
-             ORDER BY sort_order ASC, id ASC`
-        );
-        return plans.map((plan) => ({
-            id: String(plan.id),
-            name: plan.name,
-            price: Number(plan.price) || 0,
-            isActive: Number(plan.is_active) === 1,
-        }));
-    } catch (err) {
-        console.error('subscription plans unavailable:', err.message);
-        return [];
-    }
-}
-
-function presentDiscount(row) {
-    return {
-        id: Number(row.id),
-        code: row.code,
-        percent: Number(row.percent),
-        active: Number(row.active) === 1,
-        expiresAt: expiryToInput(row.expires_input || row.expires_at),
-        maxUses: row.max_uses === null || row.max_uses === undefined ? null : Number(row.max_uses),
-        usedCount: Number(row.used_count) || 0,
-        allowedPlanIds: parsePlanIds(row.allowed_plan_ids),
-        createdAt: row.created_at || null,
-        updatedAt: row.updated_at || null,
-    };
-}
-
-const handleListDiscounts = async (req, res) => {
-    const params = [];
-    let where = '';
-    const q = String(req.query.q || '').trim();
-    if (q) {
-        where = 'WHERE code LIKE ?';
-        params.push(`%${q}%`);
-    }
-    const [rows] = await pool.query(
-        `SELECT id, code, percent, active,
-                DATE_FORMAT(expires_at, '%Y-%m-%dT%H:%i') AS expires_input,
-                max_uses, used_count, allowed_plan_ids, created_at, updated_at
-         FROM discount_codes
-         ${where}
-         ORDER BY id DESC`,
-        params
-    );
-    const plans = await loadPlans();
-    return res.json({
-        success: true,
-        discounts: rows.map(presentDiscount),
-        plans,
-    });
-};
-
-const handleSaveDiscount = async (req, res) => {
-    const parsed = validateDiscountPayload(req.body || {});
-    if (!parsed.ok) return res.json({ success: false, message: parsed.message });
-
-    const id = req.params.id ? Number(req.params.id) : null;
-    if (req.params.id && (!Number.isInteger(id) || id <= 0)) {
-        return res.json({ success: false, message: 'Invalid discount id' });
-    }
-
-    const value = parsed.value;
-    try {
-        if (id) {
-            const [[existing]] = await pool.query(`SELECT id FROM discount_codes WHERE id = ? LIMIT 1`, [id]);
-            if (!existing) return res.json({ success: false, message: 'Discount code not found' });
-            await pool.query(
-                `UPDATE discount_codes
-                    SET code = ?, percent = ?, active = ?, expires_at = ?, max_uses = ?, allowed_plan_ids = ?
-                  WHERE id = ?`,
-                [value.code, value.percent, value.active, value.expiresAt, value.maxUses, value.allowedPlanIds, id]
-            );
-        } else {
-            await pool.query(
-                `INSERT INTO discount_codes (code, percent, active, expires_at, max_uses, allowed_plan_ids)
-                 VALUES (?, ?, ?, ?, ?, ?)`,
-                [value.code, value.percent, value.active, value.expiresAt, value.maxUses, value.allowedPlanIds]
-            );
-        }
-    } catch (err) {
-        if (err && (err.code === 'ER_DUP_ENTRY' || err.errno === 1062)) {
-            return res.json({ success: false, message: 'That discount code already exists.' });
-        }
-        console.error('save discount failed:', err);
-        return res.status(500).json({ success: false, message: 'Failed to save discount code' });
-    }
-
-    const [rows] = await pool.query(
-        `SELECT id, code, percent, active,
-                DATE_FORMAT(expires_at, '%Y-%m-%dT%H:%i') AS expires_input,
-                max_uses, used_count, allowed_plan_ids, created_at, updated_at
-         FROM discount_codes WHERE code = ? LIMIT 1`,
-        [value.code]
-    );
-    return res.json({ success: true, discount: rows[0] ? presentDiscount(rows[0]) : null });
-};
-
-const handleDeleteDiscount = async (req, res) => {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id) || id <= 0) return res.json({ success: false, message: 'Invalid discount id' });
-
-    const [[row]] = await pool.query(
-        `SELECT id, used_count FROM discount_codes WHERE id = ? LIMIT 1`,
-        [id]
-    );
-    if (!row) return res.json({ success: false, message: 'Discount code not found' });
-
-    let assigned = 0;
-    try {
-        const [[link]] = await pool.query(
-            `SELECT COUNT(*) AS c FROM tam24_user_discount_codes WHERE discount_code_id = ?`,
-            [id]
-        );
-        assigned = Number(link?.c) || 0;
-    } catch (err) {
-        if (err && err.code !== 'ER_NO_SUCH_TABLE') throw err;
-    }
-
-    if (Number(row.used_count) > 0 || assigned > 0) {
-        await pool.query(`UPDATE discount_codes SET active = 0 WHERE id = ?`, [id]);
-        return res.json({
-            success: true,
-            deactivated: true,
-            message: 'This code has already been used, so it was deactivated instead of deleted.',
-        });
-    }
-
-    await pool.query(`DELETE FROM discount_codes WHERE id = ?`, [id]);
-    return res.json({ success: true, deleted: true });
 };
 
 const handleListReports = async (req, res) => {
@@ -376,9 +237,6 @@ const handleSaveAccess = async (req, res) => {
 
 module.exports = {
     handleWordStats,
-    handleListDiscounts,
-    handleSaveDiscount,
-    handleDeleteDiscount,
     handleListReports,
     handleUpdateReport,
     handleListAccess,

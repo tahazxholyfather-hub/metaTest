@@ -6,6 +6,13 @@ import {
 import { flowApi } from '../lib/authApi';
 import type { User } from './AuthView';
 
+interface PlanOption {
+    id: string;
+    name: string;
+    price: number;
+    is_active: boolean;
+}
+
 interface DiscountCode {
     id: number;
     code: string;
@@ -16,6 +23,7 @@ interface DiscountCode {
     used_count: number;
     remaining: number | null;
     created_at?: string;
+    allowed_plan_ids: string[];
 }
 
 interface FormState {
@@ -25,6 +33,7 @@ interface FormState {
     max_uses: string;
     expires_at: string;
     active: boolean;
+    allowed_plan_ids: string[];
 }
 
 const EMPTY_FORM: FormState = {
@@ -34,6 +43,7 @@ const EMPTY_FORM: FormState = {
     max_uses: '50',
     expires_at: '',
     active: true,
+    allowed_plan_ids: [],
 };
 
 const toDateTimeLocal = (value: string | null) => {
@@ -58,6 +68,7 @@ interface Props {
 export default function DiscountCodesManager({ user }: Props) {
     const canDelete = user.id === 1;
     const [codes, setCodes] = useState<DiscountCode[]>([]);
+    const [plans, setPlans] = useState<PlanOption[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -78,6 +89,7 @@ export default function DiscountCodesManager({ user }: Props) {
                 return;
             }
             setCodes(Array.isArray(res.codes) ? res.codes : []);
+            setPlans(Array.isArray(res.plans) ? res.plans : []);
         } catch {
             setErrorMessage('ارتباط با سرور برقرار نشد.');
         } finally {
@@ -109,6 +121,7 @@ export default function DiscountCodesManager({ user }: Props) {
             max_uses: item.max_uses == null ? '' : String(item.max_uses),
             expires_at: toDateTimeLocal(item.expires_at),
             active: item.active,
+            allowed_plan_ids: Array.isArray(item.allowed_plan_ids) ? item.allowed_plan_ids.map(String) : [],
         });
         setIsModalOpen(true);
     };
@@ -119,6 +132,17 @@ export default function DiscountCodesManager({ user }: Props) {
         for (let i = 0; i < 6; i++) out += alphabet[Math.floor(Math.random() * alphabet.length)];
         setForm((prev) => ({ ...prev, code: out }));
     };
+
+    const togglePlan = (planId: string) => {
+        setForm((prev) => ({
+            ...prev,
+            allowed_plan_ids: prev.allowed_plan_ids.includes(planId)
+                ? prev.allowed_plan_ids.filter((id) => id !== planId)
+                : [...prev.allowed_plan_ids, planId],
+        }));
+    };
+
+    const planLabel = (id: string) => plans.find((plan) => plan.id === id)?.name || id;
 
     const handleSave = async () => {
         const percent = Number(form.percent);
@@ -141,6 +165,7 @@ export default function DiscountCodesManager({ user }: Props) {
                 max_uses: maxUses,
                 expires_at: toMysqlDateTime(form.expires_at),
                 active: form.active,
+                allowed_plan_ids: form.allowed_plan_ids,
             });
             if (!res?.success) {
                 setErrorMessage(res?.message || 'ذخیره کد تخفیف ناموفق بود.');
@@ -282,7 +307,12 @@ export default function DiscountCodesManager({ user }: Props) {
                                             {copiedCode === item.code ? <CheckCircle2 size={14} className="text-green-500" /> : <Copy size={14} />}
                                         </button>
                                     </div>
-                                    <p className="text-xs text-[#86868b] mt-1">{formatFa(item.percent)}٪ تخفیف روی قیمت پلن‌ها</p>
+                                    <p className="text-xs text-[#86868b] mt-1">
+                                        {formatFa(item.percent)}٪ تخفیف
+                                        {item.allowed_plan_ids?.length
+                                            ? ` · فقط ${item.allowed_plan_ids.map(planLabel).join('، ')}`
+                                            : ' · همه پکیج‌ها'}
+                                    </p>
                                 </div>
 
                                 <div>
@@ -346,7 +376,7 @@ export default function DiscountCodesManager({ user }: Props) {
 
             {isModalOpen && (
                 <div className="fixed inset-0 z-80 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="w-full max-w-md bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-3xl p-5 shadow-xl">
+                    <div className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-3xl p-5 shadow-xl">
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-sm font-bold">{form.id ? 'ویرایش کد تخفیف' : 'ساخت کد تخفیف'}</h3>
                             <button onClick={() => setIsModalOpen(false)} className="p-2 rounded-lg hover:bg-[#f1f3f4] dark:hover:bg-[#2b2d2f]">
@@ -408,6 +438,36 @@ export default function DiscountCodesManager({ user }: Props) {
                                 />
                                 کد فعال باشد
                             </label>
+
+                            <div>
+                                <p className="text-[11px] font-bold text-[#86868b]">محدود به پکیج</p>
+                                <p className="text-[10px] text-[#86868b] mt-1 mb-2">
+                                    اگر هیچ پکیجی انتخاب نشود، کد روی همه اشتراک‌ها کار می‌کند.
+                                </p>
+                                {plans.length === 0 ? (
+                                    <p className="text-[11px] text-[#86868b]">پلنی برای انتخاب پیدا نشد.</p>
+                                ) : (
+                                    <div className="flex flex-wrap gap-2">
+                                        {plans.map((plan) => {
+                                            const on = form.allowed_plan_ids.includes(plan.id);
+                                            return (
+                                                <button
+                                                    key={plan.id}
+                                                    type="button"
+                                                    onClick={() => togglePlan(plan.id)}
+                                                    className={`px-3 py-1.5 rounded-full text-[11px] font-bold border ${
+                                                        on
+                                                            ? 'bg-[#e8f0fe] text-[#1a73e8] border-[#1a73e8]'
+                                                            : 'border-[#dadce0] dark:border-[#444746] text-[#444746] dark:text-[#c4c7c5]'
+                                                    }`}
+                                                >
+                                                    {plan.name}{plan.is_active ? '' : ' (غیرفعال)'}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                         <button
                             type="button"

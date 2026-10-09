@@ -4,6 +4,7 @@ const path = require('path');
 const zlib = require('zlib');
 const crypto = require('crypto');
 const walletController = require('./walletController');
+const { parsePlanIds } = require('../admin/discounts');
 const {
     ensureQuestionTagTables,
     saveQuestionTags,
@@ -1132,6 +1133,45 @@ const ensureDiscountCodesTable = async () => {
             UNIQUE KEY code (code)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
     `);
+    const [cols] = await pool.query(
+        `SELECT COUNT(*) AS c FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'discount_codes' AND COLUMN_NAME = 'allowed_plan_ids'`
+    );
+    if (Number(cols[0]?.c) === 0) {
+        await pool.query(
+            `ALTER TABLE discount_codes
+             ADD COLUMN allowed_plan_ids longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL`
+        );
+    }
+};
+
+const loadSubscriptionPlans = async () => {
+    try {
+        const [plans] = await pool.query(
+            `SELECT id, name, price, is_active
+             FROM subscription_plans
+             ORDER BY sort_order ASC, id ASC`
+        );
+        return plans.map((plan) => ({
+            id: String(plan.id),
+            name: plan.name,
+            price: Number(plan.price) || 0,
+            is_active: Number(plan.is_active) === 1,
+        }));
+    } catch (error) {
+        if (error && error.code === 'ER_NO_SUCH_TABLE') return [];
+        throw error;
+    }
+};
+
+const serializeAllowedPlans = (raw) => {
+    if (raw == null) return { value: null };
+    if (!Array.isArray(raw)) return { error: 'لیست پکیج‌ها نامعتبر است.' };
+    const ids = [...new Set(raw.map((id) => String(id).trim()).filter(Boolean))];
+    if (ids.length > 50 || ids.some((id) => id.length > 64)) {
+        return { error: 'حداکثر ۵۰ پکیج می‌توان انتخاب کرد.' };
+    }
+    return { value: ids.length ? JSON.stringify(ids) : null };
 };
 
 const normalizeDiscountCode = (value) =>
@@ -1163,6 +1203,7 @@ const mapDiscountRow = (row) => {
         remaining,
         created_at: row.created_at,
         updated_at: row.updated_at,
+        allowed_plan_ids: parsePlanIds(row.allowed_plan_ids),
     };
 };
 
@@ -1178,13 +1219,14 @@ const handleAdminGetDiscountCodes = async (req, res) => {
             params.push(`%${search}%`);
         }
         const [rows] = await pool.query(
-            `SELECT id, code, percent, active, expires_at, max_uses, used_count, created_at, updated_at
+            `SELECT id, code, percent, active, expires_at, max_uses, used_count, allowed_plan_ids, created_at, updated_at
              FROM discount_codes
              WHERE ${where}
              ORDER BY id DESC`,
             params
         );
-        res.json({ success: true, codes: rows.map(mapDiscountRow) });
+        const plans = await loadSubscriptionPlans();
+        res.json({ success: true, codes: rows.map(mapDiscountRow), plans });
     } catch (error) {
         console.error('❌ SQL Error in handleAdminGetDiscountCodes:', error);
         res.json({ success: false, message: 'خطا در دریافت کدهای تخفیف' });
@@ -1203,6 +1245,12 @@ const handleAdminSaveDiscountCode = async (req, res) => {
         const maxUses = maxUsesRaw === '' || maxUsesRaw == null ? null : Number(maxUsesRaw);
         const active = req.body.active === false || req.body.active === 0 || req.body.active === '0' ? 0 : 1;
         const expiresAt = req.body.expires_at ? String(req.body.expires_at).trim() || null : null;
+        const allowedPlans = serializeAllowedPlans(
+            req.body.allowed_plan_ids !== undefined ? req.body.allowed_plan_ids : req.body.allowedPlanIds
+        );
+        if (allowedPlans.error) {
+            return res.json({ success: false, message: allowedPlans.error });
+        }
 
         if (!code) {
             for (let i = 0; i < 8; i++) {
@@ -1232,9 +1280,9 @@ const handleAdminSaveDiscountCode = async (req, res) => {
             try {
                 await pool.query(
                     `UPDATE discount_codes
-                     SET code = ?, percent = ?, active = ?, expires_at = ?, max_uses = ?, updated_at = NOW()
+                     SET code = ?, percent = ?, active = ?, expires_at = ?, max_uses = ?, allowed_plan_ids = ?, updated_at = NOW()
                      WHERE id = ?`,
-                    [code, percent, active, expiresAt, maxUses, id]
+                    [code, percent, active, expiresAt, maxUses, allowedPlans.value, id]
                 );
             } catch (err) {
                 if (err && err.code === 'ER_DUP_ENTRY') {
@@ -1247,9 +1295,9 @@ const handleAdminSaveDiscountCode = async (req, res) => {
 
         try {
             await pool.query(
-                `INSERT INTO discount_codes (code, percent, active, expires_at, max_uses, used_count)
-                 VALUES (?, ?, ?, ?, ?, 0)`,
-                [code, percent, active, expiresAt, maxUses]
+                `INSERT INTO discount_codes (code, percent, active, expires_at, max_uses, used_count, allowed_plan_ids)
+                 VALUES (?, ?, ?, ?, ?, 0, ?)`,
+                [code, percent, active, expiresAt, maxUses, allowedPlans.value]
             );
         } catch (err) {
             if (err && err.code === 'ER_DUP_ENTRY') {

@@ -66,11 +66,6 @@ router.get('/dashboard', requireSection('dashboard'), wrap(dashboard.handleGetDa
 
 router.get('/words', requireSection('word-stats'), wrap(ops.handleWordStats));
 
-router.get('/discounts', requireSection('discounts'), wrap(ops.handleListDiscounts));
-router.post('/discounts', requireSection('discounts'), wrap(ops.handleSaveDiscount));
-router.patch('/discounts/:id', requireSection('discounts'), wrap(ops.handleSaveDiscount));
-router.delete('/discounts/:id', requireSection('discounts'), wrap(ops.handleDeleteDiscount));
-
 router.get('/reports', requireSection('reports'), wrap(ops.handleListReports));
 router.patch('/reports/:id', requireSection('reports'), wrap(ops.handleUpdateReport));
 

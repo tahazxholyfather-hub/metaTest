@@ -16,7 +16,6 @@ export const ADMIN_NAV: { id: string; label: string; superOnly?: boolean }[] = [
     { id: 'referral-settings', label: 'تنظیمات دعوت' },
     { id: 'withdrawals', label: 'برداشت‌ها' },
     { id: 'word-stats', label: 'Word Activity' },
-    { id: 'discounts', label: 'Discount Codes' },
     { id: 'reports', label: 'Reports' },
     { id: 'ai-manager', label: 'AI Manager' },
     { id: 'admins', label: 'Admins' },
