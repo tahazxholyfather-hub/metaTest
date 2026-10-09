@@ -47,6 +47,7 @@ import { MetView } from "./views/met";
 import InviteLanding from "./views/InviteLanding";
 
 const DentalLandingPage = lazy(() => import("./views/dental/DentalLandingPage"));
+const BounceApp = lazy(() => import("./bounce/ui/BounceApp").then((mod) => ({ default: mod.BounceApp })));
 
 
 
@@ -694,6 +695,7 @@ function MainApp() {
 const router = createBrowserRouter(
     [
         { path: "/admin/*", element: <AdminPanel /> },
+        { path: "/bounce/*", element: <Suspense fallback={<div style={{ position: "fixed", inset: 0, background: "#9fd4f2" }} />}><BounceApp /></Suspense> },
         { path: "/re/*", element: <PlanSelectorView /> },
         { path: "/payment/result/:token", element: <PaymentResultPage /> },
         { path: "/invite/:code", element: <InviteLanding /> },
