@@ -83,7 +83,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpen, setI
                         </div>
                         <div className="flex-1 min-w-0">
                             <p className="text-xs font-semibold truncate uppercase tracking-tighter">{user.fullName || user.username}</p>
-                            <p className="text-[10px] text-[#86868b] truncate">{isSuper ? 'super admin' : user.role}</p>
+                            <p className="text-[10px] text-[#86868b] truncate">{user.isSuper ? 'super admin' : user.role}</p>
                         </div>
                         <button onClick={onLogout} className="p-2 text-[#86868b] hover:text-red-500 transition-colors">
                             <LogOut size={14} />
