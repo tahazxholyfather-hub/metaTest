@@ -355,10 +355,16 @@ const handleVerifyOtp = async (req, res) => {
             userId = insertResult.insertId;
 
             // Attribute invite-link referral at registration (one-time).
+            // Store the code from the link itself so the first paid purchase
+            // can resolve the inviter and pay 30% into their Toman wallet.
             if (referral_code) {
-                const inviter = await walletController.resolveInviter(db, referral_code);
-                if (inviter && inviter.id) {
-                    await db.query('UPDATE tam24_users SET referrer_code_submitted = ? WHERE id = ?', [inviter.phone || inviter.username, userId]);
+                const submittedCode = String(referral_code).trim();
+                const inviter = submittedCode ? await walletController.resolveInviter(db, submittedCode) : null;
+                if (inviter && Number(inviter.id) !== Number(userId)) {
+                    await db.query(
+                        'UPDATE tam24_users SET referrer_code_submitted = ? WHERE id = ? AND (referrer_code_submitted IS NULL OR referrer_code_submitted = \'\')',
+                        [submittedCode, userId]
+                    );
                 }
             }
             await walletController.ensureReferralCode(db, userId);
@@ -1099,17 +1105,12 @@ const handleGetMyInvites = async (req, res) => {
     try {
         const userId = req.user.id;
 
-        const [userRows] = await db.query(
-            'SELECT phone, username FROM tam24_users WHERE id = ?',
-            [userId]
-        );
-
-        if (userRows.length === 0) {
-            return res.json({ success: false, message: 'کاربر یافت نشد.' });
+        const keys = await walletController.listInviterKeys(db, userId);
+        if (!keys.length) {
+            return res.json({ success: true, data: { list: [], totalInvited: 0, activeInvites: 0 } });
         }
 
-        const { phone, username } = userRows[0];
-
+        const where = keys.map(() => 'u.referrer_code_submitted = ?').join(' OR ');
         const [invites] = await db.query(`
             SELECT
                 u.id,
@@ -1120,9 +1121,9 @@ const handleGetMyInvites = async (req, res) => {
                 (SELECT COUNT(*) FROM payments p WHERE p.user_id = u.id AND p.status = 'paid' AND p.final_price > 0) AS purchases_count,
                 COALESCE((SELECT SUM(r.reward_amount) FROM tam24_referral_rewards r WHERE r.inviter_id = ? AND r.invitee_id = u.id AND r.reward_type <> 'token'), 0) AS commission_earned
             FROM tam24_users u
-            WHERE u.referrer_code_submitted = ? OR u.referrer_code_submitted = ?
+            WHERE ${where}
             ORDER BY u.created_at DESC
-        `, [userId, phone || '', username || '']);
+        `, [userId, ...keys]);
 
         return res.json({
             success: true,

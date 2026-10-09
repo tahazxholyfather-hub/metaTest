@@ -59,10 +59,27 @@ async function resolveInviter(conn, referrerCode) {
     const code = String(referrerCode).trim();
     if (!code) return null;
     const [rows] = await conn.query(
-        'SELECT id, first_name, last_name, username, phone FROM tam24_users WHERE referral_code = ? OR phone = ? OR username = ? LIMIT 1',
+        'SELECT id, first_name, last_name, username, phone, referral_code FROM tam24_users WHERE referral_code = ? OR phone = ? OR username = ? LIMIT 1',
         [code, code, code]
     );
     return rows[0] || null;
+}
+
+// Values that may be stored in referrer_code_submitted for this inviter:
+// the shareable referral code, and (for older rows) phone or username.
+async function listInviterKeys(conn, userId) {
+    const [rows] = await conn.query(
+        'SELECT phone, username, referral_code FROM tam24_users WHERE id = ?',
+        [userId]
+    );
+    if (!rows.length) return [];
+    const { phone, username, referral_code } = rows[0];
+    return [...new Set([phone, username, referral_code].map((v) => String(v || '').trim()).filter(Boolean))];
+}
+
+function inviteUrlForCode(code) {
+    const base = String(process.env.FRONTEND_URL || 'https://metatest.app').replace(/\/+$/, '');
+    return `${base}/invite/${code}`;
 }
 
 async function getTomanWallet(conn, userId, forUpdate = false) {
@@ -268,7 +285,7 @@ const handleGetMyReferralCode = async (req, res) => {
                 success: true,
                 data: {
                     referralCode: code,
-                    inviteUrl: code ? `https://metatest.com/invite/${code}` : null,
+                    inviteUrl: code ? inviteUrlForCode(code) : null,
                 },
             });
         } catch (e) {
@@ -382,6 +399,7 @@ module.exports = {
     creditTomanWallet,
     debitTomanWallet,
     resolveInviter,
+    listInviterKeys,
     awardReferralRewardForPayment,
     handleGetMyReferralCode,
     handleGetMyWallet,

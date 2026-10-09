@@ -180,6 +180,8 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
     const [withdrawSubmitting, setWithdrawSubmitting] = useState(false);
     const [referralCode, setReferralCode] = useState('');
     const [inviteUrl, setInviteUrl] = useState('');
+    const [referralLoading, setReferralLoading] = useState(true);
+    const [referralError, setReferralError] = useState<string | null>(null);
 
     const fetchPayments = useCallback(async () => {
         setPaymentsLoading(true);
@@ -266,16 +268,31 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
     }, [activeTab, paymentsData, paymentsLoading, invitesData, invitesLoading, fetchPayments, fetchInvites, walletData, walletLoading, fetchWallet]);
 
     useEffect(() => {
+        let cancelled = false;
+        setReferralLoading(true);
         flowApi.getMyReferralCode().then((res: any) => {
-            if (res?.success && res?.data) {
-                setReferralCode(res.data.referralCode || '');
+            if (cancelled) return;
+            if (res?.success && res?.data?.referralCode) {
+                setReferralCode(res.data.referralCode);
                 setInviteUrl(res.data.inviteUrl || '');
+                setReferralError(null);
+            } else {
+                setReferralError(res?.message || 'لینک دعوت ساخته نشد. مایگریشن کیف پول را روی دیتابیس اجرا کنید.');
             }
-        }).catch(() => {});
+        }).catch(() => {
+            if (!cancelled) setReferralError('خطا در دریافت لینک دعوت.');
+        }).finally(() => {
+            if (!cancelled) setReferralLoading(false);
+        });
+        return () => { cancelled = true; };
     }, []);
 
+    const inviteLink = referralCode
+        ? `${window.location.origin}/invite/${referralCode}`
+        : inviteUrl;
+
     const copyInviteLink = async () => {
-        const link = inviteUrl || (referralCode ? `https://metatest.com/invite/${referralCode}` : '');
+        const link = inviteLink;
         if (!link) return;
         try {
             await navigator.clipboard.writeText(link);
@@ -1032,6 +1049,35 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
                                     transition={{ duration: 0.2 }}
                                     className="space-y-4"
                                 >
+                                    <div className="p-4 rounded-2xl bg-[var(--bg-elevated)]/60 border border-[var(--accent)]/30 space-y-3">
+                                        <span className="text-xs font-bold text-[var(--accent)]">لینک دعوت اختصاصی شما</span>
+                                        {referralLoading ? (
+                                            <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
+                                                <Loader2 size={14} className="animate-spin text-[var(--accent)]" />
+                                                در حال ساخت لینک دعوت...
+                                            </div>
+                                        ) : referralError ? (
+                                            <p className="text-[11px] text-rose-500 font-bold leading-5">{referralError}</p>
+                                        ) : (
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    readOnly
+                                                    dir="ltr"
+                                                    value={inviteLink}
+                                                    className="flex-1 min-w-0 bg-[var(--bg-card)] border border-[var(--border)] rounded-lg px-3 py-2 text-[11px] text-[var(--text-primary)] outline-none"
+                                                />
+                                                <button
+                                                    onClick={copyInviteLink}
+                                                    disabled={!inviteLink}
+                                                    className="shrink-0 px-4 py-2 rounded-lg bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 disabled:opacity-40 transition-opacity"
+                                                >
+                                                    کپی لینک
+                                                </button>
+                                            </div>
+                                        )}
+                                        <p className="text-[10px] text-[var(--text-muted)] leading-5">با ارسال این لینک، هرکس ثبت‌نام کند و اولین پکیج پولی را بخرد، ۳۰٪ مبلغ همان خرید به کیف پول تومانی شما واریز می‌شود.</p>
+                                    </div>
+
                                     {invitesLoading ? (
                                         <div className="flex flex-col items-center justify-center py-16 gap-3 text-[var(--text-muted)]">
                                             <Loader2 size={26} className="animate-spin text-[var(--accent)]" />
@@ -1044,27 +1090,6 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
                                         </div>
                                     ) : (
                                         <>
-                                            {/* Invite link */}
-                                            <div className="p-4 rounded-2xl bg-[var(--bg-elevated)]/60 border border-[var(--accent)]/30 space-y-3">
-                                                <span className="text-xs font-bold text-[var(--accent)]">لینک دعوت اختصاصی شما</span>
-                                                <div className="flex items-center gap-2">
-                                                    <input
-                                                        readOnly
-                                                        dir="ltr"
-                                                        value={inviteUrl || (referralCode ? `https://metatest.com/invite/${referralCode}` : '')}
-                                                        className="flex-1 min-w-0 bg-[var(--bg-card)] border border-[var(--border)] rounded-lg px-3 py-2 text-[11px] text-[var(--text-primary)] outline-none"
-                                                    />
-                                                    <button
-                                                        onClick={copyInviteLink}
-                                                        disabled={!inviteUrl && !referralCode}
-                                                        className="shrink-0 px-4 py-2 rounded-lg bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 disabled:opacity-40 transition-opacity"
-                                                    >
-                                                        کپی لینک
-                                                    </button>
-                                                </div>
-                                                <p className="text-[10px] text-[var(--text-muted)] leading-5">با ارسال این لینک، هرکس ثبت‌نام کند و اولین پکیج را بخرد، پاداش آن به کیف پول تومانی شما واریز می‌شود.</p>
-                                            </div>
-
                                             {/* Summary */}
                                             <div className="grid grid-cols-2 gap-3">
                                                 <div className="p-4 rounded-2xl bg-[var(--bg-elevated)]/60 border border-[var(--border)] text-center">
@@ -1082,7 +1107,7 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
                                                 <div className="flex flex-col items-center justify-center py-12 gap-2 text-[var(--text-muted)] bg-[var(--bg-elevated)]/40 border border-dashed border-[var(--border)] rounded-2xl">
                                                     <UserPlus size={24} />
                                                     <span className="text-xs font-bold">هنوز کسی با معرفی شما ثبت‌نام نکرده است.</span>
-                                                    <span className="text-[10px]">لینک دعوت خود را از داشبورد برای دوستانتان ارسال کنید.</span>
+                                                    <span className="text-[10px]">لینک بالای همین بخش را برای دوستانتان بفرستید.</span>
                                                 </div>
                                             ) : (
                                                 <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">

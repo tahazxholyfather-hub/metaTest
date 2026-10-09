@@ -2,6 +2,7 @@
 'use strict';
 
 const db = require('../db');
+const walletController = require('./walletController');
 
 // ─── Streak helper ────────────────────────────────────────────────────────────
 const calculateDailyStreak = async (userId) => {
@@ -71,16 +72,15 @@ const getCorrectPracticeCount = async (userId) => {
 };
 
 const getInviteCount = async (userId) => {
-    // Tracing invites directly from tam24_users using referrer_code_submitted
-    const [[userRow]] = await db.query('SELECT phone, username FROM tam24_users WHERE id = ?', [userId]);
-    const phone = userRow?.phone || '';
-    const username = userRow?.username || '';
+    const keys = await walletController.listInviterKeys(db, userId);
+    if (!keys.length) return { current: 0, target: 3 };
+    const where = keys.map(() => 'referrer_code_submitted = ?').join(' OR ');
 
     const [[row]] = await db.query(`
         SELECT COUNT(*) AS cnt
         FROM tam24_users
-        WHERE referrer_code_submitted = ? OR referrer_code_submitted = ?
-    `, [phone, username]);
+        WHERE ${where}
+    `, keys);
     return { current: row.cnt, target: 3 };
 };
 

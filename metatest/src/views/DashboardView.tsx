@@ -712,7 +712,7 @@ export function DashboardView({
     // Generate simple, shorter encrypted parameters for safety and UX
     const obfuscatedCode = useMemo(() => encryptPhoneNumber(user?.phone || user?.username || ''), [user]);
     const inviteCode = referralCode || obfuscatedCode;
-    const inviteLink = `https://metatest.com/invite/${inviteCode}`;
+    const inviteLink = `${window.location.origin}/invite/${inviteCode}`;
 
     const handleCopy = () => {
         navigator.clipboard.writeText(inviteLink);

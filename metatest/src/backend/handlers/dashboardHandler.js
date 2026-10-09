@@ -52,10 +52,19 @@ const handleGetDashboardData = async (req, res) => {
 
     try {
         // 1. User basics
-        const [users] = await db.query(
-            'SELECT username, phone, xp_points, trophies, referrer_code_submitted FROM tam24_users WHERE id = ?',
-            [userId]
-        );
+        let users;
+        try {
+            [users] = await db.query(
+                'SELECT username, phone, referral_code, xp_points, trophies, referrer_code_submitted FROM tam24_users WHERE id = ?',
+                [userId]
+            );
+        } catch (err) {
+            if (!err || err.code !== 'ER_BAD_FIELD_ERROR') throw err;
+            [users] = await db.query(
+                'SELECT username, phone, xp_points, trophies, referrer_code_submitted FROM tam24_users WHERE id = ?',
+                [userId]
+            );
+        }
 
         if (users.length === 0) {
             return res.status(404).json({ success: false, message: 'User not found' });
@@ -181,9 +190,9 @@ const handleGetDashboardData = async (req, res) => {
                 status, 
                 created_at
             FROM tam24_users
-            WHERE referrer_code_submitted = ? OR referrer_code_submitted = ?
+            WHERE referrer_code_submitted = ? OR referrer_code_submitted = ? OR referrer_code_submitted = ?
             ORDER BY created_at DESC
-        `, [user.phone, user.username]);
+        `, [user.phone || '', user.username || '', user.referral_code || '']);
 
         const invitesData = {
             totalInvited: invitesRaw.length,
@@ -476,8 +485,8 @@ const handleSubmitReferrerCode = async (req, res) => {
 
         // Search the referrer in user records
         const [referrer] = await conn.query(
-            'SELECT id, first_name, last_name, username, phone FROM tam24_users WHERE phone = ? OR username = ? LIMIT 1',
-            [referrerCode.trim(), referrerCode.trim()]
+            'SELECT id, first_name, last_name, username, phone, referral_code FROM tam24_users WHERE phone = ? OR username = ? OR referral_code = ? LIMIT 1',
+            [referrerCode.trim(), referrerCode.trim(), referrerCode.trim()]
         );
 
         if (referrer.length === 0) {
