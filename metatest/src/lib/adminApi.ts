@@ -160,6 +160,10 @@ export const adminApi = {
         adminRequest<Json>('/subscriptions/settings', { method: 'PUT', body: JSON.stringify(payload) }),
     saveSubscriptionPlan: (id: string, payload: Json) =>
         adminRequest<Json>(`/subscriptions/plans/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(payload) }),
+    createSubscriptionPlan: (payload: Json) =>
+        adminRequest<Json>('/subscriptions/plans', { method: 'POST', body: JSON.stringify(payload) }),
+    deleteSubscriptionPlan: (id: string) =>
+        adminRequest<Json>(`/subscriptions/plans/${encodeURIComponent(id)}`, { method: 'DELETE' }),
     saveLoyaltyRules: (rules: Json[]) =>
         adminRequest<Json>('/subscriptions/loyalty', { method: 'PUT', body: JSON.stringify({ rules }) }),
 };

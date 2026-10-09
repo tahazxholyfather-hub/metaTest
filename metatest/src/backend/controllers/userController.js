@@ -121,6 +121,19 @@ const handleGetUserInfo = async (req, res) => {
             daysRemaining = diffMs > 0 ? Math.ceil(diffMs / (1000 * 60 * 60 * 24)) : 0;
         }
 
+        let planName = null;
+        if (planActive && user.current_plan) {
+            try {
+                const [planRows] = await db.query(
+                    `SELECT name FROM subscription_plans WHERE id = ? LIMIT 1`,
+                    [user.current_plan]
+                );
+                planName = planRows[0]?.name || null;
+            } catch (err) {
+                console.error('[plans] name', err.message);
+            }
+        }
+
         const socialLinks = typeof user.social_links === 'string'
             ? JSON.parse(user.social_links)
             : (user.social_links || {});
@@ -142,6 +155,7 @@ const handleGetUserInfo = async (req, res) => {
                 previous_plan: !planActive && storedPlanKey !== 'free' ? user.current_plan : null,
                 days_remaining: planUnlimited ? null : daysRemaining,
                 plan_unlimited: planUnlimited,
+                plan_name: planName,
                 password_set: !!user.password_hash,
                 password_hash: undefined,
                 plan_expires_at: undefined,

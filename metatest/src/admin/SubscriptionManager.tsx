@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Loader2, Save } from 'lucide-react';
+import { Loader2, Plus, Save, Trash2 } from 'lucide-react';
 import { adminApi } from '../lib/adminApi';
 
 type PlanDraft = {
@@ -56,6 +56,10 @@ export default function SubscriptionManager() {
     const [savingSettings, setSavingSettings] = useState(false);
     const [savingPlanId, setSavingPlanId] = useState<string | null>(null);
     const [savingRules, setSavingRules] = useState(false);
+    const [showNew, setShowNew] = useState(false);
+    const [creating, setCreating] = useState(false);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [draft, setDraft] = useState({ id: '', name: '', price: '', days: '30', unlimited: false, look: 'silver' });
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -95,11 +99,6 @@ export default function SubscriptionManager() {
     useEffect(() => {
         load();
     }, [load]);
-
-    const planName = useMemo(() => {
-        const map = new Map(plans.map((plan) => [plan.id, plan.name || plan.id]));
-        return (id: string) => map.get(id) || id;
-    }, [plans]);
 
     const updatePlan = (id: string, patch: Partial<PlanDraft>) => {
         setPlans((current) => current.map((plan) => (plan.id === id ? { ...plan, ...patch } : plan)));
@@ -149,6 +148,42 @@ export default function SubscriptionManager() {
         }
     };
 
+    const createPlan = async () => {
+        setCreating(true);
+        try {
+            const res: any = await adminApi.createSubscriptionPlan({
+                id: draft.id.trim().toLowerCase(),
+                name: draft.name,
+                price: Number(draft.price),
+                days: draft.unlimited ? null : Number(draft.days),
+                unlimited: draft.unlimited,
+                look: draft.look,
+            });
+            toast.success(res?.message || 'اشتراک اضافه شد.');
+            setDraft({ id: '', name: '', price: '', days: '30', unlimited: false, look: 'silver' });
+            setShowNew(false);
+            await load();
+        } catch (err: any) {
+            toast.error(err?.message || 'خطا در افزودن اشتراک');
+        } finally {
+            setCreating(false);
+        }
+    };
+
+    const deletePlan = async (plan: PlanDraft) => {
+        if (!window.confirm(`اشتراک «${plan.name}» حذف شود؟ اگر خریدی برایش ثبت شده باشد، حذف انجام نمی‌شود.`)) return;
+        setDeletingId(plan.id);
+        try {
+            const res: any = await adminApi.deleteSubscriptionPlan(plan.id);
+            toast.success(res?.message || 'اشتراک حذف شد.');
+            await load();
+        } catch (err: any) {
+            toast.error(err?.message || 'خطا در حذف اشتراک');
+        } finally {
+            setDeletingId(null);
+        }
+    };
+
     const saveRules = async () => {
         setSavingRules(true);
         try {
@@ -181,16 +216,77 @@ export default function SubscriptionManager() {
             <section className="rounded-2xl border border-[#dadce0] dark:border-[#333537] bg-white dark:bg-[#1e1f20] p-6">
                 <h2 className="text-base font-bold text-gray-800 dark:text-gray-100">پلن‌های اشتراک</h2>
                 <p className="text-xs text-[#86868b] mt-1 leading-6">
-                    اسم، قیمت به تومان و مدت هر اشتراک از اینجا عوض می‌شود. «نمایش در فروشگاه» کارت را به کاربر نشان می‌دهد.
+                    اشتراک تازه بسازید یا یکی را حذف کنید. اسم، قیمت به تومان و مدت هر اشتراک از همین‌جا عوض می‌شود. «نمایش در فروشگاه» کارت را به کاربر نشان می‌دهد.
                     «قابل خرید» را خاموش کنید تا کارت با پوشش خاکستری دیده شود و دکمه پرداخت برایش کار نکند.
                     مدت خالی یا نامحدود یعنی تاریخ انقضا ندارد.
                 </p>
+                <div className="mt-4">
+                    <button
+                        type="button"
+                        onClick={() => setShowNew((open) => !open)}
+                        className="inline-flex items-center gap-2 rounded-xl border border-[#1a73e8] px-4 py-2.5 text-xs font-bold text-[#1a73e8]"
+                    >
+                        <Plus size={14} />
+                        افزودن اشتراک
+                    </button>
+                </div>
+                {showNew && (
+                    <div className="mt-4 rounded-2xl border border-dashed border-[#1a73e8]/50 p-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                            <label className="block">
+                                <span className="text-[11px] font-bold text-[#86868b]">شناسه انگلیسی</span>
+                                <input className={`${inputClass} mt-1`} value={draft.id} placeholder="platinum" onChange={(event) => setDraft({ ...draft, id: event.target.value })} />
+                            </label>
+                            <label className="block">
+                                <span className="text-[11px] font-bold text-[#86868b]">نام</span>
+                                <input className={`${inputClass} mt-1`} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
+                            </label>
+                            <label className="block">
+                                <span className="text-[11px] font-bold text-[#86868b]">قیمت (تومان)</span>
+                                <input className={`${inputClass} mt-1`} type="number" min={0} value={draft.price} onChange={(event) => setDraft({ ...draft, price: event.target.value })} />
+                            </label>
+                            <label className="block">
+                                <span className="text-[11px] font-bold text-[#86868b]">ظاهر کارت</span>
+                                <select className={`${inputClass} mt-1`} value={draft.look} onChange={(event) => setDraft({ ...draft, look: event.target.value })}>
+                                    <option value="bronze">برنزی</option>
+                                    <option value="silver">نقره‌ای</option>
+                                    <option value="golden">طلایی</option>
+                                    <option value="diamond">الماسی</option>
+                                </select>
+                            </label>
+                            <label className="block">
+                                <span className="text-[11px] font-bold text-[#86868b]">مدت (روز)</span>
+                                <input className={`${inputClass} mt-1 disabled:opacity-50`} type="number" min={1} disabled={draft.unlimited} value={draft.unlimited ? '' : draft.days} placeholder={draft.unlimited ? 'نامحدود' : '۳۰'} onChange={(event) => setDraft({ ...draft, days: event.target.value })} />
+                            </label>
+                        </div>
+                        <div className="mt-3">
+                            <Toggle checked={draft.unlimited} onChange={(value) => setDraft({ ...draft, unlimited: value })} label="نامحدود" />
+                        </div>
+                        <button
+                            type="button"
+                            onClick={createPlan}
+                            disabled={creating}
+                            className="mt-3 inline-flex items-center gap-2 rounded-xl bg-[#1a73e8] px-4 py-2.5 text-xs font-bold text-white disabled:opacity-60"
+                        >
+                            {creating ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                            ساخت اشتراک
+                        </button>
+                    </div>
+                )}
                 <div className="mt-5 space-y-4">
                     {plans.map((plan) => (
                         <div key={plan.id} className="rounded-2xl border border-[#dadce0] dark:border-[#333537] p-4">
                             <div className="mb-3 flex items-center justify-between gap-3">
                                 <span className="text-xs font-bold text-[#86868b]">شناسه: {plan.id}</span>
-                                <span className="text-[11px] font-bold text-[#1a73e8]">{planName(plan.id)}</span>
+                                <button
+                                    type="button"
+                                    onClick={() => deletePlan(plan)}
+                                    disabled={deletingId === plan.id}
+                                    className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold text-rose-500 hover:bg-rose-500/10 disabled:opacity-60"
+                                >
+                                    {deletingId === plan.id ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                                    حذف
+                                </button>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
                                 <label className="block">

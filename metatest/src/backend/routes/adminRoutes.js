@@ -72,8 +72,10 @@ router.patch('/reports/:id', requireSection('reports'), wrap(ops.handleUpdateRep
 
 // Section access stays with the main admin even if another admin can open Admins.
 router.get('/subscriptions', requireSuperAdmin, wrap(subscriptions.handleGetCatalog));
+router.post('/subscriptions/plans', requireSuperAdmin, wrap(subscriptions.handleCreatePlan));
 router.put('/subscriptions/settings', requireSuperAdmin, wrap(subscriptions.handleSaveSettings));
 router.put('/subscriptions/plans/:id', requireSuperAdmin, wrap(subscriptions.handleSavePlan));
+router.delete('/subscriptions/plans/:id', requireSuperAdmin, wrap(subscriptions.handleDeletePlan));
 router.put('/subscriptions/loyalty', requireSuperAdmin, wrap(subscriptions.handleSaveLoyalty));
 
 router.get('/access', requireSuperAdmin, wrap(ops.handleListAccess));

@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { flowApi } from '../lib/authApi';
 import { CustomSelect, CustomMultiSelect, type SelectOption } from './EditQuestions';
+import { topicMatchesGrades } from './chapterGrades';
 import { MathRenderer } from '../components/ui/MathRenderer';
 
 
@@ -96,8 +97,11 @@ export default function InsertQuestions() {
     }, [successMessage]);
 
     const topicOptions: SelectOption[] = useMemo(
-        () => curriculum.topics.filter(t => t.subject_id === meta.subject_id).map(t => ({ id: t.id, title: t.title })),
-        [curriculum.topics, meta.subject_id]
+        () => curriculum.topics
+            .filter(t => t.subject_id === meta.subject_id)
+            .filter(t => meta.topic_ids.includes(t.id) || topicMatchesGrades(t.title, meta.grade_ids))
+            .map(t => ({ id: t.id, title: t.title })),
+        [curriculum.topics, meta.subject_id, meta.grade_ids, meta.topic_ids]
     );
     const chapterOptions: SelectOption[] = useMemo(() => {
         const topicSet = new Set(meta.topic_ids.map(String));
@@ -113,6 +117,18 @@ export default function InsertQuestions() {
             if (key === 'subject_id') {
                 next.topic_ids = [];
                 next.chapter_ids = [];
+            }
+            if (key === 'grade_ids') {
+                const gradeIds = (value || []).map(Number);
+                next.topic_ids = prev.topic_ids.filter((id) => {
+                    const topic = curriculum.topics.find((item) => item.id === id);
+                    return topic && topicMatchesGrades(topic.title, gradeIds);
+                });
+                const allowed = new Set(next.topic_ids.map(String));
+                next.chapter_ids = prev.chapter_ids.filter((id) => {
+                    const chapter = curriculum.chapters.find((item) => String(item.id) === String(id));
+                    return chapter && (allowed.size === 0 || allowed.has(String(chapter.topic_id)));
+                });
             }
             if (key === 'topic_ids') {
                 const allowed = new Set((value || []).map(String));

@@ -90,9 +90,17 @@ export const SideNav = ({ activeView, onNavigate, theme, onToggleTheme, isCollap
     const logoSrc = theme === 'dark' ? '/logo.png' : '/logo2.png';
 
     // --- User Plan Logic ---
-    const rawPlan = user?.current_plan === 'epic' ? 'diamond' : user?.current_plan;
-    const currentPlanKey = rawPlan && PLAN_CONFIG[rawPlan] ? rawPlan : 'free';
-    const planDetails = PLAN_CONFIG[currentPlanKey];
+    const rawPlan = user?.current_plan === 'epic' ? 'diamond' : user?.current_plan === 'gold' ? 'golden' : user?.current_plan;
+    const knownPlan = rawPlan && PLAN_CONFIG[rawPlan] ? PLAN_CONFIG[rawPlan] : null;
+    const currentPlanKey = knownPlan ? String(rawPlan) : (rawPlan && rawPlan !== 'free' ? String(rawPlan) : 'free');
+    const planDetails = knownPlan || (currentPlanKey !== 'free' ? {
+        label: user?.plan_name || 'اشتراک ویژه',
+        totalDays: 30,
+        colorClass: 'text-violet-500',
+        hexColor: '#8b5cf6',
+        icon: Crown,
+        bgLight: 'bg-violet-500/10',
+    } : PLAN_CONFIG.free);
 
     const daysLeft = user?.days_remaining || 0;
     const totalDays = planDetails.totalDays;

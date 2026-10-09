@@ -12,6 +12,8 @@ const {
     joinOnTag,
     matchTagIn,
     toPositiveIds,
+    majorityGradeSql,
+    filterTopicsForSelectedGrades,
 } = require('../utils/questionTags');
 const {
     authenticateAdmin,
@@ -271,14 +273,20 @@ const handleAdminGetChaptersBySubject = async (req, res) => {
         await ensureQuestionTagTables();
         const gradeMatch = matchTagIn('q', 'grade', grade_id);
         const sql = `
-            SELECT DISTINCT t.id, t.title
+            SELECT t.id, t.title,
+                   ${majorityGradeSql('t', { requireEditDone: false })} AS majority_grade_id
             FROM questions_tam24 q
             JOIN topics_tam24 t ON ${joinOnTag('q', 't', 'topic')}
             WHERE q.subject_id = ? ${gradeMatch.sql ? `AND ${gradeMatch.sql}` : ''}
+            GROUP BY t.id, t.title
             ORDER BY t.id ASC
         `;
         const [rows] = await pool.query(sql, [subject_id, ...gradeMatch.params]);
-        res.json({ success: true, chapters: rows });
+        const chapters = filterTopicsForSelectedGrades(rows, grade_id).map((row) => ({
+            id: row.id,
+            title: row.title,
+        }));
+        res.json({ success: true, chapters });
     } catch (error) {
         console.error("Error in handleAdminGetChaptersBySubject:", error);
         res.json({ success: false, message: error.message });

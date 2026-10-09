@@ -19,6 +19,7 @@ export type UserData = {
     previous_plan?: string | null;
     days_remaining?: number | null;
     plan_unlimited?: boolean;
+    plan_name?: string | null;
     role?: 'user' | 'guest' | 'admin' | 'developer';
     status?: string;
     trophies?: number;

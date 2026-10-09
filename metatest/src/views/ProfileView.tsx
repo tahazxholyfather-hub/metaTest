@@ -876,8 +876,14 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
                                     ) : (
                                         (() => {
                                             const sub = paymentsData?.subscription;
-                                            const planKey = (sub?.currentPlan === 'epic' ? 'diamond' : sub?.currentPlan) || 'free';
-                                            const meta = PLAN_META[planKey] || PLAN_META.free;
+                                            const planKey = (sub?.currentPlan === 'epic' ? 'diamond' : sub?.currentPlan === 'gold' ? 'golden' : sub?.currentPlan) || 'free';
+                                            const meta = PLAN_META[planKey] || {
+                                                label: sub?.planName || 'اشتراک ویژه',
+                                                colorClass: 'text-violet-500',
+                                                bgClass: 'bg-violet-500/10',
+                                                icon: Crown,
+                                                totalDays: 30,
+                                            };
                                             const PlanIcon = meta.icon;
                                             const unlimited = Boolean(sub?.unlimited);
                                             const daysRemaining = unlimited ? null : (sub?.daysRemaining || 0);

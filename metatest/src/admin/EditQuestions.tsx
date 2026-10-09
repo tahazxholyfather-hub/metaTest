@@ -4,6 +4,7 @@ import {
     Filter, CheckCircle2, Circle, X, ChevronDown, Search, Loader2, Image as ImageIcon, AlertCircle
 } from 'lucide-react';
 import { flowApi } from '../lib/authApi';
+import { topicMatchesGrades } from './chapterGrades';
 
 
 // Re-exported so existing imports of MathRenderer from this file keep working.
@@ -450,10 +451,15 @@ export default function EditQuestions({
     useEffect(() => { fetchMabahes(filters.topic_id); }, [filters.topic_id]);
 
     const editTopicOptions: SelectOption[] = useMemo(
-        () => curriculum.topics
-            .filter((t) => !question?.subject || Number(t.subject_id) === Number(question.subject))
-            .map((t) => ({ id: t.id, title: t.title })),
-        [curriculum.topics, question?.subject]
+        () => {
+            const gradeIds = (question?.grade_ids || []).map(Number);
+            const selected = new Set((question?.chapter_ids || []).map(String));
+            return curriculum.topics
+                .filter((t) => !question?.subject || Number(t.subject_id) === Number(question.subject))
+                .filter((t) => selected.has(String(t.id)) || topicMatchesGrades(t.title, gradeIds))
+                .map((t) => ({ id: t.id, title: t.title }));
+        },
+        [curriculum.topics, question?.subject, question?.grade_ids, question?.chapter_ids]
     );
     const editMabhasOptions: SelectOption[] = useMemo(() => {
         const topicIds = (question?.chapter_ids?.length
@@ -504,7 +510,24 @@ export default function EditQuestions({
                 mabhas: nextMabhas[0] ?? null,
             };
         } else if (field === 'grade_ids') {
-            updatedQuestion = { ...updatedQuestion, grade: value?.[0] ?? null };
+            const gradeIds = (value || []).map(Number);
+            const chapter_ids = (question.chapter_ids || []).filter((id) => {
+                const topic = curriculum.topics.find((item) => Number(item.id) === Number(id));
+                return topic && topicMatchesGrades(topic.title, gradeIds);
+            });
+            const allowed = new Set(chapter_ids.map(String));
+            const mabhas_ids = (question.mabhas_ids || []).filter((id) => {
+                const chapter = curriculum.chapters.find((item) => String(item.id) === String(id));
+                return chapter && (allowed.size === 0 || allowed.has(String(chapter.topic_id)));
+            });
+            updatedQuestion = {
+                ...updatedQuestion,
+                grade: value?.[0] ?? null,
+                chapter_ids,
+                chapter: chapter_ids[0] ?? null,
+                mabhas_ids,
+                mabhas: mabhas_ids[0] ?? null,
+            };
         } else if (field === 'mabhas_ids') {
             updatedQuestion = { ...updatedQuestion, mabhas: value?.[0] ?? null };
         }

@@ -85,9 +85,17 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
     const fullName = user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.username : 'کاربر مهمان';
 
     // Map old 'epic' to 'diamond' just in case old data exists, otherwise use current plan
-    const rawPlan = user?.current_plan === 'epic' ? 'diamond' : user?.current_plan;
-    const currentPlanKey = rawPlan && PLAN_CONFIG[rawPlan] ? rawPlan : 'free';
-    const planDetails = PLAN_CONFIG[currentPlanKey];
+    const rawPlan = user?.current_plan === 'epic' ? 'diamond' : user?.current_plan === 'gold' ? 'golden' : user?.current_plan;
+    const knownPlan = rawPlan && PLAN_CONFIG[rawPlan] ? PLAN_CONFIG[rawPlan] : null;
+    const currentPlanKey = knownPlan ? String(rawPlan) : (rawPlan && rawPlan !== 'free' ? String(rawPlan) : 'free');
+    const planDetails = knownPlan || (currentPlanKey !== 'free' ? {
+        label: user?.plan_name || 'اشتراک ویژه',
+        totalDays: 30,
+        colorClass: 'text-violet-500',
+        hexColor: '#8b5cf6',
+        icon: Crown,
+        bgLight: 'bg-violet-500/10',
+    } : PLAN_CONFIG.free);
 
     // Pro Plan Logic
     const daysLeft = user?.days_remaining || 0;
