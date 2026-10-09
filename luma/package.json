@@ -1,0 +1,20 @@
+{
+  "name": "luma",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Luma — a polished 2D bounce adventure starring the eyes-only sphere character.",
+  "scripts": {
+    "dev": "vite --host --port 5173",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host --port 4173",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "phaser": "^3.87.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.2",
+    "vite": "^6.2.2"
+  }
+}
