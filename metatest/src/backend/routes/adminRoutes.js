@@ -2,11 +2,11 @@
 
 const express = require('express');
 const router = express.Router();
-const dashboard = require('./controllers/adminDashboardController');
-const staff = require('./controllers/adminStaffController');
-const ai = require('./controllers/adminAiController');
-const ops = require('./controllers/adminOpsController');
-const { requireSection, withSections } = require('./admin/access');
+const dashboard = require('../controllers/adminDashboardController');
+const staff = require('../controllers/adminStaffController');
+const ai = require('../controllers/adminAiController');
+const ops = require('../controllers/adminOpsController');
+const { requireSection, withSections } = require('../admin/access');
 const {
     requireAdminSession,
     requireSuperAdmin,
@@ -17,7 +17,7 @@ const {
     issueSession,
     clearAdminCookie,
     attachAdminIfPresent,
-} = require('./middleware/adminAuth');
+} = require('../middleware/adminAuth');
 
 function wrap(handler) {
     return async (req, res, next) => {
