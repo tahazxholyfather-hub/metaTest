@@ -317,6 +317,45 @@ async function creditPurchased(dbOrConn, userId, amount, { type = LEDGER.PURCHAS
     });
 }
 
+/** Credit or debit coins as an admin. Positive delta adds purchased coins; negative spends daily then purchased. */
+async function adminAdjust(dbOrConn, userId, delta, { reason, adminId, referenceId } = {}) {
+    const amt = Math.trunc(Number(delta) || 0);
+    if (!amt) {
+        const err = new Error('INVALID_AMOUNT');
+        err.code = 'INVALID_AMOUNT';
+        throw err;
+    }
+    if (amt > 0) {
+        return creditPurchased(dbOrConn, userId, amt, {
+            type: LEDGER.ADMIN_ADJUSTMENT,
+            reason: reason || 'افزایش سکه توسط ادمین',
+            referenceType: 'admin',
+            referenceId: referenceId || `admin-${adminId || 'x'}-${Date.now()}`,
+            metadata: { adminId },
+        });
+    }
+    return withConnection(dbOrConn, async (conn) => {
+        const w = await getWallet(conn, userId, { forUpdate: true });
+        const cost = Math.abs(amt);
+        if (w.total < cost) throw insufficient(w.total);
+        const { fromDaily, fromPurchased } = splitDebit(w.daily, w.purchased, cost);
+        await writeBuckets(conn, userId, w.daily - fromDaily, w.purchased - fromPurchased, { spent: cost });
+        await writeLedger(conn, {
+            userId, type: LEDGER.ADMIN_ADJUSTMENT, dailyDelta: -fromDaily, purchasedDelta: -fromPurchased,
+            before: w.total, after: w.total - cost,
+            reason: reason || 'کاهش سکه توسط ادمین',
+            referenceType: 'admin',
+            referenceId: referenceId || `admin-${adminId || 'x'}-${Date.now()}`,
+            metadata: { adminId },
+        });
+        return {
+            credited: -cost,
+            balance: w.total - cost,
+            wallet: { daily: w.daily - fromDaily, purchased: w.purchased - fromPurchased, total: w.total - cost },
+        };
+    });
+}
+
 async function listLedger(db, userId, { limit = 30, offset = 0 } = {}) {
     const [rows] = await db.query(
         `SELECT id, type, amount, daily_delta, purchased_delta, balance_before, balance_after, reason,
@@ -343,6 +382,7 @@ module.exports = {
     refundReservation,
     chargeFlat,
     creditPurchased,
+    adminAdjust,
     listLedger,
     quoteMessageCost,
     splitDebit,

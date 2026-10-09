@@ -1,6 +1,8 @@
 import React from 'react';
-import { LayoutDashboard, Layers, LogOut, Hexagon, ListTree, FileText, FilePlus2, BadgePercent, UserPlus, Wallet } from 'lucide-react';
+import { LayoutDashboard, Layers, LogOut, Hexagon, ListTree, FileText, FilePlus2, BadgePercent, UserPlus, Wallet, Bot, Shield, PenLine, Ticket, Flag, KeyRound } from 'lucide-react';
 import type { User } from './AuthView';
+import { ADMIN_NAV, canAccessSection } from './access';
+import type { LucideIcon } from 'lucide-react';
 
 interface SidebarProps {
     activeTab: string;
@@ -11,17 +13,28 @@ interface SidebarProps {
     onLogout: () => void;
 }
 
+const ICONS: Record<string, LucideIcon> = {
+    dashboard: LayoutDashboard,
+    'edit-questions': Layers,
+    'insert-questions': FilePlus2,
+    curriculum: ListTree,
+    'pdf-library': FileText,
+    'discount-codes': BadgePercent,
+    'referral-settings': UserPlus,
+    withdrawals: Wallet,
+    'word-stats': PenLine,
+    discounts: Ticket,
+    reports: Flag,
+    'ai-manager': Bot,
+    admins: Shield,
+    access: KeyRound,
+};
+
 const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpen, setIsOpen, user, onLogout }) => {
-    const navItems = [
-        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-        { id: 'edit-questions', label: 'Edit Questions', icon: Layers },
-        { id: 'insert-questions', label: 'Insert Questions', icon: FilePlus2 },
-        { id: 'curriculum', label: 'Curriculum', icon: ListTree },
-        { id: 'pdf-library', label: 'PDF Library', icon: FileText },
-        { id: 'discount-codes', label: 'کد تخفیف', icon: BadgePercent },
-        { id: 'referral-settings', label: 'تنظیمات دعوت', icon: UserPlus },
-        { id: 'withdrawals', label: 'برداشت‌ها', icon: Wallet },
-    ];
+    const navItems = ADMIN_NAV.filter((item) => canAccessSection(user, item.id)).map((item) => ({
+        ...item,
+        icon: ICONS[item.id] || LayoutDashboard,
+    }));
 
     return (
         <>
@@ -69,8 +82,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpen, setI
                             {user.username.split(' ').map(n => n[0]).join('')}
                         </div>
                         <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold truncate uppercase tracking-tighter">{user.username}</p>
-                            <p className="text-[10px] text-[#86868b] truncate">{user.role}</p>
+                            <p className="text-xs font-semibold truncate uppercase tracking-tighter">{user.fullName || user.username}</p>
+                            <p className="text-[10px] text-[#86868b] truncate">{isSuper ? 'super admin' : user.role}</p>
                         </div>
                         <button onClick={onLogout} className="p-2 text-[#86868b] hover:text-red-500 transition-colors">
                             <LogOut size={14} />

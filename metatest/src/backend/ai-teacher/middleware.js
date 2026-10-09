@@ -10,6 +10,7 @@ function rateLimit(name, perMinute) {
     const windowMs = 60 * 1000;
     const hits = new Map(); // key → [timestamps]
     let sweepAt = Date.now() + windowMs;
+    const limitOf = typeof perMinute === 'function' ? perMinute : () => perMinute;
 
     return (req, res, next) => {
         const now = Date.now();
@@ -20,9 +21,10 @@ function rateLimit(name, perMinute) {
             }
             sweepAt = now + windowMs;
         }
+        const cap = Math.max(1, Number(limitOf()) || 1);
         const key = `${name}:${req.user?.id || req.ip}`;
         const arr = (hits.get(key) || []).filter((t) => now - t < windowMs);
-        if (arr.length >= perMinute) {
+        if (arr.length >= cap) {
             const retryAfter = Math.ceil((windowMs - (now - arr[0])) / 1000);
             res.setHeader('Retry-After', String(retryAfter));
             return res.status(429).json({
@@ -38,9 +40,9 @@ function rateLimit(name, perMinute) {
     };
 }
 
-const chatLimiter = rateLimit('chat', RATE_LIMITS.chatPerMinute);
-const uploadLimiter = rateLimit('upload', RATE_LIMITS.uploadsPerMinute);
-const voiceLimiter = rateLimit('voice', RATE_LIMITS.voicePerMinute);
+const chatLimiter = rateLimit('chat', () => RATE_LIMITS.chatPerMinute);
+const uploadLimiter = rateLimit('upload', () => RATE_LIMITS.uploadsPerMinute);
+const voiceLimiter = rateLimit('voice', () => RATE_LIMITS.voicePerMinute);
 
 /** Blocks AI-powered endpoints when the subsystem is switched off or unconfigured. */
 function requireAi(req, res, next) {
