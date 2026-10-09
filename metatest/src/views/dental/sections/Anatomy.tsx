@@ -1,9 +1,10 @@
 import { Suspense, lazy, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion, useScroll, useSpring } from "framer-motion";
-import { Reveal, SectionHead } from "../ui";
+import { AccentTitle, Reveal, SectionHead } from "../ui";
 import { Icon } from "../icons";
 import { LazyCanvas } from "../three/LazyCanvas";
 import { ANATOMY, type AnatomyKey } from "../data";
+import { useLang } from "../i18n";
 
 const AnatomyScene = lazy(() => import("../three/AnatomyScene"));
 
@@ -28,20 +29,14 @@ export default function Anatomy() {
   const reduced = useReducedMotion();
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "end start"] });
   const scroll = useSpring(scrollYProgress, { stiffness: 60, damping: 20, mass: 0.6 });
-  const current = ANATOMY.find((a) => a.key === active);
+  const { t } = useLang();
+  const copy = t.anatomy;
+  const current = active ? copy.items[active] : null;
 
   return (
     <section id="anatomy" className="dl-section dl-anatomy">
       <div className="dl-container">
-        <SectionHead
-          eyebrow="Interactive anatomy"
-          title={
-            <>
-              Understand your smile, <span className="dl-serif dl-gradient-text">layer by layer</span>
-            </>
-          }
-          lead="Explore a living model of the dental arch. Select any structure to see how we protect it — from the enamel surface down to the nerve."
-        />
+        <SectionHead eyebrow={copy.eyebrow} title={<AccentTitle parts={copy.title} />} lead={copy.lead} />
 
         <div className="dl-anatomy-layout" ref={ref}>
           <Reveal className="dl-anatomy-stage" amount={0.15} blur={false}>
@@ -59,17 +54,17 @@ export default function Anatomy() {
                   }}
                   className={`dl-hotspot ${active === a.key ? "is-active" : ""}`}
                 >
-                  <button type="button" aria-label={a.label} className="dl-hotspot-dot" onClick={() => setActive(a.key)} />
+                  <button type="button" aria-label={copy.items[a.key].label} className="dl-hotspot-dot" onClick={() => setActive(a.key)} />
                   <span className="dl-hotspot-line" />
-                  <span className="dl-hotspot-label">{a.label}</span>
+                  <span className="dl-hotspot-label">{copy.items[a.key].label}</span>
                 </div>
               ))}
             </div>
             <span className="dl-stage-badge">
-              <i /> Live 3D model
+              <i />               {copy.live}
             </span>
             <span className="dl-stage-hint">
-              <Icon.Rotate size={14} /> Drag to rotate · tap a point to explore
+              <Icon.Rotate size={14} /> {copy.hint}
             </span>
           </Reveal>
 
@@ -86,8 +81,8 @@ export default function Anatomy() {
               >
                 <span className="dl-anatomy-num">0{i + 1}</span>
                 <span>
-                  <strong>{a.label}</strong>
-                  <small>{a.short}</small>
+                  <strong>{copy.items[a.key].label}</strong>
+                  <small>{copy.items[a.key].short}</small>
                 </span>
                 <Icon.Arrow size={16} style={{ opacity: active === a.key ? 1 : 0.3, color: "var(--dl-blue-deep)" }} />
               </button>
@@ -102,22 +97,15 @@ export default function Anatomy() {
                   exit={{ opacity: 0, y: -6 }}
                   transition={{ duration: 0.4 }}
                 >
-                  <h4>{current ? current.label : "A complete picture of oral health"}</h4>
-                  <p>
-                    {current
-                      ? current.description
-                      : "Every treatment plan at Lumière begins with understanding — digital scans, 3D imaging and a clear explanation of what we see. Hover a structure to begin."}
-                  </p>
+                  <h4>{current ? current.label : copy.idleTitle}</h4>
+                  <p>{current ? current.description : copy.idleBody}</p>
                 </motion.div>
               </AnimatePresence>
             </div>
 
             <div className="dl-anatomy-cross">
               <CrossSection active={active} />
-              <span>
-                Cross-section reference. Highlights follow your selection so you can relate the educational diagram to the 3D
-                model.
-              </span>
+              <span>{copy.cross}</span>
             </div>
           </Reveal>
         </div>

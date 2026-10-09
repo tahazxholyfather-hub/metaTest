@@ -1,15 +1,15 @@
 import * as THREE from "three";
 
 export const ENAMEL_PROPS = {
-  color: "#f8f5ef",
-  roughness: 0.2,
+  color: "#f3efe6",
+  roughness: 0.3,
   metalness: 0,
-  clearcoat: 1,
-  clearcoatRoughness: 0.1,
-  sheen: 0.5,
+  clearcoat: 0.9,
+  clearcoatRoughness: 0.18,
+  sheen: 0.4,
   sheenColor: new THREE.Color("#dde7ff"),
-  sheenRoughness: 0.55,
-  envMapIntensity: 1.1,
+  sheenRoughness: 0.6,
+  envMapIntensity: 0.75,
 };
 
 export const CEMENTUM_PROPS = {

@@ -1,5 +1,5 @@
 /* Lumière Dental — landing page styles (scoped under .dl) */
-@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&family=Vazirmatn:wght@300;400;500;600;700&display=swap");
 
 .dl {
   --dl-bg: #ffffff;
@@ -21,8 +21,7 @@
   font-family: "Manrope", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   color: var(--dl-ink);
   background: var(--dl-bg);
-  direction: ltr;
-  text-align: left;
+  text-align: start;
   font-feature-settings: "ss01", "cv11";
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -221,7 +220,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  padding: 0 10px 0 18px;
+  padding-inline: 18px 10px;
   border-radius: 999px;
   border: 1px solid transparent;
   transition: background-color 0.6s var(--dl-ease), border-color 0.6s var(--dl-ease), box-shadow 0.6s var(--dl-ease), backdrop-filter 0.6s, height 0.5s var(--dl-ease);
@@ -351,13 +350,21 @@
 /* ---------- Hero ---------- */
 .dl-hero {
   position: relative;
-  padding-top: clamp(120px, 15vw, 190px);
-  padding-bottom: clamp(60px, 7vw, 100px);
+  /* Only clear the fixed header; the visual's height follows the viewport so the whole block fits the first screen. */
+  padding-top: clamp(92px, 10vw, 112px);
+  padding-bottom: clamp(36px, 5vw, 64px);
   min-height: 100svh;
   display: flex;
   align-items: center;
   overflow: hidden;
   isolation: isolate;
+}
+
+@media (min-width: 1024px) {
+  .dl-hero {
+    padding-top: 104px;
+    padding-bottom: 56px;
+  }
 }
 
 .dl-hero-bg {
@@ -398,11 +405,11 @@
 }
 
 .dl-hero-title {
-  font-size: clamp(42px, 6.2vw, 84px);
+  font-size: clamp(40px, 5.6vw, 76px);
   line-height: 0.98;
   letter-spacing: -0.04em;
   font-weight: 500;
-  margin: 26px 0 0;
+  margin: 22px 0 0;
 }
 
 .dl-hero-title .dl-line {
@@ -437,7 +444,7 @@
   align-items: center;
   gap: 12px;
   height: 36px;
-  padding: 0 14px 0 8px;
+  padding-inline: 8px 14px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.7);
   border: 1px solid var(--dl-line);
@@ -466,18 +473,14 @@
 }
 
 .dl-rotator-text {
-  position: relative;
-  display: inline-block;
-  min-width: 170px;
+  display: grid;
   height: 20px;
   line-height: 20px;
   overflow: hidden;
 }
 
 .dl-rotator-text span {
-  position: absolute;
-  left: 0;
-  top: 0;
+  grid-area: 1 / 1;
   white-space: nowrap;
   color: var(--dl-ink);
 }
@@ -486,7 +489,7 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  margin-top: 40px;
+  margin-top: 32px;
   color: var(--dl-ink-3);
   font-size: 13px;
 }
@@ -501,12 +504,12 @@
   border-radius: 50%;
   object-fit: cover;
   border: 2px solid #fff;
-  margin-left: -10px;
+  margin-inline-start: -10px;
   box-shadow: 0 2px 8px rgba(11, 27, 51, 0.12);
 }
 
 .dl-avatars img:first-child {
-  margin-left: 0;
+  margin-inline-start: 0;
 }
 
 .dl-stars {
@@ -517,13 +520,14 @@
 
 .dl-hero-visual {
   position: relative;
-  min-height: 420px;
-  height: clamp(420px, 60vw, 680px);
+  min-height: 340px;
+  height: clamp(340px, 56vw, 560px);
 }
 
 @media (min-width: 1024px) {
   .dl-hero-visual {
-    height: clamp(560px, 42vw, 720px);
+    /* Fill what remains of the first screen under the header, never taller than the design maximum. */
+    height: clamp(480px, calc(100svh - 190px), 720px);
   }
 }
 
@@ -558,7 +562,7 @@
 
 .dl-hero-canvas {
   position: absolute;
-  inset: -8% -30%;
+  inset: -4% -8%;
   pointer-events: none;
 }
 
@@ -566,12 +570,23 @@
   pointer-events: none !important;
 }
 
+.dl-float-top {
+  top: 60%;
+  inset-inline-start: clamp(-10px, -2vw, 0px);
+}
+
+.dl-float-bottom {
+  bottom: 14%;
+  inset-inline-end: clamp(-10px, -2vw, 0px);
+}
+
 .dl-float-card {
   position: absolute;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px 12px 12px;
+  padding-block: 12px;
+  padding-inline: 12px 16px;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.78);
   border: 1px solid rgba(255, 255, 255, 0.95);
@@ -845,7 +860,7 @@
   grid-template-columns: 44px 1fr auto;
   align-items: center;
   gap: 14px;
-  text-align: left;
+  text-align: start;
   padding: 14px 16px;
   border-radius: 18px;
   border: 1px solid transparent;
@@ -979,16 +994,16 @@
 
 @media (min-width: 720px) {
   .dl-service:nth-child(2n) {
-    border-left: 1px solid var(--dl-line);
+    border-inline-start: 1px solid var(--dl-line);
   }
 }
 
 @media (min-width: 1100px) {
   .dl-service:nth-child(2n) {
-    border-left: 0;
+    border-inline-start: 0;
   }
   .dl-service:not(:nth-child(3n + 1)) {
-    border-left: 1px solid var(--dl-line);
+    border-inline-start: 1px solid var(--dl-line);
   }
 }
 
@@ -1328,7 +1343,7 @@
 }
 
 .dl-stat:nth-child(odd) {
-  border-right: 1px solid var(--dl-line);
+  border-inline-end: 1px solid var(--dl-line);
 }
 
 .dl-stat:nth-child(-n + 2) {
@@ -1405,18 +1420,21 @@
   }
 }
 
-.dl-compare img {
+.dl-compare-layer,
+.dl-compare img,
+.dl-compare canvas {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: 68% 40%;
+  object-position: 50% 48%;
   pointer-events: none;
 }
 
-.dl-compare-before {
-  filter: saturate(0.75) sepia(0.35) brightness(0.9) contrast(0.95);
+/* Only used when the photo's pixels cannot be read (no CORS); approximates the teeth-only retouch. */
+.dl-compare-before.is-fallback img {
+  filter: saturate(0.8) sepia(0.45) brightness(0.92);
 }
 
 .dl-compare-after-wrap {
@@ -1425,8 +1443,8 @@
   overflow: hidden;
 }
 
-.dl-compare-after-wrap img {
-  filter: saturate(1.05) brightness(1.04) contrast(1.02);
+.dl-compare-after.is-fallback img {
+  filter: saturate(1.02) brightness(1.05) contrast(1.03);
 }
 
 .dl-compare-handle {
@@ -1673,7 +1691,7 @@
 
 .dl-field-icon {
   position: absolute;
-  right: 16px;
+  inset-inline-end: 16px;
   bottom: 17px;
   color: var(--dl-ink-3);
   pointer-events: none;
@@ -2192,6 +2210,138 @@
 @keyframes dl-breathe {
   0%, 100% { transform: scale(0.95); opacity: 0.7; }
   50% { transform: scale(1.05); opacity: 1; }
+}
+
+/* ---------- Language switch ---------- */
+.dl-lang {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
+  border-radius: 999px;
+  border: 1px solid var(--dl-line);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.dl-lang button {
+  min-width: 36px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--dl-ink-3);
+}
+
+.dl-lang button[data-lang="fa"] {
+  font-family: "Vazirmatn", sans-serif;
+  letter-spacing: 0;
+}
+
+.dl-lang button[aria-pressed="true"] {
+  background: var(--dl-ink);
+  color: #fff;
+}
+
+/* ---------- Persian ---------- */
+.dl[dir="rtl"] {
+  font-family: "Vazirmatn", "Manrope", sans-serif;
+}
+
+.dl[dir="rtl"] .dl-serif {
+  font-family: "Vazirmatn", sans-serif;
+  font-style: normal;
+}
+
+.dl[dir="rtl"] .dl-hero-title,
+.dl[dir="rtl"] .dl-h2,
+.dl[dir="rtl"] .dl-logo,
+.dl[dir="rtl"] .dl-eyebrow,
+.dl[dir="rtl"] .dl-stage-badge,
+.dl[dir="rtl"] .dl-compare-label,
+.dl[dir="rtl"] .dl-case-row span,
+.dl[dir="rtl"] .dl-scroll-cue {
+  letter-spacing: 0;
+}
+
+.dl[dir="rtl"] .dl-eyebrow,
+.dl[dir="rtl"] .dl-stage-badge,
+.dl[dir="rtl"] .dl-compare-label,
+.dl[dir="rtl"] .dl-case-row span,
+.dl[dir="rtl"] .dl-scroll-cue {
+  text-transform: none;
+}
+
+.dl[dir="rtl"] .dl-btn > svg,
+.dl[dir="rtl"] .dl-service-link > svg,
+.dl[dir="rtl"] .dl-anatomy-item > svg {
+  transform: scaleX(-1);
+}
+
+/* The comparison slider and the 3D hotspots are positioned in screen space. */
+.dl[dir="rtl"] .dl-compare,
+.dl[dir="rtl"] .dl-hotspots,
+.dl[dir="rtl"] .dl-hotspot,
+.dl[dir="rtl"] .dl-arrows {
+  direction: ltr;
+}
+
+.dl[dir="rtl"] input[type="tel"],
+.dl[dir="rtl"] input[type="date"],
+.dl[dir="rtl"] .dl-time {
+  direction: ltr;
+  text-align: start;
+}
+
+.dl[dir="rtl"] .dl-quote-mark {
+  font-family: "Vazirmatn", sans-serif;
+  right: auto;
+  left: 40px;
+}
+
+@media (max-width: 767px) {
+  .dl-hero {
+    align-items: flex-start;
+    padding-top: 84px;
+    padding-bottom: 20px;
+  }
+  .dl-hero-layout {
+    gap: 18px;
+  }
+  .dl-hero-title {
+    font-size: 34px;
+    margin-top: 14px;
+  }
+  .dl-hero-desc {
+    margin-top: 12px;
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  .dl-hero-ctas {
+    margin-top: 18px;
+  }
+  .dl-hero-trust {
+    margin-top: 14px;
+  }
+  .dl-hero-visual {
+    height: 280px;
+    min-height: 0;
+  }
+  .dl-float-top {
+    top: 8%;
+  }
+  .dl-float-card {
+    max-width: 62%;
+    gap: 8px;
+    padding: 8px 10px;
+  }
+  .dl-float-card strong {
+    font-size: 13px;
+  }
+  .dl-float-icon {
+    width: 30px;
+    height: 30px;
+  }
 }
 
 /* ---------- Reduced motion ---------- */

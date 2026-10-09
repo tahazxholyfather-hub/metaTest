@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import * as THREE from "three";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Environment, Lightformer } from "@react-three/drei";
-import { createCrownGeometry, createRootGeometry, type CrownParams } from "./toothGeometry";
+import { createCrownGeometry, createRidgeGeometry, createRootGeometry, type CrownParams, type RootSpec } from "./toothGeometry";
 
 /* ---------- Tooth ---------- */
 
@@ -13,10 +13,13 @@ type ToothProps = {
   scale?: number;
   crownMaterial: THREE.Material;
   rootMaterial?: THREE.Material;
-  roots?: Array<{ x: number; z?: number; tilt: number; length: number; radius: number }>;
+  roots?: RootSpec[];
   castShadow?: boolean;
   renderOrder?: number;
 };
+
+/** Height of the cementum trunk that joins multi-rooted teeth below the cervical line. */
+const TRUNK_HEIGHT = 0.2;
 
 export function Tooth({
   params,
@@ -30,23 +33,37 @@ export function Tooth({
   renderOrder = 0,
 }: ToothProps) {
   const crown = useMemo(() => createCrownGeometry(params), [params]);
-  const rootGeos = useMemo(() => roots.map((r) => createRootGeometry(r.length, r.radius)), [roots]);
-  useEffect(() => () => {
-    crown.dispose();
-    rootGeos.forEach((g) => g.dispose());
-  }, [crown, rootGeos]);
+  const rootGeos = useMemo(() => roots.map((r) => createRootGeometry(r.length, r.radius, r.bend ?? 0)), [roots]);
+  const trunk = useMemo(
+    () => (roots.length > 1 ? createRidgeGeometry(params.width * 0.72, TRUNK_HEIGHT, params.depth * 0.72, params.squareness ?? 0.6, 0.5) : null),
+    [roots.length, params],
+  );
+  useEffect(
+    () => () => {
+      crown.dispose();
+      rootGeos.forEach((g) => g.dispose());
+      trunk?.dispose();
+    },
+    [crown, rootGeos, trunk],
+  );
+
+  const neckY = -params.height * 0.97;
 
   return (
     <group position={position} rotation={rotation} scale={scale}>
       <mesh geometry={crown} material={crownMaterial} castShadow={castShadow} receiveShadow renderOrder={renderOrder} />
+      {rootMaterial && trunk && (
+        <mesh geometry={trunk} material={rootMaterial} position={[0, neckY - TRUNK_HEIGHT * 0.15, 0]} castShadow={castShadow} renderOrder={renderOrder} />
+      )}
       {rootMaterial &&
         roots.map((r, i) => (
           <mesh
             key={i}
             geometry={rootGeos[i]}
             material={rootMaterial}
-            position={[r.x, -params.height * 0.96, r.z ?? 0]}
+            position={[r.x, neckY + 0.04, r.z ?? 0]}
             rotation={[0, 0, r.tilt]}
+            scale={[1, 1, r.flatten ?? 1]}
             castShadow={castShadow}
             renderOrder={renderOrder}
           />

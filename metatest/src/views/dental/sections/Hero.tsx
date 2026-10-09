@@ -4,12 +4,9 @@ import { Img, Magnetic, Stars } from "../ui";
 import { Icon } from "../icons";
 import { EASE, IMAGES } from "../data";
 import { LazyCanvas } from "../three/LazyCanvas";
+import { useLang } from "../i18n";
 
 const FloatingScene = lazy(() => import("../three/FloatingScene"));
-
-const LINES = [["Expert", "Dental", "Care"], ["for a", "Healthier,"], ["Brighter", "Smile"]];
-
-const MESSAGES = ["Advanced Dental Care", "Confident Smiles", "Modern Technology", "Personalized Treatment", "Healthy Teeth for Life"];
 
 const TRANSITIONS = [
   { initial: { y: 20, opacity: 0 }, animate: { y: 0, opacity: 1 }, exit: { y: -20, opacity: 0 } },
@@ -20,13 +17,15 @@ const TRANSITIONS = [
 ];
 
 function Rotator() {
+  const { t } = useLang();
+  const messages = t.hero.messages;
   const [i, setI] = useState(0);
   const reduced = useReducedMotion();
   useEffect(() => {
-    const id = window.setInterval(() => setI((v) => (v + 1) % MESSAGES.length), 3200);
+    const id = window.setInterval(() => setI((v) => (v + 1) % messages.length), 3200);
     return () => window.clearInterval(id);
-  }, []);
-  const t = reduced ? TRANSITIONS[1] : TRANSITIONS[i % TRANSITIONS.length];
+  }, [messages.length]);
+  const fx = reduced ? TRANSITIONS[1] : TRANSITIONS[i % TRANSITIONS.length];
   return (
     <motion.div
       className="dl-rotator"
@@ -37,8 +36,8 @@ function Rotator() {
       <span className="dl-rotator-dot" aria-hidden />
       <span className="dl-rotator-text" aria-live="polite">
         <AnimatePresence initial={false}>
-          <motion.span key={i} initial={t.initial} animate={t.animate} exit={t.exit} transition={{ duration: 0.5, ease: EASE }}>
-            {MESSAGES[i]}
+          <motion.span key={i} initial={fx.initial} animate={fx.animate} exit={fx.exit} transition={{ duration: 0.5, ease: EASE }}>
+            {messages[i]}
           </motion.span>
         </AnimatePresence>
       </span>
@@ -47,6 +46,7 @@ function Rotator() {
 }
 
 export default function Hero() {
+  const { t } = useLang();
   const ref = useRef<HTMLElement>(null);
   const reduced = useReducedMotion();
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
@@ -67,21 +67,20 @@ export default function Hero() {
           <motion.div style={{ y: textY, opacity: textOpacity }}>
             <Rotator />
 
-            <h1 className="dl-hero-title">
-              {LINES.map((line, li) => (
+            <h1 className="dl-hero-title" key={t.hero.lines[0][0].text}>
+              {t.hero.lines.map((line, li) => (
                 <span className="dl-line" key={li}>
                   {line.map((word, wi) => {
                     const idx = wordIndex++;
-                    const highlight = word === "Brighter" || word === "Smile";
                     return (
                       <motion.span
                         key={wi}
-                        className={`dl-word ${highlight ? "dl-gradient-text" : ""}`}
+                        className={`dl-word ${word.highlight ? "dl-gradient-text" : ""}`}
                         initial={reduced ? false : { y: "110%", opacity: 0, filter: "blur(10px)" }}
                         animate={{ y: "0%", opacity: 1, filter: "blur(0px)" }}
                         transition={{ duration: 1.1, ease: EASE, delay: 0.45 + idx * 0.07 }}
                       >
-                        {word}
+                        {word.text}
                         {wi < line.length - 1 ? "\u00A0" : ""}
                       </motion.span>
                     );
@@ -96,8 +95,7 @@ export default function Hero() {
               animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
               transition={{ duration: 1, ease: EASE, delay: 1.05 }}
             >
-              Lumière is a modern dental studio where precision technology meets genuinely personal care. From routine
-              check-ups to full smile design, every treatment is planned around your comfort and your long-term health.
+              {t.hero.desc}
             </motion.p>
 
             <motion.div
@@ -108,7 +106,7 @@ export default function Hero() {
             >
               <Magnetic>
                 <a href="#booking" className="dl-btn dl-btn-primary">
-                  Book Appointment
+                  {t.book}
                   <Icon.Arrow size={18} />
                 </a>
               </Magnetic>
@@ -117,7 +115,7 @@ export default function Hero() {
                   <span className="dl-play">
                     <Icon.Play size={14} />
                   </span>
-                  Explore the Clinic
+                  {t.hero.explore}
                 </a>
               </Magnetic>
             </motion.div>
@@ -136,7 +134,7 @@ export default function Hero() {
               <span>
                 <Stars size={12} />
                 <br />
-                Trusted by <strong style={{ color: "var(--dl-ink)", fontWeight: 600 }}>10,000+</strong> patients
+                {t.hero.trust} <strong style={{ color: "var(--dl-ink)", fontWeight: 600 }}>{t.hero.trustCount}</strong> {t.hero.patients}
               </span>
             </motion.div>
           </motion.div>
@@ -148,7 +146,7 @@ export default function Hero() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               transition={{ duration: 1.4, ease: EASE, delay: 0.6 }}
             >
-              <Img src={IMAGES.dentist} alt="Dr. Adrian Marsh, lead dentist at Lumière Dental" loading="eager" />
+              <Img src={IMAGES.dentist} alt={t.hero.portraitAlt} loading="eager" />
             </motion.div>
 
             <div className="dl-hero-canvas" aria-hidden>
@@ -160,8 +158,7 @@ export default function Hero() {
             </div>
 
             <motion.div
-              className="dl-float-card"
-              style={{ left: "clamp(-10px, -2vw, 0px)", top: "60%" }}
+              className="dl-float-card dl-float-top"
               initial={reduced ? false : { opacity: 0, x: -24 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 1, ease: EASE, delay: 1.4 }}
@@ -170,14 +167,13 @@ export default function Hero() {
                 <Icon.Shield size={18} />
               </span>
               <span>
-                <strong>Painless by design</strong>
-                Digital anaesthesia &amp; laser care
+                <strong>{t.hero.painless}</strong>
+                {t.hero.painlessSub}
               </span>
             </motion.div>
 
             <motion.div
-              className="dl-float-card"
-              style={{ right: "clamp(-10px, -2vw, 0px)", bottom: "14%" }}
+              className="dl-float-card dl-float-bottom"
               initial={reduced ? false : { opacity: 0, x: 24 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 1, ease: EASE, delay: 1.6 }}
@@ -186,8 +182,8 @@ export default function Hero() {
                 <Icon.Sparkle size={18} />
               </span>
               <span>
-                <strong>Dr. Adrian Marsh</strong>
-                DDS · 15 years of practice
+                <strong>{t.hero.doctor}</strong>
+                {t.hero.doctorSub}
               </span>
             </motion.div>
           </motion.div>
@@ -195,7 +191,7 @@ export default function Hero() {
       </div>
 
       <div className="dl-scroll-cue" aria-hidden>
-        <span>Scroll</span>
+        <span>{t.hero.scroll}</span>
         <i />
       </div>
     </section>

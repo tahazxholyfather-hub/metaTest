@@ -7,8 +7,18 @@ import type { MotionValue } from "framer-motion";
 import { StudioLights, Tooth } from "./common";
 import { CEMENTUM_PROPS, ENAMEL_PROPS, GUM_PROPS, makeMaterial } from "./materials";
 import { ANATOMY, type AnatomyKey } from "../data";
-import { CANINE, MOLAR, PREMOLAR, createCrownGeometry, createRootGeometry } from "./toothGeometry";
-
+import {
+  CANINE,
+  CANINE_ROOTS,
+  MOLAR,
+  MOLAR_ROOTS,
+  PREMOLAR,
+  PREMOLAR_ROOTS,
+  createCrownGeometry,
+  createGumCollarGeometry,
+  createRootGeometry,
+  type CrownParams,
+} from "./toothGeometry";
 
 type Targets = { enamel: number; dentin: number; pulp: number; gum: number; root: number; nerve: number };
 
@@ -32,14 +42,14 @@ const CAMERA: Record<AnatomyKey | "idle", { pos: [number, number, number]; look:
   nerve: { pos: [1.2, -0.9, 4.0], look: [0, -1.1, 0] },
 };
 
-const MOLAR_ROOTS = [
-  { x: -0.24, tilt: -0.16, length: 1.12, radius: 0.16 },
-  { x: 0.24, tilt: 0.16, length: 1.08, radius: 0.16 },
-];
-const PREMOLAR_ROOTS = [{ x: 0, tilt: 0, length: 1.15, radius: 0.17 }];
-const CANINE_ROOTS = [{ x: 0, tilt: 0.04, length: 1.3, radius: 0.15 }];
-
 const arcZ = (x: number) => 0.045 * x * x;
+
+/** Scalloped gingival margin around one tooth neck. */
+function GumCollar({ params, scale = 1, material, renderOrder }: { params: CrownParams; scale?: number; material: THREE.Material; renderOrder: number }) {
+  const geo = useMemo(() => createGumCollarGeometry(params.width * 0.8 * scale, params.depth * 0.8 * scale, 0.13, 0.11), [params, scale]);
+  useEffect(() => () => geo.dispose(), [geo]);
+  return <mesh geometry={geo} material={material} position={[0, -0.4, 0]} rotation={[Math.PI / 2, 0, 0]} renderOrder={renderOrder} />;
+}
 
 type Props = {
   active: AnatomyKey | null;
@@ -81,15 +91,19 @@ export default function AnatomyScene({ active, scroll, reducedMotion, hotspotEls
     () => createCrownGeometry({ width: MOLAR.width * 0.42, depth: MOLAR.depth * 0.4, height: MOLAR.height * 0.34, cusps: 4, cuspHeight: 0.3, segments: 48 }),
     [],
   );
-  const canalGeo = useMemo(() => createRootGeometry(1.0, 0.07), []);
+  const canalGeos = useMemo(() => MOLAR_ROOTS.map((r) => createRootGeometry(r.length * 0.92, 0.07, r.bend ?? 0)), []);
   const nerveGeos = useMemo(
     () =>
       MOLAR_ROOTS.map((r) => {
-        // Follows the root axis (rotated about z by `tilt`) so the nerve sits inside the canal.
-        const along = (d: number) => new THREE.Vector3(r.x + Math.sin(r.tilt) * d, -0.48 - Math.cos(r.tilt) * d, 0);
+        // Follows the root axis (rotated about z by `tilt`, curving by `bend`) so the nerve sits inside the canal.
+        const bend = r.bend ?? 0;
+        const along = (d: number) => {
+          const t = Math.min(1, d / r.length);
+          return new THREE.Vector3(r.x + Math.sin(r.tilt) * d + bend * r.length * t * t, -0.46 - Math.cos(r.tilt) * d, 0);
+        };
         const curve = new THREE.CatmullRomCurve3([
           new THREE.Vector3(0, -0.2, 0),
-          new THREE.Vector3(r.x * 0.9, -0.42, 0),
+          new THREE.Vector3(r.x * 0.9, -0.4, 0),
           along(0.5),
           along(r.length),
           along(r.length + 0.3).add(new THREE.Vector3(r.x * 0.5, -0.05, 0.08)),
@@ -101,18 +115,18 @@ export default function AnatomyScene({ active, scroll, reducedMotion, hotspotEls
   const ridge = useMemo(() => {
     const pts = [-2.4, -1.2, 0.2, 1.6, 3.0, 3.9].map((x) => new THREE.Vector3(x, 0, arcZ(x)));
     const curve = new THREE.CatmullRomCurve3(pts);
-    return new THREE.TubeGeometry(curve, 48, 0.46, 36, false);
+    return new THREE.TubeGeometry(curve, 64, 0.5, 40, false);
   }, []);
 
   useEffect(
     () => () => {
       dentinGeo.dispose();
       pulpGeo.dispose();
-      canalGeo.dispose();
+      canalGeos.forEach((g) => g.dispose());
       nerveGeos.forEach((g) => g.dispose());
       ridge.dispose();
     },
-    [dentinGeo, pulpGeo, canalGeo, nerveGeos, ridge],
+    [dentinGeo, pulpGeo, canalGeos, nerveGeos, ridge],
   );
 
   // Re-arm camera focus whenever the selection changes.
@@ -208,13 +222,13 @@ export default function AnatomyScene({ active, scroll, reducedMotion, hotspotEls
 
       <group ref={group} position={[-0.3, 0.05, 0]}>
         {/* Gum ridge */}
-        <group position={[0, -0.97, 0]} scale={[1, 1.45, 1]}>
+        <group position={[0, -1.02, 0]} scale={[1, 1.4, 1]}>
           <mesh geometry={ridge} material={mats.gum} receiveShadow castShadow renderOrder={4} />
           <mesh material={mats.gum} position={[-2.4, 0, arcZ(-2.4)]} renderOrder={4}>
-            <sphereGeometry args={[0.46, 32, 24]} />
+            <sphereGeometry args={[0.5, 32, 24]} />
           </mesh>
           <mesh material={mats.gum} position={[3.9, 0, arcZ(3.9)]} renderOrder={4}>
-            <sphereGeometry args={[0.46, 32, 24]} />
+            <sphereGeometry args={[0.5, 32, 24]} />
           </mesh>
         </group>
 
@@ -224,16 +238,12 @@ export default function AnatomyScene({ active, scroll, reducedMotion, hotspotEls
           <mesh geometry={dentinGeo} material={mats.dentin} position={[0, -0.06, 0]} renderOrder={2} />
           <mesh geometry={pulpGeo} material={mats.pulp} position={[0, -0.26, 0]} renderOrder={1} />
           {MOLAR_ROOTS.map((r, i) => (
-            <mesh key={i} geometry={canalGeo} material={mats.pulp} position={[r.x, -0.44, 0]} rotation={[0, 0, r.tilt]} renderOrder={1} />
+            <mesh key={i} geometry={canalGeos[i]} material={mats.pulp} position={[r.x, -0.42, 0]} rotation={[0, 0, r.tilt]} renderOrder={1} />
           ))}
           {nerveGeos.map((g, i) => (
             <mesh key={i} geometry={g} material={mats.nerve} renderOrder={0} />
           ))}
-          {/* Gum collar */}
-          <mesh material={mats.gum} position={[0, -0.36, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[MOLAR.width * 0.78, MOLAR.depth * 0.78, 1]} renderOrder={4}>
-            <torusGeometry args={[1, 0.11, 18, 56]} />
-          </mesh>
-
+          <GumCollar params={MOLAR} material={mats.gum} renderOrder={4} />
         </group>
 
         {/* Neighbouring teeth along the arch */}
@@ -252,15 +262,7 @@ export default function AnatomyScene({ active, scroll, reducedMotion, hotspotEls
               rootMaterial={mats.rootNeighbor}
               roots={t.roots}
             />
-            <mesh
-              material={mats.gum}
-              position={[0, -0.36, 0]}
-              rotation={[Math.PI / 2, 0, 0]}
-              scale={[t.p.width * 0.78 * t.s, t.p.depth * 0.78 * t.s, 1]}
-              renderOrder={4}
-            >
-              <torusGeometry args={[1, 0.1, 18, 56]} />
-            </mesh>
+            <GumCollar params={t.p} scale={t.s} material={mats.gum} renderOrder={4} />
           </group>
         ))}
 
