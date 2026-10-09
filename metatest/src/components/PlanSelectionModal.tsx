@@ -383,7 +383,7 @@ export default function PlanSelectionModal({
             isOpen={isOpen}
             onClose={handleClose}
             title="اشتراک ویژه"
-            maxWidthClass="md:w-[min(880px,94vw)] md:max-w-[94vw]"
+            maxWidthClass="md:w-[min(1080px,96vw)] md:max-w-[96vw]"
             footer={
                 <div className="space-y-3">
                     <label className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)]/40 bg-[var(--bg-elevated)]/40 px-4 py-3 cursor-pointer">

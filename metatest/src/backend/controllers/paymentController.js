@@ -266,6 +266,21 @@ async function createPaidPaymentRecord(connection, payload) {
 
 // ─── Controllers ─────────────────────────────────────────────────────────────
 
+/** The shop only lists is_active = 1. Diamond was turned off on 2026-10-01. */
+exports.ensureDiamondPlanActive = async () => {
+    try {
+        const [result] = await pool.query(
+            `UPDATE subscription_plans SET is_active = 1 WHERE id = 'diamond' AND is_active = 0`
+        );
+        if (result && result.affectedRows) {
+            console.log('[plans] اشتراک الماسی دوباره فعال شد');
+        }
+    } catch (err) {
+        if (err && err.code === 'ER_NO_SUCH_TABLE') return;
+        console.error('[plans] diamond activate', err.message);
+    }
+};
+
 exports.getSubscriptionPlans = async (req, res) => {
     const connection = await pool.getConnection();
 

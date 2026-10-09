@@ -20,6 +20,7 @@ const walletController = require('./controllers/walletController');
 const adminRoutes = require('./routes/adminRoutes');
 const { ensureAdminSchema } = require('./middleware/adminAuth');
 const { loadRuntimeOverlayFromDb } = require('./controllers/adminAiController');
+const { ensureDiamondPlanActive } = require('./controllers/paymentController');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -480,6 +481,7 @@ app.listen(PORT, () => {
     console.log(`Backend server is running on http://localhost:${PORT}`);
     ensureAdminSchema()
         .then(() => loadRuntimeOverlayFromDb())
+        .then(() => ensureDiamondPlanActive())
         .then(() => console.log('[admin] schema ready, AI runtime overlay loaded'))
         .catch((err) => console.error('[admin] bootstrap failed:', err.message));
 });
