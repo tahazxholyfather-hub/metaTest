@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const pool = require('../db');
 const zarinpal = require('../utils/zarinpal');
+const walletController = require('./walletController');
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -148,7 +149,7 @@ async function fetchActivePlan(connection, planId) {
     return rows[0] || null;
 }
 
-async function fetchCoupon(connection, code) {
+async function fetchCoupon(connection, code, { forUpdate = false } = {}) {
     const normalizedCode = String(code || '').trim();
     if (!normalizedCode) return null;
 
@@ -156,7 +157,8 @@ async function fetchCoupon(connection, code) {
         `SELECT id, code, percent, active, expires_at, max_uses, used_count, allowed_plan_ids
          FROM discount_codes
          WHERE UPPER(code) = UPPER(?)
-         LIMIT 1`,
+         LIMIT 1
+         ${forUpdate ? 'FOR UPDATE' : ''}`,
         [normalizedCode]
     );
     return rows[0] || null;
@@ -181,12 +183,25 @@ function validateCouponForPlan(coupon, planId) {
 
     const allowedPlanIds = safeJsonParse(coupon.allowed_plan_ids, null);
     if (Array.isArray(allowedPlanIds) && allowedPlanIds.length > 0) {
-        if (!allowedPlanIds.includes(planId)) {
+        const planKey = String(planId);
+        const matches = allowedPlanIds.map(String).includes(planKey);
+        if (!matches) {
             return { valid: false, message: 'این کد برای پلن انتخابی قابل استفاده نیست' };
         }
     }
 
     return { valid: true };
+}
+
+async function userAlreadyUsedCoupon(connection, userId, couponId) {
+    if (!userId || !couponId) return false;
+    const [rows] = await connection.execute(
+        `SELECT id FROM payments
+         WHERE user_id = ? AND discount_code_id = ? AND status = 'paid'
+         LIMIT 1`,
+        [userId, couponId]
+    );
+    return rows.length > 0;
 }
 
 async function lockUser(connection, userId) {
@@ -311,6 +326,10 @@ exports.validateDiscountCode = async (req, res) => {
             return res.status(400).json({ success: false, message: validation.message });
         }
 
+        if (req.user?.id && await userAlreadyUsedCoupon(connection, req.user.id, coupon.id)) {
+            return res.status(400).json({ success: false, message: 'شما قبلاً از این کد تخفیف استفاده کرده‌اید' });
+        }
+
         const pricing = calculatePricing(plan, coupon);
 
         return res.json({
@@ -349,23 +368,106 @@ exports.createSubscriptionPayment = async (req, res) => {
             return res.status(400).json({ success: false, message: 'پلن معتبر نیست' });
         }
 
+        await connection.beginTransaction();
+
         let coupon = null;
         if (discountCode && String(discountCode).trim()) {
-            coupon = await fetchCoupon(connection, discountCode);
+            coupon = await fetchCoupon(connection, discountCode, { forUpdate: true });
 
             if (!coupon) {
+                await connection.rollback();
                 return res.status(400).json({ success: false, message: 'کد تخفیف معتبر نیست' });
             }
 
             const validation = validateCouponForPlan(coupon, planId);
             if (!validation.valid) {
+                await connection.rollback();
                 return res.status(400).json({ success: false, message: validation.message });
+            }
+
+            if (await userAlreadyUsedCoupon(connection, userId, coupon.id)) {
+                await connection.rollback();
+                return res.status(400).json({ success: false, message: 'شما قبلاً از این کد تخفیف استفاده کرده‌اید' });
             }
         }
 
         const pricing = calculatePricing(plan, coupon);
 
-        await connection.beginTransaction();
+        // ---- Pay with Toman wallet (no ZarinPal redirect) ----
+        if (req.body.paymentMethod === 'wallet') {
+            if (pricing.finalPrice <= 0) {
+                await connection.rollback();
+                return res.status(400).json({ success: false, message: 'این پلن رایگان است و نیازی به پرداخت ندارد.' });
+            }
+
+            try {
+                await walletController.debitTomanWallet(connection, userId, pricing.finalPrice, {
+                    type: 'purchase',
+                    description: `خرید اشتراک ${plan.name} از کیف پول`,
+                    referenceType: 'payment',
+                });
+            } catch (err) {
+                await connection.rollback();
+                if (err && err.code === 'INSUFFICIENT_BALANCE') {
+                    return res.status(400).json({ success: false, message: err.message });
+                }
+                throw err;
+            }
+
+            const walletPaymentId = await createPaidPaymentRecord(connection, {
+                userId,
+                planId: plan.id,
+                discountCodeId: coupon ? coupon.id : null,
+                ...pricing,
+                currency: 'IRR',
+                status: 'paid',
+                gateway: 'wallet',
+                description: `اشتراک ${plan.name} - پرداخت با کیف پول`,
+                requestPayload: { planId, discountCode: discountCode || null, metadata: metadata || null, paymentMethod: 'wallet' },
+                clientIp: getClientIp(req),
+                userAgent: req.headers['user-agent'] || null,
+            });
+
+            const { newExpireDate: walletExpireDate } = calculateNewPlanExpiry(plan.days);
+
+            await connection.execute(
+                `UPDATE tam24_users SET current_plan = ?, plan_expires_at = ?, updated_at = NOW() WHERE id = ?`,
+                [plan.id, walletExpireDate, userId]
+            );
+
+            if (coupon) {
+                await connection.execute(
+                    `UPDATE discount_codes SET used_count = used_count + 1, updated_at = NOW() WHERE id = ? AND (max_uses IS NULL OR used_count < max_uses)`,
+                    [coupon.id]
+                );
+            }
+
+            await connection.execute(
+                `UPDATE payments SET paid_at = NOW(), verified_at = NOW(), updated_at = NOW() WHERE id = ?`,
+                [walletPaymentId]
+            );
+
+            await connection.commit();
+
+            // Referral reward for the inviter (first purchase only) — post-commit.
+            await walletController.awardReferralRewardForPayment(walletPaymentId);
+
+            const walletResultToken = createPaymentResultToken(walletPaymentId);
+            return res.json({
+                success: true,
+                message: 'پلن با موفقیت با کیف پول فعال شد',
+                data: {
+                    directActivated: true,
+                    walletPaid: true,
+                    paymentId: walletPaymentId,
+                    resultToken: walletResultToken,
+                    resultUrl: `/payment/result/${walletResultToken}`,
+                    plan: { id: plan.id, name: plan.name, days: plan.days },
+                    pricing,
+                    expiresAt: walletExpireDate,
+                },
+            });
+        }
 
         if (pricing.finalPrice <= 0) {
             const user = await lockUser(connection, userId);
@@ -403,12 +505,16 @@ exports.createSubscriptionPayment = async (req, res) => {
             );
 
             if (coupon) {
-                await connection.execute(
+                const [usedResult] = await connection.execute(
                     `UPDATE discount_codes
                      SET used_count = used_count + 1, updated_at = NOW()
-                     WHERE id = ?`,
+                     WHERE id = ? AND (max_uses IS NULL OR used_count < max_uses)`,
                     [coupon.id]
                 );
+                if (!usedResult.affectedRows) {
+                    await connection.rollback();
+                    return res.status(400).json({ success: false, message: 'ظرفیت استفاده از این کد تکمیل شده است' });
+                }
             }
 
             await connection.execute(
@@ -638,7 +744,7 @@ exports.handleZarinpalCallback = async (req, res) => {
             await connection.execute(
                 `UPDATE discount_codes
                  SET used_count = used_count + 1, updated_at = NOW()
-                 WHERE id = ?`,
+                 WHERE id = ? AND (max_uses IS NULL OR used_count < max_uses)`,
                 [lockedPayment.discount_code_id]
             );
         }
@@ -664,6 +770,9 @@ exports.handleZarinpalCallback = async (req, res) => {
         );
 
         await connection.commit();
+
+        // Award referral reward for the inviter (first purchase only) — post-commit.
+        await walletController.awardReferralRewardForPayment(paymentId);
 
         return redirectToResult(paymentId);
     } catch (error) {

@@ -160,6 +160,7 @@ export default function PlanSelectionModal({
     const [paymentError, setPaymentError] = useState('');
     const [isApplyingDiscount, setIsApplyingDiscount] = useState(false);
     const [isPaying, setIsPaying] = useState(false);
+    const [payWithWallet, setPayWithWallet] = useState(false);
 
     const selectedPlan = useMemo(
         () => plans.find((plan) => plan.id === selectedPlanId),
@@ -229,6 +230,7 @@ export default function PlanSelectionModal({
         setPaymentError('');
         setIsApplyingDiscount(false);
         setIsPaying(false);
+        setPayWithWallet(false);
         setPlansError('');
     };
 
@@ -273,7 +275,10 @@ export default function PlanSelectionModal({
             }
 
             const data = res.data || {};
-            const percent = Number(data.percent ?? data.discountPercent ?? 0);
+            const coupon = data.coupon || data;
+            const percent = Number(
+                coupon.percent ?? data.discountPercent ?? data.pricing?.couponPercent ?? 0
+            );
 
             if (!percent || percent <= 0) {
                 const errMsg = data.message || res.message || 'کد تخفیف معتبر نیست.';
@@ -283,9 +288,9 @@ export default function PlanSelectionModal({
             }
 
             setCouponData({
-                code,
+                code: coupon.code || code,
                 percent,
-                couponId: data.couponId ? String(data.couponId) : String(data.id),
+                couponId: String(coupon.id ?? data.couponId ?? data.id ?? ''),
                 message: data.message ?? res.message,
             });
             toast.success(`تخفیف ${percent}٪ با موفقیت اعمال شد.`);
@@ -314,6 +319,7 @@ export default function PlanSelectionModal({
             const res = await flowApi.createSubscriptionPayment({
                 planId: selectedPlan.id,
                 discountCode: couponData?.code || undefined,
+                paymentMethod: payWithWallet ? 'wallet' : undefined,
                 metadata: {
                     userId: user?.id ? String(user.id) : undefined,
                     mobile: user?.phone,
@@ -700,6 +706,15 @@ export default function PlanSelectionModal({
                         </div>
 
                         <div className="border-t border-[var(--border)]/40 bg-[var(--bg-elevated)]/20 p-6">
+                            <label className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-[var(--border)]/40 bg-[var(--bg-elevated)]/40 px-4 py-3 cursor-pointer">
+                                <span className="text-xs font-bold text-[var(--text-primary)]">پرداخت با کیف پول تومانی</span>
+                                <input
+                                    type="checkbox"
+                                    checked={payWithWallet}
+                                    onChange={(e) => setPayWithWallet(e.target.checked)}
+                                    className="h-4 w-4 accent-[var(--accent)]"
+                                />
+                            </label>
                             <button
                                 onClick={handlePay}
                                 disabled={isPaying || !selectedPlan || isLoadingPlans}

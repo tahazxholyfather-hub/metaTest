@@ -3,6 +3,16 @@ const cookie = require('cookie');
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
+const crypto = require('crypto');
+const walletController = require('./walletController');
+const {
+    ensureQuestionTagTables,
+    saveQuestionTags,
+    getQuestionTags,
+    joinOnTag,
+    matchTagIn,
+    toPositiveIds,
+} = require('../utils/questionTags');
 
 // --- PDF Library upload configuration ---
 // Defaults to the same web root used for avatar uploads in server.js
@@ -21,6 +31,15 @@ const getAdminIdFromRequest = (req) => {
         return Number.isNaN(adminId) ? null : adminId;
     }
     return null;
+};
+
+const requireAdmin = (req, res) => {
+    const adminId = getAdminIdFromRequest(req);
+    if (!adminId) {
+        res.json({ success: false, message: 'Unauthorized' });
+        return null;
+    }
+    return adminId;
 };
 
 // Helper: Only admin with id 1 is allowed to delete records
@@ -47,6 +66,7 @@ const requirePost = (req, res, key) => {
 // ===============================================
 const handleGetQuestionForEdit = async (req, res) => {
     try {
+        await ensureQuestionTagTables();
         const { question_id, direction, current_id, filters } = req.body;
 
         // Base SQL query
@@ -67,19 +87,16 @@ const handleGetQuestionForEdit = async (req, res) => {
         // --- Dynamically add filter conditions (skipped for direct ID lookups) ---
         if (filters && !question_id) {
             // Note the mapping from frontend filters to DB columns
-            const filterMap = {
-                subject_id: 'q.subject_id',
-                grade_id: 'q.grade_id',
-                topic_id: 'q.topic_id',     // UI "Chapter" is DB "topic_id"
-                chapter_id: 'q.chapter_id'  // UI "Mabhas" is DB "chapter_id"
-            };
-
-            for (const key in filters) {
-                if (filters[key] !== null && filters[key] !== undefined && filterMap[key]) {
-                    sql += ` AND ${filterMap[key]} = ?`;
-                    params.push(filters[key]);
-                }
+            if (filters.subject_id) {
+                sql += ` AND q.subject_id = ?`;
+                params.push(filters.subject_id);
             }
+            const gradeMatch = matchTagIn('q', 'grade', filters.grade_id);
+            if (gradeMatch.sql) { sql += ` AND ${gradeMatch.sql}`; params.push(...gradeMatch.params); }
+            const topicMatch = matchTagIn('q', 'topic', filters.topic_id);
+            if (topicMatch.sql) { sql += ` AND ${topicMatch.sql}`; params.push(...topicMatch.params); }
+            const mabhasMatch = matchTagIn('q', 'mabhas', filters.chapter_id);
+            if (mabhasMatch.sql) { sql += ` AND ${mabhasMatch.sql}`; params.push(...mabhasMatch.params); }
 
             // Filter by status (فعال / غیرفعال)
             if (filters.status) {
@@ -127,6 +144,13 @@ const handleGetQuestionForEdit = async (req, res) => {
         }
 
         const q = questions[0];
+        const tags = await getQuestionTags(q.id);
+        const gradeIds = tags.grade_ids.length ? tags.grade_ids : (q.grade_id ? [Number(q.grade_id)] : []);
+        const topicIds = tags.topic_ids.length ? tags.topic_ids : (q.topic_id ? [Number(q.topic_id)] : []);
+        const chapterIds = tags.chapter_ids.length ? tags.chapter_ids : (q.chapter_id ? [Number(q.chapter_id)] : []);
+        const gradeTitles = tags.grade_titles.length ? tags.grade_titles : (q.grade_title ? [q.grade_title] : []);
+        const topicTitles = tags.topic_titles.length ? tags.topic_titles : (q.topic_title ? [q.topic_title] : []);
+        const chapterTitles = tags.chapter_titles.length ? tags.chapter_titles : (q.chapter_title ? [q.chapter_title] : []);
 
         // Fetch Options
         const [options] = await pool.query(
@@ -158,14 +182,20 @@ const handleGetQuestionForEdit = async (req, res) => {
                 subject: q.subject_id,
                 subject_title: q.subject_title || '----',
 
-                grade: q.grade_id,
-                grade_title: q.grade_title || '----',
+                grade: gradeIds[0] || q.grade_id,
+                grade_title: gradeTitles[0] || q.grade_title || '----',
+                grade_ids: gradeIds,
+                grade_titles: gradeTitles,
 
-                chapter: q.topic_id, // topic in DB = chapter in UI
-                chapter_title: q.topic_title || '----',
+                chapter: topicIds[0] || q.topic_id, // topic in DB = chapter in UI
+                chapter_title: topicTitles[0] || q.topic_title || '----',
+                chapter_ids: topicIds,
+                chapter_titles: topicTitles,
 
-                mabhas: q.chapter_id, // chapter in DB = mabhas in UI
-                mabhas_title: q.chapter_title || '----',
+                mabhas: chapterIds[0] || q.chapter_id, // chapter in DB = mabhas in UI
+                mabhas_title: chapterTitles[0] || q.chapter_title || '----',
+                mabhas_ids: chapterIds,
+                mabhas_titles: chapterTitles,
 
                 level: q.difficulty_level || 'متوسط',
                 status: q.status || 'غیرفعال'
@@ -202,13 +232,20 @@ const handleAdminGetSubjects = async (req, res) => {
 
 const handleAdminGetGradesBySubject = async (req, res) => {
     try {
-        // grades_tam24 has no subject_id, so we return all grades
+        const { subject_id } = req.body;
+        if (!subject_id || subject_id === 'null') {
+            return res.json({ success: true, grades: [] });
+        }
+
+        await ensureQuestionTagTables();
         const sql = `
-            SELECT id, title
-            FROM grades_tam24
-            ORDER BY id ASC
+            SELECT DISTINCT g.id, g.title
+            FROM questions_tam24 q
+            JOIN grades_tam24 g ON ${joinOnTag('q', 'g', 'grade')}
+            WHERE q.subject_id = ?
+            ORDER BY g.id ASC
         `;
-        const [rows] = await pool.query(sql);
+        const [rows] = await pool.query(sql, [subject_id]);
         res.json({ success: true, grades: rows });
     } catch (error) {
         console.error("Error in handleAdminGetGradesBySubject:", error);
@@ -218,18 +255,22 @@ const handleAdminGetGradesBySubject = async (req, res) => {
 
 const handleAdminGetChaptersBySubject = async (req, res) => {
     try {
-        const { subject_id } = req.body; // grade_id is ignored because topics_tam24 has no grade_id
+        const { subject_id, grade_id } = req.body;
+
         if (!subject_id || subject_id === 'null') {
             return res.json({ success: true, chapters: [] });
         }
 
+        await ensureQuestionTagTables();
+        const gradeMatch = matchTagIn('q', 'grade', grade_id);
         const sql = `
-            SELECT id, title
-            FROM topics_tam24
-            WHERE subject_id = ?
-            ORDER BY id ASC
+            SELECT DISTINCT t.id, t.title
+            FROM questions_tam24 q
+            JOIN topics_tam24 t ON ${joinOnTag('q', 't', 'topic')}
+            WHERE q.subject_id = ? ${gradeMatch.sql ? `AND ${gradeMatch.sql}` : ''}
+            ORDER BY t.id ASC
         `;
-        const [rows] = await pool.query(sql, [subject_id]);
+        const [rows] = await pool.query(sql, [subject_id, ...gradeMatch.params]);
         res.json({ success: true, chapters: rows });
     } catch (error) {
         console.error("Error in handleAdminGetChaptersBySubject:", error);
@@ -244,13 +285,16 @@ const handleAdminGetMabahesByChapter = async (req, res) => {
             return res.json({ success: true, mabahes: [] });
         }
 
+        await ensureQuestionTagTables();
+        const topicMatch = matchTagIn('q', 'topic', topic_id);
         const sql = `
-            SELECT id, title
-            FROM chapters_tam24
-            WHERE topic_id = ?
-            ORDER BY id ASC
+            SELECT DISTINCT c.id, c.title
+            FROM questions_tam24 q
+            JOIN chapters_tam24 c ON ${joinOnTag('q', 'c', 'mabhas')}
+            WHERE ${topicMatch.sql || '1=1'}
+            ORDER BY c.id ASC
         `;
-        const [rows] = await pool.query(sql, [topic_id]);
+        const [rows] = await pool.query(sql, topicMatch.params);
         res.json({ success: true, mabahes: rows });
     } catch (error) {
         console.error("Error in handleAdminGetMabahesByChapter:", error);
@@ -384,6 +428,9 @@ const handleFullUpdateQuestion = async (req, res) => {
         if (!questionId) return;
 
         const { text, options, descriptiveAnswer, correct_option_id, subject_id, grade_id, chapter_id, topic_id, level, status } = req.body;
+        const gradeIds = toPositiveIds(req.body.grade_ids || grade_id);
+        const topicIds = toPositiveIds(req.body.topic_ids || topic_id);
+        const chapterIds = toPositiveIds(req.body.chapter_ids || req.body.mabhas_ids || chapter_id);
 
         // 1. Update Question Text & Meta Info
         let updateFields = [];
@@ -391,10 +438,19 @@ const handleFullUpdateQuestion = async (req, res) => {
 
         if (text !== undefined) { updateFields.push("question_text = ?"); updateParams.push(text); }
         if (subject_id !== undefined) { updateFields.push("subject_id = ?"); updateParams.push(subject_id); }
-        if (grade_id !== undefined) { updateFields.push("grade_id = ?"); updateParams.push(grade_id); }
+        if (gradeIds.length || grade_id !== undefined) {
+            updateFields.push("grade_id = ?");
+            updateParams.push(gradeIds[0] || grade_id || null);
+        }
 
-        if (chapter_id !== undefined) { updateFields.push("chapter_id = ?"); updateParams.push(chapter_id); }
-        if (topic_id !== undefined) { updateFields.push("topic_id = ?"); updateParams.push(topic_id); }
+        if (chapterIds.length || chapter_id !== undefined) {
+            updateFields.push("chapter_id = ?");
+            updateParams.push(chapterIds[0] || chapter_id || null);
+        }
+        if (topicIds.length || topic_id !== undefined) {
+            updateFields.push("topic_id = ?");
+            updateParams.push(topicIds[0] || topic_id || null);
+        }
         if (level !== undefined) { updateFields.push("difficulty_level = ?"); updateParams.push(level); }
         if (status !== undefined) { updateFields.push("status = ?"); updateParams.push(status); }
 
@@ -405,6 +461,10 @@ const handleFullUpdateQuestion = async (req, res) => {
 
         updateParams.push(questionId);
         await pool.query(`UPDATE questions_tam24 SET ${updateFields.join(', ')} WHERE id = ?`, updateParams);
+
+        if (grade_id !== undefined || topic_id !== undefined || chapter_id !== undefined || req.body.grade_ids || req.body.topic_ids || req.body.chapter_ids || req.body.mabhas_ids) {
+            await saveQuestionTags(questionId, { gradeIds, topicIds, chapterIds });
+        }
 
         // 2. Update Descriptive Answer
         if (descriptiveAnswer !== undefined) {
@@ -471,18 +531,12 @@ const getQuestionsByFilters = async (req, res) => {
             sql += ` AND q.subject_id = ?`;
             params.push(subject_id);
         }
-        if (grade_id) {
-            sql += ` AND q.grade_id = ?`;
-            params.push(grade_id);
-        }
-        if (chapter_id) {
-            sql += ` AND q.chapter_id = ?`;
-            params.push(chapter_id);
-        }
-        if (topic_id) {
-            sql += ` AND q.topic_id = ?`;
-            params.push(topic_id);
-        }
+        const gradeMatch = matchTagIn('q', 'grade', grade_id);
+        if (gradeMatch.sql) { sql += ` AND ${gradeMatch.sql}`; params.push(...gradeMatch.params); }
+        const mabhasMatch = matchTagIn('q', 'mabhas', chapter_id);
+        if (mabhasMatch.sql) { sql += ` AND ${mabhasMatch.sql}`; params.push(...mabhasMatch.params); }
+        const topicMatch = matchTagIn('q', 'topic', topic_id);
+        if (topicMatch.sql) { sql += ` AND ${topicMatch.sql}`; params.push(...topicMatch.params); }
         if (difficulty_level) {
             sql += ` AND q.difficulty_level = ?`;
             params.push(difficulty_level);
@@ -507,9 +561,9 @@ const getQuestionsByFilters = async (req, res) => {
 
         // Re-apply same filters for the count query
         if (subject_id) { countSql += ` AND q.subject_id = ?`; countParams.push(subject_id); }
-        if (grade_id) { countSql += ` AND q.grade_id = ?`; countParams.push(grade_id); }
-        if (chapter_id) { countSql += ` AND q.chapter_id = ?`; countParams.push(chapter_id); }
-        if (topic_id) { countSql += ` AND q.topic_id = ?`; countParams.push(topic_id); }
+        if (gradeMatch.sql) { countSql += ` AND ${gradeMatch.sql}`; countParams.push(...gradeMatch.params); }
+        if (mabhasMatch.sql) { countSql += ` AND ${mabhasMatch.sql}`; countParams.push(...mabhasMatch.params); }
+        if (topicMatch.sql) { countSql += ` AND ${topicMatch.sql}`; countParams.push(...topicMatch.params); }
         if (difficulty_level) { countSql += ` AND q.difficulty_level = ?`; countParams.push(difficulty_level); }
         if (status) { countSql += ` AND q.status = ?`; countParams.push(status); }
 
@@ -1004,6 +1058,9 @@ const handleAdminInsertQuestions = async (req, res) => {
         const m = meta || {};
         const validLevels = ['آسان', 'متوسط', 'سخت'];
         const level = validLevels.includes(m.level) ? m.level : 'متوسط';
+        const gradeIds = toPositiveIds(m.grade_ids || m.grade_id);
+        const topicIds = toPositiveIds(m.topic_ids || m.topic_id);
+        const chapterIds = toPositiveIds(m.chapter_ids || m.chapter_id || m.mabhas_ids);
 
         const insertedIds = [];
         const failed = [];
@@ -1018,9 +1075,9 @@ const handleAdminInsertQuestions = async (req, res) => {
                     [
                         String(q.text).trim(),
                         m.subject_id || null,
-                        m.grade_id || null,
-                        m.topic_id || null,   // UI "Chapter" is DB "topic_id"
-                        m.chapter_id || null, // UI "Mabhas" is DB "chapter_id"
+                        gradeIds[0] || null,
+                        topicIds[0] || null,   // UI "Chapter" is DB "topic_id"
+                        chapterIds[0] || null, // UI "Mabhas" is DB "chapter_id"
                         level,
                         m.source || null,
                         m.book || null,
@@ -1029,6 +1086,7 @@ const handleAdminInsertQuestions = async (req, res) => {
                     ]
                 );
                 const questionId = qResult.insertId;
+                await saveQuestionTags(questionId, { gradeIds, topicIds, chapterIds });
 
                 const correctIndex = parseInt(q.correct_index, 10);
                 for (let optIdx = 0; optIdx < 4; optIdx++) {
@@ -1068,6 +1126,301 @@ const handleAdminInsertQuestions = async (req, res) => {
     }
 };
 
+const ensureDiscountCodesTable = async () => {
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS discount_codes (
+            id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+            code varchar(100) NOT NULL,
+            percent decimal(5,2) NOT NULL,
+            active tinyint(1) NOT NULL DEFAULT 1,
+            expires_at datetime DEFAULT NULL,
+            max_uses int(11) DEFAULT NULL,
+            used_count int(11) NOT NULL DEFAULT 0,
+            allowed_plan_ids longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
+            created_at timestamp NOT NULL DEFAULT current_timestamp(),
+            updated_at timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+            PRIMARY KEY (id),
+            UNIQUE KEY code (code)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+    `);
+};
+
+const normalizeDiscountCode = (value) =>
+    String(value || '')
+        .trim()
+        .toUpperCase()
+        .replace(/\s+/g, '');
+
+const generateDiscountCode = () => {
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let out = 'MT';
+    const bytes = crypto.randomBytes(6);
+    for (let i = 0; i < 6; i++) out += alphabet[bytes[i] % alphabet.length];
+    return out;
+};
+
+const mapDiscountRow = (row) => {
+    const maxUses = row.max_uses == null ? null : Number(row.max_uses);
+    const usedCount = Number(row.used_count) || 0;
+    const remaining = maxUses == null ? null : Math.max(0, maxUses - usedCount);
+    return {
+        id: Number(row.id),
+        code: row.code,
+        percent: Number(row.percent),
+        active: Number(row.active) === 1,
+        expires_at: row.expires_at || null,
+        max_uses: maxUses,
+        used_count: usedCount,
+        remaining,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+    };
+};
+
+const handleAdminGetDiscountCodes = async (req, res) => {
+    try {
+        if (requireAdmin(req, res) === null) return;
+        await ensureDiscountCodesTable();
+        const search = typeof req.body.search === 'string' ? req.body.search.trim() : '';
+        const params = [];
+        let where = '1=1';
+        if (search) {
+            where += ' AND code LIKE ?';
+            params.push(`%${search}%`);
+        }
+        const [rows] = await pool.query(
+            `SELECT id, code, percent, active, expires_at, max_uses, used_count, created_at, updated_at
+             FROM discount_codes
+             WHERE ${where}
+             ORDER BY id DESC`,
+            params
+        );
+        res.json({ success: true, codes: rows.map(mapDiscountRow) });
+    } catch (error) {
+        console.error('❌ SQL Error in handleAdminGetDiscountCodes:', error);
+        res.json({ success: false, message: 'خطا در دریافت کدهای تخفیف' });
+    }
+};
+
+const handleAdminSaveDiscountCode = async (req, res) => {
+    try {
+        if (requireAdmin(req, res) === null) return;
+        await ensureDiscountCodesTable();
+
+        const id = req.body.id ? Number(req.body.id) : null;
+        let code = normalizeDiscountCode(req.body.code);
+        const percent = Number(req.body.percent);
+        const maxUsesRaw = req.body.max_uses;
+        const maxUses = maxUsesRaw === '' || maxUsesRaw == null ? null : Number(maxUsesRaw);
+        const active = req.body.active === false || req.body.active === 0 || req.body.active === '0' ? 0 : 1;
+        const expiresAt = req.body.expires_at ? String(req.body.expires_at).trim() || null : null;
+
+        if (!code) {
+            for (let i = 0; i < 8; i++) {
+                const candidate = generateDiscountCode();
+                const [exists] = await pool.query('SELECT id FROM discount_codes WHERE code = ? LIMIT 1', [candidate]);
+                if (exists.length === 0) {
+                    code = candidate;
+                    break;
+                }
+            }
+        }
+        if (!code) {
+            return res.json({ success: false, message: 'کد تخفیف نامعتبر است.' });
+        }
+        if (!Number.isFinite(percent) || percent <= 0 || percent > 100) {
+            return res.json({ success: false, message: 'درصد تخفیف باید بین ۱ تا ۱۰۰ باشد.' });
+        }
+        if (maxUses != null && (!Number.isInteger(maxUses) || maxUses < 1)) {
+            return res.json({ success: false, message: 'تعداد نفرات باید عدد صحیح بزرگ‌تر از صفر باشد.' });
+        }
+
+        if (id) {
+            const [exists] = await pool.query('SELECT id FROM discount_codes WHERE id = ? LIMIT 1', [id]);
+            if (!exists.length) {
+                return res.json({ success: false, message: 'کد تخفیف پیدا نشد.' });
+            }
+            try {
+                await pool.query(
+                    `UPDATE discount_codes
+                     SET code = ?, percent = ?, active = ?, expires_at = ?, max_uses = ?, updated_at = NOW()
+                     WHERE id = ?`,
+                    [code, percent, active, expiresAt, maxUses, id]
+                );
+            } catch (err) {
+                if (err && err.code === 'ER_DUP_ENTRY') {
+                    return res.json({ success: false, message: 'این کد تخفیف از قبل وجود دارد.' });
+                }
+                throw err;
+            }
+            return res.json({ success: true, message: 'کد تخفیف به‌روزرسانی شد.', code });
+        }
+
+        try {
+            await pool.query(
+                `INSERT INTO discount_codes (code, percent, active, expires_at, max_uses, used_count)
+                 VALUES (?, ?, ?, ?, ?, 0)`,
+                [code, percent, active, expiresAt, maxUses]
+            );
+        } catch (err) {
+            if (err && err.code === 'ER_DUP_ENTRY') {
+                return res.json({ success: false, message: 'این کد تخفیف از قبل وجود دارد.' });
+            }
+            throw err;
+        }
+
+        res.json({ success: true, message: 'کد تخفیف ساخته شد.', code });
+    } catch (error) {
+        console.error('❌ SQL Error in handleAdminSaveDiscountCode:', error);
+        res.json({ success: false, message: 'خطا در ذخیره کد تخفیف' });
+    }
+};
+
+const handleAdminToggleDiscountCode = async (req, res) => {
+    try {
+        if (requireAdmin(req, res) === null) return;
+        const id = Number(req.body.id);
+        if (!id) return res.json({ success: false, message: 'شناسه نامعتبر است.' });
+        const [rows] = await pool.query('SELECT active FROM discount_codes WHERE id = ? LIMIT 1', [id]);
+        if (!rows.length) return res.json({ success: false, message: 'کد تخفیف پیدا نشد.' });
+        const next = Number(rows[0].active) === 1 ? 0 : 1;
+        await pool.query('UPDATE discount_codes SET active = ?, updated_at = NOW() WHERE id = ?', [next, id]);
+        res.json({ success: true, active: next === 1 });
+    } catch (error) {
+        console.error('❌ SQL Error in handleAdminToggleDiscountCode:', error);
+        res.json({ success: false, message: 'خطا در تغییر وضعیت کد تخفیف' });
+    }
+};
+
+const handleAdminDeleteDiscountCode = async (req, res) => {
+    try {
+        if (requireSuperAdmin(req, res) === null) return;
+        const id = Number(req.body.id);
+        if (!id) return res.json({ success: false, message: 'شناسه نامعتبر است.' });
+        const [result] = await pool.query('DELETE FROM discount_codes WHERE id = ?', [id]);
+        if (!result.affectedRows) return res.json({ success: false, message: 'کد تخفیف پیدا نشد.' });
+        res.json({ success: true, message: 'کد تخفیف حذف شد.' });
+    } catch (error) {
+        console.error('❌ SQL Error in handleAdminDeleteDiscountCode:', error);
+        res.json({ success: false, message: 'خطا در حذف کد تخفیف' });
+    }
+};
+
+
+// ===================== Referral Settings =====================
+const handleAdminGetReferralSettings = async (req, res) => {
+    try {
+        const [rows] = await pool.query('SELECT * FROM tam24_referral_settings WHERE id = 1 LIMIT 1');
+        const s = rows[0] || { reward_type: 'percent', reward_percent: 30, reward_fixed_amount: 0, reward_token_amount: 0, is_active: 1 };
+        return res.json({
+            success: true,
+            data: {
+                rewardType: s.reward_type,
+                rewardPercent: Number(s.reward_percent || 0),
+                rewardFixedAmount: Number(s.reward_fixed_amount || 0),
+                rewardTokenAmount: Number(s.reward_token_amount || 0),
+                isActive: Number(s.is_active) === 1,
+            },
+        });
+    } catch (error) {
+        console.error('Admin_get_referral_settings error:', error);
+        return res.status(500).json({ success: false, message: 'خطا در دریافت تنظیمات دعوت.' });
+    }
+};
+
+const handleAdminUpdateReferralSettings = async (req, res) => {
+    const { rewardType, rewardPercent, rewardFixedAmount, rewardTokenAmount, isActive } = req.body;
+    if (!['percent', 'fixed', 'token'].includes(rewardType)) {
+        return res.json({ success: false, message: 'نوع پاداش نامعتبر است.' });
+    }
+    try {
+        await pool.query(
+            `INSERT INTO tam24_referral_settings (id, reward_type, reward_percent, reward_fixed_amount, reward_token_amount, is_active)
+             VALUES (1, ?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE
+                reward_type = VALUES(reward_type),
+                reward_percent = VALUES(reward_percent),
+                reward_fixed_amount = VALUES(reward_fixed_amount),
+                reward_token_amount = VALUES(reward_token_amount),
+                is_active = VALUES(is_active)`,
+            [rewardType, Number(rewardPercent) || 0, Number(rewardFixedAmount) || 0, Number(rewardTokenAmount) || 0, isActive ? 1 : 0]
+        );
+        return res.json({ success: true, message: 'تنظیمات دعوت ذخیره شد.' });
+    } catch (error) {
+        console.error('Admin_update_referral_settings error:', error);
+        return res.status(500).json({ success: false, message: 'خطا در ذخیره تنظیمات دعوت.' });
+    }
+};
+
+const handleAdminGetWithdrawalRequests = async (req, res) => {
+    try {
+        const [rows] = await pool.query(`
+            SELECT wr.id, wr.user_id, wr.amount, wr.status, wr.note, wr.created_at,
+                   u.first_name, u.last_name, u.username, u.phone
+            FROM tam24_withdrawal_requests wr
+            JOIN tam24_users u ON u.id = wr.user_id
+            ORDER BY wr.created_at DESC
+            LIMIT 200
+        `);
+        const list = rows.map((r) => ({
+            id: r.id,
+            userId: r.user_id,
+            name: [r.first_name, r.last_name].filter(Boolean).join(' ').trim() || r.username || r.phone,
+            phone: r.phone,
+            username: r.username,
+            amount: Number(r.amount),
+            status: r.status,
+            note: r.note,
+            createdAt: r.created_at,
+        }));
+        return res.json({ success: true, data: { list, pendingCount: list.filter(r => r.status === 'pending').length } });
+    } catch (error) {
+        console.error('Admin_get_withdrawal_requests error:', error);
+        return res.status(500).json({ success: false, message: 'خطا در دریافت درخواست‌های برداشت.' });
+    }
+};
+
+const handleAdminUpdateWithdrawalStatus = async (req, res) => {
+    const { id, status, note } = req.body;
+    if (!id || !['approved', 'rejected', 'paid'].includes(status)) {
+        return res.json({ success: false, message: 'پارامترهای نامعتبر.' });
+    }
+    const conn = await pool.getConnection();
+    try {
+        await conn.beginTransaction();
+        const [rows] = await conn.query('SELECT * FROM tam24_withdrawal_requests WHERE id = ? FOR UPDATE', [id]);
+        if (!rows.length) {
+            await conn.rollback();
+            return res.json({ success: false, message: 'درخواست یافت نشد.' });
+        }
+        const wr = rows[0];
+        if (wr.status !== 'pending') {
+            await conn.rollback();
+            return res.json({ success: false, message: 'این درخواست قبلاً پردازش شده است.' });
+        }
+
+        await conn.query('UPDATE tam24_withdrawal_requests SET status = ?, note = ? WHERE id = ?', [status, note || null, id]);
+
+        if (status === 'rejected') {
+            // Refund the reserved amount back to the wallet.
+            await walletController.creditTomanWallet(conn, wr.user_id, Number(wr.amount), {
+                type: 'withdrawal_refund',
+                description: 'بازگشت وجه درخواست برداشت ردشده',
+                referenceType: 'withdrawal',
+                referenceId: String(id),
+            });
+        }
+
+        await conn.commit();
+        return res.json({ success: true, message: 'وضعیت درخواست به‌روزرسانی شد.' });
+    } catch (error) {
+        await conn.rollback().catch(() => {});
+        console.error('Admin_update_withdrawal_status error:', error);
+        return res.status(500).json({ success: false, message: 'خطا در به‌روزرسانی وضعیت.' });
+    } finally {
+        conn.release();
+    }
+};
 
 module.exports = {
     handleUpdateQuestion,
@@ -1091,5 +1444,13 @@ module.exports = {
     handleAdminDeletePdf,
     // Insert questions (manual + docx auto-import)
     handleAdminParseQuestionsDocx,
-    handleAdminInsertQuestions
+    handleAdminInsertQuestions,
+    handleAdminGetDiscountCodes,
+    handleAdminSaveDiscountCode,
+    handleAdminToggleDiscountCode,
+    handleAdminDeleteDiscountCode,
+    handleAdminGetReferralSettings,
+    handleAdminUpdateReferralSettings,
+    handleAdminGetWithdrawalRequests,
+    handleAdminUpdateWithdrawalStatus,
 };

@@ -16,6 +16,7 @@ const quizWorldController = require('./controllers/quizWorldController');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const aiTeacherRoutes = require('./ai-teacher/routes');
+const walletController = require('./controllers/walletController');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -202,6 +203,15 @@ app.post('/api/flow', requireToken, async (req, res) => {
             case 'get_my_invites':
                 await userController.handleGetMyInvites(req, res);
                 break;
+            case 'get_my_referral_code':
+                await walletController.handleGetMyReferralCode(req, res);
+                break;
+            case 'get_my_wallet':
+                await walletController.handleGetMyWallet(req, res);
+                break;
+            case 'request_withdrawal':
+                await walletController.handleRequestWithdrawal(req, res);
+                break;
             case 'get_subjects':
                 await quizController.handleGetSubjects(req, res);
                 break;
@@ -287,6 +297,12 @@ app.post('/api/flow', requireToken, async (req, res) => {
                 break;
             case 'get_mabahes_by_chapters_multi':
                 await quizWorldController.handleGetMabahesByChapters(req, res);
+                break;
+            case 'search_bank_questions':
+                await quizWorldController.handleSearchBankQuestions(req, res);
+                break;
+            case 'get_bank_question_answer':
+                await quizWorldController.handleGetBankQuestionAnswer(req, res);
                 break;
             case 'generate_code':
                 await quizWorldController.generateCode(req, res);
@@ -393,6 +409,31 @@ app.post('/api/flow', requireToken, async (req, res) => {
                 break;
             case 'Admin_insert_questions':
                 await adminController.handleAdminInsertQuestions(req, res);
+                break;
+
+            case 'Admin_get_discount_codes':
+                await adminController.handleAdminGetDiscountCodes(req, res);
+                break;
+            case 'Admin_save_discount_code':
+                await adminController.handleAdminSaveDiscountCode(req, res);
+                break;
+            case 'Admin_toggle_discount_code':
+                await adminController.handleAdminToggleDiscountCode(req, res);
+                break;
+            case 'Admin_delete_discount_code':
+                await adminController.handleAdminDeleteDiscountCode(req, res);
+                break;
+            case 'Admin_get_referral_settings':
+                await adminController.handleAdminGetReferralSettings(req, res);
+                break;
+            case 'Admin_update_referral_settings':
+                await adminController.handleAdminUpdateReferralSettings(req, res);
+                break;
+            case 'Admin_get_withdrawal_requests':
+                await adminController.handleAdminGetWithdrawalRequests(req, res);
+                break;
+            case 'Admin_update_withdrawal_status':
+                await adminController.handleAdminUpdateWithdrawalStatus(req, res);
                 break;
 
             // =========================================================

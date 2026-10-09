@@ -96,12 +96,16 @@ function Tooltip({
                      rect,
                      step,
                      index,
+                     stepCount,
                      onNext,
+                     onSkip,
                  }: {
     rect: DOMRect;
     step: TourStep;
     index: number;
+    stepCount: number;
     onNext: () => void | Promise<void>;
+    onSkip: () => void | Promise<void>;
 }) {
     const TOOLTIP_WIDTH = 340;
     const OFFSET = 28;
@@ -173,9 +177,19 @@ function Tooltip({
                     duration: 0.45,
                     ease: [0.16, 1, 0.3, 1],
                 }}
-                className="flex justify-end"
+                className="flex items-center justify-between gap-3"
             >
                 <motion.button
+                    type="button"
+                    onClick={() => void onSkip()}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.96 }}
+                    className="px-4 py-2.5 text-sm font-bold rounded-xl text-white/80 hover:text-white hover:bg-white/10 transition-colors"
+                >
+                    رد کردن
+                </motion.button>
+                <motion.button
+                    type="button"
                     onClick={() => void onNext()}
                     whileHover={{ scale: 1.04 }}
                     whileTap={{ scale: 0.96 }}
@@ -194,7 +208,7 @@ function Tooltip({
                         e.currentTarget.style.color = themeColor;
                     }}
                 >
-                    فهمیدم
+                    {index >= stepCount - 1 ? "شروع می‌کنم" : "فهمیدم"}
                 </motion.button>
             </motion.div>
         </motion.div>
@@ -305,6 +319,20 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
         [checkTour]
     );
 
+    const handleSkip = useCallback(async () => {
+        if (isSubmitting) return;
+        if (tourKey) {
+            try {
+                setIsSubmitting(true);
+                await submitTour(tourKey);
+            } finally {
+                endTour();
+            }
+            return;
+        }
+        endTour();
+    }, [isSubmitting, tourKey, submitTour, endTour]);
+
     const handleNext = useCallback(async () => {
         if (isSubmitting) return;
 
@@ -337,15 +365,29 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
             {children}
 
             <AnimatePresence mode="wait">
-                {active && rect && steps[index] && (
+                {active && (
                     <>
-                        <Overlay rect={rect} />
-                        <Tooltip
-                            rect={rect}
-                            step={steps[index]}
-                            index={index}
-                            onNext={handleNext}
-                        />
+                        {rect && steps[index] && <Overlay rect={rect} />}
+                        {!rect && (
+                            <div className="fixed inset-0 z-[9998] bg-black/80" />
+                        )}
+                        <button
+                            type="button"
+                            onClick={() => void handleSkip()}
+                            className="fixed top-4 left-1/2 -translate-x-1/2 z-[10001] px-5 py-2.5 rounded-xl text-sm font-bold bg-white text-zinc-900 shadow-lg hover:bg-zinc-100"
+                        >
+                            رد کردن راهنما
+                        </button>
+                        {rect && steps[index] && (
+                            <Tooltip
+                                rect={rect}
+                                step={steps[index]}
+                                index={index}
+                                stepCount={steps.length}
+                                onNext={handleNext}
+                                onSkip={handleSkip}
+                            />
+                        )}
                     </>
                 )}
             </AnimatePresence>

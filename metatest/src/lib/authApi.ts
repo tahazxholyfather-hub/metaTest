@@ -252,6 +252,7 @@ export const flowApi = {
     createSubscriptionPayment: (payload: {
         planId: string;
         discountCode?: string;
+        paymentMethod?: string;
         metadata?: {
             userId?: string;
             mobile?: string;
@@ -302,6 +303,14 @@ export const flowApi = {
         request<Json>(`${API_BASE}/dashboard/referrer-code`, {
             body: JSON.stringify({ referrerCode }),
         }),
+
+    // Toman wallet & referral
+    getMyReferralCode: () => flowApi.dispatch("get_my_referral_code"),
+
+    getMyWallet: () => flowApi.dispatch("get_my_wallet"),
+
+    requestWithdrawal: (amount: number) =>
+        flowApi.dispatch("request_withdrawal", { amount }),
 
 
     updateTaskProgress: (taskId: number, progressIncrement = 1) =>
@@ -402,6 +411,9 @@ export const flowApi = {
 
     getMabahesByChaptersMulti: (chapterIds: number[]) =>
         flowApi.dispatch("get_mabahes_by_chapters_multi", { chapterIds }),
+
+    searchBankQuestions: (payload: Json) =>
+        flowApi.dispatch("search_bank_questions", payload),
 
     generateCode: () => flowApi.dispatch("generate_code"),
 

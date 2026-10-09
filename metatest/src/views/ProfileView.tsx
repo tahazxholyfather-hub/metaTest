@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import {
     CreditCard, Crown, Calendar, CheckCircle2, XCircle,
     Clock, Loader2, Star, Shield as ShieldIcon, Diamond, User as UserIcon,
-    Inbox, Receipt, BadgePercent, UserPlus
+    Inbox, Receipt, BadgePercent, UserPlus, Wallet
 } from "lucide-react";
 import { useUser } from "../context/UserContext";
 import { flowApi } from '../lib/authApi';
@@ -41,7 +41,7 @@ const PLATFORMS = {
     website: { name: "وب‌سایت", icon: Icons.Link, color: "text-[var(--accent)]", prefix: "https://" }
 };
 
-type Tab = "info" | "social" | "security" | "payments" | "plan" | "invites";
+type Tab = "info" | "social" | "security" | "payments" | "plan" | "invites" | "wallet";
 
 interface ProfileViewProps {
     onLogout: () => void;
@@ -56,6 +56,7 @@ const TAB_CONFIG: { id: Tab; label: string; shortLabel: string; icon: React.Reac
     { id: "plan", label: "اشتراک من", shortLabel: "اشتراک", icon: <Crown size={19} strokeWidth={1.7} /> },
     { id: "payments", label: "تاریخچه پرداخت‌ها", shortLabel: "پرداخت‌ها", icon: <CreditCard size={19} strokeWidth={1.7} /> },
     { id: "invites", label: "دعوت‌های من", shortLabel: "دعوت‌ها", icon: <UserPlus size={19} strokeWidth={1.7} /> },
+    { id: "wallet", label: "کیف پول", shortLabel: "کیف پول", icon: <Wallet size={19} strokeWidth={1.7} /> },
 ];
 
 const TAB_HEADERS: Record<Tab, { title: string; subtitle: string }> = {
@@ -65,6 +66,7 @@ const TAB_HEADERS: Record<Tab, { title: string; subtitle: string }> = {
     plan: { title: "اشتراک فعال", subtitle: "وضعیت طرح فعلی، روزهای باقی‌مانده و سوابق خرید بسته‌ها" },
     payments: { title: "تاریخچه پرداخت‌ها", subtitle: "اطلاعات کامل تمام تراکنش‌های شما در سیستم" },
     invites: { title: "دعوت‌های من", subtitle: "لیست کامل کاربرانی که با معرفی شما ثبت‌نام کرده‌اند" },
+    wallet: { title: "کیف پول تومانی", subtitle: "موجودی، تراکنش‌ها و درخواست برداشت وجه" },
 };
 
 // Plan meta used in the subscription tab
@@ -170,6 +172,15 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
     const [invitesLoading, setInvitesLoading] = useState(false);
     const [invitesError, setInvitesError] = useState<string | null>(null);
 
+    const [walletData, setWalletData] = useState<{ balance: number; lifetimeEarned: number; lifetimeSpent: number; totalReferralEarned: number; pendingWithdrawal: number; transactions: any[] } | null>(null);
+    const [walletLoading, setWalletLoading] = useState(false);
+    const [walletError, setWalletError] = useState<string | null>(null);
+    const [withdrawOpen, setWithdrawOpen] = useState(false);
+    const [withdrawAmount, setWithdrawAmount] = useState('');
+    const [withdrawSubmitting, setWithdrawSubmitting] = useState(false);
+    const [referralCode, setReferralCode] = useState('');
+    const [inviteUrl, setInviteUrl] = useState('');
+
     const fetchPayments = useCallback(async () => {
         setPaymentsLoading(true);
         setPaymentsError(null);
@@ -204,6 +215,44 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
         }
     }, []);
 
+    const fetchWallet = useCallback(async () => {
+        setWalletLoading(true);
+        setWalletError(null);
+        try {
+            const res = await flowApi.dispatch('get_my_wallet');
+            if (res.success && res.data) {
+                setWalletData(res.data);
+            } else {
+                setWalletError(res.message || 'خطا در دریافت کیف پول');
+            }
+        } catch (err: any) {
+            setWalletError(err?.message || 'خطای شبکه در ارتباط با سرور');
+        } finally {
+            setWalletLoading(false);
+        }
+    }, []);
+
+    const handleRequestWithdrawal = async () => {
+        const amount = Number(withdrawAmount);
+        if (!amount || amount <= 0) return;
+        setWithdrawSubmitting(true);
+        try {
+            const res = await flowApi.dispatch('request_withdrawal', { amount });
+            if (res.success) {
+                toast.success(res.message || 'درخواست شما ثبت شد؛ با شما تماس گرفته خواهد شد.');
+                setWithdrawOpen(false);
+                setWithdrawAmount('');
+                fetchWallet();
+            } else {
+                toast.error(res.message || 'خطا در ثبت درخواست برداشت');
+            }
+        } catch (err: any) {
+            toast.error(err?.message || 'خطای شبکه');
+        } finally {
+            setWithdrawSubmitting(false);
+        }
+    };
+
     useEffect(() => {
         if ((activeTab === 'payments' || activeTab === 'plan') && !paymentsData && !paymentsLoading) {
             fetchPayments();
@@ -211,7 +260,30 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
         if (activeTab === 'invites' && !invitesData && !invitesLoading) {
             fetchInvites();
         }
-    }, [activeTab, paymentsData, paymentsLoading, invitesData, invitesLoading, fetchPayments, fetchInvites]);
+        if (activeTab === 'wallet' && !walletData && !walletLoading) {
+            fetchWallet();
+        }
+    }, [activeTab, paymentsData, paymentsLoading, invitesData, invitesLoading, fetchPayments, fetchInvites, walletData, walletLoading, fetchWallet]);
+
+    useEffect(() => {
+        flowApi.getMyReferralCode().then((res: any) => {
+            if (res?.success && res?.data) {
+                setReferralCode(res.data.referralCode || '');
+                setInviteUrl(res.data.inviteUrl || '');
+            }
+        }).catch(() => {});
+    }, []);
+
+    const copyInviteLink = async () => {
+        const link = inviteUrl || (referralCode ? `https://metatest.com/invite/${referralCode}` : '');
+        if (!link) return;
+        try {
+            await navigator.clipboard.writeText(link);
+            toast.success('لینک دعوت کپی شد.');
+        } catch {
+            toast.error('کپی نشد؛ لطفاً دستی کپی کنید.');
+        }
+    };
 
     useEffect(() => {
         if (user) {
@@ -972,6 +1044,27 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
                                         </div>
                                     ) : (
                                         <>
+                                            {/* Invite link */}
+                                            <div className="p-4 rounded-2xl bg-[var(--bg-elevated)]/60 border border-[var(--accent)]/30 space-y-3">
+                                                <span className="text-xs font-bold text-[var(--accent)]">لینک دعوت اختصاصی شما</span>
+                                                <div className="flex items-center gap-2">
+                                                    <input
+                                                        readOnly
+                                                        dir="ltr"
+                                                        value={inviteUrl || (referralCode ? `https://metatest.com/invite/${referralCode}` : '')}
+                                                        className="flex-1 min-w-0 bg-[var(--bg-card)] border border-[var(--border)] rounded-lg px-3 py-2 text-[11px] text-[var(--text-primary)] outline-none"
+                                                    />
+                                                    <button
+                                                        onClick={copyInviteLink}
+                                                        disabled={!inviteUrl && !referralCode}
+                                                        className="shrink-0 px-4 py-2 rounded-lg bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 disabled:opacity-40 transition-opacity"
+                                                    >
+                                                        کپی لینک
+                                                    </button>
+                                                </div>
+                                                <p className="text-[10px] text-[var(--text-muted)] leading-5">با ارسال این لینک، هرکس ثبت‌نام کند و اولین پکیج را بخرد، پاداش آن به کیف پول تومانی شما واریز می‌شود.</p>
+                                            </div>
+
                                             {/* Summary */}
                                             <div className="grid grid-cols-2 gap-3">
                                                 <div className="p-4 rounded-2xl bg-[var(--bg-elevated)]/60 border border-[var(--border)] text-center">
@@ -1023,7 +1116,113 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
                                     )}
                                 </motion.div>
                             )}
+                            {/* ─── Wallet Tab ─── */}
+                            {activeTab === "wallet" && (
+                                <motion.div
+                                    key="wallet"
+                                    initial={{ opacity: 0, x: -10 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    exit={{ opacity: 0, x: 10 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="space-y-4"
+                                >
+                                    {walletLoading ? (
+                                        <div className="flex flex-col items-center justify-center py-16 gap-3 text-[var(--text-muted)]">
+                                            <Loader2 size={26} className="animate-spin text-[var(--accent)]" />
+                                            <span className="text-xs font-bold">در حال دریافت اطلاعات کیف پول...</span>
+                                        </div>
+                                    ) : walletError ? (
+                                        <div className="text-center py-12 space-y-3">
+                                            <p className="text-sm text-rose-500 font-bold">{walletError}</p>
+                                            <button onClick={fetchWallet} className="px-5 py-2 bg-[var(--accent)] text-white rounded-xl text-xs font-bold">تلاش مجدد</button>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div className="p-5 rounded-2xl bg-gradient-to-l from-[var(--color-primary-600)] to-[var(--color-primary-500)] text-white">
+                                                <span className="text-[11px] opacity-80">موجودی کیف پول تومانی</span>
+                                                <div className="mt-1 text-3xl font-black tabular-nums" dir="ltr">{(walletData?.balance || 0).toLocaleString('fa-IR')} <span className="text-sm font-bold">تومان</span></div>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div className="p-4 rounded-2xl bg-[var(--bg-elevated)]/60 border border-[var(--border)] text-center">
+                                                    <span className="block text-xl font-black text-[var(--text-primary)]">{(walletData?.totalReferralEarned || 0).toLocaleString('fa-IR')}</span>
+                                                    <span className="text-[11px] text-[var(--text-muted)]">درآمد از دعوت (تومان)</span>
+                                                </div>
+                                                <div className="p-4 rounded-2xl bg-[var(--bg-elevated)]/60 border border-[var(--border)] text-center">
+                                                    <span className="block text-xl font-black text-[var(--text-primary)]">{(walletData?.pendingWithdrawal || 0).toLocaleString('fa-IR')}</span>
+                                                    <span className="text-[11px] text-[var(--text-muted)]">در انتظار برداشت</span>
+                                                </div>
+                                            </div>
+
+                                            <button
+                                                onClick={() => setWithdrawOpen(true)}
+                                                disabled={!(walletData?.balance > 0)}
+                                                className="w-full h-12 rounded-xl font-bold text-white bg-[var(--accent)] hover:opacity-90 disabled:opacity-40 transition-opacity flex items-center justify-center gap-2"
+                                            >
+                                                <Wallet size={18} /> درخواست برداشت وجه
+                                            </button>
+                                            <p className="text-[10px] text-[var(--text-muted)] text-center">پس از ثبت درخواست، کارشناسان ما برای پرداخت کارت‌به‌کارت با شما تماس می‌گیرند.</p>
+
+                                            <div>
+                                                <h4 className="text-xs font-bold text-[var(--text-primary)] mb-2">تراکنش‌های اخیر</h4>
+                                                {(walletData?.transactions || []).length === 0 ? (
+                                                    <div className="flex flex-col items-center justify-center py-8 gap-2 text-[var(--text-muted)] bg-[var(--bg-elevated)]/40 border border-dashed border-[var(--border)] rounded-2xl">
+                                                        <Receipt size={20} />
+                                                        <span className="text-xs font-bold">تراکنشی ثبت نشده است.</span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                                                        {(walletData?.transactions || []).map((tx: any) => (
+                                                            <div key={tx.id} className="flex items-center justify-between p-3 rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)]/40">
+                                                                <div className="flex flex-col min-w-0">
+                                                                    <span className="text-xs font-bold text-[var(--text-primary)] truncate">{tx.description || tx.type}</span>
+                                                                    <span className="text-[10px] text-[var(--text-muted)]">{formatDate(tx.createdAt)}</span>
+                                                                </div>
+                                                                <span className={`text-sm font-black tabular-nums ${tx.amount >= 0 ? 'text-emerald-500' : 'text-rose-500'}`} dir="ltr">
+                                                                    {tx.amount >= 0 ? '+' : ''}{Number(tx.amount).toLocaleString('fa-IR')}
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </>
+                                    )}
+                                </motion.div>
+                            )}
+
                         </AnimatePresence>
+
+                        <ResponsiveModal isOpen={withdrawOpen} onClose={() => { setWithdrawOpen(false); setWithdrawAmount(''); }} title="درخواست برداشت وجه">
+                            <div className="space-y-4 p-1">
+                                <p className="text-xs text-[var(--text-muted)] leading-6">
+                                    مبلغ مورد نظر را وارد کنید. پس از ثبت، کارشناسان ما برای پرداخت کارت‌به‌کارت با شما تماس خواهند گرفت.
+                                </p>
+                                <div>
+                                    <label className="block text-xs font-bold text-[var(--text-secondary)] mb-2 mr-1">مبلغ برداشت (تومان)</label>
+                                    <input
+                                        type="number"
+                                        dir="ltr"
+                                        value={withdrawAmount}
+                                        onChange={(e) => setWithdrawAmount(e.target.value)}
+                                        placeholder="مثلاً 500000"
+                                        className="w-full rounded-xl py-3.5 px-4 bg-[var(--bg-elevated)] border border-transparent focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent)]/10 text-[var(--text-primary)] outline-none font-medium text-center"
+                                    />
+                                </div>
+                                <div className="flex items-center justify-between rounded-xl bg-[var(--bg-elevated)]/60 px-4 py-3">
+                                    <span className="text-xs text-[var(--text-muted)]">موجودی قابل برداشت</span>
+                                    <span className="text-sm font-black text-[var(--text-primary)]">{Number(walletData?.balance || 0).toLocaleString('fa-IR')} تومان</span>
+                                </div>
+                                <button
+                                    onClick={handleRequestWithdrawal}
+                                    disabled={withdrawSubmitting || !Number(withdrawAmount) || Number(withdrawAmount) > Number(walletData?.balance || 0)}
+                                    className="w-full h-12 rounded-xl bg-[var(--accent)] text-white font-bold text-sm transition-opacity hover:opacity-90 disabled:opacity-40 flex items-center justify-center gap-2"
+                                >
+                                    {withdrawSubmitting ? <Loader2 size={18} className="animate-spin" /> : null}
+                                    ثبت درخواست برداشت
+                                </button>
+                            </div>
+                        </ResponsiveModal>
 
                         {["info", "social", "security"].includes(activeTab) && (
                             <div className="mt-8 pt-4 border-t border-[var(--border)]/50 flex justify-end">

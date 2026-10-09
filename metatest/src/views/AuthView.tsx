@@ -47,7 +47,7 @@ const AnimatedIcon = ({ icon: Icon }: { icon: any }) => (
 
 export default function AuthView({ onSuccess }: AuthViewProps) {
     const [step, setStep] = useState<'phone' | 'otp'>('phone');
-    const [loginMethod, setLoginMethod] = useState<'otp' | 'password'>('otp');
+    const [loginMethod, setLoginMethod] = useState<'otp' | 'password'>('password');
 
     const [phone, setPhone] = useState('');
     const [password, setPassword] = useState('');
@@ -98,7 +98,11 @@ export default function AuthView({ onSuccess }: AuthViewProps) {
             if (res.success && res.token) {
                 handleLoginSuccess(res.token);
             } else {
-                setErrorMsg(toPersianMessage(res.message, 'شماره موبایل یا رمز عبور اشتباه است'));
+                const message = toPersianMessage(res.message, 'شماره موبایل یا رمز عبور اشتباه است');
+                setErrorMsg(message);
+                if (/رمز عبوری تنظیم نشده|Password not set|Please use OTP/i.test(String(res.message || ''))) {
+                    setLoginMethod('otp');
+                }
             }
         } catch (err: any) {
             setErrorMsg(toPersianMessage(err?.message, 'خطای شبکه؛ لطفاً دوباره تلاش کنید'));
@@ -111,9 +115,11 @@ export default function AuthView({ onSuccess }: AuthViewProps) {
         setIsLoading(true);
         setErrorMsg('');
         try {
-            const res: any = await flowApi.dispatch('verify_otp', { phone, code: otpString });
+            const referralCode = localStorage.getItem('invite_code') || undefined;
+            const res: any = await flowApi.dispatch('verify_otp', { phone, code: otpString, referral_code: referralCode });
 
             if (res.success) {
+                localStorage.removeItem('invite_code');
                 if (res.isComplete) {
                     handleLoginSuccess(res.token);
                 } else {
@@ -123,7 +129,8 @@ export default function AuthView({ onSuccess }: AuthViewProps) {
                         code: otpString,
                         firstName: 'کاربر',
                         lastName: 'مهمان',
-                        password: ''
+                        password: '',
+                        referral_code: referralCode
                     });
 
                     if (registerRes.success) {
@@ -227,12 +234,16 @@ export default function AuthView({ onSuccess }: AuthViewProps) {
                             <div className="flex flex-col items-center text-center">
                                 <AnimatedIcon icon={loginMethod === 'otp' ? Smartphone : KeyRound} />
                                 <h1 className="text-xl font-bold mt-6 text-[var(--text-primary)]">خوش آمدید</h1>
-                                <p className="text-[var(--text-secondary)] text-sm mt-1.5">شماره موبایل خود را وارد کنید</p>
+                                <p className="text-[var(--text-secondary)] text-sm mt-1.5">
+                                    {loginMethod === 'password'
+                                        ? 'شماره موبایل و رمز عبور خود را وارد کنید'
+                                        : 'اگر رمز ندارید یا فراموش کرده‌اید، با پیامک وارد شوید'}
+                                </p>
                             </div>
 
                             {/* Ultra Minimal Tab */}
                             <div className="relative flex justify-center gap-6">
-                                {['otp', 'password'].map((method) => (
+                                {['password', 'otp'].map((method) => (
                                     <button
                                         key={method}
                                         type="button"
@@ -251,7 +262,7 @@ export default function AuthView({ onSuccess }: AuthViewProps) {
                                                 transition={{ type: "spring", stiffness: 300, damping: 25 }}
                                             />
                                         )}
-                                        {method === 'otp' ? 'رمز یکبار مصرف' : 'رمز عبور'}
+                                        {method === 'otp' ? 'ورود با پیامک' : 'رمز عبور'}
                                     </button>
                                 ))}
                             </div>
@@ -308,6 +319,18 @@ export default function AuthView({ onSuccess }: AuthViewProps) {
                                 >
                                     {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'ادامه'}
                                 </button>
+                                {loginMethod === 'password' && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setLoginMethod('otp');
+                                            setErrorMsg('');
+                                        }}
+                                        className="text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--color-primary-500)] transition-colors"
+                                    >
+                                        رمز ندارید یا فراموش کرده‌اید؟ ورود با پیامک
+                                    </button>
+                                )}
                             </form>
                         </motion.div>
                     )}

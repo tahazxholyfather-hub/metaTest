@@ -83,6 +83,7 @@ export const PracticeView = ({ onStartQuiz, onStateChange }: PracticeViewProps) 
     const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
     const [pendingQuizConfig, setPendingQuizConfig] = useState<Record<string, unknown> | null>(null);
     const [duplicateSavedQuiz, setDuplicateSavedQuiz] = useState<ActiveQuizState | null>(null);
+    const [highlightedIndex, setHighlightedIndex] = useState(0);
 
     // --- First-visit guided tour (only shown once; completion is stored server-side) ---
     const { startTour } = useTour();
@@ -396,6 +397,53 @@ export const PracticeView = ({ onStartQuiz, onStateChange }: PracticeViewProps) 
         }
     };
 
+    useEffect(() => {
+        setHighlightedIndex(0);
+    }, [step, gridItems]);
+
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (isHistoryModalOpen || isDuplicateModalOpen || dataLoading || error) return;
+            const target = e.target as HTMLElement | null;
+            const tag = target?.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable) return;
+
+            const unlocked = gridItems
+                .map((item, index) => ({ item, index }))
+                .filter(({ item }) => !item.locked);
+            if (unlocked.length === 0) return;
+
+            if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') {
+                e.preventDefault();
+                setHighlightedIndex((prev) => {
+                    const pos = unlocked.findIndex(({ index }) => index === prev);
+                    const nextPos = pos < 0 ? 0 : Math.min(unlocked.length - 1, pos + 1);
+                    return unlocked[nextPos].index;
+                });
+                return;
+            }
+            if (e.key === 'ArrowUp' || e.key === 'ArrowRight') {
+                e.preventDefault();
+                setHighlightedIndex((prev) => {
+                    const pos = unlocked.findIndex(({ index }) => index === prev);
+                    const nextPos = pos <= 0 ? 0 : pos - 1;
+                    return unlocked[nextPos].index;
+                });
+                return;
+            }
+            if (e.key !== 'Enter' || e.repeat) return;
+            if (e.altKey || e.ctrlKey || e.metaKey) return;
+            if (tag === 'BUTTON' || target?.closest('button, [role="button"]')) return;
+            e.preventDefault();
+            const current = gridItems[highlightedIndex];
+            const fallback = unlocked[0]?.item;
+            const chosen = current && !current.locked ? current : fallback;
+            if (chosen) handleCardClick(chosen);
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    });
+
 
     const getTimeAgoFa = (timestamp: string | number | Date): React.ReactNode => {
         const date = new Date(timestamp);
@@ -518,7 +566,10 @@ export const PracticeView = ({ onStartQuiz, onStateChange }: PracticeViewProps) 
                             <div
                                 key={item.id}
                                 onClick={() => handleCardClick(item)}
-                                className={item.locked ? 'cursor-not-allowed' : 'cursor-pointer'}
+                                onMouseEnter={() => setHighlightedIndex(i)}
+                                className={`${item.locked ? 'cursor-not-allowed' : 'cursor-pointer'} rounded-2xl transition-shadow ${
+                                    highlightedIndex === i ? 'ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--bg-primary,transparent)]' : ''
+                                }`}
                             >
                                 <WideCard
                                     icon={item.icon}

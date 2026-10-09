@@ -1,12 +1,9 @@
-import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useLayoutEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useReactToPrint } from 'react-to-print';
-import PrintResultSheet from './PrintResultSheet';
 import { toast, Toaster } from 'sonner';
 import {
     Share2,
-    Printer,
     LogOut,
     Clock3,
     BookOpenText,
@@ -376,11 +373,12 @@ function mapResultData(data) {
     return { userInfo, mappedQuestions, mappedWaveData, mappedLessons };
 }
 
-const scrollToTop = () => {
-    window.scrollTo({
-        top: 0,
-        behavior: 'smooth',
-    });
+const scrollResultsToTop = () => {
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+    const main = document.querySelector('main');
+    if (main) main.scrollTop = 0;
 };
 
 
@@ -406,7 +404,6 @@ export default function ResultDashboard() {
     const [originalWaveChartData, setOriginalWaveChartData] = useState([]);
 
     const [selectedQuestion, setSelectedQuestion] = useState(null);
-    const printRef = useRef(null);
     // Members state (only populated for public quizzes)
     const [members, setMembers] = useState([]);
     const [membersLoading, setMembersLoading] = useState(false);
@@ -418,11 +415,6 @@ export default function ResultDashboard() {
     const handleLeave = useCallback(() => {
         navigate('/dashboard');
     }, [navigate]);
-
-    // ─── Print: navigate to print view with active user data ─────────────────
-    const handlePrint = useReactToPrint({
-        contentRef: printRef
-    });
 
     // ─── Fetch quiz result (self) on mount ────────────────────────────────────
     const fetchResultData = useCallback(async () => {
@@ -448,7 +440,7 @@ export default function ResultDashboard() {
                 // Override name: this is always "شما" for own result
                 userInfo.name = 'شما';
                 userInfo.isSelf = true;
-                scrollToTop();
+                scrollResultsToTop();
                 setActiveUser(userInfo);
                 setOriginalUser(userInfo);
                 setQuestions(mappedQuestions);
@@ -478,6 +470,14 @@ export default function ResultDashboard() {
     useEffect(() => {
         fetchResultData();
     }, [fetchResultData]);
+
+    useLayoutEffect(() => {
+        scrollResultsToTop();
+    }, [hashedresultId]);
+
+    useEffect(() => {
+        if (!loading) scrollResultsToTop();
+    }, [loading, hashedresultId]);
 
     // ─── Fetch quiz members (only when quiz is public and user data exists) ──
     useEffect(() => {
@@ -613,7 +613,7 @@ export default function ResultDashboard() {
 
     if (error && !loading) {
         return (
-            <div className="min-h-screen bg-[var(--bg-app)] flex flex-col items-center justify-center p-6 dark" dir="rtl">
+            <div className="min-h-screen bg-[var(--bg-app)] flex flex-col items-center justify-center p-6" dir="rtl">
                 <div className="max-w-md w-full bg-[var(--bg-card)] border border-[var(--border)] rounded-3xl p-8 text-center flex flex-col items-center gap-6 shadow-lg">
                     <div className="w-20 h-20 bg-[color:rgba(185,28,28,0.1)] rounded-full flex items-center justify-center text-[var(--error)]">
                         <AlertCircle className="w-10 h-10" />
@@ -638,8 +638,8 @@ export default function ResultDashboard() {
     const showMemberError = memberError && memberError.memberId === activeMemberId;
 
     return (
-        <div className="dark" dir="rtl">
-            <div className="min-h-screen bg-[var(--bg-app)] text-[var(--text-primary)] transition-colors duration-300">
+        <div className="bg-[var(--bg-app)]" dir="rtl" style={{ overflowAnchor: 'none' }}>
+            <div className="bg-[var(--bg-app)] text-[var(--text-primary)] transition-colors duration-300">
 
                 <div className="mx-auto max-w-[1550px] p-0 sm:p-3 md:p-6 lg:p-8">
 
@@ -667,16 +667,6 @@ export default function ResultDashboard() {
                                 >
                                     <Share2 className="h-5 w-5 sm:h-4 sm:w-4 text-[var(--color-primary-400)]" />
                                     <span className="hidden sm:inline">اشتراک</span>
-                                </button>
-
-                                {/* Print → navigate to print route with data */}
-                                <button
-                                    onClick={handlePrint}
-                                    disabled={!activeUser || loading}
-                                    className="inline-flex p-0 h-10 w-10 sm:h-11 sm:w-auto items-center justify-center gap-2 rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] sm:px-4 text-sm font-medium text-[var(--text-primary)] transition hover:bg-[var(--hover-overlay)] disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    <Printer className="h-5 w-5 sm:h-4 sm:w-4 text-[var(--color-primary-400)]" />
-                                    <span className="hidden sm:inline">چاپ</span>
                                 </button>
                             </div>
                         </div>
@@ -1010,7 +1000,7 @@ export default function ResultDashboard() {
                                                                     </div>
                                                                 </div>
 
-                                                                <div className="line-clamp-2 text-sm text-white font-medium">
+                                                                <div className="line-clamp-2 text-sm text-[var(--text-primary)] font-medium">
                                                                     <MathRenderer text={q.text} inline={true} />
                                                                 </div>
 
@@ -1199,17 +1189,6 @@ export default function ResultDashboard() {
                         </div>
                     )}
                 </ResponsiveModal>
-
-                <div style={{ display: 'none' }}>
-                    <div ref={printRef}>
-                        <PrintResultSheet
-                            activeUser={activeUser}
-                            questions={questions}
-                            lessonsData={lessonsData}
-                            quizTitle={'hh'}
-                        />
-                    </div>
-                </div>
 
                 <style>{`
                   .math-renderer .mjx-chtml {
