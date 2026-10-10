@@ -1,9 +1,11 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, animate, motion, useInView, useReducedMotion, useScroll, useTransform } from "framer-motion";
-import { Img, Reveal, SectionHead, Stars } from "../ui";
+import { AccentTitle, Img, Reveal, SectionHead, Stars } from "../ui";
 import { Icon } from "../icons";
 import { EASE, IMAGES } from "../data";
+import { useLang } from "../i18n";
 import { LazyCanvas } from "../three/LazyCanvas";
+import { retouchSmile } from "../smileRetouch";
 
 const FloatingScene = lazy(() => import("../three/FloatingScene"));
 
@@ -11,38 +13,9 @@ const FloatingScene = lazy(() => import("../three/FloatingScene"));
    Testimonials
    ========================================================= */
 
-const TESTIMONIALS = [
-  {
-    quote:
-      "I had avoided dentists for years. The team explained everything on the 3D scan before touching a single tooth, and the implant feels completely natural. I actually look forward to my visits now.",
-    name: "Sophie Laurent",
-    treatment: "Dental implant & crown",
-    avatar: IMAGES.avatars[0],
-  },
-  {
-    quote:
-      "The whitening was calibrated to my enamel so there was zero sensitivity. Results looked natural, not artificial — exactly what I asked for.",
-    name: "Marcus Chen",
-    treatment: "Teeth whitening",
-    avatar: IMAGES.avatars[1],
-  },
-  {
-    quote:
-      "Clear aligners with remote check-ins meant fewer trips across town. Eighteen months later my bite is corrected and the whole process was remarkably calm.",
-    name: "Daniel Rossi",
-    treatment: "Orthodontics · clear aligners",
-    avatar: IMAGES.avatars[2],
-  },
-  {
-    quote:
-      "A root canal in one appointment, pain-free. I didn't think those words could go together. The clinic itself feels more like a design studio than a surgery.",
-    name: "Amara Okafor",
-    treatment: "Root canal therapy",
-    avatar: IMAGES.avatars[3],
-  },
-];
-
 export function Testimonials() {
+  const { t } = useLang();
+  const items = t.reviews.items;
   const [i, setI] = useState(0);
   const [dir, setDir] = useState(1);
   const reduced = useReducedMotion();
@@ -50,8 +23,8 @@ export function Testimonials() {
 
   const go = useCallback((d: number) => {
     setDir(d);
-    setI((v) => (v + d + TESTIMONIALS.length) % TESTIMONIALS.length);
-  }, []);
+    setI((v) => (v + d + items.length) % items.length);
+  }, [items.length]);
 
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -60,30 +33,23 @@ export function Testimonials() {
     return () => window.clearInterval(id);
   }, [go]);
 
-  const t = TESTIMONIALS[i];
+  const story = items[i];
+  const copy = t.reviews;
 
   return (
     <section id="reviews" className="dl-section dl-testimonials">
       <div className="dl-container">
-        <SectionHead
-          eyebrow="Patient stories"
-          title={
-            <>
-              Smiles we are <span className="dl-serif dl-gradient-text">proud of</span>
-            </>
-          }
-          align="center"
-        />
+        <SectionHead eyebrow={copy.eyebrow} title={<AccentTitle parts={copy.title} />} align="center" />
 
         <div className="dl-testi-layout">
           <Reveal className="dl-testi-visual" blur={false}>
-            <Img src={IMAGES.smile} alt="A patient smiling after treatment at Lumière Dental" />
+            <Img src={IMAGES.smile} alt={copy.photoAlt} />
             <div className="dl-testi-caption">
               <span>
-                <strong>Real patients, real results</strong>
-                <span>Photographed with consent</span>
+                <strong>{copy.real}</strong>
+                <span>{copy.consent}</span>
               </span>
-              <span className="dl-testi-pill">4.9 ★ · 1,200+ reviews</span>
+              <span className="dl-testi-pill">{copy.pill}</span>
             </div>
           </Reveal>
 
@@ -107,12 +73,12 @@ export function Testimonials() {
                     exit={{ opacity: 0, x: -40 * dir, filter: "blur(4px)" }}
                     transition={{ duration: 0.6, ease: EASE }}
                   >
-                    <p className="dl-testi-quote">{t.quote}</p>
+                    <p className="dl-testi-quote">{story.quote}</p>
                     <div className="dl-testi-meta">
-                      <Img src={t.avatar} alt="" />
+                      <Img src={IMAGES.avatars[i]} alt="" />
                       <span>
-                        <strong>{t.name}</strong>
-                        <span>{t.treatment}</span>
+                        <strong>{story.name}</strong>
+                        <span>{story.treatment}</span>
                       </span>
                     </div>
                   </motion.div>
@@ -121,13 +87,13 @@ export function Testimonials() {
             </div>
 
             <div className="dl-testi-controls">
-              <div className="dl-dots" role="tablist" aria-label="Testimonials">
-                {TESTIMONIALS.map((_, k) => (
+              <div className="dl-dots" role="tablist" aria-label={copy.tabs}>
+                {items.map((_, k) => (
                   <button
                     key={k}
                     role="tab"
                     aria-selected={k === i}
-                    aria-label={`Testimonial ${k + 1}`}
+                    aria-label={copy.tab(k + 1)}
                     className={k === i ? "is-active" : ""}
                     onClick={() => {
                       setDir(k > i ? 1 : -1);
@@ -137,10 +103,10 @@ export function Testimonials() {
                 ))}
               </div>
               <div className="dl-arrows">
-                <button className="dl-arrow" aria-label="Previous testimonial" onClick={() => go(-1)}>
+                <button className="dl-arrow" aria-label={copy.prev} onClick={() => go(-1)}>
                   <Icon.ChevronLeft size={18} />
                 </button>
-                <button className="dl-arrow" aria-label="Next testimonial" onClick={() => go(1)}>
+                <button className="dl-arrow" aria-label={copy.next} onClick={() => go(1)}>
                   <Icon.ChevronRight size={18} />
                 </button>
               </div>
@@ -156,41 +122,43 @@ export function Testimonials() {
    Stats
    ========================================================= */
 
-function CountUp({ to, suffix = "", decimals = 0, start }: { to: number; suffix?: string; decimals?: number; start: boolean }) {
+function CountUp({ to, suffix = "", decimals = 0 }: { to: number; suffix?: string; decimals?: number }) {
   const ref = useRef<HTMLSpanElement>(null);
   const reduced = useReducedMotion();
-  const format = (v: number) => v.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  const inView = useInView(ref, { once: true, amount: 0.6 });
+  const { lang } = useLang();
+  const [value, setValue] = useState(0);
+  const format = (v: number) =>
+    v.toLocaleString(lang === "fa" ? "fa-IR" : "en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+
   useEffect(() => {
-    if (!start || reduced || !ref.current) return;
-    const el = ref.current;
+    if (reduced || !inView) return;
     const controls = animate(0, to, {
       duration: 2.2,
       ease: [0.16, 1, 0.3, 1],
-      onUpdate: (v: number) => {
-        el.textContent = format(v);
-      },
+      onUpdate: (v) => setValue(v),
     });
     return () => controls.stop();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [start, to, decimals, reduced]);
+  }, [inView, to, reduced]);
+
   return (
     <>
-      <span ref={ref}>{reduced || !start ? format(reduced ? to : 0) : format(0)}</span>
+      <span ref={ref}>{format(reduced ? to : value)}</span>
       <sup>{suffix}</sup>
     </>
   );
 }
 
 const STATS = [
-  { to: 15, suffix: "+", label: "Years of experience", icon: Icon.Award },
-  { to: 10, suffix: "K+", label: "Happy patients", icon: Icon.Users },
-  { to: 98, suffix: "%", label: "Patient satisfaction", icon: Icon.Heart },
-  { to: 4.9, suffix: "★", label: "Average rating", icon: Icon.Star, decimals: 1 },
+  { to: 12, suffix: "+", icon: Icon.Award },
+  { to: 8, suffix: "K+", icon: Icon.Users },
+  { to: 98, suffix: "%", icon: Icon.Heart },
+  { to: 4.9, suffix: "★", icon: Icon.Star, decimals: 1 },
 ];
 
 export function Stats() {
+  const { t } = useLang();
   const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, amount: 0.4 });
   const reduced = useReducedMotion();
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "end start"] });
   const y = useTransform(scrollYProgress, [0, 1], [reduced ? 0 : 60, reduced ? 0 : -60]);
@@ -208,14 +176,7 @@ export function Stats() {
           </motion.div>
 
           <div>
-            <SectionHead
-              eyebrow="Why Lumière"
-              title={
-                <>
-                  Trusted care, <span className="dl-serif dl-gradient-text">measured</span>
-                </>
-              }
-            />
+            <SectionHead eyebrow={t.stats.eyebrow} title={<AccentTitle parts={t.stats.title} />} />
             <motion.div
               className="dl-stats-grid"
               style={{ marginTop: 40 }}
@@ -224,20 +185,20 @@ export function Stats() {
               viewport={{ once: true, amount: 0.3 }}
               variants={{ hidden: {}, show: { transition: { staggerChildren: 0.12 } } }}
             >
-              {STATS.map((s) => {
+              {STATS.map((s, i) => {
                 const I = s.icon;
                 return (
                   <motion.div
-                    key={s.label}
+                    key={t.stats.items[i].label}
                     className="dl-stat"
                     variants={{ hidden: { opacity: 0, y: 24 }, show: { opacity: 1, y: 0, transition: { duration: 0.9, ease: EASE } } }}
                   >
                     <div className="dl-stat-value">
-                      <CountUp to={s.to} suffix={s.suffix} decimals={s.decimals ?? 0} start={inView} />
+                      <CountUp to={s.to} suffix={s.suffix} decimals={s.decimals ?? 0} />
                     </div>
                     <div className="dl-stat-label">
                       <I size={16} />
-                      {s.label}
+                      {t.stats.items[i].label}
                     </div>
                   </motion.div>
                 );
@@ -254,7 +215,47 @@ export function Stats() {
    Before / After
    ========================================================= */
 
+/** Mounts the retouched before/after canvases; falls back to the plain photo if pixels cannot be read. */
+function SmileLayers({ pos, beforeAlt, afterAlt }: { pos: number; beforeAlt: string; afterAlt: string }) {
+  const beforeRef = useRef<HTMLDivElement>(null);
+  const afterRef = useRef<HTMLDivElement>(null);
+  const [state, setState] = useState<"loading" | "ready" | "fallback">("loading");
+
+  useEffect(() => {
+    const ac = new AbortController();
+    retouchSmile(IMAGES.result, ac.signal)
+      .then(({ before, after }) => {
+        if (ac.signal.aborted || !beforeRef.current || !afterRef.current) return;
+        beforeRef.current.replaceChildren(before);
+        afterRef.current.replaceChildren(after);
+        setState("ready");
+      })
+      .catch(() => {
+        if (!ac.signal.aborted) setState("fallback");
+      });
+    return () => ac.abort();
+  }, []);
+
+  // The canvas hosts are left empty by React so the imperative inserts never fight reconciliation.
+  return (
+    <>
+      <div className={`dl-compare-layer dl-compare-before ${state === "fallback" ? "is-fallback" : ""}`}>
+        {state !== "ready" && <Img src={IMAGES.result} alt={beforeAlt} />}
+        <div ref={beforeRef} className="dl-compare-layer" />
+      </div>
+      <div className="dl-compare-after-wrap" style={{ clipPath: `inset(0 0 0 ${pos}%)` }}>
+        <div className={`dl-compare-layer dl-compare-after ${state === "fallback" ? "is-fallback" : ""}`}>
+          {state !== "ready" && <Img src={IMAGES.result} alt={afterAlt} />}
+          <div ref={afterRef} className="dl-compare-layer" />
+        </div>
+      </div>
+    </>
+  );
+}
+
 export function Results() {
+  const { t } = useLang();
+  const copy = t.results;
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState(50);
   const dragging = useRef(false);
@@ -278,15 +279,7 @@ export function Results() {
   return (
     <section id="results" className="dl-section dl-results">
       <div className="dl-container">
-        <SectionHead
-          eyebrow="Real results"
-          title={
-            <>
-              Before and after, <span className="dl-serif dl-gradient-text">side by side</span>
-            </>
-          }
-          lead="Drag the divider to compare. Every case is planned digitally and photographed under the same studio lighting for an honest comparison."
-        />
+        <SectionHead eyebrow={copy.eyebrow} title={<AccentTitle parts={copy.title} />} lead={copy.lead} />
 
         <div className="dl-results-layout">
           <Reveal blur={false}>
@@ -294,7 +287,7 @@ export function Results() {
               ref={ref}
               className="dl-compare"
               role="slider"
-              aria-label="Before and after comparison"
+              aria-label={copy.slider}
               aria-valuemin={0}
               aria-valuemax={100}
               aria-valuenow={Math.round(pos)}
@@ -312,12 +305,9 @@ export function Results() {
               onPointerUp={() => (dragging.current = false)}
               onPointerCancel={() => (dragging.current = false)}
             >
-              <Img src={IMAGES.result} alt="Patient smile before treatment" className="dl-compare-before" />
-              <div className="dl-compare-after-wrap" style={{ clipPath: `inset(0 0 0 ${pos}%)` }}>
-                <Img src={IMAGES.result} alt="Patient smile after treatment" />
-              </div>
-              <span className="dl-compare-label before">Before</span>
-              <span className="dl-compare-label after">After</span>
+              <SmileLayers pos={pos} beforeAlt={copy.beforeAlt} afterAlt={copy.afterAlt} />
+              <span className="dl-compare-label before">{copy.before}</span>
+              <span className="dl-compare-label after">{copy.after}</span>
               <div className="dl-compare-handle" style={{ left: `${pos}%` }}>
                 <span className="dl-compare-knob">
                   <Icon.Drag size={20} />
@@ -327,26 +317,19 @@ export function Results() {
           </Reveal>
 
           <Reveal className="dl-case" delay={0.15}>
-            <span className="dl-eyebrow">Case study 24</span>
-            <h3 style={{ margin: "8px 0 4px", fontSize: 26, fontWeight: 500, letterSpacing: "-0.03em" }}>Smile design with six porcelain veneers</h3>
-            <p style={{ margin: 0, color: "var(--dl-ink-2)", lineHeight: 1.7, fontSize: 15 }}>
-              Minimal-preparation veneers designed in 3D and refined with a trial smile before the final ceramics were bonded.
-            </p>
+            <span className="dl-eyebrow">{copy.caseEyebrow}</span>
+            <h3 style={{ margin: "8px 0 4px", fontSize: 26, fontWeight: 500, letterSpacing: "-0.03em" }}>{copy.caseTitle}</h3>
+            <p style={{ margin: 0, color: "var(--dl-ink-2)", lineHeight: 1.7, fontSize: 15 }}>{copy.caseBody}</p>
             <div>
-              {[
-                ["Concern", "Discolouration, uneven edges"],
-                ["Treatment", "Whitening + 6 veneers"],
-                ["Duration", "3 visits over 4 weeks"],
-                ["Outcome", "Natural shade BL2, symmetrical line"],
-              ].map(([k, v]) => (
-                <div className="dl-case-row" key={k}>
-                  <span>{k}</span>
-                  <strong>{v}</strong>
+              {copy.rows.map((row) => (
+                <div className="dl-case-row" key={row.label}>
+                  <span>{row.label}</span>
+                  <strong>{row.value}</strong>
                 </div>
               ))}
             </div>
             <a href="#booking" className="dl-btn dl-btn-ghost" style={{ width: "fit-content" }}>
-              Discuss your case
+              {copy.discuss}
               <Icon.Arrow size={16} />
             </a>
           </Reveal>

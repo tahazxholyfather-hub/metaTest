@@ -1,21 +1,18 @@
 import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import { useRef } from "react";
-import { Img, Logo, Reveal, SectionHead } from "../ui";
+import { AccentTitle, Img, Logo, Reveal, SectionHead } from "../ui";
 import { Icon } from "../icons";
-import { EASE, IMAGES, NAV } from "../data";
+import { EASE, IMAGES } from "../data";
+import { useLang } from "../i18n";
+import { AppearanceControls } from "../theme";
 
 /* =========================================================
    About
    ========================================================= */
 
-const VALUES = [
-  { title: "15 years of expertise", text: "Founded in 2011, our clinicians have completed over 40,000 treatments across every speciality." },
-  { title: "Technology that reassures", text: "Intra-oral scanners, 3D CBCT imaging and in-house ceramics shorten treatment and remove guesswork." },
-  { title: "A team that listens", text: "Specialists, hygienists and coordinators work as one team, so your plan is consistent from first call to last visit." },
-  { title: "Care that is personal", text: "No templates. Every plan is built around your anatomy, your goals and the pace you are comfortable with." },
-];
-
 export function About() {
+  const { t } = useLang();
+  const copy = t.about;
   const ref = useRef<HTMLDivElement>(null);
   const reduced = useReducedMotion();
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "end start"] });
@@ -26,18 +23,10 @@ export function About() {
     <section id="about" className="dl-section">
       <div className="dl-container">
         <div className="dl-services-head">
-          <SectionHead
-            eyebrow="About the clinic"
-            title={
-              <>
-                More than a <span className="dl-serif dl-gradient-text">dental clinic</span>
-              </>
-            }
-            lead="Lumière was founded on a simple idea: that exceptional dentistry should feel calm, transparent and genuinely human. Fifteen years later, that idea still shapes every room, every instrument and every conversation."
-          />
+          <SectionHead eyebrow={copy.eyebrow} title={<AccentTitle parts={copy.title} />} lead={copy.lead} />
           <Reveal delay={0.1}>
             <a href="#booking" className="dl-btn dl-btn-ghost">
-              Meet the team
+              {copy.meet}
               <Icon.Arrow size={16} />
             </a>
           </Reveal>
@@ -46,33 +35,33 @@ export function About() {
         <div className="dl-about-grid" ref={ref}>
           <Reveal className="dl-about-img dl-about-a" blur={false}>
             <motion.div style={{ position: "absolute", inset: -40, y: y1 }}>
-              <Img src={IMAGES.clinic} alt="The light-filled reception and treatment rooms at Lumière Dental" />
+              <Img src={IMAGES.clinic} alt={copy.clinicAlt} />
             </motion.div>
             <span className="dl-about-tag">
-              <Icon.Pin size={14} /> Our studio, Marina District
+              <Icon.Pin size={14} /> {copy.studio}
             </span>
           </Reveal>
           <Reveal className="dl-about-img dl-about-b" delay={0.1} blur={false}>
             <motion.div style={{ position: "absolute", inset: -30, y: y2 }}>
-              <Img src={IMAGES.consult} alt="A dentist reviewing a digital scan together with a patient" />
+              <Img src={IMAGES.consult} alt={copy.consultAlt} />
             </motion.div>
             <span className="dl-about-tag">
-              <Icon.Sparkle size={14} /> Digital smile planning
+              <Icon.Sparkle size={14} /> {copy.planning}
             </span>
           </Reveal>
           <Reveal className="dl-about-c" delay={0.2} blur={false}>
             <div>
               <span className="dl-eyebrow" style={{ color: "#cfd9ff" }}>
-                Our promise
+                {copy.promiseEyebrow}
               </span>
-              <h3 style={{ marginTop: 14 }}>You will always understand what we recommend, and why.</h3>
-              <p>Clear explanations, honest pricing, and the time to decide — that is how trust is built, one visit at a time.</p>
+              <h3 style={{ marginTop: 14 }}>{copy.promise}</h3>
+              <p>{copy.promiseBody}</p>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 12, position: "relative" }}>
               <Img src={IMAGES.team} alt="" style={{ width: 44, height: 44, borderRadius: "50%", objectFit: "cover", border: "2px solid rgba(255,255,255,0.6)" }} />
               <span style={{ fontSize: 13, opacity: 0.9 }}>
-                <strong style={{ display: "block", fontWeight: 600 }}>Dr. Adrian Marsh</strong>
-                Founder &amp; Lead Dentist
+                <strong style={{ display: "block", fontWeight: 600 }}>{copy.founder}</strong>
+                {copy.founderRole}
               </span>
             </div>
           </Reveal>
@@ -85,7 +74,7 @@ export function About() {
           viewport={{ once: true, amount: 0.3 }}
           variants={{ hidden: {}, show: { transition: { staggerChildren: 0.1 } } }}
         >
-          {VALUES.map((v, i) => (
+          {copy.values.map((v, i) => (
             <motion.div
               key={v.title}
               className="dl-value"
@@ -150,25 +139,15 @@ function MapArt() {
 }
 
 export function Contact() {
-  const rows = [
-    { icon: Icon.Pin, k: "Address", v: "1210 Chestnut Street, Suite 300", s: "San Francisco, CA 94123" },
-    { icon: Icon.Phone, k: "Phone", v: "+1 (415) 555-0142", s: "Emergency line available 24/7" },
-    { icon: Icon.Mail, k: "Email", v: "hello@lumieredental.com", s: "We reply within one working day" },
-    { icon: Icon.Clock, k: "Opening hours", v: "Mon – Fri 8:00 – 19:00", s: "Saturday 9:00 – 15:00 · Sunday closed" },
-  ];
+  const { t } = useLang();
+  const copy = t.contact;
+  const icons = [Icon.Pin, Icon.Phone, Icon.Mail, Icon.Clock];
+  const rows = copy.rows.map((row, i) => ({ ...row, icon: icons[i] }));
 
   return (
     <section id="contact" className="dl-section dl-contact">
       <div className="dl-container">
-        <SectionHead
-          eyebrow="Visit us"
-          title={
-            <>
-              Find us in the <span className="dl-serif dl-gradient-text">Marina District</span>
-            </>
-          }
-          lead="Two minutes from the Chestnut Street tram stop with validated parking beneath the building."
-        />
+        <SectionHead eyebrow={copy.eyebrow} title={<AccentTitle parts={copy.title} />} lead={copy.lead} />
 
         <div className="dl-contact-layout">
           <Reveal className="dl-contact-list">
@@ -196,16 +175,16 @@ export function Contact() {
             </div>
             <div className="dl-map-card">
               <div>
-                <strong>Lumière Dental Studio</strong>
-                <span>1210 Chestnut Street · Open today until 19:00</span>
+                <strong>{copy.mapTitle}</strong>
+                <span>{copy.mapSub}</span>
               </div>
               <a
                 className="dl-btn dl-btn-primary dl-btn-sm"
-                href="https://maps.google.com/?q=1210+Chestnut+Street+San+Francisco"
+                href={copy.directionsHref}
                 target="_blank"
                 rel="noreferrer"
               >
-                Get directions
+                {copy.directions}
                 <Icon.Arrow size={16} />
               </a>
             </div>
@@ -221,6 +200,8 @@ export function Contact() {
    ========================================================= */
 
 export function Footer() {
+  const { t } = useLang();
+  const copy = t.footer;
   const toTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
   return (
     <footer className="dl-footer">
@@ -229,25 +210,25 @@ export function Footer() {
           <div>
             <span className="dl-logo">
               <Logo />
-              <span>Lumière Dental</span>
+              <span>{t.brand}</span>
             </span>
-            <p>A modern dental studio in San Francisco combining advanced technology with calm, personal care — for healthier teeth and brighter smiles that last.</p>
+            <p>{copy.blurb}</p>
             <div className="dl-social">
-              <a href="#top" aria-label="Instagram">
+              <a href="#top" aria-label={copy.instagram}>
                 <Icon.Instagram size={18} />
               </a>
-              <a href="#top" aria-label="Facebook">
+              <a href="#top" aria-label={copy.facebook}>
                 <Icon.Facebook size={18} />
               </a>
-              <a href="#top" aria-label="LinkedIn">
+              <a href="#top" aria-label={copy.linkedin}>
                 <Icon.Linkedin size={18} />
               </a>
             </div>
           </div>
           <div>
-            <h5>Navigation</h5>
+            <h5>{copy.navigation}</h5>
             <ul>
-              {NAV.map((n) => (
+              {t.nav.map((n) => (
                 <li key={n.href}>
                   <a href={n.href}>{n.label}</a>
                 </li>
@@ -255,43 +236,47 @@ export function Footer() {
             </ul>
           </div>
           <div>
-            <h5>Services</h5>
+            <h5>{t.services.footerTitle}</h5>
             <ul>
-              {["General Dentistry", "Cosmetic Dentistry", "Dental Implants", "Orthodontics", "Root Canal", "Teeth Whitening"].map((s) => (
-                <li key={s}>
-                  <a href="#services">{s}</a>
+              {t.services.items.map((s) => (
+                <li key={s.title}>
+                  <a href="#services">{s.title}</a>
                 </li>
               ))}
             </ul>
           </div>
           <div>
-            <h5>Contact</h5>
+            <h5>{copy.contact}</h5>
             <ul>
               <li>
-                <a href="#contact">1210 Chestnut Street, Suite 300</a>
+                <a href="#contact">{copy.address}</a>
               </li>
               <li>
-                <a href="tel:+14155550142">+1 (415) 555-0142</a>
+                <a href={copy.phoneHref}>{copy.phone}</a>
               </li>
               <li>
-                <a href="mailto:hello@lumieredental.com">hello@lumieredental.com</a>
+                <a href={copy.emailHref}>{copy.email}</a>
               </li>
               <li>
-                <a href="#contact">Mon – Fri 8:00 – 19:00</a>
+                <a href="#contact">{copy.hours}</a>
               </li>
             </ul>
           </div>
         </div>
 
+        <div className="dl-footer-appearance">
+          <AppearanceControls />
+        </div>
+
         <div className="dl-footer-bottom">
-          <span>© {new Date().getFullYear()} Lumière Dental Studio. All rights reserved.</span>
+          <span>{copy.rights(new Date().getFullYear())}</span>
           <span style={{ display: "flex", gap: 20 }}>
-            <a href="#top">Privacy</a>
-            <a href="#top">Terms</a>
-            <a href="#top">Accessibility</a>
+            <a href="#top">{copy.privacy}</a>
+            <a href="#top">{copy.terms}</a>
+            <a href="#top">{copy.accessibility}</a>
           </span>
           <button className="dl-to-top" onClick={toTop}>
-            Back to top
+            {copy.toTop}
             <i>
               <Icon.ArrowUp size={16} />
             </i>

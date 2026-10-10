@@ -2,6 +2,8 @@ import { useRef, useState, type CSSProperties, type PointerEvent, type ReactNode
 import { Icon } from "./icons";
 import { motion, useReducedMotion } from "framer-motion";
 import { EASE } from "./data";
+import type { TextPart } from "./copy";
+import { useLang } from "./i18n";
 
 
 
@@ -116,9 +118,26 @@ export function Magnetic({ children, strength = 0.25, className }: { children: R
   );
 }
 
-export function Stars({ n = 5, size = 14 }: { n?: number; size?: number }) {
+export function AccentTitle({ parts }: { parts: TextPart[] }) {
   return (
-    <span className="dl-stars" aria-label={`${n} out of 5 stars`}>
+    <>
+      {parts.map((part, i) =>
+        part.accent ? (
+          <span key={i} className="dl-serif dl-gradient-text">
+            {part.text}
+          </span>
+        ) : (
+          <span key={i}>{part.text}</span>
+        ),
+      )}
+    </>
+  );
+}
+
+export function Stars({ n = 5, size = 14 }: { n?: number; size?: number }) {
+  const { t } = useLang();
+  return (
+    <span className="dl-stars" aria-label={t.stars(n)}>
       {Array.from({ length: n }).map((_, i) => (
         <Icon.Star key={i} size={size} />
       ))}

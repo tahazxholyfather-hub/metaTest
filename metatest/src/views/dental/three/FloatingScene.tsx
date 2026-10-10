@@ -4,13 +4,8 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { Float } from "@react-three/drei";
 import { PointerParallax, StudioLights, Tooth } from "./common";
 import { CEMENTUM_PROPS, ENAMEL_PROPS, makeMaterial } from "./materials";
-import { CANINE, MOLAR } from "./toothGeometry";
-
-const MOLAR_ROOTS = [
-  { x: -0.24, tilt: -0.16, length: 0.98, radius: 0.15 },
-  { x: 0.24, tilt: 0.16, length: 0.94, radius: 0.15 },
-];
-const CANINE_ROOTS = [{ x: 0, tilt: 0.03, length: 1.15, radius: 0.14 }];
+import { CANINE, CANINE_ROOTS, MOLAR, MOLAR_ROOTS } from "./toothGeometry";
+import MouthScene from "./MouthScene";
 
 function Spinner({ children, speed = 0.18, axis = "y" }: { children: ReactNode; speed?: number; axis?: "x" | "y" }) {
   const ref = useRef<THREE.Group>(null);
@@ -60,25 +55,27 @@ export default function FloatingScene({ variant, reducedMotion }: { variant: "he
     () => ({
       enamel: makeMaterial(ENAMEL_PROPS),
       root: makeMaterial(CEMENTUM_PROPS),
+      // Transmission needs an opaque backdrop to refract; on this alpha canvas it rendered as
+      // dark, broken shapes. Glossy, lightly transparent surfaces read as glass without that.
       glass: new THREE.MeshPhysicalMaterial({
-        color: "#eaf1ff",
-        roughness: 0.08,
+        color: "#dfe9ff",
+        roughness: 0.1,
         metalness: 0,
-        transmission: 1,
-        thickness: 1.4,
-        ior: 1.42,
         clearcoat: 1,
-        envMapIntensity: 1.2,
-        attenuationColor: new THREE.Color("#c6d6ff"),
-        attenuationDistance: 2.5,
+        clearcoatRoughness: 0.08,
+        transparent: true,
+        opacity: 0.82,
+        envMapIntensity: 1.6,
+        specularIntensity: 1,
       }),
       bubble: new THREE.MeshPhysicalMaterial({
-        color: "#ffffff",
-        roughness: 0.05,
-        transmission: 1,
-        thickness: 0.6,
-        ior: 1.3,
-        envMapIntensity: 1.4,
+        color: "#f4f8ff",
+        roughness: 0.06,
+        clearcoat: 1,
+        transparent: true,
+        opacity: 0.7,
+        envMapIntensity: 1.8,
+        specularIntensity: 1,
       }),
     }),
     [],
@@ -92,40 +89,16 @@ export default function FloatingScene({ variant, reducedMotion }: { variant: "he
   const hh = viewport.height / 2;
 
   if (variant === "stats") {
-    const s = Math.min(hw, hh) * 0.86;
+    const s = Math.min(hw, hh) * 0.66;
     return (
-      <>
-        <StudioLights shadows={false} />
-        <PointerParallax amount={0.14}>
-          <Float speed={1.1} rotationIntensity={0.35} floatIntensity={0.9} {...float}>
-            <Spinner speed={spin ?? 0.22}>
-              <group rotation={[0.25, 0.4, -0.08]} scale={s} position={[0, hh * 0.18, 0]}>
-                <Tooth params={MOLAR} crownMaterial={mats.enamel} rootMaterial={mats.root} roots={MOLAR_ROOTS} castShadow={false} />
-              </group>
-            </Spinner>
-          </Float>
-          <Float speed={1.6} rotationIntensity={0.2} floatIntensity={1.2} {...float}>
-            <mesh position={[-hw * 0.62, hh * 0.55, -0.6]} material={mats.bubble}>
-              <sphereGeometry args={[0.2, 48, 32]} />
-            </mesh>
-          </Float>
-          <Float speed={1.3} rotationIntensity={0.2} floatIntensity={1} {...float}>
-            <mesh position={[hw * 0.66, -hh * 0.5, -0.2]} material={mats.bubble}>
-              <sphereGeometry args={[0.14, 48, 32]} />
-            </mesh>
-          </Float>
-          <Float speed={0.9} rotationIntensity={0.5} floatIntensity={0.6} {...float}>
-            <mesh position={[hw * 0.6, hh * 0.62, -1.2]} rotation={[0.9, 0.3, 0]} material={mats.glass}>
-              <torusGeometry args={[0.42, 0.06, 24, 80]} />
-            </mesh>
-          </Float>
-          <Particles count={50} spread={6} />
-        </PointerParallax>
-      </>
+      <group scale={s} position={[0, -hh * 0.04, 0]}>
+        <MouthScene reducedMotion={reducedMotion} />
+      </group>
     );
   }
 
-  // Hero: the portrait occupies roughly the centre 60% of the width and the lower 90% of the height.
+  // Hero: the portrait spans roughly ±0.55·hw of the canvas; objects sit just outside that band so they
+  // frame the doctor without covering the face, and stay inside ±0.8 so the section edge never slices them.
   const unit = Math.min(hw, hh);
   return (
     <>
@@ -133,43 +106,43 @@ export default function FloatingScene({ variant, reducedMotion }: { variant: "he
       <PointerParallax amount={0.1}>
         {/* Enamel molar, upper-left of the portrait */}
         <Float speed={1.2} rotationIntensity={0.45} floatIntensity={0.9} {...float}>
-          <Spinner speed={spin ?? 0.16}>
-            <group position={[-hw * 0.6, hh * 0.52, 0.3]} rotation={[0.35, 0.3, -0.15]} scale={unit * 0.3}>
+            <group position={[-hw * 0.6, hh * 0.46, 0.3]} rotation={[0.35, 0.3, -0.15]} scale={unit * 0.21}>
+            <Spinner speed={spin ?? 0.16}>
               <Tooth params={MOLAR} crownMaterial={mats.enamel} rootMaterial={mats.root} roots={MOLAR_ROOTS} castShadow={false} />
-            </group>
-          </Spinner>
+            </Spinner>
+          </group>
         </Float>
 
-        {/* Translucent glass canine, lower-right */}
+        {/* Enamel canine, lower-right */}
         <Float speed={1} rotationIntensity={0.5} floatIntensity={0.8} {...float}>
-          <Spinner speed={spin ?? -0.12}>
-            <group position={[hw * 0.68, -hh * 0.3, 0.6]} rotation={[-0.3, 0.2, 0.35]} scale={unit * 0.26}>
-              <Tooth params={CANINE} crownMaterial={mats.glass} rootMaterial={mats.glass} roots={CANINE_ROOTS} castShadow={false} />
-            </group>
-          </Spinner>
+          <group position={[hw * 0.58, -hh * 0.32, 0.6]} rotation={[-0.3, 0.2, 0.35]} scale={unit * 0.16}>
+            <Spinner speed={spin ?? -0.12}>
+              <Tooth params={CANINE} crownMaterial={mats.enamel} rootMaterial={mats.root} roots={CANINE_ROOTS} castShadow={false} />
+            </Spinner>
+          </group>
         </Float>
 
-        {/* Glass ring (aligner-like), upper-right */}
+        {/* Aligner-like ring, upper-right */}
         <Float speed={0.8} rotationIntensity={0.6} floatIntensity={0.6} {...float}>
-          <mesh position={[hw * 0.74, hh * 0.38, -1]} rotation={[1.1, 0.4, 0]} material={mats.glass}>
-            <torusGeometry args={[unit * 0.18, unit * 0.026, 24, 90]} />
+          <mesh position={[hw * 0.66, hh * 0.5, -1]} rotation={[1.1, 0.4, 0]} material={mats.glass}>
+            <torusGeometry args={[unit * 0.15, unit * 0.024, 32, 120]} />
           </mesh>
         </Float>
 
         {/* Bubbles */}
         <Float speed={1.5} rotationIntensity={0} floatIntensity={1.4} {...float}>
-          <mesh position={[-hw * 0.58, -hh * 0.12, 0.2]} material={mats.bubble}>
-            <sphereGeometry args={[unit * 0.055, 48, 32]} />
+          <mesh position={[-hw * 0.66, -hh * 0.1, 0.2]} material={mats.bubble}>
+            <sphereGeometry args={[unit * 0.05, 48, 32]} />
           </mesh>
         </Float>
         <Float speed={1.8} rotationIntensity={0} floatIntensity={1.2} {...float}>
-          <mesh position={[-hw * 0.5, -hh * 0.88, 0.8]} material={mats.bubble}>
-            <sphereGeometry args={[unit * 0.035, 48, 32]} />
+          <mesh position={[-hw * 0.56, -hh * 0.72, 0.8]} material={mats.bubble}>
+            <sphereGeometry args={[unit * 0.032, 48, 32]} />
           </mesh>
         </Float>
         <Float speed={1.3} rotationIntensity={0} floatIntensity={1} {...float}>
-          <mesh position={[hw * 0.62, hh * 0.8, -0.5]} material={mats.bubble}>
-            <sphereGeometry args={[unit * 0.04, 48, 32]} />
+          <mesh position={[hw * 0.6, hh * 0.8, -0.5]} material={mats.bubble}>
+            <sphereGeometry args={[unit * 0.036, 48, 32]} />
           </mesh>
         </Float>
         <Particles spread={Math.max(hw, hh) * 2.2} />

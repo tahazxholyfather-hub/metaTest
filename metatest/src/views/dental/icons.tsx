@@ -164,6 +164,23 @@ export const Icon = {
       <path d="M20 4v4h-4" />
     </svg>
   ),
+  Sun: ({ size, ...p }: IconProps) => (
+    <svg {...base(size)} {...p}>
+      <circle cx="12" cy="12" r="3.5" />
+      <path d="M12 3.5v1.8M12 18.7v1.8M3.5 12h1.8M18.7 12h1.8M6 6l1.3 1.3M16.7 16.7 18 18M18 6l-1.3 1.3M7.3 16.7 6 18" />
+    </svg>
+  ),
+  Moon: ({ size, ...p }: IconProps) => (
+    <svg {...base(size)} {...p}>
+      <path d="M16.5 14.2A6.2 6.2 0 0 1 9.8 4.8 6.4 6.4 0 1 0 16.5 14.2Z" />
+    </svg>
+  ),
+  Crown: ({ size, ...p }: IconProps) => (
+    <svg {...base(size)} {...p}>
+      <path d="M4 16.5 6.2 8l3.3 4.2L12 6.5l2.5 5.7L17.8 8 20 16.5Z" />
+      <path d="M5 19h14" />
+    </svg>
+  ),
   Instagram: ({ size, ...p }: IconProps) => (
     <svg {...base(size)} {...p}>
       <rect x="3.5" y="3.5" width="17" height="17" rx="4.5" />

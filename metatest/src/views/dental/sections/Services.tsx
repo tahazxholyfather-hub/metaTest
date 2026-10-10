@@ -1,59 +1,23 @@
 import { motion, useReducedMotion } from "framer-motion";
-import { Reveal, SectionHead } from "../ui";
+import { AccentTitle, Reveal, SectionHead } from "../ui";
 import { Icon } from "../icons";
 import { EASE } from "../data";
+import { useLang } from "../i18n";
 
-const SERVICES = [
-  {
-    icon: Icon.Tooth,
-    title: "General Dentistry",
-    text: "Comprehensive examinations, gentle hygiene visits and preventive care that keeps small issues from becoming big ones.",
-  },
-  {
-    icon: Icon.Sparkle,
-    title: "Cosmetic Dentistry",
-    text: "Veneers, bonding and digital smile design — subtle, natural improvements planned with you in 3D before we begin.",
-  },
-  {
-    icon: Icon.Implant,
-    title: "Dental Implants",
-    text: "Guided implant placement with premium titanium and ceramic restorations that look, feel and function like your own teeth.",
-  },
-  {
-    icon: Icon.Braces,
-    title: "Orthodontics",
-    text: "Clear aligners and discreet braces for adults and teens, monitored remotely so you visit less and smile sooner.",
-  },
-  {
-    icon: Icon.Root,
-    title: "Root Canal",
-    text: "Microscope-assisted endodontics that saves natural teeth comfortably — usually in a single, calm appointment.",
-  },
-  {
-    icon: Icon.Smile,
-    title: "Teeth Whitening",
-    text: "Clinically supervised whitening calibrated to your enamel, for a brighter result without sensitivity.",
-  },
-];
+const ICONS = [Icon.Tooth, Icon.Root, Icon.Implant, Icon.Braces, Icon.Sparkle, Icon.Smile, Icon.Shield, Icon.Crown];
 
 export default function Services() {
   const reduced = useReducedMotion();
+  const { t } = useLang();
+  const copy = t.services;
   return (
     <section id="services" className="dl-section">
       <div className="dl-container">
         <div className="dl-services-head">
-          <SectionHead
-            eyebrow="Our services"
-            title={
-              <>
-                Complete care, <span className="dl-serif dl-gradient-text">thoughtfully delivered</span>
-              </>
-            }
-            lead="Six specialities under one roof, so your care is coordinated by a team that knows your history — not a referral chain."
-          />
+          <SectionHead eyebrow={copy.eyebrow} title={<AccentTitle parts={copy.title} />} lead={copy.lead} />
           <Reveal delay={0.1}>
             <a href="#booking" className="dl-btn dl-btn-ghost">
-              Plan a consultation
+              {copy.plan}
               <Icon.Arrow size={16} />
             </a>
           </Reveal>
@@ -66,11 +30,11 @@ export default function Services() {
           viewport={{ once: true, amount: 0.15 }}
           variants={{ hidden: {}, show: { transition: { staggerChildren: 0.09 } } }}
         >
-          {SERVICES.map((s, i) => {
-            const I = s.icon;
+          {copy.items.map((s, i) => {
+            const I = ICONS[i];
             return (
               <motion.article
-                key={s.title}
+                key={i}
                 className="dl-service"
                 variants={{
                   hidden: { opacity: 0, y: 30 },
@@ -88,7 +52,7 @@ export default function Services() {
                 </div>
                 <p>{s.text}</p>
                 <a href="#booking" className="dl-service-link">
-                  Learn more
+                  {copy.more}
                   <Icon.Arrow size={16} />
                 </a>
               </motion.article>
