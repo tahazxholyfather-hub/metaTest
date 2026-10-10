@@ -4,7 +4,7 @@ import { Icon } from "../icons";
 import { EASE } from "../data";
 import { useLang } from "../i18n";
 
-const ICONS = [Icon.Tooth, Icon.Sparkle, Icon.Implant, Icon.Braces, Icon.Root, Icon.Smile];
+const ICONS = [Icon.Tooth, Icon.Root, Icon.Implant, Icon.Braces, Icon.Sparkle, Icon.Smile, Icon.Shield, Icon.Crown];
 
 export default function Services() {
   const reduced = useReducedMotion();

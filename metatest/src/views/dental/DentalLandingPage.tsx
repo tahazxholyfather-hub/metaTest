@@ -7,31 +7,16 @@ import { Results, Stats, Testimonials } from "./sections/SocialProof";
 import Booking from "./sections/Booking";
 import { About, Contact, Footer } from "./sections/StoryContact";
 import { LanguageProvider, useLang } from "./i18n";
-
-function Strip() {
-  const { t } = useLang();
-  const items = [...t.strip, ...t.strip];
-  return (
-    <div className="dl-strip" aria-hidden>
-      <div className="dl-strip-track">
-        {items.map((s, i) => (
-          <span className="dl-strip-item" key={i}>
-            <i /> {s}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
+import { ThemeProvider, useTheme } from "./theme";
 
 function Page() {
   const { dir } = useLang();
+  const { mode, vars } = useTheme();
   return (
-    <div className="dl" dir={dir}>
+    <div className="dl" dir={dir} data-mode={mode} style={vars}>
       <Header />
       <main>
         <Hero />
-        <Strip />
         <Anatomy />
         <Services />
         <Testimonials />
@@ -49,7 +34,9 @@ function Page() {
 export default function DentalLandingPage() {
   return (
     <LanguageProvider>
-      <Page />
+      <ThemeProvider>
+        <Page />
+      </ThemeProvider>
     </LanguageProvider>
   );
 }

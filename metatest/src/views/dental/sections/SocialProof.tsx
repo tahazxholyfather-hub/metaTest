@@ -122,34 +122,36 @@ export function Testimonials() {
    Stats
    ========================================================= */
 
-function CountUp({ to, suffix = "", decimals = 0, start }: { to: number; suffix?: string; decimals?: number; start: boolean }) {
+function CountUp({ to, suffix = "", decimals = 0 }: { to: number; suffix?: string; decimals?: number }) {
   const ref = useRef<HTMLSpanElement>(null);
   const reduced = useReducedMotion();
-  const format = (v: number) => v.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  const inView = useInView(ref, { once: true, amount: 0.6 });
+  const { lang } = useLang();
+  const [value, setValue] = useState(0);
+  const format = (v: number) =>
+    v.toLocaleString(lang === "fa" ? "fa-IR" : "en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+
   useEffect(() => {
-    if (!start || reduced || !ref.current) return;
-    const el = ref.current;
+    if (reduced || !inView) return;
     const controls = animate(0, to, {
       duration: 2.2,
       ease: [0.16, 1, 0.3, 1],
-      onUpdate: (v: number) => {
-        el.textContent = format(v);
-      },
+      onUpdate: (v) => setValue(v),
     });
     return () => controls.stop();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [start, to, decimals, reduced]);
+  }, [inView, to, reduced]);
+
   return (
     <>
-      <span ref={ref}>{reduced || !start ? format(reduced ? to : 0) : format(0)}</span>
+      <span ref={ref}>{format(reduced ? to : value)}</span>
       <sup>{suffix}</sup>
     </>
   );
 }
 
 const STATS = [
-  { to: 15, suffix: "+", icon: Icon.Award },
-  { to: 10, suffix: "K+", icon: Icon.Users },
+  { to: 12, suffix: "+", icon: Icon.Award },
+  { to: 8, suffix: "K+", icon: Icon.Users },
   { to: 98, suffix: "%", icon: Icon.Heart },
   { to: 4.9, suffix: "★", icon: Icon.Star, decimals: 1 },
 ];
@@ -157,7 +159,6 @@ const STATS = [
 export function Stats() {
   const { t } = useLang();
   const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, amount: 0.4 });
   const reduced = useReducedMotion();
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "end start"] });
   const y = useTransform(scrollYProgress, [0, 1], [reduced ? 0 : 60, reduced ? 0 : -60]);
@@ -193,7 +194,7 @@ export function Stats() {
                     variants={{ hidden: { opacity: 0, y: 24 }, show: { opacity: 1, y: 0, transition: { duration: 0.9, ease: EASE } } }}
                   >
                     <div className="dl-stat-value">
-                      <CountUp to={s.to} suffix={s.suffix} decimals={s.decimals ?? 0} start={inView} />
+                      <CountUp to={s.to} suffix={s.suffix} decimals={s.decimals ?? 0} />
                     </div>
                     <div className="dl-stat-label">
                       <I size={16} />

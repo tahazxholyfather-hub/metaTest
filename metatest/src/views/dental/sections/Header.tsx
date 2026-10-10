@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Logo } from "../ui";
 import { Icon } from "../icons";
 import { EASE } from "../data";
 import { useLang } from "../i18n";
 import type { Lang } from "../copy";
+import { PALETTES, useTheme } from "../theme";
 
 function LangSwitch() {
   const { lang, setLang, t } = useLang();
@@ -17,6 +18,72 @@ function LangSwitch() {
       <button type="button" data-lang="fa" aria-pressed={lang === "fa"} onClick={choose("fa")}>
         فا
       </button>
+    </div>
+  );
+}
+
+function ThemeControl() {
+  const { t } = useLang();
+  const { mode, toggleMode, preset, custom, primary, secondary, setPreset, setCustom } = useTheme();
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const copy = t.theme;
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (event: PointerEvent) => {
+      if (!root.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div className="dl-theme" ref={root}>
+      <button type="button" className="dl-theme-btn" aria-label={mode === "dark" ? copy.toLight : copy.toDark} onClick={toggleMode}>
+        {mode === "dark" ? <Icon.Sun size={16} /> : <Icon.Moon size={16} />}
+      </button>
+      <button
+        type="button"
+        className="dl-theme-btn"
+        aria-expanded={open}
+        aria-label={copy.colors}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <i className="dl-theme-swatch" style={{ background: `linear-gradient(135deg, ${primary}, ${secondary})` }} />
+      </button>
+      {open && (
+        <div className="dl-theme-pop" role="dialog" aria-label={copy.colors}>
+          <span className="dl-theme-label">{copy.preset}</span>
+          <div className="dl-theme-presets">
+            {PALETTES.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                aria-label={p.id}
+                aria-pressed={!custom && preset === p.id}
+                style={{ background: `linear-gradient(135deg, ${p.primary}, ${p.secondary})` }}
+                onClick={() => setPreset(p.id)}
+              />
+            ))}
+          </div>
+          <label>
+            {copy.primary}
+            <input type="color" value={primary} aria-label={copy.primary} onChange={(e) => setCustom(e.target.value, secondary)} />
+          </label>
+          <label>
+            {copy.secondary}
+            <input type="color" value={secondary} aria-label={copy.secondary} onChange={(e) => setCustom(primary, e.target.value)} />
+          </label>
+        </div>
+      )}
     </div>
   );
 }
@@ -65,6 +132,7 @@ export default function Header() {
 
           <div className="dl-header-actions">
             <LangSwitch />
+            <ThemeControl />
             <a href="#booking" className="dl-btn dl-btn-primary dl-btn-sm dl-header-cta">
               {t.book}
               <Icon.Arrow size={16} />
@@ -85,7 +153,7 @@ export default function Header() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.4, ease: EASE }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div className="dl-mobile-nav-top">
               <span className="dl-logo">
                 <Logo />
                 <span>{t.brand}</span>
@@ -94,27 +162,30 @@ export default function Header() {
                 <Icon.Close size={20} />
               </button>
             </div>
-            <nav style={{ display: "flex", flexDirection: "column", marginTop: 40 }} aria-label={t.navMobile}>
+            <nav aria-label={t.navMobile}>
               {t.nav.map((n, i) => (
                 <motion.a
                   key={n.href}
                   href={n.href}
                   onClick={() => setOpen(false)}
-                  initial={{ opacity: 0, y: 20 }}
+                  initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.08 + i * 0.06, duration: 0.6, ease: EASE }}
+                  transition={{ delay: 0.05 + i * 0.04, duration: 0.45, ease: EASE }}
                 >
                   {n.label}
                 </motion.a>
               ))}
             </nav>
-            <div style={{ marginTop: "auto", display: "grid", gap: 12 }}>
-              <LangSwitch />
-              <a href="#booking" className="dl-btn dl-btn-primary" onClick={() => setOpen(false)}>
+            <div className="dl-mobile-foot">
+              <div className="dl-mobile-tools">
+                <LangSwitch />
+                <ThemeControl />
+              </div>
+              <a href="#booking" className="dl-btn dl-btn-primary dl-btn-sm" onClick={() => setOpen(false)}>
                 {t.book}
                 <Icon.Arrow size={16} />
               </a>
-              <span style={{ fontSize: 13, color: "var(--dl-ink-3)", textAlign: "center" }}>{t.headerHours}</span>
+              <span className="dl-mobile-hours">{t.headerHours}</span>
             </div>
           </motion.div>
         )}

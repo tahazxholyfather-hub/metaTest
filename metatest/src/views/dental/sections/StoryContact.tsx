@@ -179,7 +179,7 @@ export function Contact() {
               </div>
               <a
                 className="dl-btn dl-btn-primary dl-btn-sm"
-                href="https://maps.google.com/?q=1210+Chestnut+Street+San+Francisco"
+                href={copy.directionsHref}
                 target="_blank"
                 rel="noreferrer"
               >
@@ -251,10 +251,10 @@ export function Footer() {
                 <a href="#contact">{copy.address}</a>
               </li>
               <li>
-                <a href="tel:+14155550142">+1 (415) 555-0142</a>
+                <a href={copy.phoneHref}>{copy.phone}</a>
               </li>
               <li>
-                <a href="mailto:hello@lumieredental.com">hello@lumieredental.com</a>
+                <a href={copy.emailHref}>{copy.email}</a>
               </li>
               <li>
                 <a href="#contact">{copy.hours}</a>

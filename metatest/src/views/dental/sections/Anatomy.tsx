@@ -69,6 +69,21 @@ export default function Anatomy() {
           </Reveal>
 
           <Reveal className="dl-anatomy-panel" delay={0.15} amount={0.15}>
+            <div className="dl-anatomy-chips" role="tablist" aria-label={copy.eyebrow}>
+              {ANATOMY.map((a) => (
+                <button
+                  key={a.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={active === a.key}
+                  className={active === a.key ? "is-active" : ""}
+                  onClick={() => setActive(a.key)}
+                >
+                  {copy.items[a.key].label}
+                </button>
+              ))}
+            </div>
+            <div className="dl-anatomy-list">
             {ANATOMY.map((a, i) => (
               <button
                 key={a.key}
@@ -87,6 +102,7 @@ export default function Anatomy() {
                 <Icon.Arrow size={16} style={{ opacity: active === a.key ? 1 : 0.3, color: "var(--dl-blue-deep)" }} />
               </button>
             ))}
+            </div>
 
             <div className="dl-anatomy-desc" aria-live="polite">
               <AnimatePresence mode="wait" initial={false}>

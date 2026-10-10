@@ -14,9 +14,9 @@ const LangContext = createContext<Ctx | null>(null);
 
 function readLang(): Lang {
   try {
-    return localStorage.getItem(STORAGE_KEY) === "fa" ? "fa" : "en";
+    return localStorage.getItem(STORAGE_KEY) === "en" ? "en" : "fa";
   } catch {
-    return "en";
+    return "fa";
   }
 }
 
@@ -40,16 +40,13 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
       title: document.title,
       dir: html.getAttribute("dir"),
       lang: html.getAttribute("lang"),
-      bg: document.body.style.background,
     };
-    document.body.style.background = "#ffffff";
     return () => {
       document.title = prev.title;
       if (prev.dir) html.setAttribute("dir", prev.dir);
       else html.removeAttribute("dir");
       if (prev.lang) html.setAttribute("lang", prev.lang);
       else html.removeAttribute("lang");
-      document.body.style.background = prev.bg;
     };
   }, []);
 

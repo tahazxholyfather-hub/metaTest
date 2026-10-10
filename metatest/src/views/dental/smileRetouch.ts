@@ -4,8 +4,8 @@
  *
  * Teeth are found as bright, low-saturation pixels that are *not* connected to
  * the picture border (a flood fill removes the white studio background), then
- * the mask is feathered. "Before" stains those pixels yellow and dulls them;
- * "after" lifts them toward a cool bright white.
+ * the mask is feathered. Colour stays inside each tooth: "before" warms the
+ * existing enamel, "after" lifts it slightly. Highlights and shading are kept.
  */
 export type RetouchResult = { before: HTMLCanvasElement; after: HTMLCanvasElement };
 
@@ -45,7 +45,7 @@ function loadImage(src: string, signal?: AbortSignal) {
 }
 
 /** Soft ellipse over the mouth; the photo is focal-point cropped so the teeth sit here. */
-const ROI = { cx: 0.475, cy: 0.42, rx: 0.19, ry: 0.1 };
+const ROI = { cx: 0.478, cy: 0.418, rx: 0.155, ry: 0.072 };
 
 function teethMask({ data, width: w, height: h }: ImageData): Float32Array {
   const n = w * h;
@@ -61,7 +61,7 @@ function teethMask({ data, width: w, height: h }: ImageData): Float32Array {
     const sat = max === 0 ? 0 : (max - min) / max;
     // Enamel is bright with little chroma; lips are far more saturated. The threshold is low enough
     // to keep the shaded teeth at the corner of the smile, so pale skin is excluded by the ROI instead.
-    if (max > 90 && sat < 0.3 && max - min < 40) candidate[i] = 1;
+    if (max > 118 && sat < 0.22 && max - min < 34) candidate[i] = 1;
     if (max > 200 && sat < 0.12) backdrop[i] = 1;
     const dx = (i % w) / w - ROI.cx;
     const dy = Math.floor(i / w) / h - ROI.cy;
@@ -120,10 +120,10 @@ function teethMask({ data, width: w, height: h }: ImageData): Float32Array {
     }
     if (comp.length >= minArea) for (const i of comp) hard[i] = roi[i];
   }
-  // Opening (erode ×3, dilate ×2) drops slivers along the lip line, then feather the edge.
-  let m = erode(erode(erode(hard, w, h), w, h), w, h);
+  // Opening pulls the mask off the lip line, then a light feather softens the edge.
+  let m = erode(erode(erode(erode(hard, w, h), w, h), w, h), w, h);
   m = dilate(dilate(m, w, h), w, h);
-  return blur(blur(m, w, h, 2), w, h, 2);
+  return blur(m, w, h, 2);
 }
 
 function dilate(src: Float32Array, w: number, h: number): Float32Array {
@@ -185,25 +185,21 @@ function paint(source: ImageData, mask: Float32Array, interior: Float32Array, mo
     let r = d[o];
     let g = d[o + 1];
     let b = d[o + 2];
+    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    const highlight = smooth((lum - 168) / 70);
     if (mode === "before") {
-      // Warm yellow cast that keeps the tooth's own shading, heavier at the margins, plus softened highlights.
-      const edge = 1 - Math.min(1, interior[i] * 1.15);
-      const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-      // Push enamel toward a dull yellow-brown while keeping each tooth's own shading.
-      const amount = (0.72 + 0.22 * edge) * m;
-      r = lerp(r, Math.min(214, lum * 0.92 + 36), amount);
-      g = lerp(g, lum * 0.78 + 8, amount);
-      b = lerp(b, lum * 0.32, amount + 0.12 * m);
+      // A warm stain on the tooth's own colour. Bright specular spots stay bright.
+      const edge = 1 - Math.min(1, interior[i] * 1.2);
+      const amt = m * (0.34 + 0.16 * edge) * (1 - 0.7 * highlight);
+      r = r * (1 - 0.04 * amt) + 22 * amt;
+      g = g * (1 - 0.1 * amt) + 6 * amt;
+      b = b * (1 - 0.38 * amt);
     } else {
-      // Lift toward a cool bright white and add a touch of contrast for shine.
-      const lift = 0.34 * m;
-      r = lerp(r, 252, lift);
-      g = lerp(g, 253, lift);
-      b = lerp(b, 255, lift);
-      const c = 1 + 0.1 * m;
-      r = (r - 128) * c + 128;
-      g = (g - 128) * c + 128;
-      b = (b - 128) * c + 130;
+      // A small lift toward the tooth's own highlight, not a flat white fill.
+      const amt = m * 0.28 * (1 - 0.35 * highlight);
+      r = r + (255 - r) * 0.22 * amt + 4 * amt;
+      g = g + (255 - g) * 0.26 * amt + 6 * amt;
+      b = b + (255 - b) * 0.3 * amt + 8 * amt;
     }
     d[o] = r;
     d[o + 1] = g;
@@ -215,5 +211,3 @@ function paint(source: ImageData, mask: Float32Array, interior: Float32Array, mo
   canvas.getContext("2d")!.putImageData(out, 0, 0);
   return canvas;
 }
-
-const lerp = (a: number, b: number, t: number) => a + (b - a) * t;

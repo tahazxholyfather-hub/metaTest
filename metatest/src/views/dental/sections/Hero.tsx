@@ -64,7 +64,7 @@ export default function Hero() {
 
       <div className="dl-container">
         <div className="dl-hero-layout">
-          <motion.div style={{ y: textY, opacity: textOpacity }}>
+          <motion.div className="dl-hero-copy" style={{ y: textY, opacity: textOpacity }}>
             <Rotator />
 
             <h1 className="dl-hero-title" key={t.hero.lines[0][0].text}>
