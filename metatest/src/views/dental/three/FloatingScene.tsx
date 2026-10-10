@@ -29,7 +29,7 @@ const STATS_ARCH: { p: CrownParams; roots: RootSpec[]; s: number; warm?: boolean
   { p: MOLAR, roots: MOLAR_ROOTS, s: 0.92 },
 ];
 
-function statsArchXs(gap = 0.02) {
+function statsArchXs(gap = -0.055) {
   const xs: number[] = [];
   let edge = 0;
   STATS_ARCH.forEach((t, i) => {
@@ -62,7 +62,7 @@ function StatsSmile() {
   );
   const ridge = useMemo(() => {
     const pts = [-1.7, -0.8, 0, 0.8, 1.7].map((x) => new THREE.Vector3(x, 0, statsZ(x)));
-    return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 72, 0.28, 24, false);
+    return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 72, 0.34, 24, false);
   }, []);
   useEffect(
     () => () => {

@@ -60,7 +60,7 @@ const NEIGHBORS: { p: CrownParams; roots: RootSpec[]; x: number; s: number; warm
 
 /** Scalloped gingival margin around one tooth neck. */
 function GumCollar({ params, scale = 1, material, renderOrder }: { params: CrownParams; scale?: number; material: THREE.Material; renderOrder: number }) {
-  const geo = useMemo(() => createGumCollarGeometry(params.width * 0.8 * scale, params.depth * 0.8 * scale, 0.13, 0.11), [params, scale]);
+  const geo = useMemo(() => createGumCollarGeometry(params.width * 0.98 * scale, params.depth * 0.92 * scale, 0.16, 0.12), [params, scale]);
   useEffect(() => () => geo.dispose(), [geo]);
   return <mesh geometry={geo} material={material} position={[0, -0.4, 0]} rotation={[Math.PI / 2, 0, 0]} renderOrder={renderOrder} />;
 }
@@ -131,7 +131,7 @@ export default function AnatomyScene({ active, scroll, reducedMotion, hotspotEls
   const ridge = useMemo(() => {
     const pts = [-1.28, -0.7, 0.05, 0.7, 1.25, 1.88].map((x) => new THREE.Vector3(x, 0, arcZ(x) - 0.02));
     const curve = new THREE.CatmullRomCurve3(pts);
-    return new THREE.TubeGeometry(curve, 80, 0.3, 28, false);
+    return new THREE.TubeGeometry(curve, 80, 0.32, 28, false);
   }, []);
 
   useEffect(
@@ -241,13 +241,13 @@ export default function AnatomyScene({ active, scroll, reducedMotion, hotspotEls
         <mesh material={mats.mouth} position={[0.35, -0.2, -0.85]} scale={[2.2, 1.05, 0.48]} renderOrder={0}>
           <sphereGeometry args={[1, 48, 32]} />
         </mesh>
-        <group position={[0, -0.78, 0]} scale={[1, 1.15, 1]}>
+        <group position={[0, -0.92, 0]} scale={[1, 1.28, 1]}>
           <mesh geometry={ridge} material={mats.gum} receiveShadow castShadow renderOrder={4} />
           <mesh material={mats.gum} position={[-1.28, 0, arcZ(-1.28)]} renderOrder={4}>
-            <sphereGeometry args={[0.3, 28, 20]} />
+            <sphereGeometry args={[0.32, 28, 20]} />
           </mesh>
           <mesh material={mats.gum} position={[1.88, 0, arcZ(1.88)]} renderOrder={4}>
-            <sphereGeometry args={[0.3, 28, 20]} />
+            <sphereGeometry args={[0.32, 28, 20]} />
           </mesh>
         </group>
 
@@ -265,8 +265,10 @@ export default function AnatomyScene({ active, scroll, reducedMotion, hotspotEls
           <GumCollar params={MOLAR} material={mats.gum} renderOrder={4} />
         </group>
 
-        {NEIGHBORS.map((t, i) => (
-          <group key={i} position={[t.x, 0, arcZ(t.x)]} rotation={[0.04, -Math.atan(2 * ARCH * t.x), 0]}>
+        {NEIGHBORS.map((t, i) => {
+          const x = t.x * 0.74;
+          return (
+          <group key={i} position={[x, 0, arcZ(x)]} rotation={[0.04, -Math.atan(2 * ARCH * x), 0]}>
             <Tooth
               params={t.p}
               scale={t.s}
@@ -277,7 +279,8 @@ export default function AnatomyScene({ active, scroll, reducedMotion, hotspotEls
             />
             <GumCollar params={t.p} scale={t.s} material={mats.gum} renderOrder={4} />
           </group>
-        ))}
+          );
+        })}
 
         <ContactShadows position={[0.6, -1.72, 0.3]} opacity={0.32} scale={12} blur={2.6} far={2.5} resolution={512} color="#1b3a7a" frames={reducedMotion ? 1 : Infinity} />
       </group>

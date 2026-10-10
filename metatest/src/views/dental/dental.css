@@ -195,7 +195,7 @@
   height: 30px;
   border-radius: 50%;
   background: var(--dl-ink);
-  color: #fff;
+  color: var(--dl-bg);
 }
 
 /* ---------- Header ---------- */

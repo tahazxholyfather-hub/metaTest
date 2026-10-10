@@ -27,9 +27,44 @@ export async function retouchSmile(src: string, signal?: AbortSignal): Promise<R
   const mask = teethMask(data);
   // Low values near the mask edge = gum line / contact points, where stains build up.
   const interior = blur(blur(mask, w, h, 5), w, h, 5);
-  const before = paint(data, mask, interior, "before");
-  const after = paint(data, mask, interior, "after");
-  return { before, after };
+  const painted = focusMouth(paint(data, mask, interior, "before"), paint(data, mask, interior, "after"), mask, w, h);
+  return painted;
+}
+
+/** Crop both layers around the teeth so the divider crosses the smile, with lip around it. */
+function focusMouth(before: HTMLCanvasElement, after: HTMLCanvasElement, mask: Float32Array, w: number, h: number) {
+  let minX = w;
+  let minY = h;
+  let maxX = 0;
+  let maxY = 0;
+  let n = 0;
+  for (let y = 0; y < h; y += 2) {
+    for (let x = 0; x < w; x += 2) {
+      if (mask[y * w + x] < 0.2) continue;
+      n++;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+  }
+  if (n < 40) return { before, after };
+  const bw = Math.max(8, maxX - minX);
+  const bh = Math.max(8, maxY - minY);
+  const x0 = Math.max(0, Math.floor(minX - bw * 0.7));
+  const x1 = Math.min(w, Math.ceil(maxX + bw * 0.7));
+  const y0 = Math.max(0, Math.floor(minY - bh * 1.6));
+  const y1 = Math.min(h, Math.ceil(maxY + bh * 1.15));
+  const cw = Math.max(1, x1 - x0);
+  const ch = Math.max(1, y1 - y0);
+  const cut = (src: HTMLCanvasElement) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = cw;
+    canvas.height = ch;
+    canvas.getContext("2d")!.drawImage(src, x0, y0, cw, ch, 0, 0, cw, ch);
+    return canvas;
+  };
+  return { before: cut(before), after: cut(after) };
 }
 
 function loadImage(src: string, signal?: AbortSignal) {
@@ -123,7 +158,7 @@ function teethMask({ data, width: w, height: h }: ImageData): Float32Array {
   // Opening pulls the mask off the lip line, then a light feather softens the edge.
   let m = erode(erode(erode(erode(hard, w, h), w, h), w, h), w, h);
   m = dilate(dilate(m, w, h), w, h);
-  return blur(m, w, h, 2);
+  return blur(blur(m, w, h, 5), w, h, 5);
 }
 
 function dilate(src: Float32Array, w: number, h: number): Float32Array {
@@ -188,18 +223,19 @@ function paint(source: ImageData, mask: Float32Array, interior: Float32Array, mo
     const lum = 0.299 * r + 0.587 * g + 0.114 * b;
     const highlight = smooth((lum - 168) / 70);
     if (mode === "before") {
-      // A warm stain on the tooth's own colour. Bright specular spots stay bright.
+      // Warm the tooth's own colour. Specular spots stay bright, so it does not become a flat yellow fill.
       const edge = 1 - Math.min(1, interior[i] * 1.2);
-      const amt = m * (0.34 + 0.16 * edge) * (1 - 0.7 * highlight);
-      r = r * (1 - 0.04 * amt) + 22 * amt;
-      g = g * (1 - 0.1 * amt) + 6 * amt;
-      b = b * (1 - 0.38 * amt);
+      const amt = m * (0.7 + 0.18 * edge) * (1 - 0.5 * highlight);
+      r = r * (1 - 0.02 * amt) + 36 * amt;
+      g = g * (1 - 0.18 * amt) + 4 * amt;
+      b = b * (1 - 0.62 * amt);
     } else {
-      // A small lift toward the tooth's own highlight, not a flat white fill.
-      const amt = m * 0.28 * (1 - 0.35 * highlight);
-      r = r + (255 - r) * 0.22 * amt + 4 * amt;
-      g = g + (255 - g) * 0.26 * amt + 6 * amt;
-      b = b + (255 - b) * 0.3 * amt + 8 * amt;
+      // Lift each tooth toward its own highlight. Darker enamel stays darker than the shiny edge.
+      const amt = m * (0.82 - 0.28 * highlight);
+      const lift = 0.58 * amt;
+      r = r + (255 - r) * lift;
+      g = g + (255 - g) * lift;
+      b = b + (255 - b) * lift * 0.9;
     }
     d[o] = r;
     d[o + 1] = g;
