@@ -85,7 +85,7 @@ export function createCrownGeometry(p: CrownParams): THREE.BufferGeometry {
     let grooves = 0;
     if (p.cusps === 4) {
       const s2 = Math.sin(2 * theta);
-      grooves = 0.055 * Math.exp(-(s2 * s2) / 0.07) * (0.45 + 0.55 * Math.sin(theta) ** 2) * wall;
+      grooves = 0.02 * Math.exp(-(s2 * s2) / 0.07) * (0.45 + 0.55 * Math.sin(theta) ** 2) * wall;
     } else if (p.cusps === 2) {
       grooves = 0.04 * Math.exp(-(Math.cos(theta) ** 2) / 0.06) * wall; // mesial / distal marginal grooves
     } else if (p.cusps === 1) {
@@ -230,7 +230,7 @@ export function createGumCollarGeometry(rx: number, rz: number, tube: number, sc
   return geo;
 }
 
-export const MOLAR: CrownParams = { width: 0.56, depth: 0.52, height: 0.48, cusps: 4, cuspHeight: 0.26, squareness: 0.58, flatness: 0.62 };
+export const MOLAR: CrownParams = { width: 0.56, depth: 0.52, height: 0.48, cusps: 4, cuspHeight: 0.16, squareness: 0.58, flatness: 0.68 };
 export const PREMOLAR: CrownParams = { width: 0.4, depth: 0.46, height: 0.52, cusps: 2, cuspHeight: 0.2, squareness: 0.68, flatness: 0.66 };
 export const CANINE: CrownParams = { width: 0.34, depth: 0.4, height: 0.58, cusps: 1, cuspHeight: 0.24, squareness: 0.82 };
 export const INCISOR: CrownParams = { width: 0.36, depth: 0.26, height: 0.56, cusps: 0, cuspHeight: 0.12, squareness: 0.75 };

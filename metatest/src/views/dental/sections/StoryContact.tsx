@@ -4,6 +4,7 @@ import { AccentTitle, Img, Logo, Reveal, SectionHead } from "../ui";
 import { Icon } from "../icons";
 import { EASE, IMAGES } from "../data";
 import { useLang } from "../i18n";
+import { AppearanceControls } from "../theme";
 
 /* =========================================================
    About
@@ -261,6 +262,10 @@ export function Footer() {
               </li>
             </ul>
           </div>
+        </div>
+
+        <div className="dl-footer-appearance">
+          <AppearanceControls />
         </div>
 
         <div className="dl-footer-bottom">

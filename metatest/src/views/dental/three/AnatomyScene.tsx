@@ -9,18 +9,14 @@ import { CEMENTUM_PROPS, ENAMEL_PROPS, GUM_DEEP_PROPS, GUM_PROPS, makeMaterial }
 import { ANATOMY, type AnatomyKey } from "../data";
 import {
   CANINE,
-  CANINE_ROOTS,
   INCISOR,
-  INCISOR_ROOTS,
   MOLAR,
   MOLAR_ROOTS,
   PREMOLAR,
-  PREMOLAR_ROOTS,
   createCrownGeometry,
-  createGumCollarGeometry,
+  createRidgeGeometry,
   createRootGeometry,
   type CrownParams,
-  type RootSpec,
 } from "./toothGeometry";
 
 type Targets = { enamel: number; dentin: number; pulp: number; gum: number; root: number; nerve: number };
@@ -36,34 +32,30 @@ const OPACITY: Record<AnatomyKey | "idle", Targets> = {
 };
 
 const CAMERA: Record<AnatomyKey | "idle", { pos: [number, number, number]; look: [number, number, number] }> = {
-  idle: { pos: [0.55, 0.72, 4.55], look: [0.32, -0.28, 0] },
-  enamel: { pos: [0.8, 2.6, 4.2], look: [0, 0.3, 0] },
-  dentin: { pos: [1.8, 0.9, 4.0], look: [0.1, 0, 0] },
-  pulp: { pos: [0.8, 0.4, 3.8], look: [0, -0.1, 0] },
-  gum: { pos: [2.0, 0.3, 4.2], look: [0.5, -0.5, 0] },
-  root: { pos: [1.6, -0.5, 4.3], look: [0.1, -0.9, 0] },
-  nerve: { pos: [1.2, -0.9, 4.0], look: [0, -1.1, 0] },
+  idle: { pos: [0.28, 0.42, 4.05], look: [0.22, -0.08, 0] },
+  enamel: { pos: [0.1, 1.05, 2.7], look: [0.02, 0.2, 0] },
+  dentin: { pos: [1.05, 0.4, 2.75], look: [0.02, 0.02, 0] },
+  pulp: { pos: [0.15, 0.12, 2.45], look: [0, -0.06, 0] },
+  gum: { pos: [1.15, 0.05, 3.15], look: [0.25, -0.32, 0] },
+  root: { pos: [0.55, -0.72, 3.35], look: [0.02, -0.78, 0] },
+  nerve: { pos: [0.25, -0.55, 2.95], look: [0, -0.62, 0] },
 };
 
-const ARCH = 0.075;
-const arcZ = (x: number) => ARCH * x * x;
+/** Necks share one gingival line so crowns read as one row, not a stack of spikes. */
+const NECK = -0.48;
+const placeY = (height: number, scale: number) => NECK + height * scale;
 
-/** Centres packed so neighbouring crowns almost touch. The teaching molar stays at x = 0. */
-const NEIGHBORS: { p: CrownParams; roots: RootSpec[]; x: number; s: number; warm?: boolean }[] = [
-  { p: PREMOLAR, roots: PREMOLAR_ROOTS, x: -1.034, s: 0.96 },
-  { p: MOLAR, roots: MOLAR_ROOTS, x: -0.561, s: 0.94 },
-  { p: PREMOLAR, roots: PREMOLAR_ROOTS, x: 0.498, s: 1 },
-  { p: CANINE, roots: CANINE_ROOTS, x: 0.886, s: 1, warm: true },
-  { p: INCISOR, roots: INCISOR_ROOTS, x: 1.254, s: 1 },
-  { p: INCISOR, roots: INCISOR_ROOTS, x: 1.614, s: 0.9, warm: true },
+/**
+ * A short clinical segment. Crowns overlap by ~0.02. The teaching molar stays at the origin
+ * so the DOM hotspots (anchored in its local space) keep lining up.
+ */
+const SOFT_CANINE: CrownParams = { ...CANINE, height: 0.5, cuspHeight: 0.1 };
+const NEIGHBORS: { p: CrownParams; x: number; s: number; warm?: boolean }[] = [
+  { p: PREMOLAR, x: -0.444, s: 0.92 },
+  { p: PREMOLAR, x: 0.444, s: 0.92 },
+  { p: SOFT_CANINE, x: 0.72, s: 0.9 },
+  { p: INCISOR, x: 0.99, s: 0.86, warm: true },
 ];
-
-/** Scalloped gingival margin around one tooth neck. */
-function GumCollar({ params, scale = 1, material, renderOrder }: { params: CrownParams; scale?: number; material: THREE.Material; renderOrder: number }) {
-  const geo = useMemo(() => createGumCollarGeometry(params.width * 0.98 * scale, params.depth * 0.92 * scale, 0.16, 0.12), [params, scale]);
-  useEffect(() => () => geo.dispose(), [geo]);
-  return <mesh geometry={geo} material={material} position={[0, -0.4, 0]} rotation={[Math.PI / 2, 0, 0]} renderOrder={renderOrder} />;
-}
 
 type Props = {
   active: AnatomyKey | null;
@@ -86,11 +78,10 @@ export default function AnatomyScene({ active, scroll, reducedMotion, hotspotEls
     () => ({
       enamel: makeMaterial(ENAMEL_PROPS, true),
       enamelNeighbor: makeMaterial(ENAMEL_PROPS, false),
-      enamelWarm: makeMaterial({ ...ENAMEL_PROPS, color: "#f7dcc0" }, false),
+      enamelWarm: makeMaterial({ ...ENAMEL_PROPS, color: "#f4eadc" }, false),
       dentin: makeMaterial({ ...CEMENTUM_PROPS, color: "#efe1c8", roughness: 0.5 }, true, "#6e9bff"),
       pulp: makeMaterial({ color: "#e5879b", roughness: 0.45, clearcoat: 0.3, sheen: 0.5, sheenColor: new THREE.Color("#ffc9d3") }, true, "#ff6f86"),
       root: makeMaterial(CEMENTUM_PROPS, true, "#6e9bff"),
-      rootNeighbor: makeMaterial(CEMENTUM_PROPS, false),
       gum: makeMaterial(GUM_PROPS, true, "#ff6f86"),
       mouth: makeMaterial(GUM_DEEP_PROPS, false),
       nerve: makeMaterial({ color: "#e14c63", roughness: 0.35, clearcoat: 0.6 }, true, "#ff3b5c", 0.3),
@@ -128,11 +119,9 @@ export default function AnatomyScene({ active, scroll, reducedMotion, hotspotEls
       }),
     [],
   );
-  const ridge = useMemo(() => {
-    const pts = [-1.28, -0.7, 0.05, 0.7, 1.25, 1.88].map((x) => new THREE.Vector3(x, 0, arcZ(x) - 0.02));
-    const curve = new THREE.CatmullRomCurve3(pts);
-    return new THREE.TubeGeometry(curve, 80, 0.32, 28, false);
-  }, []);
+  // One smooth gingival volume. Crowns emerge from the top; roots stay inside until that layer is opened.
+  const gumPad = useMemo(() => createRidgeGeometry(1.16, 0.74, 0.46, 0.48, 0.62), []);
+  const gumLip = useMemo(() => createRidgeGeometry(1.02, 0.11, 0.1, 0.4, 0.7), []);
 
   useEffect(
     () => () => {
@@ -140,9 +129,10 @@ export default function AnatomyScene({ active, scroll, reducedMotion, hotspotEls
       pulpGeo.dispose();
       canalGeos.forEach((g) => g.dispose());
       nerveGeos.forEach((g) => g.dispose());
-      ridge.dispose();
+      gumPad.dispose();
+      gumLip.dispose();
     },
-    [dentinGeo, pulpGeo, canalGeos, nerveGeos, ridge],
+    [dentinGeo, pulpGeo, canalGeos, nerveGeos, gumPad, gumLip],
   );
 
   // Re-arm camera focus whenever the selection changes.
@@ -173,8 +163,8 @@ export default function AnatomyScene({ active, scroll, reducedMotion, hotspotEls
     if (group.current) {
       const t = state.clock.elapsedTime;
       const s = scroll.get();
-      const base = reducedMotion ? 0 : Math.sin(t * 0.35) * 0.08;
-      group.current.rotation.y = base + (s - 0.5) * 0.9;
+      const base = reducedMotion ? 0 : Math.sin(t * 0.35) * 0.05;
+      group.current.rotation.y = base + (s - 0.5) * 0.28;
       group.current.position.y = reducedMotion ? 0 : Math.sin(t * 0.7) * 0.035;
     }
 
@@ -226,7 +216,7 @@ export default function AnatomyScene({ active, scroll, reducedMotion, hotspotEls
         minAzimuthAngle={-Math.PI * 0.6}
         maxAzimuthAngle={Math.PI * 0.6}
         autoRotate={!reducedMotion && !active}
-        autoRotateSpeed={0.35}
+        autoRotateSpeed={0.22}
         onStart={() => {
           dragging.current = true;
           focusing.current = false;
@@ -236,53 +226,39 @@ export default function AnatomyScene({ active, scroll, reducedMotion, hotspotEls
         }}
       />
 
-      <group ref={group} position={[-0.15, 0.12, 0]}>
-        {/* Mouth cavity behind the arch, then the gum that the teeth sit in. */}
-        <mesh material={mats.mouth} position={[0.35, -0.2, -0.85]} scale={[2.2, 1.05, 0.48]} renderOrder={0}>
-          <sphereGeometry args={[1, 48, 32]} />
+      <group ref={group} position={[-0.06, 0.08, 0]}>
+        <mesh material={mats.mouth} position={[0.28, -0.55, -0.72]} scale={[1.35, 0.85, 0.42]} renderOrder={0}>
+          <sphereGeometry args={[1, 40, 28]} />
         </mesh>
-        <group position={[0, -0.92, 0]} scale={[1, 1.28, 1]}>
-          <mesh geometry={ridge} material={mats.gum} receiveShadow castShadow renderOrder={4} />
-          <mesh material={mats.gum} position={[-1.28, 0, arcZ(-1.28)]} renderOrder={4}>
-            <sphereGeometry args={[0.32, 28, 20]} />
-          </mesh>
-          <mesh material={mats.gum} position={[1.88, 0, arcZ(1.88)]} renderOrder={4}>
-            <sphereGeometry args={[0.32, 28, 20]} />
-          </mesh>
-        </group>
+        <mesh geometry={gumPad} material={mats.gum} position={[0.28, -0.96, -0.02]} castShadow receiveShadow renderOrder={2} />
+        <mesh geometry={gumLip} material={mats.gum} position={[0.28, -0.36, 0.2]} renderOrder={5} />
 
-        {/* Hero molar with internal anatomy */}
+        {/* Hero molar with internal anatomy. Stays at the local origin for hotspot projection. */}
         <group ref={hero} position={[0, 0, 0]}>
-          <Tooth params={MOLAR} crownMaterial={mats.enamel} rootMaterial={mats.root} roots={MOLAR_ROOTS} renderOrder={3} />
-          <mesh geometry={dentinGeo} material={mats.dentin} position={[0, -0.06, 0]} renderOrder={2} />
-          <mesh geometry={pulpGeo} material={mats.pulp} position={[0, -0.26, 0]} renderOrder={1} />
+          <Tooth params={MOLAR} crownMaterial={mats.enamel} rootMaterial={mats.root} roots={MOLAR_ROOTS} renderOrder={4} />
+          <mesh geometry={dentinGeo} material={mats.dentin} position={[0, -0.06, 0]} renderOrder={3} />
+          <mesh geometry={pulpGeo} material={mats.pulp} position={[0, -0.26, 0]} renderOrder={2} />
           {MOLAR_ROOTS.map((r, i) => (
-            <mesh key={i} geometry={canalGeos[i]} material={mats.pulp} position={[r.x, -0.42, 0]} rotation={[0, 0, r.tilt]} renderOrder={1} />
+            <mesh key={i} geometry={canalGeos[i]} material={mats.pulp} position={[r.x, -0.42, 0]} rotation={[0, 0, r.tilt]} renderOrder={2} />
           ))}
           {nerveGeos.map((g, i) => (
-            <mesh key={i} geometry={g} material={mats.nerve} renderOrder={0} />
+            <mesh key={i} geometry={g} material={mats.nerve} renderOrder={1} />
           ))}
-          <GumCollar params={MOLAR} material={mats.gum} renderOrder={4} />
         </group>
 
-        {NEIGHBORS.map((t, i) => {
-          const x = t.x * 0.74;
-          return (
-          <group key={i} position={[x, 0, arcZ(x)]} rotation={[0.04, -Math.atan(2 * ARCH * x), 0]}>
-            <Tooth
-              params={t.p}
-              scale={t.s}
-              position={[0, (t.p.height - 0.5) * t.s, 0]}
-              crownMaterial={t.warm ? mats.enamelWarm : mats.enamelNeighbor}
-              rootMaterial={mats.rootNeighbor}
-              roots={t.roots}
-            />
-            <GumCollar params={t.p} scale={t.s} material={mats.gum} renderOrder={4} />
-          </group>
-          );
-        })}
+        {NEIGHBORS.map((t, i) => (
+          <Tooth
+            key={i}
+            params={t.p}
+            scale={t.s}
+            position={[t.x, placeY(t.p.height, t.s), 0.012 * t.x * t.x]}
+            rotation={[0.02, -0.04 * t.x, 0]}
+            crownMaterial={t.warm ? mats.enamelWarm : mats.enamelNeighbor}
+            renderOrder={4}
+          />
+        ))}
 
-        <ContactShadows position={[0.6, -1.72, 0.3]} opacity={0.32} scale={12} blur={2.6} far={2.5} resolution={512} color="#1b3a7a" frames={reducedMotion ? 1 : Infinity} />
+        <ContactShadows position={[0.3, -1.62, 0.2]} opacity={0.28} scale={8} blur={2.4} far={2.2} resolution={512} color="#1b3a7a" frames={reducedMotion ? 1 : Infinity} />
       </group>
     </>
   );

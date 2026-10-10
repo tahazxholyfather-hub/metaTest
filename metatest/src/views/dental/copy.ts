@@ -284,6 +284,8 @@ const en = {
     primary: "Primary",
     secondary: "Secondary",
     preset: "Palettes",
+    light: "Light",
+    dark: "Dark",
   },
 };
 
@@ -555,6 +557,8 @@ const fa: typeof en = {
     primary: "رنگ اصلی",
     secondary: "رنگ دوم",
     preset: "پالت‌ها",
+    light: "روشن",
+    dark: "تیره",
   },
 };
 

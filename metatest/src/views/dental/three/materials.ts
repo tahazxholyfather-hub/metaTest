@@ -1,15 +1,15 @@
 import * as THREE from "three";
 
 export const ENAMEL_PROPS = {
-  color: "#f4ead6",
-  roughness: 0.22,
-  metalness: 0,
+  color: "#f7f4ee",
+  roughness: 0.14,
+  metalness: 0.04,
   clearcoat: 1,
-  clearcoatRoughness: 0.12,
-  sheen: 0.55,
-  sheenColor: new THREE.Color("#d5e4ff"),
-  sheenRoughness: 0.45,
-  envMapIntensity: 1.05,
+  clearcoatRoughness: 0.05,
+  sheen: 0.35,
+  sheenColor: new THREE.Color("#e7eefc"),
+  sheenRoughness: 0.35,
+  envMapIntensity: 1.15,
 };
 
 export const CEMENTUM_PROPS = {
@@ -22,15 +22,15 @@ export const CEMENTUM_PROPS = {
 };
 
 export const GUM_PROPS = {
-  color: "#e45b78",
-  roughness: 0.38,
+  color: "#e07b80",
+  roughness: 0.42,
   metalness: 0,
-  clearcoat: 0.55,
-  clearcoatRoughness: 0.28,
-  sheen: 0.9,
-  sheenColor: new THREE.Color("#ffc1cf"),
-  sheenRoughness: 0.42,
-  envMapIntensity: 0.95,
+  clearcoat: 0.4,
+  clearcoatRoughness: 0.32,
+  sheen: 0.7,
+  sheenColor: new THREE.Color("#ffd5d8"),
+  sheenRoughness: 0.4,
+  envMapIntensity: 0.7,
 };
 
 export const GUM_DEEP_PROPS = {

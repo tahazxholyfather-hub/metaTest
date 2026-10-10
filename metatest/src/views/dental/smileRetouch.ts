@@ -51,10 +51,10 @@ function focusMouth(before: HTMLCanvasElement, after: HTMLCanvasElement, mask: F
   if (n < 40) return { before, after };
   const bw = Math.max(8, maxX - minX);
   const bh = Math.max(8, maxY - minY);
-  const x0 = Math.max(0, Math.floor(minX - bw * 0.7));
-  const x1 = Math.min(w, Math.ceil(maxX + bw * 0.7));
-  const y0 = Math.max(0, Math.floor(minY - bh * 1.6));
-  const y1 = Math.min(h, Math.ceil(maxY + bh * 1.15));
+  const x0 = Math.max(0, Math.floor(minX - bw * 0.55));
+  const x1 = Math.min(w, Math.ceil(maxX + bw * 0.85));
+  const y0 = Math.max(0, Math.floor(minY - bh * 1.05));
+  const y1 = Math.min(h, Math.ceil(maxY + bh * 0.95));
   const cw = Math.max(1, x1 - x0);
   const ch = Math.max(1, y1 - y0);
   const cut = (src: HTMLCanvasElement) => {
@@ -80,7 +80,7 @@ function loadImage(src: string, signal?: AbortSignal) {
 }
 
 /** Soft ellipse over the mouth; the photo is focal-point cropped so the teeth sit here. */
-const ROI = { cx: 0.478, cy: 0.418, rx: 0.155, ry: 0.072 };
+const ROI = { cx: 0.5, cy: 0.5, rx: 0.3, ry: 0.22 };
 
 function teethMask({ data, width: w, height: h }: ImageData): Float32Array {
   const n = w * h;
@@ -96,12 +96,13 @@ function teethMask({ data, width: w, height: h }: ImageData): Float32Array {
     const sat = max === 0 ? 0 : (max - min) / max;
     // Enamel is bright with little chroma; lips are far more saturated. The threshold is low enough
     // to keep the shaded teeth at the corner of the smile, so pale skin is excluded by the ROI instead.
-    if (max > 118 && sat < 0.22 && max - min < 34) candidate[i] = 1;
+    // Enamel in this photo is bright and slightly cool. Lips are redder, so a tight chroma cut keeps the stain on the teeth.
+    if (max > 165 && sat < 0.16 && max - min < 38) candidate[i] = 1;
     if (max > 200 && sat < 0.12) backdrop[i] = 1;
     const dx = (i % w) / w - ROI.cx;
     const dy = Math.floor(i / w) / h - ROI.cy;
     const e = (dx * dx) / (ROI.rx * ROI.rx) + (dy * dy) / (ROI.ry * ROI.ry);
-    roi[i] = 1 - smooth((e - 0.85) / 0.35);
+    roi[i] = 1 - smooth((e - 1.05) / 0.5);
   }
 
   // Flood fill the white studio backdrop from the border so it is never mistaken for enamel.
@@ -155,10 +156,9 @@ function teethMask({ data, width: w, height: h }: ImageData): Float32Array {
     }
     if (comp.length >= minArea) for (const i of comp) hard[i] = roi[i];
   }
-  // Opening pulls the mask off the lip line, then a light feather softens the edge.
-  let m = erode(erode(erode(erode(hard, w, h), w, h), w, h), w, h);
-  m = dilate(dilate(m, w, h), w, h);
-  return blur(blur(m, w, h, 5), w, h, 5);
+  // A single erosion pulls the mask off the lip line. Two passes were eating the lower crown and leaving a hard stain edge.
+  const opened = dilate(erode(hard, w, h), w, h);
+  return blur(blur(opened, w, h, 7), w, h, 7);
 }
 
 function dilate(src: Float32Array, w: number, h: number): Float32Array {
@@ -223,19 +223,19 @@ function paint(source: ImageData, mask: Float32Array, interior: Float32Array, mo
     const lum = 0.299 * r + 0.587 * g + 0.114 * b;
     const highlight = smooth((lum - 168) / 70);
     if (mode === "before") {
-      // Warm the tooth's own colour. Specular spots stay bright, so it does not become a flat yellow fill.
-      const edge = 1 - Math.min(1, interior[i] * 1.2);
-      const amt = m * (0.7 + 0.18 * edge) * (1 - 0.5 * highlight);
-      r = r * (1 - 0.02 * amt) + 36 * amt;
-      g = g * (1 - 0.18 * amt) + 4 * amt;
-      b = b * (1 - 0.62 * amt);
+      // Warm the photograph in place. Highlights stay bright streaks; the crown does not become a yellow fill.
+      const body = 0.9 + 0.1 * Math.min(1, interior[i]);
+      const amt = m * body * 0.92 * (1 - 0.5 * highlight);
+      const shade = 1 - 0.14 * amt;
+      r = r * (1 + 0.1 * amt) * shade;
+      g = g * (1 - 0.16 * amt) * shade;
+      b = b * (1 - 0.42 * amt) * shade;
     } else {
-      // Lift each tooth toward its own highlight. Darker enamel stays darker than the shiny edge.
-      const amt = m * (0.82 - 0.28 * highlight);
-      const lift = 0.58 * amt;
-      r = r + (255 - r) * lift;
-      g = g + (255 - g) * lift;
-      b = b + (255 - b) * lift * 0.9;
+      // Same photo, clearer in the shaded enamel. Specular streaks stay in the original pixels.
+      const amt = m * 0.28 * (1 - 0.65 * highlight);
+      r = r + (255 - r) * amt;
+      g = g + (255 - g) * amt;
+      b = b + (255 - b) * amt * 0.9;
     }
     d[o] = r;
     d[o + 1] = g;

@@ -28,10 +28,10 @@ export type AnatomyKey = "enamel" | "dentin" | "pulp" | "gum" | "root" | "nerve"
 
 /** Hotspot anchors in tooth space. Labels live in copy.ts so both languages share one model. */
 export const ANATOMY: Array<{ key: AnatomyKey; anchor: [number, number, number] }> = [
-  { key: "enamel", anchor: [0.32, 0.64, 0.3] },
-  { key: "dentin", anchor: [0.62, 0.12, 0.08] },
-  { key: "pulp", anchor: [0, -0.02, 0.56] },
-  { key: "gum", anchor: [0.78, -0.42, 0.42] },
-  { key: "root", anchor: [0.3, -1.1, 0.32] },
-  { key: "nerve", anchor: [0, -1.56, 0.3] },
+  { key: "enamel", anchor: [0.16, 0.28, 0.36] },
+  { key: "dentin", anchor: [0.34, 0.02, 0.2] },
+  { key: "pulp", anchor: [0, -0.08, 0.42] },
+  { key: "gum", anchor: [0.55, -0.38, 0.32] },
+  { key: "root", anchor: [0.16, -0.7, 0.22] },
+  { key: "nerve", anchor: [0.02, -0.92, 0.12] },
 ];

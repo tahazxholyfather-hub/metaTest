@@ -39,7 +39,7 @@ export default function Anatomy() {
         <SectionHead eyebrow={copy.eyebrow} title={<AccentTitle parts={copy.title} />} lead={copy.lead} />
 
         <div className="dl-anatomy-layout" ref={ref}>
-          <Reveal className="dl-anatomy-stage" amount={0.15} blur={false}>
+          <Reveal className="dl-anatomy-stage" amount={0.05} blur={false}>
             <LazyCanvas camera={{ position: [0.5, 1.1, 5.4], fov: 32 }} shadows style={{ position: "absolute", inset: 0 }}>
               <Suspense fallback={null}>
                 <AnatomyScene active={active} scroll={scroll} reducedMotion={!!reduced} hotspotEls={hotspotEls} />
@@ -68,42 +68,7 @@ export default function Anatomy() {
             </span>
           </Reveal>
 
-          <Reveal className="dl-anatomy-panel" delay={0.15} amount={0.15}>
-            <div className="dl-anatomy-chips" role="tablist" aria-label={copy.eyebrow}>
-              {ANATOMY.map((a) => (
-                <button
-                  key={a.key}
-                  type="button"
-                  role="tab"
-                  aria-selected={active === a.key}
-                  className={active === a.key ? "is-active" : ""}
-                  onClick={() => setActive(a.key)}
-                >
-                  {copy.items[a.key].label}
-                </button>
-              ))}
-            </div>
-            <div className="dl-anatomy-list">
-            {ANATOMY.map((a, i) => (
-              <button
-                key={a.key}
-                type="button"
-                className={`dl-anatomy-item ${active === a.key ? "is-active" : ""}`}
-                onMouseEnter={() => setActive(a.key)}
-                onFocus={() => setActive(a.key)}
-                onClick={() => setActive(a.key)}
-                aria-pressed={active === a.key}
-              >
-                <span className="dl-anatomy-num">0{i + 1}</span>
-                <span>
-                  <strong>{copy.items[a.key].label}</strong>
-                  <small>{copy.items[a.key].short}</small>
-                </span>
-                <Icon.Arrow size={16} style={{ opacity: active === a.key ? 1 : 0.3, color: "var(--dl-blue-deep)" }} />
-              </button>
-            ))}
-            </div>
-
+          <Reveal className="dl-anatomy-panel" delay={0.15} amount={0.05}>
             <div className="dl-anatomy-desc" aria-live="polite">
               <AnimatePresence mode="wait" initial={false}>
                 <motion.div
@@ -117,6 +82,24 @@ export default function Anatomy() {
                   <p>{current ? current.description : copy.idleBody}</p>
                 </motion.div>
               </AnimatePresence>
+            </div>
+
+            <div className="dl-anatomy-list" role="tablist" aria-label={copy.eyebrow}>
+              {ANATOMY.map((a, i) => (
+                <button
+                  key={a.key}
+                  type="button"
+                  role="tab"
+                  className={`dl-anatomy-item ${active === a.key ? "is-active" : ""}`}
+                  onMouseEnter={() => setActive(a.key)}
+                  onFocus={() => setActive(a.key)}
+                  onClick={() => setActive(a.key)}
+                  aria-pressed={active === a.key}
+                >
+                  <span className="dl-anatomy-num">0{i + 1}</span>
+                  <strong>{copy.items[a.key].label}</strong>
+                </button>
+              ))}
             </div>
 
             <div className="dl-anatomy-cross">

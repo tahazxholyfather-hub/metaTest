@@ -1,4 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { Icon } from "./icons";
+import { useLang } from "./i18n";
 
 const STORAGE_KEY = "dl-theme";
 
@@ -132,4 +134,51 @@ export function useTheme() {
   const value = useContext(ThemeContext);
   if (!value) throw new Error("useTheme must be used within ThemeProvider");
   return value;
+}
+
+/** Light/dark and palette controls. Lives in the mobile menu and the footer, not the top bar. */
+export function AppearanceControls() {
+  const { t } = useLang();
+  const { mode, setMode, preset, custom, primary, secondary, setPreset, setCustom } = useTheme();
+  const copy = t.theme;
+  return (
+    <div className="dl-appearance">
+      <div className="dl-appearance-row">
+        <span className="dl-appearance-label">{copy.mode}</span>
+        <div className="dl-mode" role="group" aria-label={copy.mode}>
+          <button type="button" aria-pressed={mode === "light"} onClick={() => setMode("light")}>
+            <Icon.Sun size={14} />
+            <span>{copy.light}</span>
+          </button>
+          <button type="button" aria-pressed={mode === "dark"} onClick={() => setMode("dark")}>
+            <Icon.Moon size={14} />
+            <span>{copy.dark}</span>
+          </button>
+        </div>
+      </div>
+      <div className="dl-appearance-row">
+        <span className="dl-appearance-label">{copy.colors}</span>
+        <div className="dl-theme-presets" role="group" aria-label={copy.preset}>
+          {PALETTES.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              aria-label={p.id}
+              aria-pressed={!custom && preset === p.id}
+              style={{ background: `linear-gradient(135deg, ${p.primary}, ${p.secondary})` }}
+              onClick={() => setPreset(p.id)}
+            />
+          ))}
+        </div>
+        <label className="dl-color">
+          <span>{copy.primary}</span>
+          <input type="color" value={primary} aria-label={copy.primary} onChange={(e) => setCustom(e.target.value, secondary)} />
+        </label>
+        <label className="dl-color">
+          <span>{copy.secondary}</span>
+          <input type="color" value={secondary} aria-label={copy.secondary} onChange={(e) => setCustom(primary, e.target.value)} />
+        </label>
+      </div>
+    </div>
+  );
 }

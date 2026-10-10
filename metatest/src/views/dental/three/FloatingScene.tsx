@@ -3,99 +3,9 @@ import * as THREE from "three";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Float } from "@react-three/drei";
 import { PointerParallax, StudioLights, Tooth } from "./common";
-import { CEMENTUM_PROPS, ENAMEL_PROPS, GUM_DEEP_PROPS, GUM_PROPS, makeMaterial } from "./materials";
-import {
-  CANINE,
-  CANINE_ROOTS,
-  INCISOR,
-  INCISOR_ROOTS,
-  MOLAR,
-  MOLAR_ROOTS,
-  PREMOLAR,
-  PREMOLAR_ROOTS,
-  createGumCollarGeometry,
-  type CrownParams,
-  type RootSpec,
-} from "./toothGeometry";
-
-const STATS_ARCH: { p: CrownParams; roots: RootSpec[]; s: number; warm?: boolean }[] = [
-  { p: MOLAR, roots: MOLAR_ROOTS, s: 0.92 },
-  { p: PREMOLAR, roots: PREMOLAR_ROOTS, s: 0.98 },
-  { p: CANINE, roots: CANINE_ROOTS, s: 1, warm: true },
-  { p: INCISOR, roots: INCISOR_ROOTS, s: 0.96 },
-  { p: INCISOR, roots: INCISOR_ROOTS, s: 0.96, warm: true },
-  { p: CANINE, roots: CANINE_ROOTS, s: 1 },
-  { p: PREMOLAR, roots: PREMOLAR_ROOTS, s: 0.98 },
-  { p: MOLAR, roots: MOLAR_ROOTS, s: 0.92 },
-];
-
-function statsArchXs(gap = -0.055) {
-  const xs: number[] = [];
-  let edge = 0;
-  STATS_ARCH.forEach((t, i) => {
-    const w = t.p.width * t.s;
-    const x = i === 0 ? w / 2 : edge + gap + w / 2;
-    xs.push(x);
-    edge = x + w / 2;
-  });
-  const mid = (xs[0] + xs[xs.length - 1]) / 2;
-  return xs.map((x) => x - mid);
-}
-
-const STATS_X = statsArchXs();
-const statsZ = (x: number) => 0.07 * x * x;
-
-function StatsSmile() {
-  const mats = useMemo(
-    () => ({
-      enamel: makeMaterial(ENAMEL_PROPS),
-      warm: makeMaterial({ ...ENAMEL_PROPS, color: "#f6d7b4" }),
-      root: makeMaterial(CEMENTUM_PROPS),
-      gum: makeMaterial(GUM_PROPS),
-      mouth: makeMaterial(GUM_DEEP_PROPS),
-    }),
-    [],
-  );
-  const collars = useMemo(
-    () => STATS_ARCH.map((t) => createGumCollarGeometry(t.p.width * 0.78 * t.s, t.p.depth * 0.78 * t.s, 0.12, 0.1)),
-    [],
-  );
-  const ridge = useMemo(() => {
-    const pts = [-1.7, -0.8, 0, 0.8, 1.7].map((x) => new THREE.Vector3(x, 0, statsZ(x)));
-    return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 72, 0.34, 24, false);
-  }, []);
-  useEffect(
-    () => () => {
-      Object.values(mats).forEach((m) => m.dispose());
-      collars.forEach((g) => g.dispose());
-      ridge.dispose();
-    },
-    [mats, collars, ridge],
-  );
-
-  return (
-    <group>
-      <mesh material={mats.mouth} position={[0, -0.08, -0.72]} scale={[1.9, 0.82, 0.42]}>
-        <sphereGeometry args={[1, 40, 28]} />
-      </mesh>
-      <mesh geometry={ridge} material={mats.gum} position={[0, -0.72, 0]} scale={[1.05, 1.12, 1]} />
-      {STATS_ARCH.map((t, i) => (
-        <group key={i} position={[STATS_X[i], 0, statsZ(STATS_X[i])]} rotation={[0.05, -Math.atan(0.14 * STATS_X[i]), 0]}>
-          <Tooth
-            params={t.p}
-            scale={t.s}
-            position={[0, (t.p.height - 0.5) * t.s, 0]}
-            crownMaterial={t.warm ? mats.warm : mats.enamel}
-            rootMaterial={mats.root}
-            roots={t.roots}
-            castShadow={false}
-          />
-          <mesh geometry={collars[i]} material={mats.gum} position={[0, -0.4 * t.s, 0]} rotation={[Math.PI / 2, 0, 0]} />
-        </group>
-      ))}
-    </group>
-  );
-}
+import { CEMENTUM_PROPS, ENAMEL_PROPS, makeMaterial } from "./materials";
+import { CANINE, CANINE_ROOTS, MOLAR, MOLAR_ROOTS } from "./toothGeometry";
+import MouthScene from "./MouthScene";
 
 function Spinner({ children, speed = 0.18, axis = "y" }: { children: ReactNode; speed?: number; axis?: "x" | "y" }) {
   const ref = useRef<THREE.Group>(null);
@@ -179,21 +89,11 @@ export default function FloatingScene({ variant, reducedMotion }: { variant: "he
   const hh = viewport.height / 2;
 
   if (variant === "stats") {
-    const s = Math.min(hw, hh) * 0.42;
+    const s = Math.min(hw, hh) * 0.66;
     return (
-      <>
-        <StudioLights shadows={false} />
-        <PointerParallax amount={0.12}>
-          <Float speed={0.8} rotationIntensity={0.18} floatIntensity={0.45} {...float}>
-            <group rotation={[0.35, -0.35, 0]} scale={s} position={[0, hh * 0.04, 0]}>
-              <Spinner speed={spin ?? 0.12}>
-                <StatsSmile />
-              </Spinner>
-            </group>
-          </Float>
-          <Particles count={36} spread={5} />
-        </PointerParallax>
-      </>
+      <group scale={s} position={[0, -hh * 0.04, 0]}>
+        <MouthScene reducedMotion={reducedMotion} />
+      </group>
     );
   }
 
