@@ -13546,7 +13546,8 @@ CREATE TABLE `discount_codes` (
 --
 
 INSERT INTO `discount_codes` (`id`, `code`, `percent`, `active`, `expires_at`, `max_uses`, `used_count`, `allowed_plan_ids`, `created_at`, `updated_at`) VALUES
-(1, 'JAVAD10', 20.00, 1, '2026-10-31 02:08:00', 50, 0, NULL, '2026-10-09 22:39:02', '2026-10-09 22:39:02');
+(1, 'JAVAD10', 20.00, 1, '2026-10-31 02:08:00', 50, 0, NULL, '2026-10-09 22:39:02', '2026-10-09 22:39:02'),
+(2, 'FGT543', 2.00, 1, '2026-11-13 19:48:00', NULL, 0, NULL, '2026-10-13 16:19:24', '2026-10-13 16:19:24');
 
 -- --------------------------------------------------------
 
@@ -140772,7 +140773,7 @@ ALTER TABLE `descriptive_answers_tam24`
 -- AUTO_INCREMENT for table `discount_codes`
 --
 ALTER TABLE `discount_codes`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `favorites_tam24`
