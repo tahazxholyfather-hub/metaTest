@@ -1,8 +1,8 @@
 'use strict';
 
 const jwt = require('jsonwebtoken');
-const cookie = require('cookie');
 const pool = require('../db');
+const { parseCookieHeader, serializeCookie } = require('../utils/cookies');
 const { hashPassword, verifyAdminPassword } = require('../utils/password');
 
 const COOKIE_NAME = 'admin_token';
@@ -27,7 +27,7 @@ function isAdminAction(action) {
 
 function readCookieToken(req) {
     if (req.cookies && req.cookies[COOKIE_NAME]) return req.cookies[COOKIE_NAME];
-    const parsed = cookie.parse(req.headers.cookie || '');
+    const parsed = parseCookieHeader(req.headers && req.headers.cookie);
     return parsed[COOKIE_NAME] || null;
 }
 
@@ -52,11 +52,11 @@ function cookieOptions({ clear = false } = {}) {
 }
 
 function setAdminCookie(res, token) {
-    res.setHeader('Set-Cookie', cookie.serialize(COOKIE_NAME, token, cookieOptions()));
+    res.setHeader('Set-Cookie', serializeCookie(COOKIE_NAME, token, cookieOptions()));
 }
 
 function clearAdminCookie(res) {
-    res.setHeader('Set-Cookie', cookie.serialize(COOKIE_NAME, '', cookieOptions({ clear: true })));
+    res.setHeader('Set-Cookie', serializeCookie(COOKIE_NAME, '', cookieOptions({ clear: true })));
 }
 
 function publicAdmin(row) {
