@@ -1,0 +1,696 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+    Users, LogOut, Trophy, Clock, Activity,
+    Globe, Play, Share2, Crown, Copy, Check, Target, Star
+} from 'lucide-react';
+import { toast } from 'sonner';
+import { ResponsiveModal } from '../components/ResponsiveModal';
+import { flowApi } from '../lib/authApi';
+import QuizPage from './testworld/QuizPage';
+import { useUser } from '../context/UserContext';
+import { QuizCountdown } from '../components/QuizCountdown';
+
+// --- Socket System Imports ---
+import { useSocket } from '../socket/useSocket';
+import { useLobbyEvents } from '../socket/useLobbyEvents';
+import {
+    joinLobby,
+    startLobby,
+    leaveLobby,
+    kickMember
+} from '../socket/lobby.socket';
+
+import type {
+    LobbyState,
+    LobbyMember,
+    LobbyErrorEvent
+} from '../socket/types';
+
+export interface LobbyUser {
+    id: string | number;
+    name: string;
+    socketId: string;
+    avatar?: string | null;
+    trophies: number;
+    isMe?: boolean;
+    online?: boolean;
+    isHost?: boolean;
+}
+
+const mapLobbyMemberToUser = (
+    member: LobbyMember,
+    state: LobbyState
+): LobbyUser => {
+    // 1. Safely extract IDs (fallback to empty strings if missing)
+    const mUserId = member.userId;
+    const hostId = state.lobby?.hostUserId;
+    const isHost = String(hostId) === String(mUserId);
+
+    return {
+        // @ts-ignore
+        id: member.userId,
+        name: member.displayName || member.username,
+        socketId: member.socketId,
+        avatar: member.avatarUrl,
+        trophies: member.trophies,
+        isHost: isHost,
+        // @ts-ignore
+        online: member.connected,
+    };
+};
+
+
+export const LobbyView: React.FC = () => {
+    // Route & Navigation
+    const { shareCode } = useParams<{ shareCode: string }>();
+    const navigate = useNavigate();
+    const { user : currentUser } = useUser();
+
+    // Socket Context
+    const {
+        socket,
+        isConnected,
+        error: socketConnectionError,
+    } = useSocket();
+
+    // Main App States
+    const [currentScreen, setCurrentScreen] = useState<'lobby' | 'countdown' | 'quiz' | 'result'>('lobby');
+    const [lobbyState, setLobbyState] = useState<LobbyState | null>(null);
+    const [lobbyUsers, setLobbyUsers] = useState<LobbyUser[]>([]);
+    const [lobbyError, setLobbyError] = useState<string | null>(null);
+    const [quizData, setQuizData] = useState<any>(null);
+
+    // Data Fetching States
+    const [fetchedData, setFetchedData] = useState<any>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    // Modal States
+    const [isLeaveOpen, setIsLeaveOpen] = useState(false);
+    const [isShareOpen, setIsShareOpen] = useState(false);
+    const [isStartOpen, setIsStartOpen] = useState(false);
+    const [userToKick, setUserToKick] = useState<LobbyUser | null>(null);
+    const [isCopied, setIsCopied] = useState(false);
+
+    const shareLink = `${window.location.origin}/join/${shareCode}`;
+
+    const applyLobbyState = useCallback((state: LobbyState) => {
+        if (!state || !state.lobby) return;
+
+        setLobbyState(state);
+
+        // Safeguard: Only map members if the array exists in the payload
+        if (state.members && Array.isArray(state.members)) {
+            const mappedUsers = state.members.map((member) =>
+                mapLobbyMemberToUser(member, state)
+            );
+            setLobbyUsers(mappedUsers);
+        }
+
+        setQuizData((prev: any) => ({
+            ...prev,
+            ...state.lobby,
+            questionCount: state.lobby.questionCount,
+            maxMembers: state.lobby.maxMembers,
+            status: state.lobby.status,
+        }));
+
+        setLobbyError(null);
+        setIsLoading(false);
+
+        if (state.lobby.status === 'started') {
+            setCurrentScreen('quiz');
+        }
+
+        if (state.lobby.status === 'results') {
+            setCurrentScreen('result');
+        }
+    }, []);
+
+    const handleLobbyError = useCallback((err: LobbyErrorEvent) => {
+        const errorMsg = err.message || 'خطای دریافت رویدادهای اتاق';
+        setLobbyError(errorMsg);
+        toast.error(errorMsg);
+    }, []);
+
+    // Listen to lobby events
+    useLobbyEvents({
+        socket,
+
+        onLobbyState: applyLobbyState,
+
+        onLobbyStarted: (data) => {
+            const { startedAt } = data;
+
+            setQuizData((prev: any) => ({
+                ...prev,
+                status: "started",
+                startedAt
+            }));
+
+            setCurrentScreen("countdown");
+        },
+
+
+        onMemberJoined: (state) => {
+            applyLobbyState(state);
+        },
+        onMemberLeft: applyLobbyState,
+        onMemberUpdated: applyLobbyState,
+
+        onMemberProgress: (payload) => {
+            if ('members' in payload && 'lobby' in payload) {
+                applyLobbyState(payload);
+            }
+        },
+
+        onLobbyDestroyed: () => {
+            toast.error('اتاق توسط میزبان بسته شد.');
+            navigate('/');
+        },
+
+        onKicked: (payload) => {
+            const currentUserId = currentUser?.id;
+
+            if (!payload.userId || String(payload.userId) === String(currentUserId)) {
+                toast.error('شما از اتاق اخراج شدید.');
+                navigate('/');
+                return;
+            }
+
+            toast.info('یکی از کاربران از اتاق اخراج شد.');
+        },
+
+        onQuizResult: () => {
+            setCurrentScreen('result');
+        },
+
+        onLobbyError: handleLobbyError,
+    });
+
+    // Join lobby on mount / socket ready
+    useEffect(() => {
+        if (!shareCode || !socket || !isConnected) return;
+
+        let mounted = true;
+
+        const join = async () => {
+            try {
+                setIsLoading(true);
+
+                const state = await joinLobby(socket, {
+                    code: shareCode,
+                });
+
+                if (!mounted) return;
+
+                applyLobbyState(state);
+            } catch (err: any) {
+                if (!mounted) return;
+
+                const msg = err?.message || 'خطا در ورود به اتاق';
+                setLobbyError(msg);
+                toast.error(msg);
+                setIsLoading(false);
+            }
+        };
+
+        join();
+
+        return () => {
+            mounted = false;
+
+            leaveLobby(socket, {
+                code: shareCode,
+            }).catch(() => {});
+        };
+    }, [socket, isConnected, shareCode, applyLobbyState]);
+
+    // Fetch quiz static details (names, settings, etc.)
+    useEffect(() => {
+        if (fetchedData || !shareCode) {
+            if (fetchedData) setIsLoading(false);
+            return;
+        }
+
+        const fetchMissingQuizData = async () => {
+            try {
+                const res = await flowApi.dispatch('get_quiz_by_share_code', { shareCode });
+
+                if (res && res.success) {
+                    setFetchedData(res);
+                } else {
+                    setError(res?.message || 'خطا در دریافت اطلاعات آزمون');
+                }
+            } catch {
+                setError('خطا در ارتباط با سرور');
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchMissingQuizData();
+    }, [shareCode, fetchedData]);
+
+    const handleCopy = () => {
+        navigator.clipboard.writeText(shareLink);
+        setIsCopied(true);
+        toast.success('لینک اتاق کپی شد');
+        setTimeout(() => setIsCopied(false), 2000);
+    };
+
+    const handleKickUser = async (userId: string | number) => {
+        if (!socket || !shareCode) return;
+
+        try {
+            const state = await kickMember(socket, {
+                code: shareCode,
+                userId: String(userId),
+            });
+
+            applyLobbyState(state);
+            toast.success('کاربر با موفقیت اخراج شد');
+        } catch (err: any) {
+            toast.error(err?.message || 'خطا در اخراج کاربر');
+        } finally {
+            setUserToKick(null);
+        }
+    };
+
+    const handleStartQuiz = async () => {
+        if (!socket || !shareCode) return;
+
+        try {
+            const state = await startLobby(socket, {
+                code: shareCode,
+            });
+
+            applyLobbyState(state);
+
+            setCurrentScreen('countdown');
+            setIsStartOpen(false);
+        } catch (err: any) {
+            toast.error(err?.message || 'خطا در شروع آزمون');
+        }
+    };
+
+    const handleLeave = async () => {
+        if (socket && shareCode) {
+            try {
+                await leaveLobby(socket, {
+                    code: shareCode,
+                });
+            } catch (e) {
+                console.error('Leave lobby error:', e);
+            }
+        }
+
+        navigate('/');
+    };
+
+    const containerVariants = {
+        hidden: { opacity: 0 },
+        show: { opacity: 1, transition: { staggerChildren: 0.05 } }
+    };
+
+    const itemVariants = {
+        hidden: { opacity: 0, y: 10 },
+        show: { opacity: 1, transition: { type: 'spring', stiffness: 300, damping: 24 } }
+    };
+
+    // Merge static fetched data with dynamic socket data
+    const currentData = { ...fetchedData, ...quizData };
+
+    const isMeHost = Boolean(
+        lobbyUsers.find((u) => String(u.id) === String(currentUser?.id))?.isHost
+    );
+
+    const allSelections = [
+        ...(currentData?.lessons || []),
+        ...(currentData?.grades || []),
+        ...(currentData?.chapters || currentData?.mabhas || [])
+    ];
+    if (currentScreen === "countdown") {
+        return (
+            <QuizCountdown
+                startAt={quizData.startedAt}
+                onComplete={() => setCurrentScreen("quiz")}
+            />
+        );
+    }
+
+    if (currentScreen === 'quiz' || currentScreen === 'result') {
+        return (
+            <QuizPage
+                socket={socket}
+                lobbyUsers={lobbyUsers}
+                quizData={currentData}
+                quizId={currentData.id}
+                shareCode={shareCode!}
+                isHost={isMeHost}
+                currentScreen={currentScreen}
+                setCurrentScreen={setCurrentScreen}
+                onLeave={handleLeave}
+            />
+        );
+    }
+
+    if (isLoading && !currentData.quizId && !currentData.quizName) {
+        return (
+            <div dir="rtl" className="flex flex-col items-center justify-center min-h-screen text-[var(--accent)] gap-3">
+                <div className="w-8 h-8 border-4 border-current border-t-transparent rounded-full animate-spin" />
+                <p className="text-sm font-bold">در حال همگام‌سازی با اتاق...</p>
+
+                {socketConnectionError && (
+                    <p className="text-xs text-red-500 font-bold">
+                        {socketConnectionError}
+                    </p>
+                )}
+            </div>
+        );
+    }
+
+    return (
+        <div dir="rtl" className="relative p-4 flex flex-col w-full min-h-screen md:max-w-7xl md:mx-auto md:px-8 md:py-10">
+            {/* Error Banners */}
+            {(error || lobbyError || socketConnectionError) && (
+                <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 text-red-500 rounded-xl text-sm font-bold text-center">
+                    {lobbyError || socketConnectionError || error}
+                </div>
+            )}
+
+            {/* Top Bar */}
+            <div className="flex flex-row justify-between items-center mb-6 mt-2 gap-2 sm:gap-4">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                    <div className="flex items-center justify-center p-2 sm:p-2.5 rounded-xl bg-[var(--accent)]/10 text-[var(--accent)] border border-[var(--accent)]/20 shrink-0">
+                        <Users size={20} strokeWidth={2} />
+                    </div>
+                    <div className="min-w-0">
+                        <h2 className="text-sm sm:text-base font-bold text-[var(--text-primary)] truncate">
+                            اتاق انتظار
+                        </h2>
+                        <p className="text-[var(--text-secondary)] text-[10px] sm:text-xs font-medium flex items-center gap-1 mt-0.5 truncate">
+                            کد اتاق: {shareCode}
+                        </p>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                    <button
+                        onClick={() => setIsLeaveOpen(true)}
+                        className="flex items-center justify-center p-2 sm:p-2.5 rounded-xl border border-[var(--border)] text-red-500 hover:bg-red-500/10 transition-colors shrink-0"
+                        title="خروج"
+                    >
+                        <LogOut size={20} />
+                    </button>
+
+                    <button
+                        onClick={() => setIsShareOpen(true)}
+                        className="flex items-center justify-center p-2 sm:p-2.5 rounded-xl border border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--bg-element)] transition-colors shrink-0"
+                        title="اشتراک‌گذاری"
+                    >
+                        <Share2 size={20} />
+                    </button>
+
+                    {isMeHost && (
+                        <button
+                            onClick={() => setIsStartOpen(true)}
+                            className="flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 bg-[var(--accent)] hover:bg-[var(--accent)]/90 text-white rounded-xl font-bold text-xs sm:text-sm transition-all active:scale-95 shrink-0"
+                        >
+                            <Play size={16} fill="currentColor" />
+                            شروع
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {/* Stats Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+                <div className="flex flex-col p-3.5 rounded-2xl border border-[var(--border)] bg-[var(--bg-element)]/50">
+                    <div className="flex items-center gap-2 mb-2 text-blue-500">
+                        <Activity size={16} />
+                        <span className="text-xs font-medium text-[var(--text-secondary)]">نام آزمون</span>
+                    </div>
+                    <span className="text-sm font-bold text-[var(--text-primary)] truncate" title={currentData?.quizName || currentData?.title || 'بدون نام'}>
+                        {currentData?.quizName || currentData?.title || 'بدون نام'}
+                    </span>
+                </div>
+
+                <div className="flex flex-col p-3.5 rounded-2xl border border-[var(--border)] bg-[var(--bg-element)]/50">
+                    <div className="flex items-center gap-2 mb-2 text-orange-500">
+                        <Clock size={16} />
+                        <span className="text-xs font-medium text-[var(--text-secondary)]">زمان</span>
+                    </div>
+                    <span className="text-sm font-bold text-[var(--text-primary)]">
+                        {currentData?.settings?.time || 'نامشخص'} دقیقه
+                    </span>
+                </div>
+
+                <div className="flex flex-col p-3.5 rounded-2xl border border-[var(--border)] bg-[var(--bg-element)]/50">
+                    <div className="flex items-center gap-2 mb-2 text-purple-500">
+                        <Globe size={16} />
+                        <span className="text-xs font-medium text-[var(--text-secondary)]">وضعیت</span>
+                    </div>
+                    <span className="text-sm font-bold text-[var(--text-primary)]">
+                        {currentData?.status === 'waiting' ? 'در انتظار' : 'شروع شده'}
+                    </span>
+                </div>
+
+                <div className="flex flex-col p-3.5 rounded-2xl border border-[var(--border)] bg-[var(--bg-element)]/50">
+                    <div className="flex items-center gap-2 mb-2 text-emerald-500">
+                        <Users size={16} />
+                        <span className="text-xs font-medium text-[var(--text-secondary)]">ظرفیت</span>
+                    </div>
+                    <span className="text-sm font-bold text-[var(--text-primary)]">
+                        {lobbyUsers.length} / {currentData?.maxMembers || currentData?.settings?.memberLimit || 50}
+                    </span>
+                </div>
+            </div>
+
+            {/* Selections */}
+            <div className="mb-8">
+                {allSelections.length > 0 ? (
+                    <div className="flex overflow-x-auto gap-2 items-center [-ms-overflow-style:'none'] [scrollbar-width:'none'] [&::-webkit-scrollbar]:hidden py-1">
+                        {allSelections.map((item: any, idx: number) => {
+                            const label = typeof item === 'object'
+                                ? item.name || item.title || `مورد ${idx + 1}`
+                                : item;
+
+                            return (
+                                <span
+                                    key={item?.id || idx}
+                                    className="px-4 py-2 rounded-xl border border-[var(--accent)] text-[var(--accent)] text-xs font-bold whitespace-nowrap shrink-0 transition-colors bg-[var(--accent)]/5"
+                                >
+                                    {label}
+                                </span>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <span className="text-xs text-[var(--text-muted)] italic">
+                        آیتمی انتخاب نشده است
+                    </span>
+                )}
+            </div>
+
+            {/* Players List */}
+            <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-bold text-[var(--text-primary)]">
+                    شرکت‌کنندگان ({lobbyUsers.length})
+                </h3>
+            </div>
+
+            <motion.div
+                variants={containerVariants}
+                initial="hidden"
+                animate="show"
+                className="grid grid-cols-1 md:grid-cols-3 gap-4"
+            >
+                <AnimatePresence>
+                    {lobbyUsers.map((user) => {
+
+
+                        const isMe = String(user.id) === String(currentUser?.id);
+
+                        return (
+                            <motion.div
+                                variants={itemVariants}
+                                key={user.socketId}
+                                onClick={() => {
+                                    if (isMeHost && !isMe) {
+                                        setUserToKick(user);
+                                    }
+                                }}
+                                initial="hidden"
+                                animate="show"
+                                exit="hidden"
+                                className={`flex items-center p-4 rounded-2xl border transition-all 
+                ${isMe ? 'border-[var(--accent)] cursor-default bg-[var(--accent)]/5' : ''}
+                ${isMeHost && !isMe ? 'cursor-pointer hover:bg-[var(--bg-element)] border-[var(--border)]' : 'border-[var(--border)]'}
+            `}
+                            >
+                                <div className="flex items-center gap-3 shrink-0">
+                                    <div className="relative">
+                                        <div className={`w-12 h-12 rounded-full flex items-center justify-center overflow-hidden border ${isMe ? 'border-[var(--accent)]' : 'border-[var(--border)]'} bg-[var(--bg-element)]`}>
+                                            {user.avatar ? (
+                                                <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+                                            ) : (
+                                                <Users size={18} className="text-[var(--text-muted)]" />
+                                            )}
+                                        </div>
+                                        <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 border-2 border-[var(--background)] rounded-full ${user.online !== false ? 'bg-emerald-500' : 'bg-gray-400'}`} />
+                                    </div>
+
+                                    <div className="flex flex-col min-w-0 pr-1 gap-1">
+                                        <div className="flex items-center gap-2">
+                        <span className="font-bold text-sm text-[var(--text-primary)] truncate max-w-[120px]">
+                            {user.name}
+                        </span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                            {user.isHost && (
+                                                <span className="w-fit flex items-center gap-1 text-[9px] font-black text-yellow-600 bg-yellow-500/10 px-2 py-0.5 rounded-full">
+                                <Crown size={10} /> میزبان
+                            </span>
+                                            )}
+                                            {isMe && (
+                                                <span className="w-fit flex items-center gap-1 text-[9px] font-black text-[var(--accent)] bg-[var(--accent)]/10 px-2 py-0.5 rounded-full">
+                                شما
+                            </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-4 mr-auto pl-1 shrink-0">
+                                    <div className="flex flex-col items-center gap-1" title="کاپ">
+                                        <Trophy size={15} className="text-yellow-500" />
+                                        <span className="text-[10px] font-bold text-[var(--text-secondary)]">{user.trophies || 0}</span>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        );
+                    })}
+
+                </AnimatePresence>
+            </motion.div>
+
+            {/* Kick Confirmation Modal */}
+            <ResponsiveModal isOpen={!!userToKick} onClose={() => setUserToKick(null)} title="اخراج بازیکن">
+                {userToKick && (
+                    <div className="flex flex-col items-center text-center mt-2">
+                        <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-[var(--border)] mb-3 bg-[var(--bg-element)] flex items-center justify-center">
+                            {userToKick.avatar ? (
+                                <img src={userToKick.avatar} alt={userToKick.name} className="w-full h-full object-cover" />
+                            ) : (
+                                <Users size={32} className="text-[var(--text-muted)]" />
+                            )}
+                        </div>
+
+                        <h4 className="font-bold text-base text-[var(--text-primary)] mb-4">
+                            {userToKick.name}
+                        </h4>
+
+                        <div className="flex items-center justify-center gap-6 w-full p-4 bg-[var(--bg-element)] rounded-2xl border border-[var(--border)] mb-6">
+                            <div className="flex flex-col items-center gap-1.5">
+                                <Target size={18} className="text-blue-500" />
+                                <span className="text-xs font-bold text-[var(--text-primary)]">{userToKick.accuracy || 0}%</span>
+                                <span className="text-[10px] text-[var(--text-muted)]">دقت</span>
+                            </div>
+                            <div className="w-px h-8 bg-[var(--border)]" />
+                            <div className="flex flex-col items-center gap-1.5">
+                                <Star size={18} className="text-orange-500" />
+                                <span className="text-xs font-bold text-[var(--text-primary)]">سطح {userToKick.level || 0}</span>
+                                <span className="text-[10px] text-[var(--text-muted)]">تجربه</span>
+                            </div>
+                            <div className="w-px h-8 bg-[var(--border)]" />
+                            <div className="flex flex-col items-center gap-1.5">
+                                <Trophy size={18} className="text-yellow-500" />
+                                <span className="text-xs font-bold text-[var(--text-primary)]">{userToKick.trophy || 0}</span>
+                                <span className="text-[10px] text-[var(--text-muted)]">کاپ</span>
+                            </div>
+                        </div>
+
+                        <p className="text-sm text-[var(--text-secondary)] mb-6">
+                            آیا مطمئن هستید که می‌خواهید{' '}
+                            <span className="font-bold text-[var(--text-primary)]">{userToKick.name}</span>
+                            {' '}را از اتاق اخراج کنید؟
+                        </p>
+
+                        <div className="flex gap-3 w-full">
+                            <button
+                                onClick={() => setUserToKick(null)}
+                                className="flex-1 py-3 rounded-xl border border-[var(--border)] text-[var(--text-primary)] font-bold text-sm transition-colors hover:bg-[var(--bg-element)]"
+                            >
+                                انصراف
+                            </button>
+                            <button
+                                onClick={() => handleKickUser(userToKick.id)}
+                                className="flex-1 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold text-sm transition-colors"
+                            >
+                                اخراج بازیکن
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </ResponsiveModal>
+
+            {/* Leave Modal */}
+            <ResponsiveModal isOpen={isLeaveOpen} onClose={() => setIsLeaveOpen(false)} title="خروج از اتاق">
+                <p className="text-sm text-[var(--text-secondary)] mb-6">
+                    آیا مطمئن هستید که می‌خواهید از اتاق انتظار خارج شوید؟
+                </p>
+                <div className="flex gap-3 mt-4">
+                    <button onClick={() => setIsLeaveOpen(false)} className="flex-1 py-3 rounded-xl border border-[var(--border)] text-[var(--text-primary)] font-bold text-sm">
+                        انصراف
+                    </button>
+                    <button onClick={handleLeave} className="flex-1 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold text-sm transition-colors">
+                        خروج
+                    </button>
+                </div>
+            </ResponsiveModal>
+
+            {/* Share Modal */}
+            <ResponsiveModal isOpen={isShareOpen} onClose={() => setIsShareOpen(false)} title="اشتراک‌گذاری">
+                <p className="text-sm text-[var(--text-secondary)] mb-4">
+                    لینک زیر را برای دعوت دوستان خود کپی کنید:
+                </p>
+                <div className="flex items-center gap-2 p-1.5 rounded-xl border border-[var(--border)] bg-[var(--bg-element)] mb-6">
+                    <input
+                        type="text"
+                        readOnly
+                        value={shareLink}
+                        className="flex-1 bg-transparent text-sm text-left text-[var(--text-primary)] px-2 outline-none w-full min-w-0"
+                        dir="ltr"
+                    />
+                    <button
+                        onClick={handleCopy}
+                        className={`flex items-center justify-center w-10 h-10 rounded-lg text-white transition-all shrink-0 ${isCopied ? 'bg-emerald-500' : 'bg-[var(--accent)]'}`}
+                    >
+                        {isCopied ? <Check size={16} /> : <Copy size={16} />}
+                    </button>
+                </div>
+                <button onClick={() => setIsShareOpen(false)} className="w-full py-3 rounded-xl border border-[var(--border)] text-[var(--text-primary)] font-bold text-sm">
+                    بستن
+                </button>
+            </ResponsiveModal>
+
+            {/* Start Modal */}
+            <ResponsiveModal isOpen={isStartOpen} onClose={() => setIsStartOpen(false)} title="شروع رقابت">
+                <p className="text-sm text-[var(--text-secondary)] mb-6">
+                    آیا می‌خواهید آزمون را برای همه شرکت‌کنندگان شروع کنید؟
+                </p>
+                <div className="flex gap-3 mt-4">
+                    <button onClick={() => setIsStartOpen(false)} className="flex-1 py-3 rounded-xl border border-[var(--border)] text-[var(--text-primary)] font-bold text-sm">
+                        انصراف
+                    </button>
+                    <button onClick={handleStartQuiz} className="flex-1 py-3 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent)]/90 text-white font-bold text-sm transition-colors">
+                        شروع آزمون
+                    </button>
+                </div>
+            </ResponsiveModal>
+        </div>
+    );
+};
