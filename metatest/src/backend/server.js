@@ -16,7 +16,13 @@ const quizWorldController = require('./controllers/quizWorldController');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const aiTeacherRoutes = require('./ai-teacher/routes');
-const adminRoutes = require('./routes/adminRoutes');
+const { registerAdminOps } = require('./adminOpsRoutes');
+let adminRoutes = null;
+try {
+    adminRoutes = require('./routes/adminRoutes');
+} catch (err) {
+    console.error('[admin] failed to load admin router:', err);
+}
 const { ensureAdminSchema } = require('./middleware/adminAuth');
 const { loadRuntimeOverlayFromDb } = require('./controllers/adminAiController');
 const app = express();
@@ -110,8 +116,11 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/payments', paymentRoutes);
 // AI Private Teacher module (bootstrap, teachers, chat stream, wallet, settings, …)
 app.use('/api/ai-teacher', aiTeacherRoutes);
-// Admin panel — independent session (admin_token cookie), not the student JWT
-app.use('/api/admin', adminRoutes);
+// Admin panel — independent session (admin_token cookie), not the student JWT.
+// Ops routes are mounted on the app itself so a failure inside the larger admin
+// router cannot turn discounts, reports, words, or access into a 404.
+registerAdminOps(app, { prefix: '/api/admin', withSession: true });
+if (adminRoutes) app.use('/api/admin', adminRoutes);
 
 // 3. Route updated to just use the fixed multer upload
 app.post(

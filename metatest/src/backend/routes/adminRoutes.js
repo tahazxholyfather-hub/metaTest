@@ -2,14 +2,13 @@
 
 const express = require('express');
 const router = express.Router();
-const dashboard = require('./controllers/adminDashboardController');
-const staff = require('./controllers/adminStaffController');
-const ai = require('./controllers/adminAiController');
-const ops = require('./controllers/adminOpsController');
-const { requireSection, withSections } = require('./admin/access');
+const dashboard = require('../controllers/adminDashboardController');
+const staff = require('../controllers/adminStaffController');
+const ai = require('../controllers/adminAiController');
+const { registerAdminOps } = require('../adminOpsRoutes');
+const { requireSection, withSections } = require('../admin/access');
 const {
     requireAdminSession,
-    requireSuperAdmin,
     loginRateLimited,
     clientIp,
     authenticateAdmin,
@@ -17,7 +16,7 @@ const {
     issueSession,
     clearAdminCookie,
     attachAdminIfPresent,
-} = require('./middleware/adminAuth');
+} = require('../middleware/adminAuth');
 
 function wrap(handler) {
     return async (req, res, next) => {
@@ -64,19 +63,7 @@ router.use(requireAdminSession);
 
 router.get('/dashboard', requireSection('dashboard'), wrap(dashboard.handleGetDashboard));
 
-router.get('/words', requireSection('word-stats'), wrap(ops.handleWordStats));
-
-router.get('/discounts', requireSection('discounts'), wrap(ops.handleListDiscounts));
-router.post('/discounts', requireSection('discounts'), wrap(ops.handleSaveDiscount));
-router.patch('/discounts/:id', requireSection('discounts'), wrap(ops.handleSaveDiscount));
-router.delete('/discounts/:id', requireSection('discounts'), wrap(ops.handleDeleteDiscount));
-
-router.get('/reports', requireSection('reports'), wrap(ops.handleListReports));
-router.patch('/reports/:id', requireSection('reports'), wrap(ops.handleUpdateReport));
-
-// Section access stays with the main admin even if another admin can open Admins.
-router.get('/access', requireSuperAdmin, wrap(ops.handleListAccess));
-router.put('/access/:id', requireSuperAdmin, wrap(ops.handleSaveAccess));
+registerAdminOps(router);
 
 router.get('/admins', requireSection('admins'), wrap(staff.handleListAdmins));
 router.post('/admins', requireSection('admins'), wrap(staff.handleCreateAdmin));
