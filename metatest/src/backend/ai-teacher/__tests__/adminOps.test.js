@@ -1,5 +1,7 @@
 'use strict';
 
+const fs = require('fs');
+const { createRequire } = require('module');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const {
@@ -101,4 +103,22 @@ test('discount payload validation', () => {
     assert.equal(validateDiscountPayload({ code: 'OK', percent: 5, maxUses: 1.5 }).ok, false);
     assert.equal(parseExpiry('2026-02-31T10:00').ok, false);
     assert.equal(validateDiscountPayload({ code: 'OK', percent: 5, active: 'false' }).value.active, 0);
+});
+
+test('admin routes load controllers from the backend root', () => {
+    const routeFile = require.resolve('../../routes/adminRoutes.js');
+    const src = fs.readFileSync(routeFile, 'utf8');
+    assert.doesNotMatch(src, /require\('\.\/(?:controllers|middleware|admin)\//);
+    const req = createRequire(routeFile);
+    for (const spec of [
+        '../controllers/adminDashboardController',
+        '../controllers/adminStaffController',
+        '../controllers/adminAiController',
+        '../controllers/adminOpsController',
+        '../admin/access',
+        '../middleware/adminAuth',
+    ]) {
+        assert.match(req.resolve(spec), /\.js$/);
+        assert.match(src, new RegExp(spec.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    }
 });
