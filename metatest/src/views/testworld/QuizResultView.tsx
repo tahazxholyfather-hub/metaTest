@@ -4,7 +4,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast, Toaster } from 'sonner';
 import {
     Share2,
-    Printer,
     LogOut,
     Clock3,
     BookOpenText,
@@ -668,15 +667,6 @@ export default function ResultDashboard() {
                                 >
                                     <Share2 className="h-5 w-5 sm:h-4 sm:w-4 text-[var(--color-primary-400)]" />
                                     <span className="hidden sm:inline">اشتراک</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    disabled
-                                    aria-disabled="true"
-                                    className="inline-flex p-0 h-10 w-10 sm:h-11 sm:w-auto items-center justify-center gap-2 rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] sm:px-4 text-sm font-medium text-[var(--text-primary)] opacity-50 cursor-not-allowed"
-                                >
-                                    <Printer className="h-5 w-5 sm:h-4 sm:w-4 text-[var(--color-primary-400)]" />
-                                    <span className="hidden sm:inline">چاپ</span>
                                 </button>
                             </div>
                         </div>
