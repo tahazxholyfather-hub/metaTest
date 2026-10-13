@@ -1,0 +1,44 @@
+// src/views/JoinLobby.tsx
+import { useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useSocket } from '../hooks/useSocket';
+import { toast } from 'sonner';
+
+export default function JoinLobby() {
+    const { shareCode } = useParams<{ shareCode: string }>();
+    const navigate = useNavigate();
+    const socket = useSocket();
+
+    useEffect(() => {
+        if (!socket || !shareCode) return;
+
+        // Emit the join request to the backend
+        socket.emit('join_lobby', shareCode);
+
+        // Listen for success
+        socket.on('join_success', (data) => {
+            toast.success('با موفقیت به لابی پیوستید'); // "Successfully joined lobby"
+            navigate(`/lobby/${shareCode}`, { replace: true });
+        });
+
+        // Listen for errors (e.g., lobby full, not found, already started)
+        socket.on('error', (data) => {
+            toast.error(data.message || 'خطا در پیوستن به لابی');
+            navigate('/', { replace: true }); // Send back to main app on error
+        });
+
+        return () => {
+            socket.off('join_success');
+            socket.off('error');
+        };
+    }, [socket, shareCode, navigate]);
+
+    return (
+        <div className="h-[100dvh] flex items-center justify-center bg-[var(--bg-app)] text-white">
+            <div className="flex flex-col items-center gap-4">
+                <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                <p>در حال پیوستن به لابی...</p>
+            </div>
+        </div>
+    );
+}
