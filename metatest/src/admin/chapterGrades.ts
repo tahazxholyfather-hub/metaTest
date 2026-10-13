@@ -1,10 +1,16 @@
-/** Same grade words the quiz world uses. «دهم» is not counted inside یازدهم or دوازدهم. */
+/** Same grade words the quiz world uses. «دهم» is not counted inside longer ordinals. */
 export function gradesFromTopicTitle(title: string): number[] {
     const text = String(title || '').replace(/ي/g, 'ی').replace(/ك/g, 'ک');
     const found: number[] = [];
     if (text.includes('دوازدهم')) found.push(3);
     if (text.includes('یازدهم')) found.push(2);
-    const stripped = text.replace(/دوازدهم/g, '\0').replace(/یازدهم/g, '\0');
+    const stripped = text
+        .replace(/دوازدهم/g, '\0')
+        .replace(/یازدهم/g, '\0')
+        .replace(/سیزدهم/g, '\0')
+        .replace(/چهاردهم/g, '\0')
+        .replace(/پانزدهم/g, '\0')
+        .replace(/شانزدهم/g, '\0');
     if (stripped.includes('دهم')) found.push(1);
     const compact = text.replace(/\s+/g, '');
     if ((compact.includes('قدرمطلق') || compact.includes('جزءصحیح')) && !found.includes(2)) {

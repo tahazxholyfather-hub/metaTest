@@ -213,13 +213,19 @@ function normalizeFaDigits(title) {
         .replace(/ك/g, 'ک');
 }
 
-/** Grade ids mentioned in a chapter title. 'دهم' is not counted inside یازدهم/دوازدهم. */
+/** Grade ids mentioned in a chapter title. 'دهم' is not counted inside longer ordinals. */
 function gradesFromTopicTitle(title) {
     const t = normalizeFaDigits(title);
     const found = new Set();
     if (t.includes('دوازدهم')) found.add(3);
     if (t.includes('یازدهم')) found.add(2);
-    const stripped = t.replace(/دوازدهم/g, '\0').replace(/یازدهم/g, '\0');
+    const stripped = t
+        .replace(/دوازدهم/g, '\0')
+        .replace(/یازدهم/g, '\0')
+        .replace(/سیزدهم/g, '\0')
+        .replace(/چهاردهم/g, '\0')
+        .replace(/پانزدهم/g, '\0')
+        .replace(/شانزدهم/g, '\0');
     if (stripped.includes('دهم')) found.add(1);
     // ریاضی ۲: «قدر مطلق و جزء صحیح» پایهٔ یازدهم است، حتی اگر عنوانش «یازدهم» نداشته باشد.
     const compact = t.replace(/\s+/g, '');
