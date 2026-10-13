@@ -1,0 +1,161 @@
+import React from 'react';
+import { motion } from 'framer-motion';
+import { Check } from 'lucide-react';
+
+// --- Types ---
+interface AvatarData {
+    id: string | number;
+    imageUrl: string;
+    name: string;
+    progress: number; // 0 to 100
+}
+
+interface AvatarListProps {
+    avatars: AvatarData[];
+}
+
+interface AvatarWithProgressProps {
+    avatar: AvatarData;
+    size?: number;
+    strokeWidth?: number;
+}
+
+// --- Sub-Component: Individual Avatar with Framer Motion ---
+const AvatarWithProgress: React.FC<AvatarWithProgressProps> = ({
+                                                                   avatar,
+                                                                   size = 72,
+                                                                   strokeWidth = 3,
+                                                               }) => {
+    // SVG Math: Circumference $C = 2 \pi r$
+    const radius = (size - strokeWidth) / 2;
+    const circumference = radius * 2 * Math.PI;
+    const strokeDashoffset = circumference - (avatar.progress / 100) * circumference;
+
+    const isCompleted = avatar.progress === 100;
+
+    return (
+        <div className="relative flex flex-col items-center gap-2 shrink-0 snap-start cursor-pointer">
+            {/* Avatar Container */}
+            <motion.div
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="relative flex items-center justify-center"
+                style={{ width: size, height: size }}
+            >
+                {/* Background & Progress SVG */}
+                <svg
+                    className="absolute top-0 left-0 -rotate-90"
+                    width={size}
+                    height={size}
+                    viewBox={`0 0 ${size} ${size}`}
+                >
+                    {/* Track Circle */}
+                    <circle
+                        style={{ color: 'var(--border)' }}
+                        strokeWidth={strokeWidth}
+                        stroke="currentColor"
+                        fill="transparent"
+                        r={radius}
+                        cx={size / 2}
+                        cy={size / 2}
+                    />
+                    {/* Animated Progress Circle */}
+                    <motion.circle
+                        style={{ color: 'var(--accent)' }}
+                        strokeWidth={strokeWidth}
+                        strokeDasharray={circumference}
+                        initial={{ strokeDashoffset: circumference }}
+                        animate={{ strokeDashoffset }}
+                        transition={{ duration: 1.2, ease: "easeOut" }}
+                        strokeLinecap="round"
+                        stroke="currentColor"
+                        fill="transparent"
+                        r={radius}
+                        cx={size / 2}
+                        cy={size / 2}
+                    />
+                </svg>
+
+                {/* Inner Image Container */}
+                <div
+                    className="relative rounded-full overflow-hidden border-2 border-transparent"
+                    style={{
+                        width: size - strokeWidth * 3,
+                        height: size - strokeWidth * 3
+                    }}
+                >
+                    <img
+                        src={avatar.imageUrl}
+                        alt={avatar.name}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                    />
+
+                    {/* 100% Completion Layer */}
+                    {isCompleted && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ delay: 0.8, duration: 0.4 }}
+                            className="absolute inset-0 flex items-center justify-center backdrop-blur-[2px]"
+                            style={{ backgroundColor: 'var(--active-overlay)' }}
+                        >
+                            <motion.div
+                                initial={{ scale: 0 }}
+                                animate={{ scale: 1 }}
+                                transition={{ type: "spring", stiffness: 300, damping: 20, delay: 0.9 }}
+                                style={{
+                                    backgroundColor: 'var(--success)',
+                                    color: 'var(--text-inverse)'
+                                }}
+                                className="p-1 rounded-full shadow-md"
+                            >
+                                <Check size={14} strokeWidth={3} />
+                            </motion.div>
+                        </motion.div>
+                    )}
+                </div>
+            </motion.div>
+
+            {/* Name Label */}
+            <span
+                className="text-xs font-medium truncate w-16 text-center"
+                style={{ color: 'var(--text-secondary)' }}
+            >
+        {avatar.name}
+      </span>
+        </div>
+    );
+};
+
+// --- Main Component: Scrollable List ---
+const AvatarList: React.FC<AvatarListProps> = ({ avatars }) => {
+    return (
+        <div
+            className="w-full py-6 px-4 rounded-2xl border"
+            style={{
+                backgroundColor: 'var(--bg-card)',
+                borderColor: 'var(--border)',
+                boxShadow: 'var(--shadow-1)'
+            }}
+        >
+            {/*
+        Scrollable Container
+        - hidden scrollbar via Tailwind arbitrary variants
+        - snap-x for smooth native scrolling
+      */}
+            <div className="flex items-center gap-4 overflow-x-auto snap-x snap-mandatory pb-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                {avatars.map((avatar) => (
+                    <AvatarWithProgress
+                        key={avatar.id}
+                        avatar={avatar}
+                        size={72}
+                        strokeWidth={3}
+                    />
+                ))}
+            </div>
+        </div>
+    );
+};
+
+export default AvatarList;
