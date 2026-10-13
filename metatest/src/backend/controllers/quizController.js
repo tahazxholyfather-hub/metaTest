@@ -682,6 +682,7 @@ const handleGetPracticeQuestion = async (req, res) => {
 
 const handleCheckAnswer = async (req, res) => {
     let conn;
+    let checked = null;
 
     try {
         // ==========================================
@@ -938,42 +939,67 @@ const handleCheckAnswer = async (req, res) => {
              LIMIT 1`,
             [questionId]
         );
-        const solutionAccess = await entitlements.consumeSolution(conn, {
-            userId,
-            subjectTitle: subjectRows[0]?.subject_title,
-            subjectId: subjectRows[0]?.subject_id,
-            questionId,
-        });
-        const descriptiveAnswer = solutionAccess.allowed && descRows.length > 0
-            ? descRows[0].answer_text
-            : null;
 
         await conn.commit();
 
-        res.json({
-            success: true,
-            is_correct: isCorrect,
-            correct_option_id: correctOptionId,
-            descriptive_answer: descriptiveAnswer,
-            solution_access: {
-                locked: solutionAccess.locked,
-                allowed: solutionAccess.allowed,
-                subjectKey: solutionAccess.subjectKey,
-                subjectLabel: solutionAccess.subjectLabel,
-                used: solutionAccess.used,
-                limit: solutionAccess.limit,
-                remaining: solutionAccess.remaining,
-            },
+        checked = {
+            isCorrect,
+            correctOptionId,
+            descriptiveText: descRows.length > 0 ? descRows[0].answer_text : null,
+            subjectTitle: subjectRows[0]?.subject_title,
+            subjectId: subjectRows[0]?.subject_id,
             option_stats,
-            reward_data: rewardData,
-        });
+            rewardData,
+            userId,
+            questionId,
+        };
     } catch (error) {
         if (conn) await conn.rollback();
         console.error("❌ SQL Error in handleCheckAnswer:", error);
-        res.json({ success: false, message: "Database error checking answer" });
+        return res.json({ success: false, message: "خطا در بررسی پاسخ. دوباره تلاش کنید." });
     } finally {
         if (conn) conn.release();
     }
+
+    // Solution quota locks the same user row. Doing it inside the answer
+    // transaction deadlocks and the quiz never shows right or wrong.
+    let solutionAccess = {
+        allowed: false,
+        locked: true,
+        subjectKey: null,
+        subjectLabel: null,
+        used: 0,
+        limit: null,
+        remaining: 0,
+    };
+    try {
+        solutionAccess = await entitlements.consumeSolution(null, {
+            userId: checked.userId,
+            subjectTitle: checked.subjectTitle,
+            subjectId: checked.subjectId,
+            questionId: checked.questionId,
+        });
+    } catch (solutionError) {
+        console.error("❌ solution access in handleCheckAnswer:", solutionError);
+    }
+
+    return res.json({
+        success: true,
+        is_correct: checked.isCorrect,
+        correct_option_id: checked.correctOptionId,
+        descriptive_answer: solutionAccess.allowed ? checked.descriptiveText : null,
+        solution_access: {
+            locked: solutionAccess.locked,
+            allowed: solutionAccess.allowed,
+            subjectKey: solutionAccess.subjectKey,
+            subjectLabel: solutionAccess.subjectLabel,
+            used: solutionAccess.used,
+            limit: solutionAccess.limit,
+            remaining: solutionAccess.remaining,
+        },
+        option_stats: checked.option_stats,
+        reward_data: checked.rewardData,
+    });
 };
 
 

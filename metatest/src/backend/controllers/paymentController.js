@@ -592,7 +592,7 @@ exports.createSubscriptionPayment = async (req, res) => {
 
         const amountInRial = toRial(pricing.finalPrice);
 
-        const paymentRequest = await zarinpal.payments.create({
+        const opened = await zarinpal.createPayableUrl({
             amount: amountInRial,
             currency: 'IRR',
             callback_url: callbackUrl,
@@ -600,21 +600,7 @@ exports.createSubscriptionPayment = async (req, res) => {
             ...(mobile ? { mobile } : {}),
             ...(email ? { email } : {}),
         });
-
-        const requestData = paymentRequest?.data;
-        const requestCode = requestData?.code;
-        const authority = requestData?.authority || null;
-
-        if (requestCode !== 100 || !authority) {
-            throw new Error(
-                `Unexpected Zarinpal payment request response: ${JSON.stringify(paymentRequest)}`
-            );
-        }
-
-        const paymentUrl = await zarinpal.payments.getRedirectUrl(authority);
-        if (!paymentUrl) {
-            throw new Error(`Zarinpal did not return a redirect URL for authority: ${authority}`);
-        }
+        const { authority, paymentUrl, paymentRequest } = opened;
 
         await connection.execute(
             `UPDATE payments
@@ -1009,6 +995,7 @@ exports.getCoinPackages = async (req, res) => {
 
 exports.createCoinPayment = async (req, res) => {
     const connection = await pool.getConnection();
+    let purchaseId = null;
     try {
         const ent = await entitlements.forUser(req.user.id);
         if (!ent.canPurchaseCoins) {
@@ -1027,35 +1014,37 @@ exports.createCoinPayment = async (req, res) => {
             `INSERT INTO tam24_coin_purchases (user_id, package_id, coins, price_toman, status) VALUES (?, ?, ?, ?, 'pending')`,
             [req.user.id, pack.id, pack.coins, pack.priceToman]
         );
-        const purchaseId = ins.insertId;
+        purchaseId = ins.insertId;
         const baseUrl = String(process.env.BASE_URL || '').replace(/\/+$/, '');
         const callbackUrl = `${baseUrl}/api/payments/zarinpal/callback?coinPurchaseId=${purchaseId}`;
-        const paymentRequest = await zarinpal.payments.create({
+        const opened = await zarinpal.createPayableUrl({
             amount: toRial(pack.priceToman),
             currency: 'IRR',
             callback_url: callbackUrl,
             description: `خرید ${pack.coins} سکه متاتست`,
             metadata: { mobile: req.user.phone, email: req.user.email },
         });
-        const authority = paymentRequest?.data?.authority || paymentRequest?.authority;
-        if (!authority) {
-            await connection.execute(
-                `UPDATE tam24_coin_purchases SET status = 'failed' WHERE id = ?`,
-                [purchaseId]
-            );
-            return res.status(502).json({ success: false, message: 'درگاه پرداخت پاسخ نداد.' });
-        }
         await connection.execute(
             `UPDATE tam24_coin_purchases SET authority = ? WHERE id = ?`,
-            [authority, purchaseId]
+            [opened.authority, purchaseId]
         );
-        const paymentUrl = await zarinpal.payments.getRedirectUrl(authority);
         return res.json({
             success: true,
-            data: { purchaseId, paymentUrl, package: pack },
+            data: { purchaseId, paymentUrl: opened.paymentUrl, package: pack },
         });
     } catch (error) {
         console.error('createCoinPayment error:', error);
+        if (purchaseId) {
+            try {
+                await connection.execute(
+                    `UPDATE tam24_coin_purchases SET status = 'failed' WHERE id = ? AND status = 'pending'`,
+                    [purchaseId]
+                );
+            } catch (_) { /* row may not exist */ }
+        }
+        if (error && error.expose) {
+            return res.status(error.status || 502).json({ success: false, message: error.message });
+        }
         return res.status(500).json({ success: false, message: 'خطا در ایجاد پرداخت سکه' });
     } finally {
         connection.release();

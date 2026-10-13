@@ -762,7 +762,9 @@ export function QuizView({
 
             if (!response.success) throw new Error(response.message);
 
-            const fetchedCorrectOptionId = response.correct_option_id ?? null;
+            const fetchedCorrectOptionId = response.correct_option_id == null
+                ? null
+                : Number(response.correct_option_id);
             const fetchedDescAnswer = response.descriptive_answer ? decodeHtmlEntities(response.descriptive_answer) : null;
             const fetchedOptionStats = response.option_stats ?? [];
             const locked = !!response.solution_access?.locked;
@@ -823,6 +825,7 @@ export function QuizView({
             }, 1500);
         } catch (err) {
             console.error(err);
+            toast.error((err as Error)?.message || 'پاسخ ثبت نشد. دوباره تلاش کنید.');
         } finally {
             setIsChecking(false);
         }
@@ -1003,8 +1006,9 @@ export function QuizView({
 
     // --- Renderers ---
     const renderOption = (option: Option, index: number, subject: number) => {
-        const isSelected = selectedOptionId === option.id;
-        const isActuallyCorrect = isAnswered && correctOptionId === option.id;
+        const sameOption = (a: unknown, b: unknown) => Number(a) > 0 && Number(a) === Number(b);
+        const isSelected = sameOption(selectedOptionId, option.id);
+        const isActuallyCorrect = isAnswered && sameOption(correctOptionId, option.id);
         const isMyWrongSelection =
             isAnswered && isSelected && !isActuallyCorrect && isCorrect === false;
 
@@ -1026,7 +1030,7 @@ export function QuizView({
             badgeClass = "bg-[var(--text-muted)] text-white";
         }
 
-        const stat = optionStats.find(s => s.id === option.id || s.option_id === option.id);
+        const stat = optionStats.find(s => sameOption(s.id, option.id) || sameOption(s.option_id, option.id));
         const percent = stat ? stat.percent : 0;
 
         return (
