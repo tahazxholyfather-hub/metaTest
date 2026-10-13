@@ -1,9 +1,12 @@
-import React, { useState, useMemo, useEffect, useLayoutEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useReactToPrint } from 'react-to-print';
+import PrintResultSheet from './PrintResultSheet';
 import { toast, Toaster } from 'sonner';
 import {
     Share2,
+    Printer,
     LogOut,
     Clock3,
     BookOpenText,
@@ -390,6 +393,8 @@ export default function ResultDashboard() {
     const [error, setError] = useState(null);
     const [isPublic, setIsPublic] = useState(false);
     const [quizId, setQuizId] = useState(null);
+    const [quizTitle, setQuizTitle] = useState('نتیجه آزمون');
+    const printRef = useRef(null);
 
     const [activeUser, setActiveUser] = useState(null);
     const [originalUser, setOriginalUser] = useState(null);
@@ -415,6 +420,10 @@ export default function ResultDashboard() {
     const handleLeave = useCallback(() => {
         navigate('/dashboard');
     }, [navigate]);
+
+    const handlePrint = useReactToPrint({
+        contentRef: printRef,
+    });
 
     // ─── Fetch quiz result (self) on mount ────────────────────────────────────
     const fetchResultData = useCallback(async () => {
@@ -453,6 +462,7 @@ export default function ResultDashboard() {
                 // Determine if quiz is public and store quizId
                 const resolvedQuizId = data.quizId || data.quiz_id;
                 setQuizId(resolvedQuizId);
+                setQuizTitle(data.quizName || data.quiz_title || data.title || 'نتیجه آزمون');
                 const publicFlag = data.is_public ?? data.isPublic ?? false;
                 setIsPublic(publicFlag);
 
@@ -667,6 +677,15 @@ export default function ResultDashboard() {
                                 >
                                     <Share2 className="h-5 w-5 sm:h-4 sm:w-4 text-[var(--color-primary-400)]" />
                                     <span className="hidden sm:inline">اشتراک</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handlePrint}
+                                    disabled={!activeUser || loading}
+                                    className="inline-flex p-0 h-10 w-10 sm:h-11 sm:w-auto items-center justify-center gap-2 rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] sm:px-4 text-sm font-medium text-[var(--text-primary)] transition hover:bg-[var(--hover-overlay)] disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <Printer className="h-5 w-5 sm:h-4 sm:w-4 text-[var(--color-primary-400)]" />
+                                    <span className="hidden sm:inline">چاپ</span>
                                 </button>
                             </div>
                         </div>
@@ -1189,6 +1208,15 @@ export default function ResultDashboard() {
                         </div>
                     )}
                 </ResponsiveModal>
+
+                <div ref={printRef} className="pointer-events-none absolute h-0 w-0 overflow-hidden" aria-hidden="true">
+                    <PrintResultSheet
+                        activeUser={activeUser}
+                        questions={questions}
+                        lessonsData={lessonsData}
+                        quizTitle={quizTitle}
+                    />
+                </div>
 
                 <style>{`
                   .math-renderer .mjx-chtml {

@@ -2529,22 +2529,24 @@ async function getQuizResultById(connection, {
     resultId,
     userId
 }) {
-    const [rows] = await connection.query(`
+        const [rows] = await connection.query(`
         SELECT
-            id,
-            quiz_id,
-            user_id,
-            correct_count,
-            incorrect_count,
-            unanswered_count,
-            accuracy_rate,
-            total_score,
-            summary_json,
-            result_data_json,
-            created_at
-        FROM quiz_results
-        WHERE id = ?
-          AND user_id = ?
+            r.id,
+            r.quiz_id,
+            r.user_id,
+            r.correct_count,
+            r.incorrect_count,
+            r.unanswered_count,
+            r.accuracy_rate,
+            r.total_score,
+            r.summary_json,
+            r.result_data_json,
+            r.created_at,
+            q.title AS quiz_title
+        FROM quiz_results r
+        LEFT JOIN quizzes q ON q.id = r.quiz_id
+        WHERE r.id = ?
+          AND r.user_id = ?
         LIMIT 1
     `, [
         resultId,
@@ -2560,6 +2562,7 @@ async function getQuizResultById(connection, {
     return {
         id: row.id,
         quizId: row.quiz_id,
+        quizName: row.quiz_title || null,
         userId: row.user_id,
         correctCount: row.correct_count,
         incorrectCount: row.incorrect_count,
@@ -2685,6 +2688,7 @@ async function handleGetQuizResult(req, res) {
         const formattedResult = {
             id: encodeResultId(result.id),
             quizId: encodeQuizId(result.quizId),
+            quizName: result.quizName || null,
             is_public: is_public,
             userId: result.userId,
             success: result.success,
