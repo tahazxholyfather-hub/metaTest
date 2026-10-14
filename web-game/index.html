@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#14182b" />
+    <title>WebGame</title>
+    <link rel="icon" href="/favicon.ico" />
+    <style>
+      html,
+      body,
+      #game-container {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        background: #0e0f1a;
+        overflow: hidden;
+      }
+      canvas {
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="game-container"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

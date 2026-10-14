@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowDown, ChevronDown, History, Plus, Settings2 } from 'lucide-react';
+import { ArrowDown, ChevronDown, Gamepad2, History, Plus, Settings2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Met, chatStatusToMetState, subjectToMetColor } from '../../components/met';
 import { metApi } from './api';
@@ -26,6 +26,7 @@ type Props = {
     studentFirstName?: string | null;
     isMobile: boolean;
     onOpenPanel: (p: RailPanel) => void;
+    onOpenGame: () => void;
     onNewChat: () => void;
     onSpeak: (messageId: number) => Promise<string | null>;
     onListening: (level: number | null) => void;
@@ -60,6 +61,7 @@ export function ChatScreen({
     studentFirstName,
     isMobile,
     onOpenPanel,
+    onOpenGame,
     onNewChat,
     onSpeak,
     onListening,
@@ -201,6 +203,9 @@ export function ChatScreen({
                     </IconButton>
                 </>
             )}
+            <IconButton label="ماجرای مِت" size={36} onClick={onOpenGame}>
+                <Gamepad2 size={18} strokeWidth={1.9} />
+            </IconButton>
             <IconButton label="گفتگوی جدید" size={36} tone="primary" onClick={onNewChat} disabled={chat.busy}>
                 <Plus size={19} strokeWidth={2.1} />
             </IconButton>

@@ -18,6 +18,7 @@ import { SubjectPicker } from './SubjectPicker';
 import { SUBJECT_FALLBACKS, sortSubjects } from './subjectIcons';
 import { subscribeSharedAudio } from './audio';
 import { GraySpinner, easeOut, useIsMobile } from './ui';
+import { MetAdventure } from './game/MetAdventure';
 
 type Props = {
     onNavigate: (view: View) => void;
@@ -33,12 +34,14 @@ const PANEL_TITLES: Record<RailPanel, string> = {
 /** Root of the AI tutor. No intro screen — the student lands straight in the chat. */
 export function MetView({ onNavigate }: Props) {
     const isMobile = useIsMobile();
+    void onNavigate;
     const [boot, setBoot] = useState<MetBootstrap | null>(null);
     const [bootError, setBootError] = useState<string | null>(null);
     const [wallet, setWallet] = useState<MetWallet | null>(null);
     const [settings, setSettings] = useState<MetSettings | null>(null);
     const [subjectKey, setSubjectKey] = useState<SubjectKey>('general');
     const [panel, setPanel] = useState<RailPanel | null>(null);
+    const [gameOpen, setGameOpen] = useState(false);
     const [historyKey, setHistoryKey] = useState(0);
     const [listeningLevel, setListeningLevel] = useState<number | null>(null);
     const [speaking, setSpeaking] = useState<{ on: boolean; level: number }>({ on: false, level: 0 });
@@ -165,7 +168,11 @@ export function MetView({ onNavigate }: Props) {
                     <button type="button" onClick={load} className="mt-4 h-10 px-4 rounded-[12px] bg-[var(--color-primary-500)] text-white text-[12.5px] font-extrabold inline-flex items-center gap-1.5">
                         <RefreshCw size={14} /> تلاش دوباره
                     </button>
+                    <button type="button" onClick={() => setGameOpen(true)} className="mt-2 block mx-auto h-10 px-4 rounded-[12px] border border-[var(--border)] text-[12.5px] font-extrabold text-[var(--text-primary)]">
+                        ماجرای مِت
+                    </button>
                 </div>
+                {gameOpen && <MetAdventure metColor="violet" onClose={() => setGameOpen(false)} />}
             </div>
         );
     }
@@ -232,6 +239,7 @@ export function MetView({ onNavigate }: Props) {
                         studentFirstName={boot.user.firstName}
                         isMobile={isMobile}
                         onOpenPanel={(p) => setPanel(p)}
+                        onOpenGame={() => setGameOpen(true)}
                         onNewChat={newChat}
                         onSpeak={speak}
                         onListening={setListeningLevel}
@@ -255,7 +263,7 @@ export function MetView({ onNavigate }: Props) {
                                 onTogglePanel={togglePanel}
                                 onChat={() => { setPanel(null); composerRef.current?.focus(); }}
                                 onNewChat={newChat}
-                                onGames={() => onNavigate('tests')}
+                                onGames={() => setGameOpen(true)}
                                 busy={chat.busy}
                             />
                         </div>
@@ -280,6 +288,8 @@ export function MetView({ onNavigate }: Props) {
             </div>
 
             {/* Mobile: bottom sheets */}
+            {gameOpen && <MetAdventure metColor={subjectToMetColor(subjectKey)} onClose={() => setGameOpen(false)} />}
+
             {isMobile && (
                 <ResponsiveModal isOpen={panel !== null} onClose={() => setPanel(null)} title={panel ? PANEL_TITLES[panel] : ''}>
                     <div className="ai-teacher-root flex flex-col min-h-[40vh] max-h-[70vh]">{panelContent(panel)}</div>
