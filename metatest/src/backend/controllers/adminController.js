@@ -34,7 +34,7 @@ const { countWords, recordWordEvent, measureEditDelta } = require('../admin/word
 // --- PDF Library upload configuration ---
 // Defaults to the same web root used for avatar uploads in server.js
 // (path.resolve(serverRoot, '../../public')). Adjust via env vars if needed.
-const PDF_UPLOAD_DIR = process.env.PDF_UPLOAD_DIR || path.resolve(__dirname, '..', '..', '..', 'public', 'files', 'pdfs');
+const PDF_UPLOAD_DIR = process.env.PDF_UPLOAD_DIR || path.join(require('../runtimeMode').profile.webRoot, 'files', 'pdfs');
 const PDF_PUBLIC_PATH = process.env.PDF_PUBLIC_PATH || 'files/pdfs/';
 
 // Helper: logged-in admin id from the verified admin session (set by requireAdminSession)

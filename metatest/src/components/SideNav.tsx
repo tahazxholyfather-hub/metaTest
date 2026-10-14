@@ -25,6 +25,7 @@ import { useUser } from '../context/UserContext';
 import { ThemeSwitch } from './ThemeSwitch';
 import PlanSelectionModal from './PlanSelectionModal';
 import { MetNavIcon } from './met';
+import { avatarSrc } from '../lib/asset';
 
 type SideNavProps = {
     activeView: View;
@@ -417,7 +418,7 @@ export const SideNav = ({ activeView, onNavigate, theme, onToggleTheme, isCollap
                     <div className="flex flex-col items-center gap-2 mt-0.5">
                         <div className="relative shrink-0">
                             <img
-                                src={user?.avatar_url ? `${user.avatar_url}` : "/avatars/user_default.png"}
+                                src={avatarSrc(user?.avatar_url)}
                                 alt="User Avatar"
                                 className="w-10 h-10 rounded-full object-cover border border-[var(--border)] bg-[var(--bg-app)]"
                             />
@@ -436,7 +437,7 @@ export const SideNav = ({ activeView, onNavigate, theme, onToggleTheme, isCollap
                         <div className="flex items-center gap-3 overflow-hidden">
                             <div className="relative shrink-0">
                                 <img
-                                    src={user?.avatar_url ? `${user.avatar_url}` : "/avatars/user_default.png"}
+                                    src={avatarSrc(user?.avatar_url)}
                                     alt="User Avatar"
                                     className="w-10 h-10 rounded-full object-cover border border-[var(--border)] bg-[var(--bg-app)]"
                                 />

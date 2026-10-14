@@ -1,8 +1,9 @@
 // src/hooks/useLobby.ts
 import { useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { isLocalhost, realtimeUrl } from '../runtime';
 
-const SOCKET_URL = import.meta.env.VITE_REALTIME_API_URL || 'socket.metatest.app/';
+const SOCKET_URL = realtimeUrl;
 
 export function useLobby(token: string | null) {
     const socketRef = useRef<Socket | null>(null);
@@ -15,7 +16,8 @@ export function useLobby(token: string | null) {
         // Initialize socket connection with JWT
         socketRef.current = io(SOCKET_URL, {
             auth: { token },
-            transports: ['websocket'],
+            transports: isLocalhost ? ['websocket', 'polling'] : ['polling'],
+            upgrade: isLocalhost,
         });
 
         const socket = socketRef.current;

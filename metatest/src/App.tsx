@@ -694,6 +694,7 @@ function MainApp() {
 // ==========================================
 // 2. THE NEW ROOT APP (Handles top-level routing)
 // ==========================================
+const appBase = import.meta.env.BASE_URL.replace(/\/$/, '');
 const router = createBrowserRouter(
     [
         { path: "/dev/orbs", element: (
@@ -716,13 +717,10 @@ const router = createBrowserRouter(
             ),
         },
         { path: "/*", element: <MainApp /> },
-    ]
+    ],
+    appBase ? { basename: appBase } : undefined,
 );
 
 export default function App() {
     return <RouterProvider router={router} />;
 }
-
-// {
-//     basename: "/app",   // ← add this
-// }

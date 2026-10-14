@@ -863,7 +863,7 @@ const handleUploadAvatar = async (req, res) => {
 const handleResetAvatar = async (req, res) => {
     try {
         const userId = req.user.id;
-        const defaultAvatarUrl = '/user_default.png';
+        const defaultAvatarUrl = '/avatars/user_default.png';
 
         // 1. Get the user's current avatar from the database
         const [users] = await db.query(
@@ -881,7 +881,7 @@ const handleResetAvatar = async (req, res) => {
         if (currentAvatarUrl && currentAvatarUrl !== defaultAvatarUrl) {
             // Extract the filename and construct the absolute path to the file
             // Note: Adjust the '../public' path if your folder structure requires it
-            const filePath = path.join(__dirname, '../../public', currentAvatarUrl);
+            const filePath = path.join(require('../runtimeMode').profile.avatarDir, path.basename(currentAvatarUrl));
 
             // Check if file exists, then delete
             if (fs.existsSync(filePath)) {
@@ -935,28 +935,35 @@ const saveUserActivity = async (req, res) => {
 
 // --- Track Page Views / Visitors ---
 const trackViewCount = async (req, res) => {
-    // Get the page name/path from the client
     const { view } = req.body;
-
-    // Extract IP address and User Agent from the request headers
-    const ip_address = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-    const user_agent = req.headers['user-agent'] || 'Unknown';
+    const forwarded = req.headers['x-forwarded-for'];
+    const rawIp = Array.isArray(forwarded) ? forwarded[0] : (forwarded || req.socket?.remoteAddress || '');
+    const ip_address = String(rawIp).split(',')[0].trim().slice(0, 45) || null;
+    const user_agent = String(req.headers['user-agent'] || 'Unknown').slice(0, 2000);
 
     if (!view) {
         return res.status(400).json({ success: false, message: "page_view is required" });
     }
 
+    const insertView = () => db.execute(
+        `INSERT INTO tam24_visitor_counts (page_view, ip_address, user_agent) VALUES (?, ?, ?)`,
+        [view, ip_address, user_agent]
+    );
+
     try {
-        // Insert a new record for every visit/page view
-        const query = `
-            INSERT INTO tam24_visitor_counts (page_view, ip_address, user_agent)
-            VALUES (?, ?, ?)
-        `;
-
-        await db.execute(query, [view, ip_address, user_agent]);
-
+        await insertView();
         return res.json({ success: true, message: "View tracked successfully" });
     } catch (error) {
+        if (error && error.code === 'ER_DUP_ENTRY') {
+            try {
+                await require('../visitorCounts').ensureVisitorCountIds();
+                await insertView();
+                return res.json({ success: true, message: "View tracked successfully" });
+            } catch (again) {
+                console.error("Error tracking view count:", again);
+                return res.status(500).json({ success: false, message: "Database error" });
+            }
+        }
         console.error("Error tracking view count:", error);
         return res.status(500).json({ success: false, message: "Database error" });
     }

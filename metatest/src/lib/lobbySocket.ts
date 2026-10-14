@@ -1,7 +1,7 @@
 import { io, Socket } from 'socket.io-client';
+import { isLocalhost, realtimeUrl } from '../runtime';
 
-// Make sure this port matches your real-time Node.js/Socket.io backend
-const SOCKET_URL = 'http://localhost:5000';
+const SOCKET_URL = realtimeUrl;
 
 export class LobbySocketService {
     private socket: Socket | null = null;
@@ -9,7 +9,8 @@ export class LobbySocketService {
     public connect() {
         if (!this.socket) {
             this.socket = io(SOCKET_URL, {
-                transports: ['websocket'],
+                transports: isLocalhost ? ['websocket', 'polling'] : ['polling'],
+                upgrade: isLocalhost,
                 autoConnect: true,
             });
 

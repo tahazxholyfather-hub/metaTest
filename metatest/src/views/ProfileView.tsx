@@ -11,6 +11,7 @@ import { useUser } from "../context/UserContext";
 import { flowApi } from '../lib/authApi';
 import { getCookie } from '../lib/cookies.ts';
 import { getCroppedImg } from "../lib/cropImage";
+import { avatarSrc } from "../lib/asset";
 
 // --- FIX 2: Import your custom ResponsiveModal component ---
 import { ResponsiveModal } from "../components/ResponsiveModal"; // Adjust the path if necessary
@@ -404,7 +405,7 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
             const result = await response.json();
 
             if (response.ok && result.success) {
-                const defaultAvatarUrl = result.avatar_url || '/avatars/user_default.png';
+                const defaultAvatarUrl = avatarSrc(result.avatar_url);
                 setAvatar(defaultAvatarUrl);
                 setUser({ ...user!, avatar_url: defaultAvatarUrl });
                 toast.success("تصویر پروفایل با موفقیت حذف شد");
@@ -496,7 +497,7 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
                         {isCustomAvatar ? (
                             <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
                         ) : (
-                            <img src='/avatars/user_default.png' alt="Avatar" className="w-full h-full object-cover" />
+                            <img src={avatarSrc(null)} alt="Avatar" className="w-full h-full object-cover" />
                         )}
                         <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200">
                             <div className="text-white"><Icons.Camera /></div>

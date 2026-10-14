@@ -1,5 +1,6 @@
 import { io, Socket } from 'socket.io-client';
 import { getAccessToken } from './token';
+import { isLocalhost, realtimeUrl } from '../runtime';
 
 let socketInstance: Socket | null = null;
 
@@ -9,16 +10,11 @@ export interface CreateSocketOptions {
 }
 
 function getRealtimeUrl(): string {
-    const fromEnv =
-        import.meta.env.VITE_REALTIME_URL ||
-        import.meta.env.VITE_REALTIME_API_URL ||
-        'https://socket.metatest.app';
-
-    return String(fromEnv).replace(/\/+$/, '');
+    return realtimeUrl;
 }
 
 export function createSocket(options: CreateSocketOptions = {}): Socket {
-    const realtimeUrl = getRealtimeUrl();
+    const url = getRealtimeUrl();
     const token = options.token ?? getAccessToken();
 
     if (!token) {
@@ -36,14 +32,12 @@ export function createSocket(options: CreateSocketOptions = {}): Socket {
         socketInstance = null;
     }
 
-    // LiteSpeed/OpenLiteSpeed on socket.metatest.app does not proxy WebSocket
-    // upgrades. Engine.IO then aborts with "WebSocket is closed before the
-    // connection is established". Stay on HTTP long-polling. Do not send
-    // extraHeaders — that forces a CORS preflight the proxy also drops.
-    socketInstance = io(realtimeUrl, {
+    // LiteSpeed on socket.metatest.app does not proxy WebSocket upgrades.
+    // Local Node accepts the upgrade, so localhost can use the socket directly.
+    socketInstance = io(url, {
         autoConnect: true,
-        transports: ['polling'],
-        upgrade: false,
+        transports: isLocalhost ? ['websocket', 'polling'] : ['polling'],
+        upgrade: isLocalhost,
         withCredentials: false,
         auth: { token },
         reconnection: true,

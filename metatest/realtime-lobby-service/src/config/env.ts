@@ -1,11 +1,59 @@
+import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
 import { z } from 'zod';
 
-dotenv.config();
-dotenv.config({
-    path: path.resolve(__dirname, '../../.env'),
-});
+function loadEnvFile(filePath: string) {
+    if (fs.existsSync(filePath)) dotenv.config({ path: filePath });
+}
+
+// First file wins. These are the lobby file and the shared LOCALHOST flag.
+// Do not load the API .env whole: it sets PORT=3000 and would steal this service.
+const envFiles = [
+    path.resolve(process.cwd(), '.env'),
+    path.resolve(process.cwd(), '../.env'),
+    path.resolve(__dirname, '../../.env'),
+    path.resolve(__dirname, '../../../.env'),
+];
+for (const filePath of envFiles) loadEnvFile(filePath);
+
+function fillMissing(filePath: string, keys: string[]) {
+    if (!fs.existsSync(filePath)) return;
+    const parsed = dotenv.parse(fs.readFileSync(filePath));
+    for (const key of keys) {
+        if (!process.env[key] && parsed[key]) process.env[key] = parsed[key];
+    }
+    if (!process.env.MAIN_BACKEND_INTERNAL_KEY && parsed.INTERNAL_SERVICE_KEY) {
+        process.env.MAIN_BACKEND_INTERNAL_KEY = parsed.INTERNAL_SERVICE_KEY;
+    }
+}
+
+const apiEnvFiles = [
+    path.resolve(process.cwd(), '../src/backend/.env'),
+    path.resolve(__dirname, '../../../src/backend/.env'),
+    path.resolve(__dirname, '../../../../src/backend/.env'),
+];
+for (const filePath of apiEnvFiles) {
+    fillMissing(filePath, ['JWT_SECRET', 'HASHIDS_SALT', 'LOCALHOST']);
+}
+
+function isLocalhostFlag(value: string | undefined) {
+    if (value == null || value.trim() === '') return true;
+    return !['false', '0', 'no', 'off'].includes(value.trim().toLowerCase());
+}
+
+const localhost = isLocalhostFlag(process.env.LOCALHOST);
+if (!process.env.MAIN_BACKEND_URL) {
+    process.env.MAIN_BACKEND_URL = localhost
+        ? 'http://localhost:3000/api'
+        : 'https://metatest.app/api';
+}
+if (!process.env.PORT) process.env.PORT = '4000';
+if (!process.env.CORS_ORIGIN) {
+    process.env.CORS_ORIGIN = localhost
+        ? 'http://localhost:5173,http://127.0.0.1:5173'
+        : 'https://metatest.app,https://www.metatest.app';
+}
 
 const emptyToUndefined = (value: unknown) =>
     value === '' || value === undefined || value === null ? undefined : value;

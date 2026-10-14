@@ -22,7 +22,7 @@ const { FILE_LIMITS } = require('../config');
 // Same web root the rest of the backend uses for avatars / PDF library.
 const WEB_ROOT = FILE_LIMITS.uploadRoot
     ? path.resolve(FILE_LIMITS.uploadRoot)
-    : path.resolve(__dirname, '../../../../public');
+    : require('../../runtimeMode').profile.webRoot;
 const BASE_DIR = path.join(WEB_ROOT, 'uploads', 'ai');
 const PUBLIC_PREFIX = '/uploads/ai';
 

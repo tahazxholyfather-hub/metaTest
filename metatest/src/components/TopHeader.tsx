@@ -7,6 +7,7 @@ import { XpBadge } from "./XpBadge";
 import { MobileMenu } from "./MobileMenu";
 import { useUser } from '../context/UserContext';
 import { flowApi } from "../lib/authApi";
+import { avatarSrc } from "../lib/asset";
 
 type TopHeaderProps = {
     title: string;
@@ -253,7 +254,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                         {/* Left: avatar then ONLY coin counter */}
                         <div className="flex items-center gap-3">
                             <img
-                                src={user?.avatar_url ? `${user.avatar_url}` : "/avatars/user_default.png"}
+                                src={avatarSrc(user?.avatar_url)}
                                 alt="آواتار"
                                 className="w-10 h-10 rounded-full border-2 border-[var(--border)] object-cover"
                             />
