@@ -1,8 +1,19 @@
 const pool = require('../db');
-const cookie = require('cookie');
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
+const {
+    authenticateAdmin,
+    issueSession,
+    recordLoginSuccess,
+    clearAdminCookie,
+    publicAdmin,
+    isSuperAdmin,
+    loginRateLimited,
+    clientIp,
+    SUPER_ADMIN_ID,
+    attachAdminIfPresent,
+} = require('../middleware/adminAuth');
 
 // --- PDF Library upload configuration ---
 // Defaults to the same web root used for avatar uploads in server.js
@@ -10,23 +21,16 @@ const zlib = require('zlib');
 const PDF_UPLOAD_DIR = process.env.PDF_UPLOAD_DIR || path.resolve(__dirname, '..', '..', '..', 'public', 'files', 'pdfs');
 const PDF_PUBLIC_PATH = process.env.PDF_PUBLIC_PATH || 'files/pdfs/';
 
-// Helper: Extract the logged-in admin id from the HttpOnly cookie token (ADMIN-<id>-<timestamp>)
+// Helper: logged-in admin id from the verified admin session (set by requireAdminSession)
 const getAdminIdFromRequest = (req) => {
-    const cookies = cookie.parse(req.headers.cookie || '');
-    const token = cookies.admin_token;
-    if (!token) return null;
-    const parts = token.split('-');
-    if (parts[0] === 'ADMIN' && parts[1]) {
-        const adminId = parseInt(parts[1], 10);
-        return Number.isNaN(adminId) ? null : adminId;
-    }
-    return null;
+    const id = Number(req.admin?.id);
+    return Number.isInteger(id) && id > 0 ? id : null;
 };
 
 // Helper: Only admin with id 1 is allowed to delete records
 const requireSuperAdmin = (req, res) => {
     const adminId = getAdminIdFromRequest(req);
-    if (adminId !== 1) {
+    if (adminId !== SUPER_ADMIN_ID && !isSuperAdmin(req.admin)) {
         res.json({ success: false, message: "Only the main admin (id 1) can delete records." });
         return null;
     }
@@ -291,84 +295,39 @@ const handleUpdateQuestion = async (req, res) => {
 };
 
 const handleAdminLogin = async (req, res) => {
+    if (loginRateLimited(req)) {
+        return res.status(429).json({ success: false, message: 'Too many login attempts. Please wait a minute.' });
+    }
+
     const username = requirePost(req, res, "username");
     const password = requirePost(req, res, "password");
     if (!username || !password) return;
 
-    const match = username.match(/^admin(\d+)$/);
-
-    if (match) {
-        const adminId = parseInt(match[1], 10);
-
-        if (adminId >= 1 && adminId <= 20) {
-            const expectedPassword = `Admin@${adminId}`;
-
-            if (password === expectedPassword) {
-                // --- NEW: Create a user object ---
-                const user = {
-                    id: adminId,
-                    username: `admin${adminId}`,
-                    role: 'admin' // The role is static in this case
-                };
-
-                // Create a token (can be a JWT for more security, but this is simple)
-                const token = `ADMIN-${user.id}-${Date.now()}`;
-
-                // --- NEW: Set a secure cookie ---
-                res.setHeader('Set-Cookie', cookie.serialize('admin_token', token, {
-                    httpOnly: true, // The browser cannot access this cookie via JavaScript
-                    secure: process.env.NODE_ENV !== 'development', // Use secure in production
-                    maxAge: 60 * 60 * 24 * 7, // 1 week
-                    sameSite: 'strict',
-                    path: '/',
-                }));
-
-                // --- NEW: Return the user object in the response body ---
-                return res.json({ success: true, user });
-            }
+    try {
+        const result = await authenticateAdmin(username, password);
+        if (!result.ok) {
+            return res.json({ success: false, message: result.message || 'Invalid credentials' });
         }
-    }
-
-    res.json({ success: false, message: "Invalid credentials" });
-};
-
-// --- NEW: Function to verify session ---
-const handleAdminVerify = async (req, res) => {
-    const cookies = cookie.parse(req.headers.cookie || '');
-    const token = cookies.admin_token;
-
-    if (!token) {
-        return res.json({ success: false, message: "No session found." });
-    }
-
-    // Very basic token validation (in a real app, use JWT)
-    const parts = token.split('-');
-    if (parts[0] === 'ADMIN' && parts[1]) {
-        const adminId = parseInt(parts[1], 10);
-        const user = {
-            id: adminId,
-            username: `admin${adminId}`,
-            role: 'admin'
-        };
+        await recordLoginSuccess(result.admin.id, clientIp(req));
+        const user = await issueSession(res, result.admin);
         return res.json({ success: true, user });
+    } catch (error) {
+        console.error('Admin login error:', error);
+        return res.json({ success: false, message: 'Unable to sign in' });
     }
-
-    return res.json({ success: false, message: "Invalid session." });
 };
 
+const handleAdminVerify = async (req, res) => {
+    const admin = req.admin || await attachAdminIfPresent(req);
+    if (!admin) {
+        return res.json({ success: false, message: 'No session found.' });
+    }
+    return res.json({ success: true, user: publicAdmin(admin) });
+};
 
-// --- NEW: Function to handle logout ---
 const handleAdminLogout = async (req, res) => {
-    // Clear the cookie by setting its expiration date to the past
-    res.setHeader('Set-Cookie', cookie.serialize('admin_token', '', {
-        httpOnly: true,
-        secure: process.env.NODE_ENV !== 'development',
-        expires: new Date(0), // Set to a past date
-        sameSite: 'strict',
-        path: '/',
-    }));
-
-    res.json({ success: true, message: "Logged out" });
+    clearAdminCookie(res);
+    res.json({ success: true, message: 'Logged out' });
 };
 // ===============================================
 // FULL UPDATE QUESTION (Text, Options, Descriptive, Meta)

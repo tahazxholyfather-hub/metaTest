@@ -6,9 +6,11 @@ import EditQuestions from './EditQuestions';
 import InsertQuestions from './InsertQuestions';
 import CurriculumManager from './CurriculumManager';
 import PdfLibraryManager from './PdfLibraryManager';
-import AuthView, { type User } from './AuthView'; // Importing User interface from AuthView
+import AdminsManager from './AdminsManager';
+import AiManager from './AiManager';
+import AuthView, { type User } from './AuthView';
 import Spinner from './Spinner';
-import { flowApi } from '../lib/authApi';
+import { adminApi } from '../lib/adminApi';
 
 export default function AdminPanel() {
     const [user, setUser] = useState<User | null>(null);
@@ -31,7 +33,7 @@ export default function AdminPanel() {
         const verifySession = async () => {
             try {
                 // Endpoint that checks if the HttpOnly cookie is valid
-                const res = await flowApi.dispatch('admin_verify');
+                const res = await adminApi.me();
 
                 if (res?.success && res?.user) {
                     setUser(res.user);
@@ -44,6 +46,10 @@ export default function AdminPanel() {
         };
 
         verifySession();
+
+        const onExpired = () => setUser(null);
+        window.addEventListener('admin-session-expired', onExpired);
+        return () => window.removeEventListener('admin-session-expired', onExpired);
     }, []);
 
     // Theme Management
@@ -57,8 +63,11 @@ export default function AdminPanel() {
         localStorage.setItem('AdminTheme', theme);
     }, [isDarkMode]);
 
+    const isSuper = user?.isSuper || user?.id === 1;
+
     const handleTabChange = (tab: string) => {
         if (tab === activeTab) return;
+        if ((tab === 'ai-manager' || tab === 'admins') && !isSuper) return;
         setIsLoadingView(true);
         setActiveTab(tab);
         setTimeout(() => setIsLoadingView(false), 400);
@@ -68,7 +77,7 @@ export default function AdminPanel() {
     const handleLogout = async () => {
         try {
             // Tell the backend to clear the HttpOnly cookie
-            await flowApi.dispatch('admin_logout');
+            await adminApi.logout();
         } catch (error) {
             console.error('Logout failed:', error);
         } finally {
@@ -117,7 +126,9 @@ export default function AdminPanel() {
                             : activeTab === 'insert-questions' ? 'Insert Questions'
                                 : activeTab === 'curriculum' ? 'Curriculum'
                                     : activeTab === 'pdf-library' ? 'PDF Library'
-                                        : 'Repository'
+                                        : activeTab === 'ai-manager' ? 'AI Manager'
+                                            : activeTab === 'admins' ? 'Admins'
+                                                : 'Repository'
                     }
                 />
 
@@ -137,6 +148,8 @@ export default function AdminPanel() {
                                 {activeTab === 'insert-questions' && <InsertQuestions />}
                                 {activeTab === 'curriculum' && <CurriculumManager user={user} />}
                                 {activeTab === 'pdf-library' && <PdfLibraryManager user={user} />}
+                                {activeTab === 'ai-manager' && isSuper && <AiManager />}
+                                {activeTab === 'admins' && isSuper && <AdminsManager currentUser={user} />}
                             </div>
                         )}
                     </div>

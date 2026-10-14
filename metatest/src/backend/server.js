@@ -16,6 +16,9 @@ const quizWorldController = require('./controllers/quizWorldController');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const aiTeacherRoutes = require('./ai-teacher/routes');
+const adminRoutes = require('./routes/adminRoutes');
+const { ensureAdminSchema } = require('./middleware/adminAuth');
+const { loadRuntimeOverlayFromDb } = require('./controllers/adminAiController');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -78,11 +81,21 @@ const upload = multer({
 });
 // ----------------------------
 
+const frontendOrigins = String(process.env.FRONTEND_ORIGIN || 'http://localhost:5173')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
 app.use(cors({
-    origin: 'http://localhost:5173', // <-- MUST BE YOUR ACTUAL FRONTEND URL (No trailing slash)
-    credentials: true,               // <-- REQUIRED FOR COOKIES
-    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-APP-TOKEN']
+    origin: (origin, cb) => {
+        // Same-origin / server-to-server requests have no Origin header.
+        if (!origin) return cb(null, true);
+        if (frontendOrigins.includes(origin) || frontendOrigins.includes('*')) return cb(null, true);
+        return cb(null, false);
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-APP-TOKEN', 'X-Admin-Token']
 }));
 
 
@@ -97,6 +110,8 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/payments', paymentRoutes);
 // AI Private Teacher module (bootstrap, teachers, chat stream, wallet, settings, …)
 app.use('/api/ai-teacher', aiTeacherRoutes);
+// Admin panel — independent session (admin_token cookie), not the student JWT
+app.use('/api/admin', adminRoutes);
 
 // 3. Route updated to just use the fixed multer upload
 app.post(
@@ -410,4 +425,8 @@ app.post('/api/flow', requireToken, async (req, res) => {
 // Start the server
 app.listen(PORT, () => {
     console.log(`Backend server is running on http://localhost:${PORT}`);
+    ensureAdminSchema()
+        .then(() => loadRuntimeOverlayFromDb())
+        .then(() => console.log('[admin] schema ready, AI runtime overlay loaded'))
+        .catch((err) => console.error('[admin] bootstrap failed:', err.message));
 });

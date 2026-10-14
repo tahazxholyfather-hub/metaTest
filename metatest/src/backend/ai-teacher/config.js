@@ -39,7 +39,7 @@ const PROVIDER = Object.freeze({
 });
 
 // ─── Models: one per capability ──────────────────────────────────────────────
-const MODELS = Object.freeze({
+const ENV_MODELS = Object.freeze({
     text: env('AI_TEXT_MODEL', 'AI_TEACHER_MODEL', 'GAPGPT_MODEL') || 'gpt-5.6-luna',
     textFast: env('AI_TEXT_MODEL_FAST', 'AI_TEACHER_MODEL_LOW') || 'gpt-5.6-luna',
     textDeep: env('AI_TEXT_MODEL_DEEP') || env('AI_TEXT_MODEL', 'AI_TEACHER_MODEL') || 'gpt-5.6-terra',
@@ -54,7 +54,7 @@ const MODELS = Object.freeze({
 });
 
 // ─── Feature flags (opt-out; each also needs its model + provider) ───────────
-const FLAGS = Object.freeze({
+const ENV_FLAGS = Object.freeze({
     chat: bool(process.env.AI_CHAT_ENABLED, true),
     vision: bool(process.env.AI_VISION_ENABLED ?? process.env.AI_TEACHER_ENABLE_VISION, true),
     imageGeneration: bool(process.env.AI_IMAGE_GENERATION_ENABLED ?? process.env.AI_TEACHER_ENABLE_IMAGE_GEN, true),
@@ -67,7 +67,53 @@ const FLAGS = Object.freeze({
     suggestions: bool(process.env.AI_SUGGESTIONS_ENABLED, true),
 });
 
-const providerConfigured = () => AI_ENABLED && !!PROVIDER.apiKey && !!PROVIDER.baseUrl;
+/**
+ * Admin-editable overlay (tam24_ai_admin_settings). Env remains the default;
+ * DB values win when present. API keys are never stored here.
+ */
+let overlay = {};
+
+function overlayBucket(name, base) {
+    return new Proxy(base, {
+        get(target, prop, receiver) {
+            if (prop === '__base') return target;
+            if (typeof prop === 'symbol') return Reflect.get(target, prop, receiver);
+            const extra = overlay[name];
+            if (extra && Object.prototype.hasOwnProperty.call(extra, prop) && extra[prop] !== undefined && extra[prop] !== null) {
+                return extra[prop];
+            }
+            return target[prop];
+        },
+        ownKeys(target) {
+            return [...new Set([...Reflect.ownKeys(target), ...Object.keys(overlay[name] || {})])];
+        },
+        getOwnPropertyDescriptor(target, prop) {
+            if (prop in target || (overlay[name] && prop in overlay[name])) {
+                return { enumerable: true, configurable: true, writable: false };
+            }
+            return undefined;
+        },
+    });
+}
+
+const MODELS = overlayBucket('models', ENV_MODELS);
+const FLAGS = overlayBucket('flags', ENV_FLAGS);
+
+function applyRuntimeOverlay(next) {
+    overlay = next && typeof next === 'object' ? next : {};
+}
+
+function getRuntimeOverlay() {
+    return overlay;
+}
+
+function isMasterEnabled() {
+    if (overlay.flags && overlay.flags.aiEnabled === false) return false;
+    if (overlay.flags && overlay.flags.aiEnabled === true) return true;
+    return AI_ENABLED;
+}
+
+const providerConfigured = () => isMasterEnabled() && !!PROVIDER.apiKey && !!PROVIDER.baseUrl;
 
 /**
  * Effective capability matrix: flag on AND everything it depends on is
@@ -93,7 +139,7 @@ function featureStatus() {
 
 /** Why the AI is unavailable — safe to show to admins in logs, never with key material. */
 function unavailableReason() {
-    if (!AI_ENABLED) return 'AI_DISABLED';
+    if (!isMasterEnabled()) return 'AI_DISABLED';
     if (!PROVIDER.apiKey) return 'AI_NOT_CONFIGURED';
     if (!FLAGS.chat) return 'AI_CHAT_DISABLED';
     return null;
@@ -110,7 +156,7 @@ const USD_TO_IRR = num(process.env.AI_USD_TO_IRR || process.env.AI_TEACHER_USD_T
 const IRR_PER_COIN = num(process.env.AI_IRR_PER_COIN || process.env.AI_TEACHER_IRR_PER_ENERGY, 100, { min: 1 });
 
 const DEFAULT_DAILY_FREE = num(process.env.AI_DAILY_FREE_COINS, 80, { min: 0 });
-const DAILY_COINS_BY_PLAN = Object.freeze({
+const ENV_DAILY_COINS_BY_PLAN = Object.freeze({
     free: DEFAULT_DAILY_FREE,
     bronze: num(process.env.AI_DAILY_COINS_BRONZE, 300, { min: 0 }),
     silver: num(process.env.AI_DAILY_COINS_SILVER, 500, { min: 0 }),
@@ -119,22 +165,25 @@ const DAILY_COINS_BY_PLAN = Object.freeze({
     epic: num(process.env.AI_DAILY_COINS_EPIC, 1500, { min: 0 }),
     premium: num(process.env.AI_DAILY_COINS_PREMIUM, 800, { min: 0 }),
 });
+const DAILY_COINS_BY_PLAN = overlayBucket('dailyCoins', ENV_DAILY_COINS_BY_PLAN);
 
-const COIN_PRICING = Object.freeze({
+const ENV_COIN_PRICING = Object.freeze({
     minCharge: 1,
     minBalanceToStart: 1,
     defaultReservation: 20,
     usdToIrr: USD_TO_IRR,
     irrPerCoin: IRR_PER_COIN,
 });
+const COIN_PRICING = overlayBucket('coinPricing', ENV_COIN_PRICING);
 
 /** Flat coin prices for non-token operations (on top of any token cost). */
-const FLAT_COIN_COSTS = Object.freeze({
+const ENV_FLAT_COIN_COSTS = Object.freeze({
     image: num(process.env.AI_IMAGE_COIN_COST || process.env.AI_TEACHER_IMAGE_ENERGY_COST, 40, { min: 0 }),
     stt: num(process.env.AI_STT_COIN_COST || process.env.AI_TEACHER_STT_ENERGY_COST, 2, { min: 0 }),
     tts: num(process.env.AI_TTS_COIN_COST || process.env.AI_TEACHER_TTS_ENERGY_COST, 6, { min: 0 }),
     pdfIndex: num(process.env.AI_PDF_INDEX_COIN_COST, 0, { min: 0 }),
 });
+const FLAT_COIN_COSTS = overlayBucket('flatCosts', ENV_FLAT_COIN_COSTS);
 
 /**
  * Fallback provider list prices (USD per 1M tokens) used when
@@ -166,7 +215,7 @@ const UNIT_PRICES_USD = Object.freeze({
 });
 
 // ─── Context / limits ────────────────────────────────────────────────────────
-const CONTEXT_LIMITS = Object.freeze({
+const ENV_CONTEXT_LIMITS = Object.freeze({
     recentMessages: 14,
     maxMemoryItems: 8,
     summarizeAfterMessages: 24,
@@ -179,8 +228,9 @@ const CONTEXT_LIMITS = Object.freeze({
     maxAttachmentsPerMessage: 3,
     maxToolCallsPerTurn: 3,
 });
+const CONTEXT_LIMITS = overlayBucket('contextLimits', ENV_CONTEXT_LIMITS);
 
-const FILE_LIMITS = Object.freeze({
+const ENV_FILE_LIMITS = Object.freeze({
     imageMb: num(process.env.AI_MAX_IMAGE_MB, 8, { min: 1, max: 50 }),
     audioMb: num(process.env.AI_MAX_AUDIO_MB, 15, { min: 1, max: 100 }),
     pdfMb: num(process.env.AI_MAX_PDF_MB, 30, { min: 1, max: 200 }),
@@ -188,12 +238,14 @@ const FILE_LIMITS = Object.freeze({
     maxPdfPages: num(process.env.AI_MAX_PDF_PAGES, 600, { min: 10 }),
     uploadRoot: env('AI_UPLOAD_ROOT') || null,
 });
+const FILE_LIMITS = overlayBucket('fileLimits', ENV_FILE_LIMITS);
 
-const RATE_LIMITS = Object.freeze({
+const ENV_RATE_LIMITS = Object.freeze({
     chatPerMinute: num(process.env.AI_RATE_LIMIT_CHAT_PER_MINUTE, 20, { min: 1 }),
     uploadsPerMinute: num(process.env.AI_RATE_LIMIT_UPLOADS_PER_MINUTE, 15, { min: 1 }),
     voicePerMinute: num(process.env.AI_RATE_LIMIT_VOICE_PER_MINUTE, 15, { min: 1 }),
 });
+const RATE_LIMITS = overlayBucket('rateLimits', ENV_RATE_LIMITS);
 
 const SUGGESTIONS = Object.freeze({
     servePerSubject: 4,
@@ -230,6 +282,36 @@ function fallbackModelPrices(modelId) {
     return MODEL_PRICES_USD_PER_1M[key] || MODEL_PRICES_USD_PER_1M[MODELS.text] || { input: 0.2, cache: 0.02, output: 1.2 };
 }
 
+function snapshotRuntimeSettings() {
+    const pick = (obj) => JSON.parse(JSON.stringify(obj, (k, v) => (k === '__base' ? undefined : v)));
+    return {
+        flags: { aiEnabled: isMasterEnabled(), ...pick({ ...ENV_FLAGS, ...overlay.flags }) },
+        models: { ...ENV_MODELS, ...(overlay.models || {}) },
+        dailyCoins: { ...ENV_DAILY_COINS_BY_PLAN, ...(overlay.dailyCoins || {}) },
+        coinPricing: { ...ENV_COIN_PRICING, ...(overlay.coinPricing || {}) },
+        flatCosts: { ...ENV_FLAT_COIN_COSTS, ...(overlay.flatCosts || {}) },
+        contextLimits: { ...ENV_CONTEXT_LIMITS, ...(overlay.contextLimits || {}) },
+        fileLimits: { ...ENV_FILE_LIMITS, ...(overlay.fileLimits || {}) },
+        rateLimits: { ...ENV_RATE_LIMITS, ...(overlay.rateLimits || {}) },
+        defaults: {
+            flags: { aiEnabled: AI_ENABLED, ...ENV_FLAGS },
+            models: { ...ENV_MODELS },
+            dailyCoins: { ...ENV_DAILY_COINS_BY_PLAN },
+            coinPricing: { ...ENV_COIN_PRICING },
+            flatCosts: { ...ENV_FLAT_COIN_COSTS },
+            contextLimits: { ...ENV_CONTEXT_LIMITS },
+            fileLimits: { ...ENV_FILE_LIMITS },
+            rateLimits: { ...ENV_RATE_LIMITS },
+        },
+        provider: {
+            name: PROVIDER.name,
+            baseUrl: PROVIDER.baseUrl,
+            apiKeyConfigured: !!PROVIDER.apiKey,
+            timeoutMs: PROVIDER.timeoutMs,
+        },
+    };
+}
+
 module.exports = {
     AI_ENABLED,
     PROVIDER,
@@ -238,6 +320,10 @@ module.exports = {
     featureStatus,
     unavailableReason,
     providerConfigured,
+    isMasterEnabled,
+    applyRuntimeOverlay,
+    getRuntimeOverlay,
+    snapshotRuntimeSettings,
     DAILY_COINS_BY_PLAN,
     COIN_PRICING,
     FLAT_COIN_COSTS,

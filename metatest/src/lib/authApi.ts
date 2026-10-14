@@ -69,15 +69,16 @@ export function clearAuthCookie() {
 
 async function request<T = any>(
     url: string,
-    options: RequestInit & { params?: Record<string, any> } = {}
+    options: RequestInit & { params?: Record<string, any>; authKind?: 'user' | 'admin' | 'none' } = {}
 ): Promise<T> {
-    const token = getCookie("auth_token");
+    const { params, authKind = 'user', ...fetchOptions } = options;
+    const token = authKind === 'user' ? getCookie("auth_token") : null;
 
     const headers: Record<string, string> = {
-        ...((options.headers as Record<string, string>) || {}),
+        ...((fetchOptions.headers as Record<string, string>) || {}),
     };
 
-    if (!(options.body instanceof FormData) && !headers["Content-Type"]) {
+    if (!(fetchOptions.body instanceof FormData) && !headers["Content-Type"]) {
         headers["Content-Type"] = "application/json";
     }
 
@@ -86,9 +87,9 @@ async function request<T = any>(
     }
 
     let finalUrl = url;
-    if (options.params) {
+    if (params) {
         const qs = new URLSearchParams(
-            Object.entries(options.params)
+            Object.entries(params)
                 .filter(([, v]) => v !== undefined && v !== null)
                 .map(([k, v]) => [k, String(v)])
         ).toString();
@@ -96,9 +97,9 @@ async function request<T = any>(
     }
 
     const res = await fetch(finalUrl, {
-        method: options.method || "POST",
+        method: fetchOptions.method || "POST",
         headers,
-        body: options.body,
+        body: fetchOptions.body,
         credentials: "include",
     });
 
@@ -108,7 +109,7 @@ async function request<T = any>(
         : await res.text();
 
     if (!res.ok) {
-        if (res.status === 401) clearAuthCookie();
+        if (res.status === 401 && authKind === 'user') clearAuthCookie();
 
         const message =
             (data && typeof data === "object" && (data.message || data.error)) ||
@@ -118,6 +119,7 @@ async function request<T = any>(
     }
 
     if (
+        authKind === 'user' &&
         data &&
         typeof data === "object" &&
         "token" in data &&
@@ -191,6 +193,7 @@ export const flowApi = {
     dispatch: (action: string, payload: any = {}) => {
         let body: any;
         const headers: Record<string, string> = {};
+        const authKind = /^admin_/i.test(action) ? 'admin' as const : 'user' as const;
 
         const hasFile =
             payload instanceof FormData ||
@@ -229,7 +232,7 @@ export const flowApi = {
             data?: any;
             message?: string;
             token?: string;
-        }>(`${API_BASE}/flow`, { method: "POST", headers, body });
+        }>(`${API_BASE}/flow`, { method: "POST", headers, body, authKind });
     },
 
     // ===================== Subscription / Payments =====================
