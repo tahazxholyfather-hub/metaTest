@@ -86,6 +86,7 @@ type WideCardProps = {
     locked?: boolean;
     showDesc?: boolean;
     progress?: number | null;
+    selected?: boolean;
 };
 
 export const WideCard = ({
@@ -97,6 +98,7 @@ export const WideCard = ({
                              locked = false,
                              showDesc = false,
                              progress = null,
+                             selected = false,
                          }: WideCardProps) => {
     const hasImage = !!image;
 
@@ -110,10 +112,12 @@ export const WideCard = ({
     return (
         <div
             className={[
-                "group relative overflow-hidden flex items-center gap-4 p-5 rounded-2xl border transition-all duration-300 h-full",
+                "group relative overflow-hidden flex items-center gap-4 p-5 rounded-2xl border transition-colors duration-200 h-full bg-[var(--bg-card)]",
                 locked
-                    ? "bg-[var(--bg-card)] border-[var(--border)] opacity-70 cursor-not-allowed"
-                    : "bg-[var(--bg-card)] border-[var(--border)] hover:border-[var(--accent)] hover:shadow-lg hover:shadow-[var(--accent)]/10 cursor-pointer"
+                    ? "border-transparent opacity-70 cursor-not-allowed"
+                    : selected
+                        ? "border-[var(--accent)] cursor-pointer"
+                        : "border-transparent hover:border-[var(--accent)] active:border-[var(--accent)] cursor-pointer"
             ].join(" ")}
             style={{ animation: `slideUp 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) ${delay}ms backwards` }}
         >

@@ -84,6 +84,7 @@ export const PracticeView = ({ onStartQuiz, onStateChange }: PracticeViewProps) 
     const [pendingQuizConfig, setPendingQuizConfig] = useState<Record<string, unknown> | null>(null);
     const [duplicateSavedQuiz, setDuplicateSavedQuiz] = useState<ActiveQuizState | null>(null);
     const [highlightedIndex, setHighlightedIndex] = useState(0);
+    const [keyboardOn, setKeyboardOn] = useState(false);
 
     // --- First-visit guided tour (only shown once; completion is stored server-side) ---
     const { startTour } = useTour();
@@ -399,6 +400,7 @@ export const PracticeView = ({ onStartQuiz, onStateChange }: PracticeViewProps) 
 
     useEffect(() => {
         setHighlightedIndex(0);
+        setKeyboardOn(false);
     }, [step, gridItems]);
 
     useEffect(() => {
@@ -415,6 +417,7 @@ export const PracticeView = ({ onStartQuiz, onStateChange }: PracticeViewProps) 
 
             if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') {
                 e.preventDefault();
+                setKeyboardOn(true);
                 setHighlightedIndex((prev) => {
                     const pos = unlocked.findIndex(({ index }) => index === prev);
                     const nextPos = pos < 0 ? 0 : Math.min(unlocked.length - 1, pos + 1);
@@ -424,6 +427,7 @@ export const PracticeView = ({ onStartQuiz, onStateChange }: PracticeViewProps) 
             }
             if (e.key === 'ArrowUp' || e.key === 'ArrowRight') {
                 e.preventDefault();
+                setKeyboardOn(true);
                 setHighlightedIndex((prev) => {
                     const pos = unlocked.findIndex(({ index }) => index === prev);
                     const nextPos = pos <= 0 ? 0 : pos - 1;
@@ -567,14 +571,13 @@ export const PracticeView = ({ onStartQuiz, onStateChange }: PracticeViewProps) 
                                 key={item.id}
                                 onClick={() => handleCardClick(item)}
                                 onMouseEnter={() => setHighlightedIndex(i)}
-                                className={`${item.locked ? 'cursor-not-allowed' : 'cursor-pointer'} rounded-2xl transition-shadow ${
-                                    highlightedIndex === i ? 'ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--bg-primary,transparent)]' : ''
-                                }`}
+                                className={item.locked ? 'cursor-not-allowed' : 'cursor-pointer'}
                             >
                                 <WideCard
                                     icon={item.icon}
                                     image={item.image}
                                     locked={item.locked}
+                                    selected={keyboardOn && highlightedIndex === i}
                                     label={item.label}
                                     progress={step === 4 ? undefined : item.progress ?? 0}
                                     desc={item.count !== undefined ? `${item.count} سوال موجود` : item.desc}

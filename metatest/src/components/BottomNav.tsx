@@ -15,8 +15,8 @@ export const BottomNav = ({ activeView, onNavigate }: BottomNavProps) => {
     const navItems: { id: View; label: string; icon: React.ElementType | null; className: string }[] = [
         { id: 'dashboard', label: 'خانه', icon: Home, className: 'nav-home' },
         { id: 'practice', label: 'تمرین', icon: BookOpen, className: 'nav-practice' },
-        { id: 'tests', label: 'آزمون', icon: ClipboardCheck, className: 'nav-tests' },
         { id: 'met', label: 'مِت', icon: null, className: 'nav-ai-teacher' },
+        { id: 'tests', label: 'آزمون', icon: ClipboardCheck, className: 'nav-tests' },
         { id: 'profile', label: 'پروفایل', icon: User, className: 'nav-profile' },
     ];
 

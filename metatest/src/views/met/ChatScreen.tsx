@@ -193,7 +193,7 @@ export function ChatScreen({
                     </IconButton>
                 </>
             )}
-            <IconButton label="ماجرای مِت" size={36} onClick={onOpenGame}>
+            <IconButton label="بازی شیمی" size={36} onClick={onOpenGame}>
                 <Gamepad2 size={18} strokeWidth={1.9} />
             </IconButton>
             <IconButton label="گفتگوی جدید" size={36} tone="primary" onClick={onNewChat} disabled={chat.busy}>

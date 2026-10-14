@@ -14,6 +14,7 @@ async function bootstrap() {
             {
                 port: env.PORT,
                 nodeEnv: env.NODE_ENV,
+                api: env.MAIN_BACKEND_URL,
             },
             'Realtime lobby backend started',
         );

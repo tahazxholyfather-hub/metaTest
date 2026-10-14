@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const codeSchema = z.string().trim().min(4).max(16);
+const codeSchema = z.string().trim().min(4).max(80);
 const userIdSchema = z.union([z.string().min(1), z.number()]);
 
 export const createLobbySchema = z.object({

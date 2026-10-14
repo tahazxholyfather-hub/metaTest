@@ -1089,21 +1089,7 @@ const handleGetQuizByShareCode = async (req, res) => {
 
 
 
-const handleGetQuizMetadata = async (req, res) => {
-    try {
-        const quizId = decodeQuizId(req.params.quizId);
-
-        if (!quizId) {
-            return res.status(400).json({
-                success: false,
-                error: {
-                    code: 'INVALID_QUIZ_ID',
-                    message: 'Invalid quiz id'
-                }
-            });
-        }
-
-        const sql = `
+const QUIZ_META_SQL = `
             SELECT
                 id,
                 share_code,
@@ -1117,13 +1103,37 @@ const handleGetQuizMetadata = async (req, res) => {
                 question_ids,
                 settings
             FROM quizzes
-            WHERE id = ?
-                LIMIT 1
-        `;
+`;
 
-        const [rows] = await pool.query(sql, [quizId]);
+async function findQuizForMetadata(rawValue) {
+    const raw = String(rawValue || '').trim();
+    if (!raw) return null;
 
-        if (rows.length === 0) {
+    if (/^\d+$/.test(raw)) {
+        const [rows] = await pool.query(`${QUIZ_META_SQL} WHERE id = ? LIMIT 1`, [Number(raw)]);
+        if (rows.length) return rows[0];
+    }
+
+    const quizId = decodeQuizId(raw);
+    if (quizId) {
+        const [rows] = await pool.query(`${QUIZ_META_SQL} WHERE id = ? LIMIT 1`, [quizId]);
+        if (rows.length) return rows[0];
+    }
+
+    const shareId = decodeShareCode(raw);
+    if (shareId) {
+        const [rows] = await pool.query(`${QUIZ_META_SQL} WHERE share_code = ? LIMIT 1`, [shareId]);
+        if (rows.length) return rows[0];
+    }
+
+    return null;
+}
+
+const handleGetQuizMetadata = async (req, res) => {
+    try {
+        const quiz = await findQuizForMetadata(req.params.quizId);
+
+        if (!quiz) {
             return res.status(404).json({
                 success: false,
                 error: {
@@ -1132,8 +1142,6 @@ const handleGetQuizMetadata = async (req, res) => {
                 }
             });
         }
-
-        const quiz = rows[0];
 
         let questionIds = [];
         if (quiz.question_ids) {

@@ -219,7 +219,67 @@ export function QuizHistoryView({ onBack, onStateChange }: QuizHistoryViewProps)
                             <p className="text-xs text-rose-500 dark:text-rose-300 max-w-xs leading-relaxed">{error}</p>
                         </div>
                     ) : processedHistory.length > 0 ? (
-                        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl overflow-hidden shadow-sm">
+                        <>
+                        <div className="md:hidden grid grid-cols-1 gap-4">
+                            {processedHistory.map((item) => {
+                                const difficulty = getDifficultyConfig(item.difficulty);
+                                const accuracyClasses = getAccuracyClasses(item.accuracyRate);
+                                return (
+                                    <article
+                                        key={item.resultId}
+                                        className="bg-[var(--bg-card)] border border-[var(--border)] rounded-3xl p-5 shadow-sm space-y-4"
+                                    >
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-bold text-[var(--text-primary)] leading-relaxed line-clamp-2">{item.title}</p>
+                                                {item.quizType && (
+                                                    <span className="text-[11px] text-[var(--text-muted)] font-medium">{item.quizType}</span>
+                                                )}
+                                            </div>
+                                            <div className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold ${difficulty.classes}`}>
+                                                <BarChart3 size={14} strokeWidth={2.5} />
+                                                <span>{difficulty.label}</span>
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold ${accuracyClasses}`}>
+                                                <Target size={13} />
+                                                <span dir="ltr">{item.accuracyRate.toFixed(0)}٪</span>
+                                            </div>
+                                            <div className="inline-flex items-center gap-1.5 text-xs font-bold text-[var(--color-primary-600)]">
+                                                <Award size={14} />
+                                                <span>{item.totalScore.toLocaleString('fa-IR')}</span>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center justify-between gap-3 text-xs font-bold">
+                                            <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                                                <CheckCircle2 size={14} />{item.correctCount}
+                                            </span>
+                                            <span className="flex items-center gap-1 text-rose-600 dark:text-rose-400">
+                                                <XCircle size={14} />{item.incorrectCount}
+                                            </span>
+                                            <span className="flex items-center gap-1 text-[var(--text-muted)]">
+                                                <MinusCircle size={14} />{item.unansweredCount}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center justify-between gap-3 pt-3 border-t border-[var(--border)]/60">
+                                            <div className="flex flex-col gap-1 text-[11px] font-medium text-[var(--text-muted)]">
+                                                <span className="inline-flex items-center gap-1.5"><Clock size={13} />{formatTimeSpent(item.totalTimeSpent)}</span>
+                                                <span className="inline-flex items-center gap-1.5"><Calendar size={13} />{item.date}</span>
+                                            </div>
+                                            <button
+                                                onClick={() => handleViewResult(item.resultId)}
+                                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-[var(--color-primary-500)]/10 text-[var(--color-primary-600)]"
+                                            >
+                                                <span>مشاهده</span>
+                                                <ArrowUpRight size={13} />
+                                            </button>
+                                        </div>
+                                    </article>
+                                );
+                            })}
+                        </div>
+                        <div className="hidden md:block bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl overflow-hidden shadow-sm">
                             <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                                 <table className="w-full text-right min-w-[1000px] border-collapse">
                                     <thead>
@@ -335,6 +395,7 @@ export function QuizHistoryView({ onBack, onStateChange }: QuizHistoryViewProps)
                                 </table>
                             </div>
                         </div>
+                        </>
                     ) : (
                         <div className="flex flex-col items-center justify-center py-24 text-center bg-[var(--bg-card)] rounded-3xl border border-[var(--border)] border-dashed">
                             <div className="w-16 h-16 rounded-full bg-[var(--bg-element)] flex items-center justify-center text-[var(--text-muted)] mb-5">

@@ -43,16 +43,25 @@ function isLocalhostFlag(value: string | undefined) {
 }
 
 const localhost = isLocalhostFlag(process.env.LOCALHOST);
-if (!process.env.MAIN_BACKEND_URL) {
-    process.env.MAIN_BACKEND_URL = localhost
-        ? 'http://localhost:3000/api'
-        : 'https://metatest.app/api';
+const LOCAL_API = 'http://localhost:3000/api';
+const HOSTED_API = 'https://metatest.app/api';
+const configuredApi = (process.env.MAIN_BACKEND_URL || '').trim().replace(/\/+$/, '');
+// LOCALHOST picks the API. A leftover production URL in this file must not
+// send a quiz that was just created on this computer to metatest.app.
+if (!configuredApi || configuredApi === LOCAL_API || configuredApi === HOSTED_API) {
+    process.env.MAIN_BACKEND_URL = localhost ? LOCAL_API : HOSTED_API;
 }
 if (!process.env.PORT) process.env.PORT = '4000';
 if (!process.env.CORS_ORIGIN) {
     process.env.CORS_ORIGIN = localhost
         ? 'http://localhost:5173,http://127.0.0.1:5173'
         : 'https://metatest.app,https://www.metatest.app';
+} else if (localhost) {
+    const origins = process.env.CORS_ORIGIN.split(',').map((item) => item.trim()).filter(Boolean);
+    for (const origin of ['http://localhost:5173', 'http://127.0.0.1:5173']) {
+        if (!origins.includes(origin)) origins.push(origin);
+    }
+    process.env.CORS_ORIGIN = origins.join(',');
 }
 
 const emptyToUndefined = (value: unknown) =>

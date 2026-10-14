@@ -87,6 +87,16 @@ export class LobbyService {
         return { numeric, encoded: value };
     }
 
+    private async loadQuizForLobby(encodedQuizId: string, code: string, accessToken?: string) {
+        try {
+            return await mainBackendService.getQuizMetadata(encodedQuizId, accessToken);
+        } catch (err) {
+            const missing = err instanceof CustomError && err.statusCode === 404;
+            if (!missing || !code || code === encodedQuizId) throw err;
+            return mainBackendService.getQuizMetadata(code, accessToken);
+        }
+    }
+
     private encodeStoredQuizId(quizId: string | number): string {
         const numericQuizId = Number(quizId);
         if (!Number.isInteger(numericQuizId) || numericQuizId <= 0) {
@@ -490,11 +500,24 @@ export class LobbyService {
         const code = this.normalizeCode(dto.code);
 
         return withLock(lobbyLockKey(code), async () => {
-            const { numeric: rawQuizId, encoded: encodedQuizId } = this.parseIncomingQuizId(dto.quizId);
-            const quiz = await mainBackendService.getQuizMetadata(
-                encodedQuizId,
+            const requestedId = this.parseIncomingQuizId(dto.quizId);
+            const quiz = await this.loadQuizForLobby(
+                requestedId.encoded,
+                code,
                 socket.data.accessToken,
             );
+            let rawQuizId = requestedId.numeric;
+            let encodedQuizId = requestedId.encoded;
+            const returnedId = quiz.quizId || quiz.id;
+            if (returnedId) {
+                try {
+                    const confirmed = this.parseIncomingQuizId(returnedId);
+                    rawQuizId = confirmed.numeric;
+                    encodedQuizId = confirmed.encoded;
+                } catch {
+                    // The API hash still works on the next call even if this process uses another salt.
+                }
+            }
 
             const requestedMax = dto.maxMembers ?? env.LOBBY_MAX_MEMBERS;
             const maxMembers = Math.min(

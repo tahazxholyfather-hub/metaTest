@@ -529,7 +529,7 @@ function MainApp() {
             case "met":
             case "ai_teacher":
             case "chat":
-                return <MetView key="met" onNavigate={handleNavigation} />;
+                return <MetView key="met" onNavigate={handleNavigation} onToggleHeader={setIsHeaderHiddenByChild} />;
             case "dashboard":
             default:
                 return <DashboardView key="dashboard" onNavigateToQuizHistory={() => handleNavigation("History")} onNavigateToFavorites={() => handleNavigation("favorites")} onNavigateToReports={() => handleNavigation("reports")} onNavigateToReview={() => handleNavigation("reviewbox")} onNavigateToNotes={() => handleNavigation("notes")}/>;
