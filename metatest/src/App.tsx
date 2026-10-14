@@ -1,5 +1,5 @@
 // src/App.tsx
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Toaster, toast } from "sonner";
 import type { View } from "./types";
@@ -44,6 +44,7 @@ import {PdfLibraryView} from "./views/documents";
 import {PlanSelectorView} from "./views/f";
 import PaymentResultPage from "./views/paymentResult";
 import { MetView } from "./views/met";
+const BounceApp = lazy(() => import("./bounce/ui/BounceApp").then((mod) => ({ default: mod.BounceApp })));
 
 
 
@@ -691,6 +692,7 @@ function MainApp() {
 const router = createBrowserRouter(
     [
         { path: "/admin/*", element: <AdminPanel /> },
+        { path: "/bounce/*", element: <Suspense fallback={<div style={{ position: "fixed", inset: 0, background: "#9fd4f2" }} />}><BounceApp /></Suspense> },
         { path: "/re/*", element: <PlanSelectorView /> },
         { path: "/payment/result/:token", element: <PaymentResultPage /> },
         { path: "/*", element: <MainApp /> },
