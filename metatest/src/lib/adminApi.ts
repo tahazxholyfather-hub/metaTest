@@ -147,6 +147,16 @@ export const adminApi = {
 
     wordStats: () => adminRequest<Json>('/words'),
 
+    listAnnouncements: () => adminRequest<Json>('/announcements'),
+    sendAnnouncement: (payload: Json) =>
+        adminRequest<Json>('/announcements', { method: 'POST', body: JSON.stringify(payload) }),
+
+    coinCatalog: () => adminRequest<Json>('/coins'),
+    saveCoinPackages: (packages: Json[]) =>
+        adminRequest<Json>('/coins/packages', { method: 'PUT', body: JSON.stringify({ packages }) }),
+    saveDailyCoins: (dailyCoins: Json) =>
+        adminRequest<Json>('/coins/daily', { method: 'PUT', body: JSON.stringify({ dailyCoins }) }),
+
     listReports: (params?: Json) => adminRequest<Json>('/reports', { params }),
     updateReport: (id: number, payload: Json) =>
         adminRequest<Json>(`/reports/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),

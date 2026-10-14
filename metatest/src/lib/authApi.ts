@@ -302,6 +302,12 @@ export const flowApi = {
     getDashboardData: () =>
         request<Json>(`${API_BASE}/dashboard/data`, { method: "GET" }),
 
+    markNotificationsRead: (payload: { all?: boolean; ids?: number[] } = { all: true }) =>
+        request<Json>(`${API_BASE}/dashboard/messages/read`, {
+            method: "POST",
+            body: JSON.stringify(payload),
+        }),
+
     claimTaskReward: (taskId: number) =>
         request<Json>(`${API_BASE}/dashboard/claim-reward`, {
             body: JSON.stringify({ taskId }),

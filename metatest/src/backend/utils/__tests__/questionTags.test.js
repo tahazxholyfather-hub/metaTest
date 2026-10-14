@@ -3,7 +3,9 @@
 const Module = require('module');
 const originalRequire = Module.prototype.require;
 Module.prototype.require = function (id) {
-    if (id === 'mysql2/promise') return { createPool() { return {}; } };
+    if (id === 'mysql2/promise') {
+        return { createPool() { return { query: () => Promise.resolve([[]]) }; } };
+    }
     if (id === 'dotenv') return { config() {} };
     return originalRequire.apply(this, arguments);
 };

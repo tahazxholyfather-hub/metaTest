@@ -14,6 +14,7 @@ interface AdminWords {
     insertEvents: number;
     editEvents: number;
     questionsInserted: number;
+    questionsEdited?: number;
     lastActivity?: string | null;
 }
 
@@ -33,7 +34,7 @@ const fmt = (n: number) => Number(n || 0).toLocaleString();
 export default function WordStats() {
     const [admins, setAdmins] = useState<AdminWords[]>([]);
     const [recent, setRecent] = useState<RecentEvent[]>([]);
-    const [totals, setTotals] = useState({ wordsInserted: 0, wordsEdited: 0, questionsInserted: 0 });
+    const [totals, setTotals] = useState({ wordsInserted: 0, wordsEdited: 0, questionsInserted: 0, questionsEdited: 0 });
     const [backfill, setBackfill] = useState<{ complete?: boolean; error?: string } | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -47,7 +48,7 @@ export default function WordStats() {
             if (!res.success) throw new Error(res.message || 'بارگذاری فعالیت واژه‌ها ناموفق بود');
             setAdmins(res.admins || []);
             setRecent(res.recent || []);
-            setTotals(res.totals || { wordsInserted: 0, wordsEdited: 0, questionsInserted: 0 });
+            setTotals(res.totals || { wordsInserted: 0, wordsEdited: 0, questionsInserted: 0, questionsEdited: 0 });
             setBackfill(res.backfill || { complete: true });
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : 'بارگذاری فعالیت واژه‌ها ناموفق بود');
@@ -72,7 +73,7 @@ export default function WordStats() {
                 <div>
                     <h1 className="text-sm font-bold">فعالیت واژه‌ها</h1>
                     <p className="text-xs text-[#86868b] mt-0.5 max-w-2xl">
-                        واژه‌های افزوده‌شده از سوال‌هایی است که هر ادمین ساخته. واژه‌های ویرایش‌شده، کلماتی است که هنگام ذخیره متن سوال، گزینه‌ها یا پاسخ تشریحی اضافه یا حذف شده‌اند.
+                        واژه‌های افزوده‌شده از سوال‌هایی است که هر ادمین ساخته. «واژه ویرایش‌شده» اختلاف کلمه‌های متن، گزینه‌ها و پاسخ تشریحی در هر ذخیره است. «سوال ویرایش‌شده» تعداد سوال‌هایی است که آن ادمین آخرین ویرایششان را ثبت کرده.
                     </p>
                 </div>
                 <button onClick={() => { retries.current = 0; load(); }} className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746]">
@@ -91,7 +92,7 @@ export default function WordStats() {
                 </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                 <div className="bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl p-5">
                     <div className="flex items-center gap-2 text-[#86868b] text-[10px] font-bold uppercase tracking-wider"><FilePlus2 size={14} /> واژه‌های افزوده‌شده</div>
                     <p className="text-2xl font-bold mt-2">{fmt(totals.wordsInserted)}</p>
@@ -103,6 +104,10 @@ export default function WordStats() {
                 <div className="bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl p-5">
                     <div className="text-[#86868b] text-[10px] font-bold uppercase tracking-wider">سوال‌های ساخته‌شده</div>
                     <p className="text-2xl font-bold mt-2">{fmt(totals.questionsInserted)}</p>
+                </div>
+                <div className="bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl p-5">
+                    <div className="text-[#86868b] text-[10px] font-bold uppercase tracking-wider">سوال‌های ویرایش‌شده</div>
+                    <p className="text-2xl font-bold mt-2">{fmt(totals.questionsEdited)}</p>
                 </div>
             </div>
 
@@ -116,7 +121,8 @@ export default function WordStats() {
                                 <tr>
                                     <th className="text-start p-4">ادمین</th>
                                     <th className="text-start p-4">نقش</th>
-                                    <th className="text-end p-4">سوال‌ها</th>
+                                    <th className="text-end p-4">سوال ساخته‌شده</th>
+                                    <th className="text-end p-4">سوال ویرایش‌شده</th>
                                     <th className="text-end p-4">واژه افزوده‌شده</th>
                                     <th className="text-end p-4">واژه ویرایش‌شده</th>
                                     <th className="text-end p-4">ویرایش‌ها</th>
@@ -132,6 +138,7 @@ export default function WordStats() {
                                         </td>
                                         <td className="p-4">{admin.isSuper ? 'مدیر اصلی' : (admin.role === 'selector' ? 'سلکتور' : admin.role === 'typing' ? 'تایپ' : admin.role === 'admin' ? 'مدیر' : admin.role)}</td>
                                         <td className="p-4 text-end font-mono">{fmt(admin.questionsInserted)}</td>
+                                        <td className="p-4 text-end font-mono">{fmt(admin.questionsEdited || 0)}</td>
                                         <td className="p-4 text-end font-mono">{fmt(admin.wordsInserted)}</td>
                                         <td className="p-4 text-end font-mono">{fmt(admin.wordsEdited)}</td>
                                         <td className="p-4 text-end font-mono">{fmt(admin.editEvents)}</td>
@@ -139,7 +146,7 @@ export default function WordStats() {
                                     </tr>
                                 ))}
                                 {admins.length === 0 && (
-                                    <tr><td colSpan={7} className="p-8 text-center text-[#86868b]">ادمینی پیدا نشد.</td></tr>
+                                    <tr><td colSpan={8} className="p-8 text-center text-[#86868b]">ادمینی پیدا نشد.</td></tr>
                                 )}
                             </tbody>
                         </table>

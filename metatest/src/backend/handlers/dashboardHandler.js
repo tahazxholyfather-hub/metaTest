@@ -1,5 +1,6 @@
 // handlers/dashboardHandler.js
 const db = require('../db');
+const notifications = require('../notifications');
 const {
     syncUserTasksProgress,
     computeTaskProgress,
@@ -277,12 +278,29 @@ const handleGetDashboardData = async (req, res) => {
             ORDER BY h.rewarded_at DESC
         `, [userId]);
 
+        try {
+            const [[planRow]] = await db.query(
+                'SELECT current_plan, plan_expires_at FROM tam24_users WHERE id = ?',
+                [userId]
+            );
+            await notifications.maybePlanNotices({
+                id: userId,
+                current_plan: planRow?.current_plan,
+                plan_expires_at: planRow?.plan_expires_at,
+            });
+        } catch (err) {
+            if (!err || err.code !== 'ER_BAD_FIELD_ERROR') {
+                console.error('plan notices:', err.message);
+            }
+        }
+
         // 10. Fetch Real In-App Messages
         const [messages] = await db.query(`
             SELECT id, title, body, is_read as isRead, DATE_FORMAT(created_at, '%Y-%m-%d %H:%i') as date
             FROM tam24_in_app_messages
             WHERE user_id = ?
             ORDER BY created_at DESC
+            LIMIT 40
         `, [userId]);
 
         // Matches the key the frontend uses with startTour('dashboard', ...)
@@ -589,11 +607,24 @@ const handleUpdateTaskProgress = async (req, res) => {
     }
 };
 
+const handleMarkMessagesRead = async (req, res) => {
+    try {
+        const ids = Array.isArray(req.body?.ids) ? req.body.ids : null;
+        const all = req.body?.all === true || !ids;
+        await notifications.markRead(req.user.id, { all, ids });
+        return res.status(200).json({ success: true });
+    } catch (error) {
+        console.error('mark messages read:', error);
+        return res.status(500).json({ success: false, message: 'خواندن اعلان‌ها انجام نشد.' });
+    }
+};
+
 module.exports = {
     handleGetDashboardData,
     handleClaimTaskReward,
     handleSubmitReferrerCode,
     handleGetTourStatus,
     handleMarkTourAsViewed,
-    handleUpdateTaskProgress
+    handleUpdateTaskProgress,
+    handleMarkMessagesRead,
 };

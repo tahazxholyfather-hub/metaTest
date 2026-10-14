@@ -2,7 +2,8 @@ const crypto = require('crypto');
 const pool = require('../db');
 const zarinpal = require('../utils/zarinpal');
 const walletController = require('./walletController');
-const { COIN_PACKAGES, coinPackageById } = require('../subscription/limits');
+const { findCoinPackage, listCoinPackages } = require('../coinCatalog');
+const notifications = require('../notifications');
 const entitlements = require('../subscription/entitlements');
 const usage = require('../subscription/usage');
 const coinWallet = require('../ai-teacher/services/coinWallet');
@@ -34,6 +35,18 @@ function safeJsonParse(value, fallback) {
  */
 function toRial(toman) {
     return Math.round(Number(toman) * 10);
+}
+
+async function notifyPlanPurchase(userId, plan, paymentId, queued) {
+    const name = plan?.name || 'اشتراک';
+    await notifications.notifyUser(userId, {
+        title: queued ? 'اشتراک در صف فعال‌سازی است' : 'اشتراک فعال شد',
+        body: queued
+            ? `خرید «${name}» ثبت شد و بعد از پایان اشتراک فعلی فعال می‌شود.`
+            : `اشتراک «${name}» فعال شد.`,
+        kind: 'plan',
+        dedupeKey: paymentId ? `payment:${paymentId}` : null,
+    });
 }
 
 function calculatePricing(plan, coupon, loyaltyPercent = 0) {
@@ -467,6 +480,7 @@ exports.createSubscriptionPayment = async (req, res) => {
 
             // Referral reward for the inviter (first purchase only) — post-commit.
             await walletController.awardReferralRewardForPayment(walletPaymentId);
+            await notifyPlanPurchase(userId, plan, walletPaymentId, walletAssignment.queued);
 
             const walletResultToken = createPaymentResultToken(walletPaymentId);
             return res.json({
@@ -543,6 +557,7 @@ exports.createSubscriptionPayment = async (req, res) => {
             );
 
             await connection.commit();
+            await notifyPlanPurchase(userId, plan, paymentId, directAssignment.queued);
 
             const resultToken = createPaymentResultToken(paymentId);
 
@@ -740,7 +755,7 @@ exports.handleZarinpalCallback = async (req, res) => {
             return res.status(500).send('Plan not found');
         }
 
-        await policy.applyPaidPlan(connection, {
+        const paidAssignment = await policy.applyPaidPlan(connection, {
             userId: lockedPayment.user_id,
             plan,
             paymentId,
@@ -779,6 +794,7 @@ exports.handleZarinpalCallback = async (req, res) => {
 
         // Award referral reward for the inviter (first purchase only) — post-commit.
         await walletController.awardReferralRewardForPayment(paymentId);
+        await notifyPlanPurchase(lockedPayment.user_id, plan, paymentId, paidAssignment.queued);
 
         return redirectToResult(paymentId);
     } catch (error) {
@@ -982,7 +998,7 @@ exports.getCoinPackages = async (req, res) => {
         return res.json({
             success: true,
             data: {
-                packages: COIN_PACKAGES,
+                packages: await listCoinPackages(pool, { activeOnly: true }),
                 canPurchase: ent.canPurchaseCoins,
                 isPaid: ent.isPaid,
             },
@@ -1005,7 +1021,7 @@ exports.createCoinPayment = async (req, res) => {
                 message: 'خرید سکه با اشتراک ویژه ممکن است.',
             });
         }
-        const pack = coinPackageById(req.body?.packageId);
+        const pack = await findCoinPackage(pool, req.body?.packageId);
         if (!pack) {
             return res.status(400).json({ success: false, message: 'بسته سکه نامعتبر است.' });
         }
@@ -1097,6 +1113,12 @@ async function handleCoinPurchaseCallback(req, res) {
             `UPDATE tam24_coin_purchases SET status = 'paid', ref_id = ?, paid_at = NOW(), authority = ? WHERE id = ?`,
             [refId, authorityFromCb || purchase.authority, purchaseId]
         );
+        await notifications.notifyUser(purchase.user_id, {
+            title: 'سکه به کیف پول اضافه شد',
+            body: `${Number(purchase.coins).toLocaleString('fa-IR')} سکه خریداری‌شده به موجودی‌ات اضافه شد. سکه خریداری‌شده تاریخ انقضا ندارد.`,
+            kind: 'coins',
+            dedupeKey: `coin-purchase:${purchase.id}`,
+        });
         return redirect('paid');
     } catch (error) {
         console.error('handleCoinPurchaseCallback error:', error);

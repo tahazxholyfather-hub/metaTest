@@ -7,6 +7,8 @@ const staff = require('../controllers/adminStaffController');
 const ai = require('../controllers/adminAiController');
 const ops = require('../controllers/adminOpsController');
 const subscriptions = require('../controllers/adminSubscriptionController');
+const announcements = require('../controllers/announcementController');
+const coins = require('../controllers/coinAdminController');
 const { requireSection, withSections } = require('../admin/access');
 const {
     requireAdminSession,
@@ -66,6 +68,13 @@ router.use(requireAdminSession);
 router.get('/dashboard', requireSection('dashboard'), wrap(dashboard.handleGetDashboard));
 
 router.get('/words', requireSection('word-stats'), wrap(ops.handleWordStats));
+
+router.get('/announcements', requireSection('announcements'), wrap(announcements.handleList));
+router.post('/announcements', requireSection('announcements'), wrap(announcements.handleSend));
+
+router.get('/coins', requireSection('coins'), wrap(coins.handleGetCoins));
+router.put('/coins/packages', requireSection('coins'), wrap(coins.handleSavePackages));
+router.put('/coins/daily', requireSection('coins'), wrap(coins.handleSaveDaily));
 
 router.get('/reports', requireSection('reports'), wrap(ops.handleListReports));
 router.patch('/reports/:id', requireSection('reports'), wrap(ops.handleUpdateReport));

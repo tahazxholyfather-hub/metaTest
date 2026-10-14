@@ -17,7 +17,7 @@
  * actually consumed are charged.
  */
 
-const { CONTEXT_LIMITS, MODELS, dailyCoinsForPlan, featureStatus } = require('./config');
+const { CONTEXT_LIMITS, MODELS, dailyCoinsForPlan, featureStatus, COIN_PRICING } = require('./config');
 const { isValidSubject } = require('./subjects');
 const {
     db, loadUserRow, ensureSettings, walletFromBuckets, loadSubjectRow, userMessageForError,
@@ -244,7 +244,7 @@ const streamChat = async (req, res) => {
         const maxEst = pricing.estimateMaxCoins({ model, maxOutputTokens: maxTokens, allowImage: featureStatus().imageGeneration });
         const walletView = walletFromBuckets(wallet, coinPlan);
 
-        if (wallet.total < typical.coins) {
+        if (wallet.total < COIN_PRICING.minBalanceToStart) {
             const text = paid
                 ? 'موجودی سکه کافی نیست. یک بسته سکه بگیرید، یا تا شارژ فردا صبر کنید.'
                 : 'سکه امروز تمام شد. با اشتراک رایگان، گفتگو تا شارژ فردا محدود است. برای ادامه، اشتراک ویژه را فعال کنید.';
@@ -277,7 +277,10 @@ const streamChat = async (req, res) => {
             }
         }
 
-        const reserveAmount = Math.max(typical.coins, Math.min(wallet.total, maxEst.coins));
+        const reserveAmount = Math.min(
+            wallet.total,
+            Math.max(COIN_PRICING.minCharge, Math.min(maxEst.coins, Math.max(typical.coins, COIN_PRICING.defaultReservation)))
+        );
 
         conn = await db.getConnection();
         await conn.beginTransaction();
@@ -515,22 +518,27 @@ const streamChat = async (req, res) => {
         });
         out.send('status', { status: 'ready' });
 
-        // ── Background work ─────────────────────────────────────────────────
-        if (!stopped) {
-            memoryService.maybeUpdateMemory(db, {
-                userId, conversationId, messageCount: (conversation.message_count || 0) + 2, userMessage: message, assistantMessage: fullText,
-                subjectKey, sourceMessageId: assistantMsgId, enabled: settings.memoryEnabled,
-            }).catch(() => {});
-        }
+        // Title and memory run after the answer is already delivered. A failure
+        // here must not turn a finished reply into the rose error bubble.
+        try {
+            if (!stopped) {
+                await memoryService.maybeUpdateMemory(db, {
+                    userId, conversationId, messageCount: (conversation.message_count || 0) + 2, userMessage: message, assistantMessage: fullText,
+                    subjectKey, sourceMessageId: assistantMsgId, enabled: settings.memoryEnabled,
+                }).catch(() => {});
+            }
 
-        const needsTitle = conversation.source_type !== 'quiz_question' && !regenerateMessageId && (isFirstExchange || (!conversation.title_generated && conversation.title === conversationService.NEW_TITLE));
-        if (needsTitle && !out.isClosed()) {
-            const title = await conversationService.generateTitle(db, {
-                conversationId, userId, subjectKey, userMessage: message || 'تصویر ارسال شد', assistantMessage: fullText,
-            }).catch(() => null);
-            if (title) out.send('title', { conversationId, title });
-        } else if (needsTitle) {
-            conversationService.generateTitle(db, { conversationId, userId, subjectKey, userMessage: message || 'تصویر ارسال شد', assistantMessage: fullText }).catch(() => {});
+            const needsTitle = conversation.source_type !== 'quiz_question' && !regenerateMessageId && (isFirstExchange || (!conversation.title_generated && conversation.title === conversationService.NEW_TITLE));
+            if (needsTitle && !out.isClosed()) {
+                const title = await conversationService.generateTitle(db, {
+                    conversationId, userId, subjectKey, userMessage: message || 'تصویر ارسال شد', assistantMessage: fullText,
+                }).catch(() => null);
+                if (title && !out.isClosed()) out.send('title', { conversationId, title });
+            } else if (needsTitle) {
+                conversationService.generateTitle(db, { conversationId, userId, subjectKey, userMessage: message || 'تصویر ارسال شد', assistantMessage: fullText }).catch(() => {});
+            }
+        } catch (sideErr) {
+            console.error('[met] post-done', sideErr);
         }
 
         return out.end();
@@ -561,9 +569,12 @@ const streamChat = async (req, res) => {
             status: code === 'AI_STOPPED' ? 'stopped' : 'error', errorCode: code, errorMessage: err.message, durationMs: Date.now() - turnStarted,
         });
 
+        const dbWriteFailed = typeof code === 'string' && code.startsWith('ER_');
         out.send('error', {
             code,
-            message: userMessageForError(code, 'در تولید پاسخ مشکلی پیش آمد.'),
+            message: dbWriteFailed
+                ? 'ذخیره‌ی پاسخ مِت انجام نشد. بک‌اند را یک بار ری‌استارت کن و دوباره بفرست.'
+                : userMessageForError(code, 'در تولید پاسخ مشکلی پیش آمد.'),
             balance: walletAfter?.total ?? err.balance,
             needed: err.needed,
             wallet: walletAfter,

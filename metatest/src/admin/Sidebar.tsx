@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Layers, LogOut, Hexagon, ListTree, FileText, FilePlus2, BadgePercent, UserPlus, Wallet, Bot, Shield, PenLine, Flag, KeyRound, Crown } from 'lucide-react';
+import { LayoutDashboard, Layers, LogOut, Hexagon, ListTree, FileText, FilePlus2, BadgePercent, UserPlus, Wallet, Bot, Shield, PenLine, Flag, KeyRound, Crown, Bell, Coins } from 'lucide-react';
 import type { User } from './AuthView';
 import { ADMIN_NAV, canAccessSection } from './access';
 import type { LucideIcon } from 'lucide-react';
@@ -24,6 +24,8 @@ const ICONS: Record<string, LucideIcon> = {
     'referral-settings': UserPlus,
     withdrawals: Wallet,
     'word-stats': PenLine,
+    announcements: Bell,
+    coins: Coins,
     reports: Flag,
     'ai-manager': Bot,
     admins: Shield,

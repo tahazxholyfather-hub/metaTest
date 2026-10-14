@@ -37,6 +37,8 @@ test('section defaults and super override', () => {
     assert.equal(staff.withdrawals, undefined);
     assert.equal(staff['ai-manager'], false);
     assert.equal(staff.admins, false);
+    assert.equal(staff.announcements, false);
+    assert.equal(staff.coins, false);
     assert.equal(staff.access, false);
 
     const saved = resolveSections(4, [

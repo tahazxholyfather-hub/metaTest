@@ -4,6 +4,7 @@ const path = require('path');
 const zlib = require('zlib');
 const crypto = require('crypto');
 const walletController = require('./walletController');
+const notifications = require('../notifications');
 const { parsePlanIds } = require('../admin/discounts');
 const {
     ensureQuestionTagTables,
@@ -1457,6 +1458,18 @@ const handleAdminUpdateWithdrawalStatus = async (req, res) => {
         }
 
         await conn.commit();
+        const withdrawalCopy = {
+            approved: ['برداشت تأیید شد', `درخواست برداشت ${Number(wr.amount).toLocaleString('fa-IR')} تومان تأیید شد.`],
+            rejected: ['برداشت رد شد', `درخواست برداشت رد شد و مبلغ به کیف پول برگشت.${note ? ` ${String(note).trim()}` : ''}`],
+            paid: ['برداشت واریز شد', `مبلغ ${Number(wr.amount).toLocaleString('fa-IR')} تومان واریز شد.`],
+        };
+        const [title, body] = withdrawalCopy[status] || ['وضعیت برداشت', 'وضعیت درخواست برداشت تغییر کرد.'];
+        await notifications.notifyUser(wr.user_id, {
+            title,
+            body,
+            kind: 'wallet',
+            dedupeKey: `withdrawal:${id}:${status}`,
+        });
         return res.json({ success: true, message: 'وضعیت درخواست به‌روزرسانی شد.' });
     } catch (error) {
         await conn.rollback().catch(() => {});

@@ -51,8 +51,21 @@ const NotificationBell = () => {
     const hasUnread = notifications.some(n => n.isRead === 0);
 
     const markAllAsRead = () => {
+        const previous = notifications;
         setNotifications(notifications.map(n => ({ ...n, isRead: 1 })));
-        // Optional: Trigger a background api request to mark notifications as read if built in later
+        flowApi.markNotificationsRead({ all: true }).catch((error) => {
+            console.error("Failed to mark notifications read:", error);
+            setNotifications(previous);
+        });
+    };
+
+    const markOneAsRead = (id: number) => {
+        const target = notifications.find((n) => n.id === id);
+        if (!target || target.isRead !== 0) return;
+        setNotifications(notifications.map(n => n.id === id ? { ...n, isRead: 1 } : n));
+        flowApi.markNotificationsRead({ ids: [id] }).catch((error) => {
+            console.error("Failed to mark notification read:", error);
+        });
     };
 
     return (
@@ -113,6 +126,7 @@ const NotificationBell = () => {
                                     {notifications.map((notif) => (
                                         <div
                                             key={`notif-item-${notif.id}`}
+                                            onClick={() => markOneAsRead(notif.id)}
                                             className={`p-4 border-b last:border-b-0 border-[var(--border)] hover:bg-[var(--hover-overlay)] transition-colors cursor-pointer flex gap-3 ${notif.isRead === 0 ? 'bg-[var(--color-primary-500)]/5' : ''}`}
                                         >
                                             <div className={`mt-1 flex-shrink-0 ${notif.isRead === 0 ? 'text-[#FF4D6D]' : 'text-[var(--text-muted)]'}`}>

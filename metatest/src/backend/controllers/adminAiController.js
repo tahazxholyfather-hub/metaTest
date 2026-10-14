@@ -56,8 +56,10 @@ function sanitizeSettings(input) {
 
     if (src.dailyCoins && typeof src.dailyCoins === 'object') {
         const dailyCoins = {};
-        for (const key of ['free', 'bronze', 'silver', 'golden', 'diamond', 'epic', 'premium']) {
-            if (src.dailyCoins[key] != null) dailyCoins[key] = clampNum(src.dailyCoins[key], 0, { min: 0, max: 1_000_000, integer: true });
+        for (const [rawKey, rawValue] of Object.entries(src.dailyCoins)) {
+            const key = String(rawKey || '').trim().toLowerCase();
+            if (!/^[a-z0-9][a-z0-9_-]{0,39}$/.test(key) || rawValue == null) continue;
+            dailyCoins[key] = clampNum(rawValue, 0, { min: 0, max: 1_000_000, integer: true });
         }
         if (Object.keys(dailyCoins).length) out.dailyCoins = dailyCoins;
     }

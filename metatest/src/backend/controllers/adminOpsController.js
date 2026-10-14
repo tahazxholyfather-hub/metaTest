@@ -3,6 +3,7 @@
 const pool = require('../db');
 const { publicAdmin } = require('../middleware/adminAuth');
 const { backfillInsertedWords } = require('../admin/words');
+const { ensureOpsSchema } = require('../admin/schema');
 const { catalog, listAccess, saveSections } = require('../admin/access');
 const { resolveSections } = require('../admin/sections');
 
@@ -15,6 +16,7 @@ function snippet(text, limit = 180) {
 }
 
 const handleWordStats = async (req, res) => {
+    await ensureOpsSchema(pool);
     let backfill = { complete: true, scanned: 0, logged: 0 };
     if (String(req.query.backfill || '') !== '0') {
         try {
@@ -39,11 +41,19 @@ const handleWordStats = async (req, res) => {
     );
 
     let questionCounts = new Map();
+    let editCounts = new Map();
     try {
         const [counts] = await pool.query(
             `SELECT admin_id, COUNT(*) AS questions_inserted FROM questions_tam24 GROUP BY admin_id`
         );
         questionCounts = new Map(counts.map((row) => [Number(row.admin_id), Number(row.questions_inserted)]));
+        const [edits] = await pool.query(
+            `SELECT last_edit_by AS admin_id, COUNT(*) AS questions_edited
+             FROM questions_tam24
+             WHERE last_edit_by IS NOT NULL AND last_edit_by > 0
+             GROUP BY last_edit_by`
+        );
+        editCounts = new Map(edits.map((row) => [Number(row.admin_id), Number(row.questions_edited)]));
     } catch (err) {
         console.error('question counts unavailable:', err.message);
     }
@@ -70,15 +80,22 @@ const handleWordStats = async (req, res) => {
         insertEvents: Number(row.insert_events) || 0,
         editEvents: Number(row.edit_events) || 0,
         questionsInserted: questionCounts.get(Number(row.id)) || 0,
+        questionsEdited: editCounts.get(Number(row.id)) || 0,
         lastActivity: row.last_activity || null,
     }));
+
+    rows.sort((a, b) => {
+        const score = (row) => row.wordsEdited + row.questionsEdited + row.wordsInserted;
+        return score(b) - score(a) || a.id - b.id;
+    });
 
     const totals = rows.reduce((sum, row) => {
         sum.wordsInserted += row.wordsInserted;
         sum.wordsEdited += row.wordsEdited;
         sum.questionsInserted += row.questionsInserted;
+        sum.questionsEdited += row.questionsEdited;
         return sum;
-    }, { wordsInserted: 0, wordsEdited: 0, questionsInserted: 0 });
+    }, { wordsInserted: 0, wordsEdited: 0, questionsInserted: 0, questionsEdited: 0 });
 
     return res.json({
         success: true,
