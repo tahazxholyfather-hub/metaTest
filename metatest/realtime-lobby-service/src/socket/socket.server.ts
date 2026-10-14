@@ -1,6 +1,7 @@
 import { Server } from 'socket.io';
 import http from 'http';
 import { env } from '../config/env';
+import { corsOptions } from '../config/cors';
 import { logger } from '../config/logger';
 import { socketAuthMiddleware } from './middlewares/auth.middleware';
 import { registerLobbyHandlers } from './handlers/lobby.handler';
@@ -10,12 +11,11 @@ let io: Server;
 
 export function createSocketServer(server: http.Server) {
     io = new Server(server, {
-        cors: {
-            origin: env.CORS_ORIGINS,
-            credentials: true,
-        },
+        cors: corsOptions,
         pingTimeout: env.SOCKET_PING_TIMEOUT,
         pingInterval: env.SOCKET_PING_INTERVAL,
+        transports: ['websocket', 'polling'],
+        allowEIO3: true,
     });
 
     io.use(socketAuthMiddleware);

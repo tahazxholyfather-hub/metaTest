@@ -88,7 +88,7 @@ export class MainBackendService {
     private readonly internalKey?: string;
 
     constructor() {
-        this.baseUrl = env.MAIN_BACKEND_URL.replace(/\/$/, '');
+        this.baseUrl = env.MAIN_BACKEND_INTERNAL_BASE_URL;
 
         /**
          * Preferred env name:
@@ -127,7 +127,7 @@ export class MainBackendService {
          *   }
          * }
          */
-        const url = `${this.baseUrl}/internal/quizzes/${encodeURIComponent(
+        const url = `${this.baseUrl}/quizzes/${encodeURIComponent(
             quizId,
         )}/metadata`;
 
@@ -197,7 +197,7 @@ export class MainBackendService {
          *   role: 'creator' | 'member'
          * }
          */
-        const url = `${this.baseUrl}/internal/quizzes/${encodeURIComponent(
+        const url = `${this.baseUrl}/quizzes/${encodeURIComponent(
             params.quizId,
         )}/members`;
 
@@ -228,7 +228,7 @@ export class MainBackendService {
          *   payload: {}
          * }
          */
-        const url = `${this.baseUrl}/api/flow`;
+        const url = env.MAIN_BACKEND_FLOW_URL;
 
         const response = await this.request(url, {
             method: 'POST',
@@ -320,7 +320,7 @@ export class MainBackendService {
          *   selectionLog
          * }
          */
-        const url = `${this.baseUrl}/internal/quizzes/${encodeURIComponent(
+        const url = `${this.baseUrl}/quizzes/${encodeURIComponent(
             params.quizId,
         )}/grade`;
 
@@ -377,7 +377,7 @@ export class MainBackendService {
          *
          * POST /internal/results
          */
-        const url = `${this.baseUrl}/internal/results`;
+        const url = `${this.baseUrl}/results`;
 
         try {
             const response = await this.request(url, {
@@ -423,7 +423,7 @@ export class MainBackendService {
          *
          * Body: {} (empty — the action is implicit in the endpoint)
          */
-        const url = `${this.baseUrl}/internal/quizzes/${encodeURIComponent(quizId)}/finish`;
+        const url = `${this.baseUrl}/quizzes/${encodeURIComponent(quizId)}/finish`;
 
         try {
             await this.request(url, {
