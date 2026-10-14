@@ -44,6 +44,9 @@ import {PdfLibraryView} from "./views/documents";
 import {PlanSelectorView} from "./views/f";
 import PaymentResultPage from "./views/paymentResult";
 import { MetView } from "./views/met";
+import { lazy, Suspense } from "react";
+
+const DentalLandingPage = lazy(() => import("./views/dental/DentalLandingPage"));
 
 
 
@@ -693,6 +696,14 @@ const router = createBrowserRouter(
         { path: "/admin/*", element: <AdminPanel /> },
         { path: "/re/*", element: <PlanSelectorView /> },
         { path: "/payment/result/:token", element: <PaymentResultPage /> },
+        {
+            path: "/dental",
+            element: (
+                <Suspense fallback={<div style={{ minHeight: "100vh", background: "#fff" }} />}>
+                    <DentalLandingPage />
+                </Suspense>
+            ),
+        },
         { path: "/*", element: <MainApp /> },
     ]
 );
