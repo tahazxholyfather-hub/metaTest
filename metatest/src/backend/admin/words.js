@@ -102,19 +102,19 @@ async function backfillBatch(query, limit) {
              WHERE e.question_id = q.id AND e.action = 'insert'
          )
          ORDER BY q.id ASC
-         LIMIT ?`,
-        [limit]
+         LIMIT ${Math.min(500, Math.max(1, Number(limit) || 500))}`
     );
     if (!questions.length) return { scanned: 0, logged: 0 };
 
     const ids = questions.map((question) => question.id);
+    const marks = ids.map(() => '?').join(', ');
     const [options] = await query(
-        `SELECT question_id, option_text FROM options_tam24 WHERE question_id IN (?)`,
-        [ids]
+        `SELECT question_id, option_text FROM options_tam24 WHERE question_id IN (${marks})`,
+        ids
     );
     const [answers] = await query(
-        `SELECT question_id, answer_text FROM descriptive_answers_tam24 WHERE question_id IN (?)`,
-        [ids]
+        `SELECT question_id, answer_text FROM descriptive_answers_tam24 WHERE question_id IN (${marks})`,
+        ids
     );
 
     const optionWords = new Map();

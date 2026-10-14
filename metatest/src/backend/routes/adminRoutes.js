@@ -144,7 +144,8 @@ router.put('/ai/user-settings/:userId', requireSection('ai-manager'), wrap(ai.ha
 router.use((err, _req, res, _next) => {
     console.error('[admin] route error:', err);
     if (res.headersSent) return;
-    res.status(500).json({ success: false, message: 'Internal server error' });
+    const detail = err && (err.sqlMessage || err.message);
+    res.status(500).json({ success: false, message: detail ? `خطای سرور: ${detail}` : 'Internal server error' });
 });
 
 module.exports = router;

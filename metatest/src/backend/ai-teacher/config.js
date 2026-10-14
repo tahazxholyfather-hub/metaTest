@@ -88,8 +88,11 @@ function overlayBucket(name, base) {
             return [...new Set([...Reflect.ownKeys(target), ...Object.keys(overlay[name] || {})])];
         },
         getOwnPropertyDescriptor(target, prop) {
-            if (prop in target || (overlay[name] && prop in overlay[name])) {
-                return { enumerable: true, configurable: true, writable: false };
+            const own = Object.getOwnPropertyDescriptor(target, prop);
+            if (own) return own;
+            const extra = overlay[name];
+            if (extra && Object.prototype.hasOwnProperty.call(extra, prop)) {
+                return { enumerable: true, configurable: true, value: extra[prop] };
             }
             return undefined;
         },
@@ -255,10 +258,15 @@ const SUGGESTIONS = Object.freeze({
 
 function dailyCoinsForPlan(planKey) {
     const key = String(planKey || 'free').toLowerCase();
-    if (Object.prototype.hasOwnProperty.call(DAILY_COINS_BY_PLAN, key)) return DAILY_COINS_BY_PLAN[key];
+    const extra = overlay.dailyCoins;
+    if (extra && Object.prototype.hasOwnProperty.call(extra, key) && extra[key] != null) {
+        const amount = Math.floor(Number(extra[key]));
+        if (Number.isInteger(amount) && amount >= 0) return amount;
+    }
+    if (Object.prototype.hasOwnProperty.call(ENV_DAILY_COINS_BY_PLAN, key)) return ENV_DAILY_COINS_BY_PLAN[key];
     // Paid checkout stores subscription_plans.id, which is not a named key.
     // Those students stay on at least the bronze daily quota — never the free cap.
-    return DAILY_COINS_BY_PLAN.bronze;
+    return ENV_DAILY_COINS_BY_PLAN.bronze;
 }
 
 /**

@@ -244,6 +244,7 @@ export function useMetChat({ subjectKey, onWallet, onConversationChange, onStatu
                         break;
                     }
                     case 'error': {
+                        if (gotDone) break;
                         const sid = streamingIdRef.current;
                         streamingIdRef.current = null;
                         setToolLabel(null);
@@ -287,6 +288,10 @@ export function useMetChat({ subjectKey, onWallet, onConversationChange, onStatu
                 }
                 if (!gotDone) setStatusSafe('ready');
             } catch (err) {
+                if (gotDone) {
+                    setStatusSafe('ready');
+                    return;
+                }
                 if (controller.signal.aborted) {
                     // User stopped locally; keep whatever streamed so far.
                     patchStreaming((m) => ({ ...m, streaming: false, status: 'stopped' }));

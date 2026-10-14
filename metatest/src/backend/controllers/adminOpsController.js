@@ -36,8 +36,7 @@ const handleWordStats = async (req, res) => {
                 MAX(e.created_at) AS last_activity
          FROM tam24_admins a
          LEFT JOIN tam24_admin_word_events e ON e.admin_id = a.id
-         GROUP BY a.id, a.username, a.full_name, a.role, a.status
-         ORDER BY (words_inserted + words_edited) DESC, a.id ASC`
+         GROUP BY a.id, a.username, a.full_name, a.role, a.status`
     );
 
     let questionCounts = new Map();

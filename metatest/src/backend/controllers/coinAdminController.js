@@ -7,9 +7,20 @@ const { snapshotRuntimeSettings, applyRuntimeOverlay, dailyCoinsForPlan } = requ
 const PLAN_KEY = /^[a-z0-9][a-z0-9_-]{0,39}$/;
 
 async function loadMergedSettings() {
-    const [[existing]] = await pool.query(`SELECT settings_json FROM tam24_ai_admin_settings WHERE id = 1`);
+    let existing;
+    try {
+        const [[row]] = await pool.query(`SELECT settings_json FROM tam24_ai_admin_settings WHERE id = 1`);
+        existing = row;
+    } catch (err) {
+        if (!err || err.code !== 'ER_NO_SUCH_TABLE') console.error('coin settings:', err.message);
+        return {};
+    }
     let prev = {};
-    try { prev = existing?.settings_json ? JSON.parse(existing.settings_json) : {}; } catch { prev = {}; }
+    const stored = existing?.settings_json;
+    if (stored && typeof stored === 'object') prev = stored;
+    else {
+        try { prev = stored ? JSON.parse(stored) : {}; } catch { prev = {}; }
+    }
     if (prev && typeof prev === 'object') applyRuntimeOverlay(prev);
     return prev && typeof prev === 'object' ? prev : {};
 }
@@ -39,9 +50,15 @@ async function saveDailyCoins(dailyCoins, adminId) {
 }
 
 const handleGetCoins = async (_req, res) => {
-    const [plans] = await pool.query(
-        `SELECT id, name, is_active FROM subscription_plans ORDER BY sort_order ASC, id ASC`
-    );
+    let plans = [];
+    try {
+        const [rows] = await pool.query(
+            `SELECT id, name, is_active FROM subscription_plans ORDER BY sort_order ASC, id ASC`
+        );
+        plans = rows;
+    } catch (err) {
+        console.error('coin plans:', err.message);
+    }
     const prev = await loadMergedSettings();
     const snap = snapshotRuntimeSettings();
     const daily = { free: dailyCoinsForPlan('free') };
