@@ -41,15 +41,9 @@ import { LobbyView } from './views/LobbyView';
 import QuizPage from "./views/testworld/QuizPage";
 import ResultDashboard from "./views/testworld/QuizResultView";
 import {PdfLibraryView} from "./views/documents";
-import {PlanSelectorView} from "./views/f";
 import PaymentResultPage from "./views/paymentResult";
 import { MetView } from "./views/met";
 import InviteLanding from "./views/InviteLanding";
-import { LudoApp } from "./games/ludo";
-
-const DentalLandingPage = lazy(() => import("./views/dental/DentalLandingPage"));
-const BounceApp = lazy(() => import("./bounce/ui/BounceApp").then((mod) => ({ default: mod.BounceApp })));
-const OrbShowcase = lazy(() => import("./views/game/OrbShowcase"));
 
 
 
@@ -697,26 +691,13 @@ function MainApp() {
 const appBase = import.meta.env.BASE_URL.replace(/\/$/, '');
 const router = createBrowserRouter(
     [
-        { path: "/dev/orbs", element: (
-            <Suspense fallback={<div style={{ minHeight: "100dvh", background: "#070b14" }} />}>
-                <OrbShowcase />
-            </Suspense>
-        ) },
+
         { path: "/admin/*", element: <AdminPanel /> },
-        { path: "/bounce/*", element: <Suspense fallback={<div style={{ position: "fixed", inset: 0, background: "#9fd4f2" }} />}><BounceApp /></Suspense> },
-        { path: "/ludo/*", element: <LudoApp /> },
-        { path: "/re/*", element: <PlanSelectorView /> },
+
         { path: "/payment/result/:token", element: <PaymentResultPage /> },
         { path: "/invite/:code", element: <InviteLanding /> },
-        {
-            path: "/dental",
-            element: (
-                <Suspense fallback={<div style={{ minHeight: "100vh", background: "#fff" }} />}>
-                    <DentalLandingPage />
-                </Suspense>
-            ),
-        },
-        { path: "/*", element: <MainApp /> },
+
+        { path: "/*", element: <MainApp /> }
     ],
     appBase ? { basename: appBase } : undefined,
 );
