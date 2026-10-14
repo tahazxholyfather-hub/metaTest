@@ -3,6 +3,7 @@ export const LobbyEvents = {
 
     LOBBY_CREATE: 'lobby:create',
     LOBBY_JOIN: 'lobby:join',
+    LOBBY_REJOIN: 'lobby:rejoin',
     LOBBY_LEAVE: 'lobby:leave',
     LOBBY_START: 'lobby:start',
     LOBBY_DESTROY: 'lobby:destroy',
@@ -13,7 +14,9 @@ export const LobbyEvents = {
     LOBBY_LEFT: 'lobby:left',
     LOBBY_STARTED: 'lobby:started',
     LOBBY_DESTROYED: 'lobby:destroyed',
-    LOBBY_MEMBER_KICKED: 'lobby:member-kicked',
+    LOBBY_KICKED: 'lobby:kicked',
+    LOBBY_STARTING: 'lobby:starting',
+    LOBBY_CANCELLED: 'lobby:cancelled',
 
     MEMBER_ONLINE: 'member:online',
     MEMBER_OFFLINE: 'member:offline',
@@ -22,9 +25,18 @@ export const LobbyEvents = {
 
     QUIZ_SUBMIT: 'quiz:submit',
     QUIZ_RESULT: 'quiz:result',
-    LOBBY_STARTING:'lobby_starting',   // countdown started, grace window open
-    LOBBY_CANCELLED:'lobby_cancelled', // countdown cancelled (host disconnected)
-    SET_READY: 'set_ready',
-    NOTIFY_LOBBY: 'notify_lobby'
 
+    SET_READY: 'lobby:set-ready',
+    NOTIFY_LOBBY: 'lobby:notify',
+    NOTIFICATION: 'lobby:notification',
+} as const;
+
+export const LobbyEventAliases = {
+    REJOIN: 'rejoin_lobby',
+    SET_READY: 'set_ready',
+    NOTIFY: 'notify_lobby',
+    STARTING: 'lobby_starting',
+    CANCELLED: 'lobby_cancelled',
+    KICKED: 'lobby:member-kicked',
+    NOTIFICATION: 'lobby_notification',
 } as const;

@@ -15,7 +15,15 @@ type SupportedJwtPayload = JwtPayload & {
     email?: string;
 };
 
+type CachedUser = {
+    user: AuthenticatedUser;
+    expiresAt: number;
+};
+
 class AuthService {
+    private readonly profileCache = new Map<string, CachedUser>();
+    private readonly maxCacheEntries = 2000;
+
     extractBearerToken(value?: string | null): string {
         if (!value) {
             throw new CustomError('Missing authorization token', 401, 'MISSING_TOKEN');
@@ -31,8 +39,14 @@ class AuthService {
     verifyAccessToken(token: string): AuthenticatedUser {
         let decoded: SupportedJwtPayload | string;
 
+        const verifyOptions: jwt.VerifyOptions = {
+            algorithms: ['HS256'],
+        };
+        if (env.JWT_AUDIENCE) verifyOptions.audience = env.JWT_AUDIENCE;
+        if (env.JWT_ISSUER) verifyOptions.issuer = env.JWT_ISSUER;
+
         try {
-            decoded = jwt.verify(token, env.JWT_SECRET) as SupportedJwtPayload | string;
+            decoded = jwt.verify(token, env.JWT_SECRET, verifyOptions) as SupportedJwtPayload | string;
         } catch {
             throw new CustomError('Invalid or expired token', 401, 'INVALID_TOKEN');
         }
@@ -68,6 +82,11 @@ class AuthService {
     }
 
     async getAuthenticatedUser(token: string): Promise<AuthenticatedUser> {
+        const cached = this.profileCache.get(token);
+        if (cached && cached.expiresAt > Date.now()) {
+            return cached.user;
+        }
+
         const baseUser = this.verifyAccessToken(token);
 
         try {
@@ -81,38 +100,48 @@ class AuthService {
                 .join(' ')
                 .trim();
 
-            return {
-                id: String(profile.id ?? baseUser.id),
-
+            const hydrated: AuthenticatedUser = {
+                id: baseUser.id,
                 username:
                     profile.username ??
                     profile.email ??
                     profile.phone ??
                     baseUser.username,
-
-                displayName:
-                    fullName || 'کاربر مهمان',
-
-                avatarUrl:
-                    profile.avatar_url ?? '/user_default.png',
-
+                displayName: fullName || baseUser.displayName || 'کاربر مهمان',
+                avatarUrl: this.normalizeAvatarUrl(profile.avatar_url) ?? '/user_default.png',
                 firstName,
                 lastName,
-                socketId:baseUser.socketId,
+                socketId: baseUser.socketId,
                 trophies: profile.trophies ?? 0,
-
             };
+
+            this.remember(token, hydrated);
+            return hydrated;
         } catch (error) {
             logger.warn(
                 {
-                    err: error,
                     userId: baseUser.id,
                 },
                 'Failed to hydrate authenticated user from main backend. Falling back to token payload',
             );
 
+            this.remember(token, baseUser);
             return baseUser;
         }
+    }
+
+    private remember(token: string, user: AuthenticatedUser): void {
+        if (env.PROFILE_CACHE_TTL_MS <= 0) return;
+
+        if (this.profileCache.size >= this.maxCacheEntries) {
+            const firstKey = this.profileCache.keys().next().value;
+            if (firstKey) this.profileCache.delete(firstKey);
+        }
+
+        this.profileCache.set(token, {
+            user,
+            expiresAt: Date.now() + env.PROFILE_CACHE_TTL_MS,
+        });
     }
 
     private normalizeAvatarUrl(value?: string | null): string | null {

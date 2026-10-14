@@ -12,7 +12,6 @@ import { useSocket } from '../../socket/useSocket';
 import { useLobbyEvents } from '../../socket/useLobbyEvents';
 import {
     joinLobby,
-    leaveLobby,
     rejoinLobby,
     submitQuiz,
     updateMemberProgress,
@@ -992,21 +991,7 @@ export default function QuizPage({ quizData: initialQuizData, onExit }: QuizPage
         saveSession(answers);
     }, [answers, saveSession, storageKey, hashedQuizId, isSessionReady, isLoading, clearStoredSession]);
 
-    // ─── Lobby leave on unmount ───────────────────────────────────────────────
-    useEffect(() => {
-        return () => {
-            if (
-                socket &&
-                joinedLobbyRef.current &&
-                lobbyCodeRef.current &&
-                currentUserId &&
-                !isPrivatePreviewRef.current &&
-                !hasSubmittedSuccessfullyRef.current
-            ) {
-                leaveLobby(socket, { code: lobbyCodeRef.current, userId: String(currentUserId) } as any).catch(() => {});
-            }
-        };
-    }, [socket, currentUserId]);
+    // ─── Lobby presence is kept across quiz navigation; leave is explicit. ──
 
     // ─── Submit ───────────────────────────────────────────────────────────────
 
@@ -1055,17 +1040,8 @@ export default function QuizPage({ quizData: initialQuizData, onExit }: QuizPage
 
             clearStoredSession();
 
-            // FIX 2: Explicitly exit the lobby before initiating client-side redirect
-            if (!isPrivatePreviewRef.current && socket && lobbyCodeRef.current && joinedLobby) {
-                try {
-                    await leaveLobby(socket, { code: lobbyCodeRef.current, userId: String(currentUserId) } as any);
-                    setJoinedLobby(false);
-                } catch (leaveErr) {
-                    console.warn('Lobby exit request encountered an error on submission:', leaveErr);
-                }
-            }
-            else{
-                await flowApi.dispatch('finishing_quiz', { quizId })
+            if (isPrivatePreviewRef.current) {
+                await flowApi.dispatch('finishing_quiz', { quizId });
             }
 
             const resultId =
@@ -1135,7 +1111,7 @@ export default function QuizPage({ quizData: initialQuizData, onExit }: QuizPage
                     userId: String(currentUserId),
                     answeredCount: Object.keys(nextAnswers).length,
                     totalQuestions: questions.length,
-                } as any).catch(() => {});
+                } as any);
             }
             return nextAnswers;
         });

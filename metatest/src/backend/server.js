@@ -111,34 +111,46 @@ app.post(
     userController.handleResetAvatar
 );
 
-app.get(
+function mountInternal(method, routePath, ...handlers) {
+    // Direct Node access: /internal/...
+    // Public nginx /api proxy (no strip): /api/internal/...
+    app[method](routePath, ...handlers);
+    app[method](`/api${routePath}`, ...handlers);
+}
+
+mountInternal(
+    'get',
     '/internal/quizzes/:quizId/metadata',
     requireInternalService,
-    quizWorldController.handleGetQuizMetadata
+    quizWorldController.handleGetQuizMetadata,
 );
 
-app.post(
+mountInternal(
+    'post',
     '/internal/quizzes/:quizId/members',
     requireInternalService,
-    quizWorldController.handleAddQuizMember
+    quizWorldController.handleAddQuizMember,
 );
 
-app.post(
+mountInternal(
+    'post',
     '/internal/quizzes/:quizId/grade',
-    requireInternalService, // Ensure this endpoint is protected
-    quizWorldController.handleInternalGradeQuiz
+    requireInternalService,
+    quizWorldController.handleInternalGradeQuiz,
 );
 
-app.post(
+mountInternal(
+    'post',
     '/internal/quizzes/:quizId/finish',
-    requireInternalService, // Ensure this endpoint is protected
-    quizWorldController.handleInternalFinishQuiz
+    requireInternalService,
+    quizWorldController.handleInternalFinishQuiz,
 );
 
-app.post(
+mountInternal(
+    'post',
     '/internal/results',
-    requireInternalService, // Ensure this endpoint is protected
-    quizWorldController.handleInternalSaveQuizResult
+    requireInternalService,
+    quizWorldController.handleInternalSaveQuizResult,
 );
 
 

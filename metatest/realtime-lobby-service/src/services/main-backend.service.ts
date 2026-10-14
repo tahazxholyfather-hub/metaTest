@@ -1,6 +1,7 @@
 import { env } from '../config/env';
 import { logger } from '../config/logger';
 import { CustomError } from '../core/exceptions/custom-error';
+import { mainBackendHttpError } from '../core/plan-lock';
 
 
 export interface MainBackendUserInfo {
@@ -60,8 +61,8 @@ export interface QuizGradeResult {
     total: number;
     correctCount: number;
     wrongCount: number;
-    resultId?: number;
-    id?: number;
+    resultId?: number | string;
+    id?: number | string;
 }
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -88,7 +89,7 @@ export class MainBackendService {
     private readonly internalKey?: string;
 
     constructor() {
-        this.baseUrl = env.MAIN_BACKEND_URL.replace(/\/$/, '');
+        this.baseUrl = env.MAIN_BACKEND_INTERNAL_BASE_URL;
 
         /**
          * Preferred env name:
@@ -127,7 +128,7 @@ export class MainBackendService {
          *   }
          * }
          */
-        const url = `${this.baseUrl}/internal/quizzes/${encodeURIComponent(
+        const url = `${this.baseUrl}/quizzes/${encodeURIComponent(
             quizId,
         )}/metadata`;
 
@@ -197,7 +198,7 @@ export class MainBackendService {
          *   role: 'creator' | 'member'
          * }
          */
-        const url = `${this.baseUrl}/internal/quizzes/${encodeURIComponent(
+        const url = `${this.baseUrl}/quizzes/${encodeURIComponent(
             params.quizId,
         )}/members`;
 
@@ -228,7 +229,7 @@ export class MainBackendService {
          *   payload: {}
          * }
          */
-        const url = `${this.baseUrl}/api/flow`;
+        const url = env.MAIN_BACKEND_FLOW_URL;
 
         const response = await this.request(url, {
             method: 'POST',
@@ -320,7 +321,7 @@ export class MainBackendService {
          *   selectionLog
          * }
          */
-        const url = `${this.baseUrl}/internal/quizzes/${encodeURIComponent(
+        const url = `${this.baseUrl}/quizzes/${encodeURIComponent(
             params.quizId,
         )}/grade`;
 
@@ -377,7 +378,7 @@ export class MainBackendService {
          *
          * POST /internal/results
          */
-        const url = `${this.baseUrl}/internal/results`;
+        const url = `${this.baseUrl}/results`;
 
         try {
             const response = await this.request(url, {
@@ -391,8 +392,18 @@ export class MainBackendService {
                 },
             });
 
-            // Return the response data so LobbyService can extract the resultId
-            return response as { success: boolean; resultId?: number | string; note?: string };
+            const envelope = response as {
+                success?: boolean;
+                resultId?: number | string;
+                data?: { resultId?: number | string };
+                note?: string;
+            };
+
+            return {
+                success: envelope.success !== false,
+                resultId: envelope.resultId ?? envelope.data?.resultId,
+                note: envelope.note,
+            };
 
         } catch (err) {
             /**
@@ -423,7 +434,7 @@ export class MainBackendService {
          *
          * Body: {} (empty — the action is implicit in the endpoint)
          */
-        const url = `${this.baseUrl}/internal/quizzes/${encodeURIComponent(quizId)}/finish`;
+        const url = `${this.baseUrl}/quizzes/${encodeURIComponent(quizId)}/finish`;
 
         try {
             await this.request(url, {
@@ -501,7 +512,7 @@ export class MainBackendService {
             if (!response.ok) {
                 const message = this.extractErrorMessage(
                     responseBody,
-                    'Main backend request failed',
+                    `Main backend request failed (HTTP ${response.status})`,
                 );
 
                 logger.warn(
@@ -509,15 +520,17 @@ export class MainBackendService {
                         url,
                         method: options.method,
                         status: response.status,
-                        responseBody,
+                        responseBody:
+                            typeof responseBody === 'string'
+                                ? responseBody.slice(0, 300)
+                                : responseBody,
                     },
                     'Main backend request failed',
                 );
 
-                throw new CustomError(
+                throw mainBackendHttpError(
                     message,
-                    response.status >= 500 ? 502 : response.status,
-                    'MAIN_BACKEND_REQUEST_FAILED',
+                    response.status,
                     responseBody,
                 );
             }
@@ -686,9 +699,11 @@ export class MainBackendService {
         }
 
         if (typeof responseBody === 'string') {
-            /**
-             * Avoid sending huge HTML pages to the frontend.
-             */
+            const cannotMatch = responseBody.match(/Cannot (GET|POST|PUT|PATCH|DELETE) ([^<]+)/i);
+            if (cannotMatch) {
+                return `Main backend route not found: ${cannotMatch[1]} ${cannotMatch[2].trim()}`;
+            }
+
             if (responseBody.includes('<!DOCTYPE html>')) {
                 return fallback;
             }

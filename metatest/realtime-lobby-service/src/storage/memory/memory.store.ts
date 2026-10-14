@@ -38,7 +38,7 @@ export class MemoryStore implements IStorage {
     }
 
     async createLobby(lobby: Lobby): Promise<void> {
-        this.lobbies.set(lobby.code, lobby);
+        this.lobbies.set(lobby.code, { ...lobby, seq: lobby.seq ?? 0 });
         this.members.set(lobby.code, new Map());
         this.progress.set(lobby.code, new Map());
     }
@@ -79,14 +79,16 @@ export class MemoryStore implements IStorage {
     }
 
     async bindSocketToUser(binding: UserSessionBinding): Promise<void> {
-        const oldBinding = this.bindingsByUserId.get(binding.userId);
+        const userId = this.key(binding.userId);
+        const normalized: UserSessionBinding = { ...binding, userId };
 
+        const oldBinding = this.bindingsByUserId.get(userId);
         if (oldBinding) {
             this.bindingsBySocketId.delete(oldBinding.socketId);
         }
 
-        this.bindingsByUserId.set(binding.userId, binding);
-        this.bindingsBySocketId.set(binding.socketId, binding);
+        this.bindingsByUserId.set(userId, normalized);
+        this.bindingsBySocketId.set(normalized.socketId, normalized);
     }
 
     async getUserBinding(userId: string | number): Promise<UserSessionBinding | null> {
@@ -99,21 +101,23 @@ export class MemoryStore implements IStorage {
 
         this.bindingsBySocketId.delete(socketId);
 
-        const current = this.bindingsByUserId.get(binding.userId);
+        const current = this.bindingsByUserId.get(this.key(binding.userId));
         if (current?.socketId === socketId) {
-            this.bindingsByUserId.delete(binding.userId);
+            this.bindingsByUserId.delete(this.key(binding.userId));
         }
     }
 
     async setMember(code: LobbyCode, member: LobbyMember): Promise<void> {
         const lobbyMembers = this.getMembersMap(code);
-        lobbyMembers.set(this.key(member.userId), member);
+        const userId = this.key(member.userId);
+        const normalized = { ...member, userId };
+        lobbyMembers.set(userId, normalized);
 
-        const binding = this.bindingsByUserId.get(this.key(member.userId));
+        const binding = this.bindingsByUserId.get(userId);
         if (binding) {
             const updated = { ...binding, lobbyCode: code };
-            this.bindingsByUserId.set(binding.userId, updated);
-            this.bindingsBySocketId.set(binding.socketId, updated);
+            this.bindingsByUserId.set(userId, updated);
+            this.bindingsBySocketId.set(updated.socketId, updated);
         }
     }
 
@@ -122,14 +126,15 @@ export class MemoryStore implements IStorage {
     }
 
     async removeMember(code: LobbyCode, userId: string | number): Promise<void> {
-        this.members.get(code)?.delete(this.key(userId));
-        this.progress.get(code)?.delete(this.key(userId));
+        const uid = this.key(userId);
+        this.members.get(code)?.delete(uid);
+        this.progress.get(code)?.delete(uid);
 
-        const binding = this.bindingsByUserId.get(this.key(userId));
+        const binding = this.bindingsByUserId.get(uid);
         if (binding?.lobbyCode === code) {
             const updated = { ...binding, lobbyCode: undefined };
-            this.bindingsByUserId.set(binding.userId, updated);
-            this.bindingsBySocketId.set(binding.socketId, updated);
+            this.bindingsByUserId.set(uid, updated);
+            this.bindingsBySocketId.set(updated.socketId, updated);
         }
     }
 
@@ -142,7 +147,8 @@ export class MemoryStore implements IStorage {
         progress: LobbyMemberProgress,
     ): Promise<void> {
         const lobbyProgress = this.getProgressMap(code);
-        lobbyProgress.set(this.key(progress.userId), progress);
+        const userId = this.key(progress.userId);
+        lobbyProgress.set(userId, { ...progress, userId });
     }
 
     async getMemberProgress(
@@ -168,17 +174,32 @@ export class MemoryStore implements IStorage {
         this.expiries.delete(code);
     }
 
-    async cleanupExpiredLobbies(now: number): Promise<LobbyCode[]> {
+    async listExpiredLobbyCodes(now: number): Promise<LobbyCode[]> {
         const expiredCodes: LobbyCode[] = [];
-
         for (const [code, expiresAt] of this.expiries.entries()) {
             if (expiresAt <= now) expiredCodes.push(code);
         }
+        return expiredCodes;
+    }
 
+    async cleanupExpiredLobbies(now: number): Promise<LobbyCode[]> {
+        const expiredCodes = await this.listExpiredLobbyCodes(now);
         for (const code of expiredCodes) {
             await this.deleteLobby(code);
         }
-
         return expiredCodes;
+    }
+
+    async healthCheck(): Promise<boolean> {
+        return true;
+    }
+
+    async close(): Promise<void> {
+        this.lobbies.clear();
+        this.members.clear();
+        this.progress.clear();
+        this.bindingsByUserId.clear();
+        this.bindingsBySocketId.clear();
+        this.expiries.clear();
     }
 }
