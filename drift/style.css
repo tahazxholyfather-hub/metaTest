@@ -1,0 +1,139 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  background: #0a0c10;
+  color: #e8e4dc;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  overflow: hidden;
+}
+
+#wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#game {
+  display: block;
+  background: #1a2030;
+  image-rendering: auto;
+}
+
+#overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 1.5rem;
+}
+
+#hud-distance {
+  align-self: flex-start;
+  font-size: 0.95rem;
+  letter-spacing: 0.12em;
+  opacity: 0.55;
+  text-transform: uppercase;
+}
+
+#hud-tools {
+  position: absolute;
+  top: 1.5rem;
+  right: 1.5rem;
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+}
+
+#hud-tools .tool {
+  padding: 0.25rem 0.5rem;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 4px;
+  opacity: 0.7;
+}
+
+#hud-tools .tool.active {
+  opacity: 1;
+  border: 1px solid rgba(255, 240, 200, 0.4);
+}
+
+#hud-hint {
+  position: absolute;
+  bottom: 2rem;
+  font-size: 0.85rem;
+  opacity: 0.5;
+}
+
+#title-screen {
+  pointer-events: auto;
+  text-align: center;
+  margin-top: 15vh;
+}
+
+#title-screen h1 {
+  font-size: 3rem;
+  font-weight: 300;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+}
+
+#title-screen p {
+  opacity: 0.65;
+  margin: 0.35rem 0;
+}
+
+#title-screen .start {
+  margin-top: 2rem;
+  opacity: 0.9;
+  animation: pulse 2.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.hidden {
+  display: none !important;
+}
+
+#rest-panel {
+  margin-top: auto;
+  margin-bottom: 20vh;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.45);
+  padding: 1.5rem 2.5rem;
+  border-radius: 8px;
+}
+
+.rest-title {
+  font-size: 1.2rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+#death-msg {
+  position: absolute;
+  bottom: 30%;
+  font-size: 1.1rem;
+  opacity: 0.7;
+}
