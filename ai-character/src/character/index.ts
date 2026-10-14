@@ -1,0 +1,8 @@
+export { AICharacter } from './AICharacter'
+export type { AICharacterProps, AICharacterHandle } from './AICharacter'
+export { AI_CHARACTER_STATES } from './types'
+export type { AICharacterState, EyePose, Behavior, Gesture, GestureKey, StateDefinition } from './types'
+export { CharacterEngine, DEFAULT_ENGINE_CONFIG } from './engine'
+export type { EngineConfig } from './engine'
+export { STATES, NEUTRAL_POSE } from './states'
+export type { Vec2 } from './math'
