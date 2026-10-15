@@ -45,36 +45,58 @@ function greeting(firstName?: string | null) {
 }
 
 export function ChatScreen({
-    chat,
-    features,
-    subjects,
-    subjectKey,
-    onSubjectChange,
-    wallet,
-    settings,
-    studentFirstName,
-    isMobile,
-    onOpenPanel,
-    onOpenGame,
-    onNewChat,
-    onSpeak,
-    onListening,
-    audioLevel,
-    ensureConversation,
-    composerRef,
-    bottomInset,
-    onChatAction,
-}: Props) {
+                               chat,
+                               features,
+                               subjects,
+                               subjectKey,
+                               onSubjectChange,
+                               wallet,
+                               settings,
+                               studentFirstName,
+                               isMobile,
+                               onOpenPanel,
+                               onOpenGame,
+                               onNewChat,
+                               onSpeak,
+                               onListening,
+                               audioLevel,
+                               ensureConversation,
+                               composerRef,
+                               bottomInset,
+                               onChatAction,
+                           }: Props) {
     const reduce = usePrefersReducedMotion();
     const subject = findSubject(subjects, subjectKey);
     const metColor = subjectToMetColor(subjectKey);
     const scrollRef = useRef<HTMLDivElement>(null);
     const [atBottom, setAtBottom] = useState(true);
     const [menuOpen, setMenuOpen] = useState(false);
+    const menuRef = useRef<HTMLDivElement>(null);
     const [suggestions, setSuggestions] = useState<MetSuggestion[]>([]);
     const suggestionCache = useRef<Map<string, MetSuggestion[]>>(new Map());
     const isEmpty = chat.messages.length === 0 && !chat.loading;
     const working = chat.busy;
+
+    /* ── Close the "more" menu on outside tap / Escape ──────────────── */
+    useEffect(() => {
+        if (!menuOpen) return;
+
+        const handlePointerDown = (e: PointerEvent) => {
+            const target = e.target as Node;
+            if (menuRef.current?.contains(target)) return;
+            setMenuOpen(false);
+        };
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') setMenuOpen(false);
+        };
+
+        document.addEventListener('pointerdown', handlePointerDown);
+        document.addEventListener('keydown', handleKeyDown);
+        return () => {
+            document.removeEventListener('pointerdown', handlePointerDown);
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [menuOpen]);
 
     /* ── Suggestions for the empty state ─────────────────────────────── */
     useEffect(() => {
@@ -184,45 +206,42 @@ export function ChatScreen({
             <div className="flex-1" />
 
             {isMobile ? (
-                <div className="relative flex items-center gap-1.5">
+                <div ref={menuRef} className="relative flex items-center gap-1.5">
                     <CoinChip total={wallet.total} onClick={() => onOpenPanel('coins')} compact />
                     <IconButton label="بیشتر" size={36} onClick={() => setMenuOpen((open) => !open)}>
                         <MoreVertical size={18} strokeWidth={1.9} />
                     </IconButton>
                     <AnimatePresence>
                         {menuOpen && (
-                            <>
-                                <button type="button" className="fixed inset-0 z-30 cursor-default" aria-label="بستن منو" onClick={() => setMenuOpen(false)} />
-                                <motion.div
-                                    initial={{ opacity: 0, y: -8 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0, y: -6 }}
-                                    transition={{ duration: 0.18, ease: easeOut }}
-                                    className="absolute left-0 top-[calc(100%+8px)] z-40 w-52 overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-1.5 shadow-[var(--shadow-2)]"
-                                    dir="rtl"
-                                >
-                                    {([
-                                        { label: 'گفتگوی جدید', icon: <Plus size={16} />, run: onNewChat, disabled: chat.busy },
-                                        { label: 'تاریخچه', icon: <History size={16} />, run: () => onOpenPanel('history') },
-                                        { label: 'بازی شیمی', icon: <Gamepad2 size={16} />, run: onOpenGame },
-                                        { label: 'تنظیمات', icon: <Settings2 size={16} />, run: () => onOpenPanel('settings') },
-                                    ] as const).map((item) => (
-                                        <button
-                                            key={item.label}
-                                            type="button"
-                                            disabled={'disabled' in item ? item.disabled : false}
-                                            onClick={() => {
-                                                setMenuOpen(false);
-                                                item.run();
-                                            }}
-                                            className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px] font-bold text-[var(--text-primary)] transition-colors hover:bg-[var(--hover-overlay)] disabled:opacity-40"
-                                        >
-                                            <span className="text-[var(--text-secondary)]">{item.icon}</span>
-                                            {item.label}
-                                        </button>
-                                    ))}
-                                </motion.div>
-                            </>
+                            <motion.div
+                                initial={{ opacity: 0, y: -8 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -6 }}
+                                transition={{ duration: 0.18, ease: easeOut }}
+                                className="absolute left-0 top-[calc(100%+8px)] z-40 w-52 overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-1.5 shadow-[var(--shadow-2)]"
+                                dir="rtl"
+                            >
+                                {([
+                                    { label: 'گفتگوی جدید', icon: <Plus size={16} />, run: onNewChat, disabled: chat.busy },
+                                    { label: 'تاریخچه', icon: <History size={16} />, run: () => onOpenPanel('history') },
+                                    { label: 'بازی شیمی', icon: <Gamepad2 size={16} />, run: onOpenGame },
+                                    { label: 'تنظیمات', icon: <Settings2 size={16} />, run: () => onOpenPanel('settings') },
+                                ] as const).map((item) => (
+                                    <button
+                                        key={item.label}
+                                        type="button"
+                                        disabled={'disabled' in item ? item.disabled : false}
+                                        onClick={() => {
+                                            setMenuOpen(false);
+                                            item.run();
+                                        }}
+                                        className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px] font-bold text-[var(--text-primary)] transition-colors hover:bg-[var(--hover-overlay)] disabled:opacity-40"
+                                    >
+                                        <span className="text-[var(--text-secondary)]">{item.icon}</span>
+                                        {item.label}
+                                    </button>
+                                ))}
+                            </motion.div>
                         )}
                     </AnimatePresence>
                 </div>
