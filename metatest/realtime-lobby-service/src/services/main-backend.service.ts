@@ -371,7 +371,7 @@ export class MainBackendService {
         lobbyCode: string;
         result: QuizGradeResult;
         accessToken?: string;
-    }): Promise<{ success: boolean; resultId?: number | string, note?: string } | undefined> {
+    }): Promise<{ success: boolean; resultId?: number | string; id?: number | string; note?: string; error?: string } | undefined> {
         /**
          * Optional main backend endpoint:
          *
@@ -394,22 +394,21 @@ export class MainBackendService {
             const envelope = response as {
                 success?: boolean;
                 resultId?: number | string;
-                data?: { resultId?: number | string };
+                id?: number | string;
+                data?: { resultId?: number | string; id?: number | string };
                 note?: string;
+                error?: string;
             };
 
             return {
                 success: envelope.success !== false,
                 resultId: envelope.resultId ?? envelope.data?.resultId,
+                id: envelope.id ?? envelope.data?.id,
                 note: envelope.note,
+                error: typeof envelope.error === 'string' ? envelope.error : undefined,
             };
 
         } catch (err) {
-            /**
-             * Saving result may be optional depending on your main backend.
-             *
-             * If saving is mandatory, remove this catch and let the error bubble.
-             */
             logger.warn(
                 {
                     err,
@@ -419,7 +418,8 @@ export class MainBackendService {
                 },
                 'Failed to save result to main backend',
             );
-            return { success: false };
+            const message = err instanceof CustomError ? err.message : 'Failed to save result';
+            return { success: false, error: message };
         }
     }
 

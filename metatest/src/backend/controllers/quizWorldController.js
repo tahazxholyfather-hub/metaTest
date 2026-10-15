@@ -1329,9 +1329,15 @@ const handleGetQuizQuestions = async (req, res) => {
         );
 
         if (existingResult) {
+            const existingId = await positiveResultId(
+                connection,
+                existingResult.id,
+                decodedQuizId,
+                userId
+            );
             return res.status(200).json({
                 success: true,
-                resultId: encodeResultId(existingResult.id)
+                resultId: clientResultId(existingId)
             });
         }
 
@@ -1654,9 +1660,16 @@ async function handleSubmitQuizAnswers(req, res) {
             const existingId = await positiveResultId(connection, existingResult.id, decodedQuizId, userId);
             await connection.commit();
 
+            const publicId = clientResultId(existingId);
+            if (!publicId) {
+                return res.status(500).json({
+                    success: false,
+                    error: "شناسه نتیجه از سمت سرور دریافت نشد."
+                });
+            }
             return res.status(200).json({
                 success: true,
-                resultId: encodeResultId(existingId)
+                resultId: publicId
             });
         }
 
@@ -1750,9 +1763,17 @@ async function handleSubmitQuizAnswers(req, res) {
 
         await connection.commit();
 
+        const publicId = clientResultId(numericResultId);
+        if (!publicId) {
+            return res.status(500).json({
+                success: false,
+                error: "شناسه نتیجه از سمت سرور دریافت نشد."
+            });
+        }
+
         return res.status(200).json({
             success: true,
-            resultId: encodeResultId(numericResultId)
+            resultId: publicId
         });
     } catch (error) {
         if (connection) {
@@ -1782,9 +1803,16 @@ async function handleSubmitQuizAnswers(req, res) {
                         decodedQuizId,
                         userId
                     );
+                    const publicId = clientResultId(existingId);
+                    if (!publicId) {
+                        return res.status(500).json({
+                            success: false,
+                            error: "شناسه نتیجه از سمت سرور دریافت نشد."
+                        });
+                    }
                     return res.status(200).json({
                         success: true,
-                        resultId: encodeResultId(existingId)
+                        resultId: publicId
                     });
                 }
             } catch (fallbackError) {
@@ -1893,6 +1921,14 @@ async function positiveResultId(connection, insertId, quizId, userId) {
         [nextId, quizId, userId]
     );
     return nextId;
+}
+
+/** Hash the row id for /result/:resultId. A positive numeric id still works if hashing fails. */
+function clientResultId(numericId) {
+    const encoded = encodeResultId(numericId);
+    if (encoded) return encoded;
+    const id = Number(numericId);
+    return Number.isInteger(id) && id > 0 ? String(id) : null;
 }
 
 async function getUserXpInfo(connection, userId) {
@@ -2318,76 +2354,29 @@ function safeJsonParse(value, fallback = null) {
     }
 }
 
-async function handleInternalGradeQuiz(req, res) {
-    const { quizId } = req.params;
-    // اضافه شدن دریافت فیلدهای جدید زمان و لاگ
-    const { userId, answers, timeSpent, questionTimes, selectionLog } = req.body;
-
-    if (!answers || typeof answers !== 'object' || Array.isArray(answers)) {
-        return res.status(400).json({ error: "Invalid payload. Expected answers to be an object map." });
-    }
-
-    const decodedQuizId = decodeQuizId(quizId);
-    let connection;
-
-    try {
-        connection = await pool.getConnection();
-        const quiz = await getQuizById(connection, decodedQuizId);
-
-        if (!quiz) {
-            return res.status(404).json({ error: "Quiz not found." });
-        }
-
-        const questionIds = parseQuestionIds(quiz.question_ids);
-        const formattedAnswers = answers;
-
-        const metadata = await getQuizEvaluationMetadata(connection, questionIds, userId);
-
-        const evaluation = evaluateQuizSubmission({
-            questionIds,
-            submittedAnswers: formattedAnswers,
-            correctOptionsMap: metadata.correctOptionsMap,
-            descriptiveMap: metadata.descriptiveMap,
-            questionMetaMap: metadata.questionMetaMap
-        });
-
-        // The lobby service expects exactly this shape:
-        return res.status(200).json({
-            score: evaluation.summary.score,
-            total: questionIds.length,
-            correctCount: evaluation.summary.correct_count,
-            wrongCount: evaluation.summary.incorrect_count,
-            // Include extra data for the next saving step
-            evaluationData: evaluation,
-            formattedAnswers,
-
-            // پاس دادن مقادیر جدید به مرحله ذخیره‌سازی
-            timeSpent: timeSpent || 0,
-            questionTimes: questionTimes || {},
-            selectionLog: selectionLog || []
-        });
-
-    } catch (error) {
-        console.error("Error in handleInternalGradeQuiz:", error);
-        return res.status(500).json({ error: "Internal server error." });
-    } finally {
-        if (connection) connection.release();
-    }
+function httpError(message, statusCode) {
+    const error = new Error(message);
+    error.statusCode = statusCode;
+    return error;
 }
 
-
-
-
-
-// Saves the result, applies XP, and saves individual answers
-async function handleInternalSaveQuizResult(req, res) {
-    const { quizId, userId, lobbyCode, result } = req.body;
-
-    if (!userId || !quizId || !result) {
-        return res.status(400).json({ error: "Invalid payload." });
+/**
+ * Insert the graded attempt and return its numeric quiz_results id.
+ * A second call for the same quiz and user returns the existing id and does not grant XP again.
+ */
+async function persistGradedAttempt({
+    decodedQuizId,
+    userId,
+    lobbyCode,
+    evaluation,
+    formattedAnswers,
+    timeSpent,
+    questionTimes,
+    selectionLog
+}) {
+    if (!evaluation || !evaluation.summary || !evaluation.resultData) {
+        throw httpError("Invalid grade payload.", 400);
     }
-
-    const decodedQuizId = decodeQuizId(quizId);
 
     const toPositiveInt = (v) => {
         const n = Number(v);
@@ -2399,11 +2388,38 @@ async function handleInternalSaveQuizResult(req, res) {
         return Number.isFinite(n) && n >= 0 ? Math.floor(n) : null;
     };
 
-    let connection;
+    const spent = toNonNegativeInt(timeSpent) ?? 0;
+
+    const sanitizedQuestionTimes = {};
+    if (questionTimes && typeof questionTimes === "object" && !Array.isArray(questionTimes)) {
+        for (const [qid, time] of Object.entries(questionTimes)) {
+            const questionId = toPositiveInt(qid);
+            const value = toNonNegativeInt(time);
+            if (questionId && value !== null) {
+                sanitizedQuestionTimes[String(questionId)] = value;
+            }
+        }
+    }
+
+    const sanitizedSelectionLog = Array.isArray(selectionLog)
+        ? selectionLog
+            .map((entry) => {
+                const questionId = toPositiveInt(entry?.questionId);
+                const optionId = toPositiveInt(entry?.optionId);
+                const timeSpentMs = toNonNegativeInt(entry?.timeSpentMs);
+                const timestamp = toNonNegativeInt(entry?.timestamp);
+                if (!questionId || !optionId || timeSpentMs === null || timestamp === null) {
+                    return null;
+                }
+                return { questionId, optionId, timeSpentMs, timestamp };
+            })
+            .filter(Boolean)
+        : [];
+
+    await ensureVisitorCountIds();
+    const connection = await pool.getConnection();
 
     try {
-        await ensureVisitorCountIds();
-        connection = await pool.getConnection();
         await connection.beginTransaction();
 
         const quiz = await getQuizById(connection, decodedQuizId);
@@ -2411,50 +2427,24 @@ async function handleInternalSaveQuizResult(req, res) {
 
         if (!quiz || !user) {
             await connection.rollback();
-            return res.status(404).json({ error: "Quiz or User not found." });
+            throw httpError("Quiz or User not found.", 404);
+        }
+
+        const existingResult = await getExistingQuizResult(connection, decodedQuizId, userId);
+        if (existingResult) {
+            const existingId = await positiveResultId(
+                connection,
+                existingResult.id,
+                decodedQuizId,
+                userId
+            );
+            await connection.commit();
+            if (!existingId) throw httpError("Result id was not created.", 500);
+            return existingId;
         }
 
         const questionIds = parseQuestionIds(quiz.question_ids);
-
-        const evaluation = result.evaluationData;
-        const formattedAnswers = result.formattedAnswers || {};
-
-        const timeSpent = toNonNegativeInt(result.timeSpent) ?? 0;
-
-        const sanitizedQuestionTimes = {};
-        if (result.questionTimes && typeof result.questionTimes === "object") {
-            for (const [qid, time] of Object.entries(result.questionTimes)) {
-                const questionId = toPositiveInt(qid);
-                const value = toNonNegativeInt(time);
-
-                if (questionId && value !== null) {
-                    sanitizedQuestionTimes[String(questionId)] = value;
-                }
-            }
-        }
-
-        const sanitizedSelectionLog = Array.isArray(result.selectionLog)
-            ? result.selectionLog
-                .map((entry) => {
-                    const questionId = toPositiveInt(entry?.questionId);
-                    const optionId = toPositiveInt(entry?.optionId);
-                    const timeSpentMs = toNonNegativeInt(entry?.timeSpentMs);
-                    const timestamp = toNonNegativeInt(entry?.timestamp);
-
-                    if (!questionId || !optionId || timeSpentMs === null || timestamp === null) {
-                        return null;
-                    }
-
-                    return {
-                        questionId,
-                        optionId,
-                        timeSpentMs,
-                        timestamp
-                    };
-                })
-                .filter(Boolean)
-            : [];
-
+        const answers = formattedAnswers && typeof formattedAnswers === "object" ? formattedAnswers : {};
         const metadata = await getQuizEvaluationMetadata(connection, questionIds, userId);
 
         const answerMutations = buildUserAnswerMutations({
@@ -2471,32 +2461,16 @@ async function handleInternalSaveQuizResult(req, res) {
         });
 
         const enrichedEvaluation = {};
-
-        if (evaluation.resultData && typeof evaluation.resultData === "object") {
-            for (const qid of questionIds) {
-                const key = String(qid);
-                const item = evaluation.resultData[key];
-
-                if (!item) continue;
-
-                enrichedEvaluation[key] = {
-                    ...item,
-                    selected_option_id: formattedAnswers[key] ?? null,
-                    is_answered: Object.prototype.hasOwnProperty.call(formattedAnswers, key)
-                };
-            }
+        for (const qid of questionIds) {
+            const key = String(qid);
+            const item = evaluation.resultData[key];
+            if (!item) continue;
+            enrichedEvaluation[key] = {
+                ...item,
+                selected_option_id: answers[key] ?? null,
+                is_answered: Object.prototype.hasOwnProperty.call(answers, key)
+            };
         }
-
-        const resultDataToStore = {
-            evaluation: enrichedEvaluation,
-            submission: {
-                submittedAnswers: formattedAnswers,
-                totalTimeSpent: timeSpent,
-                questionTimes: sanitizedQuestionTimes,
-                selectionLog: sanitizedSelectionLog,
-                lobbyCode: lobbyCode || null
-            }
-        };
 
         const savedResultId = await insertQuizResult(connection, {
             quizId: decodedQuizId,
@@ -2506,59 +2480,171 @@ async function handleInternalSaveQuizResult(req, res) {
             unansweredCount: evaluation.summary.unanswered_count,
             accuracyRate: evaluation.summary.accuracy_rate,
             score: evaluation.summary.score,
-            totalTimeSpent: timeSpent,
+            totalTimeSpent: spent,
             summary: evaluation.summary,
-            resultData: resultDataToStore
+            resultData: {
+                evaluation: enrichedEvaluation,
+                submission: {
+                    submittedAnswers: answers,
+                    totalTimeSpent: spent,
+                    questionTimes: sanitizedQuestionTimes,
+                    selectionLog: sanitizedSelectionLog,
+                    lobbyCode: lobbyCode || null
+                }
+            }
         });
 
         await persistUserAnswerMutations(connection, answerMutations);
-
         await updateUserXp(connection, {
             userId,
             xpPoints: xpResult.updatedXpPoints,
             xpLevel: xpResult.updatedXpLevel
         });
-
         await connection.commit();
 
-        return res.status(200).json({
-            success: true,
-            resultId: savedResultId
-        });
-
+        if (!savedResultId) throw httpError("Result id was not created.", 500);
+        return savedResultId;
     } catch (error) {
-        if (connection) {
-            try { await connection.rollback(); } catch (_) {}
-        }
+        try { await connection.rollback(); } catch (_) {}
 
         if (error && (error.code === "ER_DUP_ENTRY" || error.errno === 1062)) {
-            let fallbackConnection;
+            const fallback = await pool.getConnection();
             try {
-                fallbackConnection = await pool.getConnection();
-                const existingResult = await getExistingQuizResult(fallbackConnection, decodedQuizId, userId);
+                const existingResult = await getExistingQuizResult(fallback, decodedQuizId, userId);
                 const existingId = existingResult
-                    ? await positiveResultId(fallbackConnection, existingResult.id, decodedQuizId, userId)
+                    ? await positiveResultId(fallback, existingResult.id, decodedQuizId, userId)
                     : null;
-                return res.status(200).json({
-                    success: true,
-                    resultId: existingId,
-                    note: "Already saved"
-                });
-            } catch (fallbackError) {
-                console.error("Fallback duplicate-result fetch failed:", fallbackError);
+                if (existingId) return existingId;
             } finally {
-                if (fallbackConnection) fallbackConnection.release();
+                fallback.release();
             }
         }
 
-        console.error("Error in handleInternalSaveQuizResult:", error);
+        throw error;
+    } finally {
+        connection.release();
+    }
+}
 
-        return res.status(500).json({
-            error: "Internal server error."
+async function handleInternalGradeQuiz(req, res) {
+    const { quizId } = req.params;
+    const { userId, lobbyCode, answers, timeSpent, questionTimes, selectionLog } = req.body || {};
+
+    if (!answers || typeof answers !== "object" || Array.isArray(answers)) {
+        return res.status(400).json({ error: "Invalid payload. Expected answers to be an object map." });
+    }
+
+    const decodedQuizId = decodeQuizId(quizId);
+    if (!Number.isInteger(decodedQuizId) || decodedQuizId <= 0) {
+        return res.status(400).json({ error: "Invalid quizId." });
+    }
+
+    let connection;
+
+    try {
+        connection = await pool.getConnection();
+        const quiz = await getQuizById(connection, decodedQuizId);
+
+        if (!quiz) {
+            return res.status(404).json({ error: "Quiz not found." });
+        }
+
+        const questionIds = parseQuestionIds(quiz.question_ids);
+        const formattedAnswers = answers;
+        const metadata = await getQuizEvaluationMetadata(connection, questionIds, userId);
+        const evaluation = evaluateQuizSubmission({
+            questionIds,
+            submittedAnswers: formattedAnswers,
+            correctOptionsMap: metadata.correctOptionsMap,
+            descriptiveMap: metadata.descriptiveMap,
+            questionMetaMap: metadata.questionMetaMap
         });
 
+        connection.release();
+        connection = null;
+
+        let resultId = null;
+        if (userId) {
+            const numericResultId = await persistGradedAttempt({
+                decodedQuizId,
+                userId,
+                lobbyCode,
+                evaluation,
+                formattedAnswers,
+                timeSpent: timeSpent || 0,
+                questionTimes: questionTimes || {},
+                selectionLog: selectionLog || []
+            });
+            resultId = clientResultId(numericResultId);
+            if (!resultId) {
+                return res.status(500).json({ error: "Result id was not created." });
+            }
+        }
+
+        return res.status(200).json({
+            resultId,
+            id: resultId,
+            score: evaluation.summary.score,
+            total: questionIds.length,
+            correctCount: evaluation.summary.correct_count,
+            wrongCount: evaluation.summary.incorrect_count,
+            evaluationData: evaluation,
+            formattedAnswers,
+            timeSpent: timeSpent || 0,
+            questionTimes: questionTimes || {},
+            selectionLog: selectionLog || []
+        });
+    } catch (error) {
+        console.error("Error in handleInternalGradeQuiz:", error);
+        const status = Number(error.statusCode) || 500;
+        return res.status(status).json({
+            error: status === 404 ? "Quiz or User not found." : "Internal server error."
+        });
     } finally {
         if (connection) connection.release();
+    }
+}
+
+// Saves the result, applies XP, and saves individual answers
+async function handleInternalSaveQuizResult(req, res) {
+    const { quizId, userId, lobbyCode, result } = req.body || {};
+
+    if (!userId || !quizId || !result) {
+        return res.status(400).json({ error: "Invalid payload." });
+    }
+
+    const decodedQuizId = decodeQuizId(quizId);
+    if (!Number.isInteger(decodedQuizId) || decodedQuizId <= 0) {
+        return res.status(400).json({ error: "Invalid quizId." });
+    }
+
+    try {
+        const numericResultId = await persistGradedAttempt({
+            decodedQuizId,
+            userId,
+            lobbyCode,
+            evaluation: result.evaluationData,
+            formattedAnswers: result.formattedAnswers || {},
+            timeSpent: result.timeSpent,
+            questionTimes: result.questionTimes,
+            selectionLog: result.selectionLog
+        });
+        const publicId = clientResultId(numericResultId);
+        if (!publicId) {
+            return res.status(500).json({ error: "Result id was not created." });
+        }
+
+        return res.status(200).json({
+            success: true,
+            resultId: publicId,
+            id: publicId
+        });
+    } catch (error) {
+        console.error("Error in handleInternalSaveQuizResult:", error);
+        const status = Number(error.statusCode) || 500;
+        return res.status(status).json({
+            error: status === 404 ? "Quiz or User not found." : "Internal server error."
+        });
     }
 }
 

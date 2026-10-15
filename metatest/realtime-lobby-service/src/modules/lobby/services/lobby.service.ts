@@ -25,7 +25,7 @@ import {
     SubmitQuizDto,
     UpdateProgressDto,
 } from '../dtos/lobby.schema';
-import { encodeQuizId, decodeQuizId, encodeResultId, decodeResultId } from '../../../utils/hash';
+import { encodeQuizId, decodeQuizId, encodeResultId } from '../../../utils/hash';
 
 const COUNTDOWN_MS = 3000;
 const EMPTY_LOBBY_TTL_MS = 60_000;
@@ -95,6 +95,22 @@ export class LobbyService {
             if (!missing || !code || code === encodedQuizId) throw err;
             return mainBackendService.getQuizMetadata(code, accessToken);
         }
+    }
+
+    /** Prefer a backend hash. Encode a positive numeric id when that is all we have. */
+    private pickResultId(...values: unknown[]): string | null {
+        for (const value of values) {
+            if (value == null || value === '') continue;
+            if (typeof value === 'number') {
+                if (!Number.isInteger(value) || value <= 0) continue;
+                return encodeResultId(value) ?? String(value);
+            }
+            const raw = String(value).trim();
+            if (!raw || raw === 'null' || raw === 'undefined') continue;
+            if (/^\d+$/.test(raw)) return encodeResultId(raw) ?? raw;
+            return raw;
+        }
+        return null;
     }
 
     private encodeStoredQuizId(quizId: string | number): string {
@@ -1012,11 +1028,12 @@ export class LobbyService {
             }
 
             const existingProgress = await this.storage.getMemberProgress(code, userId);
-            if (existingProgress?.finished && existingProgress.result) {
+            const cachedResultId = this.pickResultId(
+                existingProgress?.result?.resultId,
+                existingProgress?.result?.id,
+            );
+            if (existingProgress?.finished && existingProgress.result && cachedResultId) {
                 return existingProgress.result;
-            }
-            if (existingProgress?.finished) {
-                throw new CustomError('Already submitted', 409, 'ALREADY_SUBMITTED');
             }
 
             const encodedQuizId = this.encodeStoredQuizId(lobby.quizId);
@@ -1031,22 +1048,26 @@ export class LobbyService {
                 accessToken: socket.data.accessToken,
             });
 
-            const saveResponse = await mainBackendService.saveQuizResult({
-                quizId: encodedQuizId,
-                userId,
-                lobbyCode: code,
-                result,
-                accessToken: socket.data.accessToken,
-            });
-
-            if (saveResponse?.resultId) {
-                const rawId = saveResponse.resultId;
-                const encodedId = encodeResultId(rawId) ?? (decodeResultId(rawId) ? String(rawId) : null);
-                if (encodedId) {
-                    result.resultId = encodedId;
-                    result.id = encodedId;
+            let resultId = this.pickResultId(result?.resultId, result?.id);
+            if (!resultId) {
+                const saveResponse = await mainBackendService.saveQuizResult({
+                    quizId: encodedQuizId,
+                    userId,
+                    lobbyCode: code,
+                    result,
+                    accessToken: socket.data.accessToken,
+                });
+                resultId = this.pickResultId(saveResponse?.id, saveResponse?.resultId);
+                if (!resultId) {
+                    throw new CustomError(
+                        saveResponse?.error || 'شناسه نتیجه از سمت سرور دریافت نشد.',
+                        502,
+                        'RESULT_ID_MISSING',
+                    );
                 }
             }
+            result.resultId = resultId;
+            result.id = resultId;
 
             await this.storage.setMemberProgress(code, {
                 userId,
