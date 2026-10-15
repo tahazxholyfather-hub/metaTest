@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowDown, ChevronDown, Coins, Gamepad2, History, MoreHorizontal, Plus, Settings2 } from 'lucide-react';
+import { ArrowDown, ChevronDown, Gamepad2, History, MoreVertical, Plus, Settings2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Met, chatStatusToMetState, subjectToMetColor } from '../../components/met';
 import { metApi } from './api';
@@ -184,9 +184,10 @@ export function ChatScreen({
             <div className="flex-1" />
 
             {isMobile ? (
-                <div className="relative">
+                <div className="relative flex items-center gap-1.5">
+                    <CoinChip total={wallet.total} onClick={() => onOpenPanel('coins')} compact />
                     <IconButton label="بیشتر" size={36} onClick={() => setMenuOpen((open) => !open)}>
-                        <MoreHorizontal size={18} strokeWidth={1.9} />
+                        <MoreVertical size={18} strokeWidth={1.9} />
                     </IconButton>
                     <AnimatePresence>
                         {menuOpen && (
@@ -205,7 +206,6 @@ export function ChatScreen({
                                         { label: 'تاریخچه', icon: <History size={16} />, run: () => onOpenPanel('history') },
                                         { label: 'بازی شیمی', icon: <Gamepad2 size={16} />, run: onOpenGame },
                                         { label: 'تنظیمات', icon: <Settings2 size={16} />, run: () => onOpenPanel('settings') },
-                                        { label: `سکه ${wallet.total.toLocaleString('fa-IR')}`, icon: <Coins size={16} />, run: () => onOpenPanel('coins') },
                                     ] as const).map((item) => (
                                         <button
                                             key={item.label}
