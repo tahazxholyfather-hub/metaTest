@@ -2,16 +2,16 @@
 :scope {
   color-scheme: dark;
   font-family: Vazirmatn, "Segoe UI", Tahoma, sans-serif;
-  background: #05060b;
-  color: #eef2fb;
-  --ink: #eef2fb;
-  --muted: #8a93a8;
-  --line: rgba(255, 255, 255, 0.08);
-  --panel: #10131d;
-  --panel-2: #161a27;
-  --accent: #5fd4ff;
-  --accent-2: #8b7bff;
-  --good: #7ee08f;
+  background: #0B0B10;
+  color: #FAFAFA;
+  --ink: #FAFAFA;
+  --muted: #a9a9ad;
+  --line: rgba(255, 255, 255, 0.1);
+  --panel: #16161C;
+  --panel-2: #1F1F28;
+  --accent: #8B5CF6;
+  --accent-2: #A78BFA;
+  --good: #C4B5FD;
   --warn: #ff9a4a;
   --danger: #ff5d6c;
   --num: "Russo One", "JetBrains Mono", ui-monospace, monospace;
@@ -24,7 +24,7 @@
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  background: #05060b;
+  background: #0B0B10;
   font-family: Vazirmatn, "Segoe UI", Tahoma, sans-serif;
 }
 
@@ -51,7 +51,7 @@
   height: 100dvh;
   position: relative;
   overflow: hidden;
-  background: #030605;
+  background: #0B0B10;
   direction: ltr;
   touch-action: none;
   user-select: none;
@@ -90,12 +90,18 @@
   z-index: 4;
   display: flex;
   flex-direction: column;
-  background:
-    radial-gradient(520px 420px at 50% 34%, rgba(40, 110, 60, 0.22), transparent 70%),
-    radial-gradient(600px 360px at 50% 110%, rgba(120, 160, 50, 0.16), transparent 70%),
-    #030605;
+  background: #0B0B10;
   overflow: hidden;
   isolation: isolate;
+}
+.home-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  user-select: none;
 }
 
 .sky {
@@ -356,8 +362,60 @@
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  padding: calc(18px + env(safe-area-inset-top)) 18px 0;
+  padding: calc(14px + env(safe-area-inset-top)) 16px 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
+.home-tools { display: flex; align-items: center; gap: 8px; }
+.home-icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: transparent;
+  color: #FAFAFA;
+}
+.home-icon:active { transform: scale(0.96); }
+.home-guide { width: 36px; height: 36px; border-radius: 999px; opacity: 0.9; }
+.home-spacer { flex: 1; }
+.home-record {
+  position: relative;
+  z-index: 1;
+  align-self: center;
+  margin-bottom: 14px;
+  text-align: center;
+  color: #FAFAFA;
+  text-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+}
+.home-record small {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: rgba(250, 250, 250, 0.72);
+}
+.home-record b { display: block; margin-top: 2px; font-size: 28px; }
+.home-start {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 54px;
+  margin: 0 18px calc(18px + env(safe-area-inset-bottom));
+  border: 0;
+  border-radius: 16px;
+  background: #8B5CF6;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 800;
+  box-shadow: 0 10px 28px rgba(139, 92, 246, 0.35);
+}
+.home-start:active { transform: scale(0.98); }
 
 .home-player {
   display: flex;
@@ -642,7 +700,6 @@
   stroke: var(--tint);
   stroke-linecap: round;
   transition: stroke-dashoffset 0.12s linear;
-  filter: drop-shadow(0 0 4px var(--tint));
 }
 
 .gadget-core {
@@ -657,7 +714,7 @@
 }
 .gadget-btn:active .gadget-core { transform: scale(0.92); }
 .gadget-btn:not(.cooling):not(.armed) .gadget-core {
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tint) 45%, transparent), 0 0 18px color-mix(in srgb, var(--tint) 30%, transparent);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 .gadget-btn.cooling .gadget-core { opacity: 0.4; }
@@ -680,8 +737,8 @@
   animation: armed-pulse 0.9s ease-in-out infinite;
 }
 @keyframes armed-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--tint) 55%, transparent); }
-  50% { box-shadow: 0 0 0 9px color-mix(in srgb, var(--tint) 0%, transparent); }
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
 }
 
 .gadget-btn:active:not(.cooling)::after {
@@ -1262,8 +1319,8 @@
 }
 .coach-hole {
   position: absolute;
-  box-shadow: 0 0 0 200vmax rgba(1, 6, 3, 0.8);
-  outline: 2px solid rgba(170, 245, 140, 0.85);
+  box-shadow: 0 0 0 200vmax rgba(11, 11, 16, 0.78);
+  outline: 1.5px solid rgba(196, 181, 253, 0.9);
   outline-offset: 0;
   transition: left 0.5s cubic-bezier(0.65, 0, 0.35, 1), top 0.5s cubic-bezier(0.65, 0, 0.35, 1), width 0.5s cubic-bezier(0.65, 0, 0.35, 1), height 0.5s cubic-bezier(0.65, 0, 0.35, 1), border-radius 0.5s;
   pointer-events: none;
@@ -1273,7 +1330,7 @@
   position: absolute;
   inset: -2px;
   border-radius: inherit;
-  border: 2px solid rgba(170, 245, 140, 0.7);
+  border: 1.5px solid rgba(167, 139, 250, 0.7);
   animation: coach-pulse 1.6s ease-out infinite;
 }
 @keyframes coach-pulse {
@@ -1282,14 +1339,14 @@
 }
 .coach-card {
   position: absolute;
-  left: 16px;
-  right: 16px;
-  padding: 16px 16px 14px;
-  border: 1px solid rgba(160, 230, 140, 0.25);
-  border-radius: 20px;
-  background: linear-gradient(180deg, rgba(26, 70, 34, 0.96), rgba(8, 24, 13, 0.97));
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(80, 190, 90, 0.15);
-  animation: coach-card-up 0.38s cubic-bezier(0.2, 0.9, 0.3, 1.15) both;
+  left: 28px;
+  right: 28px;
+  padding: 12px 14px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  background: #16161C;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  animation: coach-card-up 0.28s ease-out both;
 }
 .coach-card.below { animation-name: coach-card-down; }
 @keyframes coach-card-up {
@@ -1300,8 +1357,8 @@
   from { opacity: 0; transform: translateY(-14px) scale(0.97); }
   to { opacity: 1; transform: none; }
 }
-.coach-card strong { display: block; font-size: 16px; color: #f0ffe9; margin-bottom: 4px; }
-.coach-card p { margin: 0; font-size: 13.5px; line-height: 1.9; color: rgba(215, 238, 210, 0.85); }
+.coach-card strong { display: block; font-size: 14px; color: #FAFAFA; margin-bottom: 2px; }
+.coach-card p { margin: 0; font-size: 12.5px; line-height: 1.6; color: #a9a9ad; }
 .coach-dots { display: flex; gap: 5px; margin-bottom: 10px; }
 .coach-dots span {
   width: 6px;
@@ -1318,11 +1375,11 @@
   padding: 0 22px;
   border: 0;
   border-radius: 999px;
-  background: linear-gradient(180deg, #b8f5a0, #4fb85e);
-  color: #06180b;
+  background: #8B5CF6;
+  color: #fff;
   font-size: 14px;
   font-weight: 800;
-  box-shadow: 0 8px 22px rgba(90, 200, 90, 0.3);
+  box-shadow: 0 8px 22px rgba(139, 92, 246, 0.28);
 }
 .coach-next:active { transform: scale(0.97); }
 .coach-skip {

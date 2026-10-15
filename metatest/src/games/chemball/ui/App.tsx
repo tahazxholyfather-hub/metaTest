@@ -1,4 +1,4 @@
-import { BookOpen, Pause, Play, Settings, Trophy, X } from "lucide-react";
+import { CircleHelp, Pause, Play, Settings, Trophy, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type PointerEvent } from "react";
 import { MusicPlayer, type MusicSettings } from "../audio/music";
 import { AudioBus } from "../audio/sfx";
@@ -11,12 +11,12 @@ import { renderFrame } from "../render/draw";
 import type { LeaderboardEntry } from "../save/models";
 import { LocalPlayerRepository } from "../save/localRepository";
 import { Chem } from "./Chem";
-import { ChemSky } from "./ChemSky";
 import { Coach, type CoachStep } from "./Coach";
 import { TIPS, type TipId } from "./copy";
 import { GadgetButton, GadgetPicker } from "./GadgetButton";
-import { HomeTitle } from "./HomeTitle";
-import { Avatar, GuidePage, LeaderboardPage, PauseSheet, SettingsPage } from "./pages";
+import { GuidePage, LeaderboardPage, PauseSheet, SettingsPage } from "./pages";
+
+const homeArt = new URL("./home-art.svg", import.meta.url).href;
 
 const EMPTY_HUD: HudSnapshot = {
   status: "playing",
@@ -245,25 +245,19 @@ export function App({ onExit }: { onExit?: () => void }) {
     {
       id: "launcher",
       title: "پرتاب",
-      text: "انگشتت را روی صفحه بکش تا مسیر را ببینی؛ رها کن تا گوی پرتاب شود.",
+      text: "بکش و رها کن.",
       target: ring(layout.launcherX, layout.launcherY, layout.drawRadius * 1.9),
-    },
-    {
-      id: "next",
-      title: "گوی بعدی",
-      text: "بعد از این پرتاب، نوبت این گوی است. از قبل برایش جا در نظر بگیر.",
-      target: { ...ring(nextX, layout.launcherY + 10, layout.drawRadius * 1.25 + 8), y: layout.launcherY + 10 - layout.drawRadius * 1.25 - 30, h: layout.drawRadius * 2.5 + 38 },
     },
     {
       id: "gadget",
       title: "ابزار",
-      text: "بزن تا ابزار کار کند. نگه دار تا بین نیتروژن، شعله و کاتالیزگر انتخاب کنی. هر ابزار بعد از استفاده شارژ می‌شود.",
+      text: "یک ضربه استفاده، نگه داشتن انتخاب.",
       target: { x: Math.min(layout.width - nextX - 40, layout.width - 84), y: layout.launcherY + 10 - 40, w: 80, h: 100, radius: 40 },
     },
     {
       id: "danger",
-      title: "خط خطر",
-      text: "ردیف‌ها آرام پایین می‌آیند. اگر گوی‌ها به این خط برسند، آزمایش تمام می‌شود.",
+      title: "خط پایان",
+      text: "گوی‌ها به این خط برسند، بازی تمام است.",
       target: { x: 8, y: layout.dangerY - 16, w: layout.width - 16, h: 32, radius: 16 },
     },
   ];
@@ -288,54 +282,34 @@ export function App({ onExit }: { onExit?: () => void }) {
 
         {mode === "home" && (
           <div className="home">
-            <ChemSky />
+            <img className="home-art" src={homeArt} alt="" />
             <header className="home-bar" dir="ltr">
-              <div className="home-player">
+              <div className="home-tools">
                 {onExit && (
-                  <button className="round-btn" type="button" aria-label="بستن بازی" onClick={onExit}>
+                  <button className="home-icon" type="button" aria-label="بستن بازی" onClick={onExit}>
                     <X size={18} />
                   </button>
                 )}
-                <button className="player-pill" type="button" onClick={() => setPage("settings")}>
-                  <Avatar name={hud.name} size={34} />
-                  <span dir="auto">{hud.name}</span>
+                <button className="home-icon" type="button" aria-label="تنظیمات" onClick={() => setPage("settings")}>
+                  <Settings size={18} />
+                </button>
+                <button className="home-icon" type="button" aria-label="رتبه‌بندی" onClick={() => void openLeaders()}>
+                  <Trophy size={18} />
                 </button>
               </div>
-              <div className="best" dir="rtl">
-                <small>بهترین امتیاز</small>
-                <b className="num">{formatNumber(hud.bestScore)}</b>
-              </div>
+              <button className="home-icon home-guide" type="button" aria-label="راهنما" onClick={() => setPage("guide")}>
+                <CircleHelp size={18} />
+              </button>
             </header>
-            <div className="home-center">
-              <HomeTitle />
-              <button className="play" type="button" aria-label="شروع بازی" onClick={begin}>
-                <span className="play-ring" />
-                <span className="play-ring late" />
-                <span className="play-face">
-                  <Play size={40} strokeWidth={2.2} fill="currentColor" />
-                </span>
-              </button>
+            <div className="home-spacer" />
+            <div className="home-record" dir="rtl">
+              <small>بهترین رکورد</small>
+              <b className="num">{formatNumber(hud.bestScore)}</b>
             </div>
-            <nav className="home-foot">
-              <button type="button" onClick={() => setPage("settings")}>
-                <span className="foot-icon">
-                  <Settings size={20} />
-                </span>
-                <span>تنظیمات</span>
-              </button>
-              <button type="button" onClick={() => setPage("guide")}>
-                <span className="foot-icon">
-                  <BookOpen size={20} />
-                </span>
-                <span>راهنما</span>
-              </button>
-              <button type="button" onClick={() => void openLeaders()}>
-                <span className="foot-icon">
-                  <Trophy size={20} />
-                </span>
-                <span>رتبه‌بندی</span>
-              </button>
-            </nav>
+            <button className="home-start" type="button" onClick={begin}>
+              <Play size={18} fill="currentColor" />
+              شروع
+            </button>
           </div>
         )}
 

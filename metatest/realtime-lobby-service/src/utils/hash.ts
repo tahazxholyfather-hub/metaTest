@@ -65,7 +65,8 @@ export function decodeQuizId(hash: string | number | null | undefined): number |
 export function encodeResultId(id: number | string | null | undefined): string | null {
     const num = Number(id);
     if (!Number.isInteger(num) || num <= 0) return null;
-    return resultHasher(DEFAULT_HASHIDS_SALT).encode(num);
+    const salt = process.env.HASHIDS_SALT?.trim() || DEFAULT_HASHIDS_SALT;
+    return resultHasher(salt).encode(num);
 }
 
 export function decodeResultId(hash: string | number | null | undefined): number | null {

@@ -19,6 +19,7 @@ const {
 } = require('../utils/questionTags');
 const entitlements = require('../subscription/entitlements');
 const usage = require('../subscription/usage');
+const { ensureVisitorCountIds } = require('../visitorCounts');
 
 
 // ==========================================
@@ -1593,6 +1594,7 @@ async function handleSubmitQuizAnswers(req, res) {
     let connection;
 
     try {
+        await ensureVisitorCountIds();
         connection = await pool.getConnection();
         await connection.beginTransaction();
 
@@ -1649,11 +1651,12 @@ async function handleSubmitQuizAnswers(req, res) {
         );
 
         if (existingResult) {
-            await connection.rollback();
+            const existingId = await positiveResultId(connection, existingResult.id, decodedQuizId, userId);
+            await connection.commit();
 
             return res.status(200).json({
                 success: true,
-                resultId: encodeResultId(existingResult.id)
+                resultId: encodeResultId(existingId)
             });
         }
 
@@ -1773,9 +1776,15 @@ async function handleSubmitQuizAnswers(req, res) {
                 );
 
                 if (existingResult) {
+                    const existingId = await positiveResultId(
+                        fallbackConnection,
+                        existingResult.id,
+                        decodedQuizId,
+                        userId
+                    );
                     return res.status(200).json({
                         success: true,
-                        resultId: encodeResultId(existingResult.id)
+                        resultId: encodeResultId(existingId)
                     });
                 }
             } catch (fallbackError) {
@@ -1863,6 +1872,27 @@ async function getExistingQuizResult(connection, quizId, userId) {
     `, [quizId, userId]);
 
     return rows.length ? rows[0] : null;
+}
+
+/** A missing AUTO_INCREMENT writes id 0, which cannot be encoded for the result page. */
+async function positiveResultId(connection, insertId, quizId, userId) {
+    let id = Number(insertId);
+    if (Number.isInteger(id) && id > 0) return id;
+
+    const existing = await getExistingQuizResult(connection, quizId, userId);
+    id = Number(existing?.id);
+    if (Number.isInteger(id) && id > 0) return id;
+    if (!existing) return null;
+
+    const [[maxRow]] = await connection.query(
+        'SELECT COALESCE(MAX(id), 0) AS maxId FROM quiz_results'
+    );
+    const nextId = Number(maxRow?.maxId || 0) + 1;
+    await connection.query(
+        'UPDATE quiz_results SET id = ? WHERE id = 0 AND quiz_id = ? AND user_id = ? LIMIT 1',
+        [nextId, quizId, userId]
+    );
+    return nextId;
 }
 
 async function getUserXpInfo(connection, userId) {
@@ -2249,7 +2279,7 @@ async function insertQuizResult(connection, {
         JSON.stringify(resultData ?? {})
     ]);
 
-    return result.insertId;
+    return positiveResultId(connection, result.insertId, quizId, userId);
 }
 
 async function persistUserAnswerMutations(connection, { inserts, updates }) {
@@ -2372,6 +2402,7 @@ async function handleInternalSaveQuizResult(req, res) {
     let connection;
 
     try {
+        await ensureVisitorCountIds();
         connection = await pool.getConnection();
         await connection.beginTransaction();
 
@@ -2501,10 +2532,23 @@ async function handleInternalSaveQuizResult(req, res) {
         }
 
         if (error && (error.code === "ER_DUP_ENTRY" || error.errno === 1062)) {
-            return res.status(200).json({
-                success: true,
-                note: "Already saved"
-            });
+            let fallbackConnection;
+            try {
+                fallbackConnection = await pool.getConnection();
+                const existingResult = await getExistingQuizResult(fallbackConnection, decodedQuizId, userId);
+                const existingId = existingResult
+                    ? await positiveResultId(fallbackConnection, existingResult.id, decodedQuizId, userId)
+                    : null;
+                return res.status(200).json({
+                    success: true,
+                    resultId: existingId,
+                    note: "Already saved"
+                });
+            } catch (fallbackError) {
+                console.error("Fallback duplicate-result fetch failed:", fallbackError);
+            } finally {
+                if (fallbackConnection) fallbackConnection.release();
+            }
         }
 
         console.error("Error in handleInternalSaveQuizResult:", error);

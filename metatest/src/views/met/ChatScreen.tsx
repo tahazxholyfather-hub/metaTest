@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowDown, ChevronDown, Gamepad2, History, Plus, Settings2 } from 'lucide-react';
+import { ArrowDown, ChevronDown, Coins, Gamepad2, History, MoreHorizontal, Plus, Settings2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Met, chatStatusToMetState, subjectToMetColor } from '../../components/met';
 import { metApi } from './api';
@@ -70,6 +70,7 @@ export function ChatScreen({
     const metColor = subjectToMetColor(subjectKey);
     const scrollRef = useRef<HTMLDivElement>(null);
     const [atBottom, setAtBottom] = useState(true);
+    const [menuOpen, setMenuOpen] = useState(false);
     const [suggestions, setSuggestions] = useState<MetSuggestion[]>([]);
     const suggestionCache = useRef<Map<string, MetSuggestion[]>>(new Map());
     const isEmpty = chat.messages.length === 0 && !chat.loading;
@@ -182,23 +183,60 @@ export function ChatScreen({
 
             <div className="flex-1" />
 
-            <CoinChip total={wallet.total} onClick={() => onOpenPanel('coins')} compact={isMobile} />
-            {isMobile && (
-                <>
-                    <IconButton label="تاریخچه" size={36} onClick={() => onOpenPanel('history')}>
-                        <History size={18} strokeWidth={1.9} />
+            {isMobile ? (
+                <div className="relative">
+                    <IconButton label="بیشتر" size={36} onClick={() => setMenuOpen((open) => !open)}>
+                        <MoreHorizontal size={18} strokeWidth={1.9} />
                     </IconButton>
-                    <IconButton label="تنظیمات" size={36} onClick={() => onOpenPanel('settings')}>
-                        <Settings2 size={18} strokeWidth={1.9} />
+                    <AnimatePresence>
+                        {menuOpen && (
+                            <>
+                                <button type="button" className="fixed inset-0 z-30 cursor-default" aria-label="بستن منو" onClick={() => setMenuOpen(false)} />
+                                <motion.div
+                                    initial={{ opacity: 0, y: -8 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -6 }}
+                                    transition={{ duration: 0.18, ease: easeOut }}
+                                    className="absolute left-0 top-[calc(100%+8px)] z-40 w-52 overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-1.5 shadow-[var(--shadow-2)]"
+                                    dir="rtl"
+                                >
+                                    {([
+                                        { label: 'گفتگوی جدید', icon: <Plus size={16} />, run: onNewChat, disabled: chat.busy },
+                                        { label: 'تاریخچه', icon: <History size={16} />, run: () => onOpenPanel('history') },
+                                        { label: 'بازی شیمی', icon: <Gamepad2 size={16} />, run: onOpenGame },
+                                        { label: 'تنظیمات', icon: <Settings2 size={16} />, run: () => onOpenPanel('settings') },
+                                        { label: `سکه ${wallet.total.toLocaleString('fa-IR')}`, icon: <Coins size={16} />, run: () => onOpenPanel('coins') },
+                                    ] as const).map((item) => (
+                                        <button
+                                            key={item.label}
+                                            type="button"
+                                            disabled={'disabled' in item ? item.disabled : false}
+                                            onClick={() => {
+                                                setMenuOpen(false);
+                                                item.run();
+                                            }}
+                                            className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px] font-bold text-[var(--text-primary)] transition-colors hover:bg-[var(--hover-overlay)] disabled:opacity-40"
+                                        >
+                                            <span className="text-[var(--text-secondary)]">{item.icon}</span>
+                                            {item.label}
+                                        </button>
+                                    ))}
+                                </motion.div>
+                            </>
+                        )}
+                    </AnimatePresence>
+                </div>
+            ) : (
+                <>
+                    <CoinChip total={wallet.total} onClick={() => onOpenPanel('coins')} />
+                    <IconButton label="بازی شیمی" size={36} onClick={onOpenGame}>
+                        <Gamepad2 size={18} strokeWidth={1.9} />
+                    </IconButton>
+                    <IconButton label="گفتگوی جدید" size={36} tone="primary" onClick={onNewChat} disabled={chat.busy}>
+                        <Plus size={19} strokeWidth={2.1} />
                     </IconButton>
                 </>
             )}
-            <IconButton label="بازی شیمی" size={36} onClick={onOpenGame}>
-                <Gamepad2 size={18} strokeWidth={1.9} />
-            </IconButton>
-            <IconButton label="گفتگوی جدید" size={36} tone="primary" onClick={onNewChat} disabled={chat.busy}>
-                <Plus size={19} strokeWidth={2.1} />
-            </IconButton>
         </header>
     );
 

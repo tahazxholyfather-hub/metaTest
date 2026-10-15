@@ -90,7 +90,7 @@ export function renderFrame(ctx: CanvasRenderingContext2D, view: ViewState, dpr:
 const SMOKE_SVG = `data:image/svg+xml,${encodeURIComponent(
   "<svg xmlns='http://www.w3.org/2000/svg' width='600' height='600'><filter id='s' x='0' y='0' width='100%' height='100%'>" +
     "<feTurbulence type='fractalNoise' baseFrequency='0.005 0.01' numOctaves='4' seed='7' stitchTiles='stitch'/>" +
-    "<feColorMatrix values='0 0 0 0 0.55  0 0 0 0 0.85  0 0 0 0 0.45  0 0 0 1.6 -0.62'/></filter>" +
+    "<feColorMatrix values='0 0 0 0 0.55  0 0 0 0 0.36  0 0 0 0 0.96  0 0 0 1.2 -0.55'/></filter>" +
     "<rect width='100%' height='100%' filter='url(#s)'/></svg>",
 )}`;
 const SMOKE_SIZE = 600;
@@ -130,21 +130,13 @@ function drawBackdrop(ctx: CanvasRenderingContext2D, width: number, height: numb
     canvas.height = Math.max(1, Math.round(height));
     const g = canvas.getContext("2d");
     if (!g) return;
-    const sky = g.createLinearGradient(0, 0, 0, height);
-    sky.addColorStop(0, "#0a1a10");
-    sky.addColorStop(0.5, "#06110a");
-    sky.addColorStop(1, "#0b160a");
-    g.fillStyle = sky;
+    g.fillStyle = "#0B0B10";
     g.fillRect(0, 0, width, height);
-    const top = g.createRadialGradient(width * 0.5, height * 0.12, 0, width * 0.5, height * 0.12, width * 0.8);
-    top.addColorStop(0, "rgba(70, 170, 90, 0.22)");
-    top.addColorStop(1, "rgba(70, 170, 90, 0)");
-    g.fillStyle = top;
-    g.fillRect(0, 0, width, height);
-    const low = g.createRadialGradient(width * 0.3, height * 0.78, 0, width * 0.3, height * 0.78, width * 0.7);
-    low.addColorStop(0, "rgba(150, 190, 60, 0.1)");
-    low.addColorStop(1, "rgba(150, 190, 60, 0)");
-    g.fillStyle = low;
+    const glow = g.createRadialGradient(width * 0.5, height * 0.46, 0, width * 0.5, height * 0.46, Math.max(width, height) * 0.48);
+    glow.addColorStop(0, "rgba(196, 181, 253, 0.42)");
+    glow.addColorStop(0.38, "rgba(139, 92, 246, 0.2)");
+    glow.addColorStop(1, "rgba(11, 11, 16, 0)");
+    g.fillStyle = glow;
     g.fillRect(0, 0, width, height);
     backdrop = { key, canvas };
   }
@@ -158,7 +150,7 @@ function drawBackdrop(ctx: CanvasRenderingContext2D, width: number, height: numb
     drawSmoke(ctx, tex, width, height, time + 40, 1, 12, 0.28);
     ctx.restore();
   }
-  ctx.fillStyle = "rgba(210, 255, 180, 0.4)";
+  ctx.fillStyle = "rgba(196, 181, 253, 0.55)";
   for (let i = 0; i < 18; i += 1) {
     const x = (width * (i * 0.17 + 0.05) + Math.sin(time * 0.15 + i) * 12) % width;
     const y = height - ((height * ((i * 0.37) % 1) + time * (6 + (i % 5))) % height);
@@ -269,46 +261,54 @@ function drawBall(ctx: CanvasRenderingContext2D, ball: ViewBall): void {
   const radius = ball.r * ball.scale;
   if (radius < 2 || ball.alpha <= 0.02) return;
   const { x, y, style } = ball;
-  const ink = signColor(style.base);
-  const wash = mixHex(style.base, "#ffffff", 0.74);
-  const mid = mixHex(style.base, "#ffffff", 0.58);
-  const edge = mixHex(style.base, "#ffffff", 0.34);
+  const ink = "#FAFAFA";
+  const deep = mixHex(style.base, "#0B0B10", 0.62);
+  const mid = mixHex(style.base, "#8B5CF6", 0.18);
+  const lit = mixHex(style.base, "#ffffff", 0.42);
   ctx.save();
   ctx.globalAlpha = ball.alpha;
-  ctx.fillStyle = "rgba(0,0,0,0.22)";
+  ctx.fillStyle = "rgba(0,0,0,0.38)";
   ctx.beginPath();
-  ctx.ellipse(x, y + radius * 0.9, radius * 0.62, radius * 0.16, 0, 0, Math.PI * 2);
+  ctx.ellipse(x, y + radius * 0.92, radius * 0.7, radius * 0.18, 0, 0, Math.PI * 2);
   ctx.fill();
-  const gradient = ctx.createRadialGradient(x - radius * 0.36, y - radius * 0.42, radius * 0.05, x, y + radius * 0.08, radius);
-  gradient.addColorStop(0, "rgba(255,255,255,0.98)");
-  gradient.addColorStop(0.18, wash);
-  gradient.addColorStop(0.62, mid);
-  gradient.addColorStop(1, edge);
+  ctx.shadowColor = mixHex(style.base, "#8B5CF6", 0.45);
+  ctx.shadowBlur = radius * 0.55;
+  const gradient = ctx.createRadialGradient(x - radius * 0.38, y - radius * 0.46, radius * 0.08, x + radius * 0.08, y + radius * 0.12, radius * 1.05);
+  gradient.addColorStop(0, "rgba(255,255,255,0.95)");
+  gradient.addColorStop(0.12, lit);
+  gradient.addColorStop(0.46, mid);
+  gradient.addColorStop(0.82, style.base);
+  gradient.addColorStop(1, deep);
   ctx.beginPath();
   ctx.arc(x, y, radius, 0, Math.PI * 2);
   ctx.fillStyle = gradient;
   ctx.fill();
+  ctx.shadowBlur = 0;
   ctx.save();
   ctx.beginPath();
   ctx.arc(x, y, radius, 0, Math.PI * 2);
   ctx.clip();
-  ctx.fillStyle = mixHex(style.base, "#ffffff", 0.2);
-  ctx.globalAlpha = ball.alpha * 0.16;
-  ctx.beginPath();
-  ctx.ellipse(x, y + radius * 0.48, radius * 0.78, radius * 0.42, 0, 0, Math.PI * 2);
-  ctx.fill();
+  const shade = ctx.createLinearGradient(x, y - radius, x, y + radius);
+  shade.addColorStop(0, "rgba(255,255,255,0)");
+  shade.addColorStop(0.62, "rgba(11,11,16,0)");
+  shade.addColorStop(1, "rgba(11,11,16,0.45)");
+  ctx.fillStyle = shade;
+  ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
   ctx.restore();
   ctx.globalAlpha = ball.alpha;
-  ctx.lineWidth = Math.max(1.1, radius * 0.045);
-  ctx.strokeStyle = "rgba(255,255,255,0.72)";
+  ctx.lineWidth = Math.max(1, radius * 0.035);
+  ctx.strokeStyle = "rgba(255,255,255,0.28)";
   ctx.beginPath();
-  ctx.arc(x, y, radius - 0.6, 0, Math.PI * 2);
+  ctx.arc(x, y, radius - 0.8, 0, Math.PI * 2);
   ctx.stroke();
-  const shine = 0.42 + Math.sin(performance.now() / 900 + x * 0.02) * 0.08;
-  ctx.globalAlpha = ball.alpha * shine;
-  ctx.fillStyle = "rgba(255,255,255,0.9)";
+  ctx.globalAlpha = ball.alpha * 0.9;
+  ctx.fillStyle = "rgba(255,255,255,0.92)";
   ctx.beginPath();
-  ctx.ellipse(x - radius * 0.28, y - radius * 0.34, radius * 0.28, radius * 0.15, -0.7, 0, Math.PI * 2);
+  ctx.ellipse(x - radius * 0.32, y - radius * 0.38, radius * 0.22, radius * 0.1, -0.6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = ball.alpha * 0.45;
+  ctx.beginPath();
+  ctx.arc(x - radius * 0.12, y - radius * 0.22, radius * 0.05, 0, Math.PI * 2);
   ctx.fill();
   ctx.globalAlpha = ball.alpha;
   if (ball.kind === "material") {

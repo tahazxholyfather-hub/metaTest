@@ -25,7 +25,7 @@ import {
     SubmitQuizDto,
     UpdateProgressDto,
 } from '../dtos/lobby.schema';
-import { encodeQuizId, decodeQuizId, encodeResultId } from '../../../utils/hash';
+import { encodeQuizId, decodeQuizId, encodeResultId, decodeResultId } from '../../../utils/hash';
 
 const COUNTDOWN_MS = 3000;
 const EMPTY_LOBBY_TTL_MS = 60_000;
@@ -1040,7 +1040,8 @@ export class LobbyService {
             });
 
             if (saveResponse?.resultId) {
-                const encodedId = encodeResultId(saveResponse.resultId);
+                const rawId = saveResponse.resultId;
+                const encodedId = encodeResultId(rawId) ?? (decodeResultId(rawId) ? String(rawId) : null);
                 if (encodedId) {
                     result.resultId = encodedId;
                     result.id = encodedId;

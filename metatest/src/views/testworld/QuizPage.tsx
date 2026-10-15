@@ -1047,7 +1047,8 @@ export default function QuizPage({ quizData: initialQuizData, onExit }: QuizPage
             const resultId =
                 response?.result_id ?? response?.resultId ??
                 response?.data?.result_id ?? response?.data?.resultId ??
-                response?.summary?.result_id ?? response?.summary?.resultId;
+                response?.summary?.result_id ?? response?.summary?.resultId ??
+                response?.id ?? response?.result?.resultId ?? response?.result?.id;
 
             const responseData = response?.data ?? {};
             const resultQuestions = questions.map((q) => {

@@ -461,7 +461,8 @@ export default function ResultDashboard() {
             }
         } catch (err) {
             console.error('Failed to fetch result:', err);
-            setError('ارتباط با سرور برقرار نشد. لطفا اتصال اینترنت خود را بررسی کنید.');
+            const message = err instanceof Error && err.message ? err.message : '';
+            setError(message || 'ارتباط با سرور برقرار نشد. لطفا اتصال اینترنت خود را بررسی کنید.');
         } finally {
             setLoading(false);
         }

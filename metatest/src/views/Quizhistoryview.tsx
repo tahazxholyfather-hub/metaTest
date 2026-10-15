@@ -220,62 +220,45 @@ export function QuizHistoryView({ onBack, onStateChange }: QuizHistoryViewProps)
                         </div>
                     ) : processedHistory.length > 0 ? (
                         <>
-                        <div className="md:hidden grid grid-cols-1 gap-4">
+                        <div className="md:hidden flex flex-col gap-3">
                             {processedHistory.map((item) => {
                                 const difficulty = getDifficultyConfig(item.difficulty);
-                                const accuracyClasses = getAccuracyClasses(item.accuracyRate);
+                                const accuracy = Math.max(0, Math.min(100, item.accuracyRate));
                                 return (
-                                    <article
+                                    <button
                                         key={item.resultId}
-                                        className="bg-[var(--bg-card)] border border-[var(--border)] rounded-3xl p-5 shadow-sm space-y-4"
+                                        type="button"
+                                        onClick={() => handleViewResult(item.resultId)}
+                                        className="w-full text-right rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] px-4 py-3.5 shadow-sm active:scale-[0.99] transition-transform"
                                     >
-                                        <div className="flex items-start justify-between gap-3">
+                                        <div className="flex items-start justify-between gap-4">
                                             <div className="min-w-0">
-                                                <p className="text-sm font-bold text-[var(--text-primary)] leading-relaxed line-clamp-2">{item.title}</p>
-                                                {item.quizType && (
-                                                    <span className="text-[11px] text-[var(--text-muted)] font-medium">{item.quizType}</span>
-                                                )}
+                                                <p className="text-[15px] font-bold text-[var(--text-primary)] leading-6 line-clamp-2">{item.title}</p>
+                                                <p className="mt-1 text-[12px] text-[var(--text-muted)]">
+                                                    {[item.quizType, difficulty.label, item.date].filter(Boolean).join(' · ')}
+                                                </p>
                                             </div>
-                                            <div className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold ${difficulty.classes}`}>
-                                                <BarChart3 size={14} strokeWidth={2.5} />
-                                                <span>{difficulty.label}</span>
-                                            </div>
-                                        </div>
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold ${accuracyClasses}`}>
-                                                <Target size={13} />
-                                                <span dir="ltr">{item.accuracyRate.toFixed(0)}٪</span>
-                                            </div>
-                                            <div className="inline-flex items-center gap-1.5 text-xs font-bold text-[var(--color-primary-600)]">
-                                                <Award size={14} />
-                                                <span>{item.totalScore.toLocaleString('fa-IR')}</span>
+                                            <div className="shrink-0 text-left">
+                                                <p className="text-[22px] font-black leading-none text-[var(--accent)] tabular-nums">{item.totalScore.toLocaleString('fa-IR')}</p>
+                                                <p className="mt-1 text-[11px] text-[var(--text-muted)]">امتیاز</p>
                                             </div>
                                         </div>
-                                        <div className="flex items-center justify-between gap-3 text-xs font-bold">
-                                            <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-                                                <CheckCircle2 size={14} />{item.correctCount}
+                                        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--bg-element)]">
+                                            <div className="h-full rounded-full bg-[var(--accent)]" style={{ width: `${accuracy}%` }} />
+                                        </div>
+                                        <div className="mt-2.5 flex items-center justify-between gap-3 text-[12px]">
+                                            <span className="text-[var(--text-secondary)]">
+                                                {item.accuracyRate.toFixed(0)}٪ دقت
+                                                <span className="mx-1.5 text-[var(--text-muted)]">·</span>
+                                                {item.correctCount} درست
+                                                <span className="mx-1.5 text-[var(--text-muted)]">·</span>
+                                                {item.incorrectCount} غلط
+                                                <span className="mx-1.5 text-[var(--text-muted)]">·</span>
+                                                {item.unansweredCount} نزده
                                             </span>
-                                            <span className="flex items-center gap-1 text-rose-600 dark:text-rose-400">
-                                                <XCircle size={14} />{item.incorrectCount}
-                                            </span>
-                                            <span className="flex items-center gap-1 text-[var(--text-muted)]">
-                                                <MinusCircle size={14} />{item.unansweredCount}
-                                            </span>
+                                            <span className="shrink-0 font-bold text-[var(--accent)]">{formatTimeSpent(item.totalTimeSpent)}</span>
                                         </div>
-                                        <div className="flex items-center justify-between gap-3 pt-3 border-t border-[var(--border)]/60">
-                                            <div className="flex flex-col gap-1 text-[11px] font-medium text-[var(--text-muted)]">
-                                                <span className="inline-flex items-center gap-1.5"><Clock size={13} />{formatTimeSpent(item.totalTimeSpent)}</span>
-                                                <span className="inline-flex items-center gap-1.5"><Calendar size={13} />{item.date}</span>
-                                            </div>
-                                            <button
-                                                onClick={() => handleViewResult(item.resultId)}
-                                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-[var(--color-primary-500)]/10 text-[var(--color-primary-600)]"
-                                            >
-                                                <span>مشاهده</span>
-                                                <ArrowUpRight size={13} />
-                                            </button>
-                                        </div>
-                                    </article>
+                                    </button>
                                 );
                             })}
                         </div>
