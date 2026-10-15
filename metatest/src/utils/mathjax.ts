@@ -41,6 +41,11 @@ if (!window.MathJax) {
         svg: {
             fontCache: 'none',
         },
+        // MathJax 4 reads the output block. fontCache none keeps each formula
+        // self-contained so ChemBall can paint it onto a canvas.
+        output: {
+            fontCache: 'none',
+        },
 
         loader: {
             load: [
