@@ -76,6 +76,40 @@ interface MainBackendEnvelope<T> {
     message?: string;
 }
 
+function describeFetchFailure(err: unknown): string {
+    const parts: string[] = [];
+    const seen = new Set<unknown>();
+    let current: unknown = err;
+    for (let depth = 0; current && depth < 4; depth += 1) {
+        if (typeof current !== 'object' || seen.has(current)) break;
+        seen.add(current);
+        const error = current as {
+            code?: unknown;
+            message?: unknown;
+            cause?: unknown;
+            address?: unknown;
+            port?: unknown;
+            syscall?: unknown;
+        };
+        const code = typeof error.code === 'string' ? error.code : '';
+        const syscall = typeof error.syscall === 'string' ? error.syscall : '';
+        const address = typeof error.address === 'string' ? error.address : '';
+        const port =
+            typeof error.port === 'number' || typeof error.port === 'string'
+                ? String(error.port)
+                : '';
+        const where = [syscall, address && port ? `${address}:${port}` : address || port]
+            .filter(Boolean)
+            .join(' ');
+        const message = typeof error.message === 'string' ? error.message : '';
+        const generic = message === 'fetch failed' || message === 'The operation was aborted';
+        const bit = [code, where].filter(Boolean).join(' ') || (generic ? '' : message);
+        if (bit && !parts.includes(bit)) parts.push(bit);
+        current = error.cause;
+    }
+    return parts.join(' | ').slice(0, 300);
+}
+
 export class MainBackendService {
     private readonly baseUrl: string;
 
@@ -545,6 +579,7 @@ export class MainBackendService {
 
             const isAbortError =
                 err instanceof Error && err.name === 'AbortError';
+            const cause = describeFetchFailure(err);
 
             logger.error(
                 {
@@ -552,6 +587,7 @@ export class MainBackendService {
                     url,
                     method: options.method,
                     timeout: isAbortError,
+                    cause,
                 },
                 isAbortError
                     ? 'Main backend request timed out'
@@ -560,12 +596,16 @@ export class MainBackendService {
 
             throw new CustomError(
                 isAbortError
-                    ? 'Main backend request timed out'
-                    : 'Main backend unavailable',
+                    ? `Main backend request timed out (${url})`
+                    : `Main backend unavailable (${url}${cause ? `: ${cause}` : ''})`,
                 502,
                 isAbortError
                     ? 'MAIN_BACKEND_TIMEOUT'
                     : 'MAIN_BACKEND_UNAVAILABLE',
+                {
+                    url,
+                    cause: cause || null,
+                },
             );
         } finally {
             clearTimeout(timeout);

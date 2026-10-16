@@ -1,4 +1,5 @@
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import dotenv from 'dotenv';
 import { z } from 'zod';
@@ -28,10 +29,42 @@ function fillMissing(filePath: string, keys: string[]) {
     }
 }
 
+function accountHome(): string {
+    const raw = process.env.HOME ? process.env.HOME.trim() : '';
+    if (raw && path.isAbsolute(raw)) {
+        const home = path.resolve(raw);
+        // LiteSpeed sometimes leaves HOME at /home, which is not this account.
+        if (home !== '/' && home !== '/home' && home !== '/Users') return home;
+    }
+    for (const start of [process.cwd(), __dirname]) {
+        const parts = path.resolve(start).split(path.sep).filter(Boolean);
+        if ((parts[0] === 'home' || parts[0] === 'Users') && parts[1] && parts[1] !== 'public') {
+            return path.join(path.sep, parts[0], parts[1]);
+        }
+    }
+    try {
+        const home = os.homedir();
+        if (home && path.isAbsolute(home)) {
+            const resolved = path.resolve(home);
+            if (resolved !== '/' && resolved !== '/home' && resolved !== '/Users') return resolved;
+        }
+    } catch {
+        // homedir can throw when the passwd entry is missing
+    }
+    return '';
+}
+
+const home = accountHome();
+// The cPanel API is deployed flat at /home/<user>/backend, not metatest/src/backend.
 const apiEnvFiles = [
     path.resolve(process.cwd(), '../src/backend/.env'),
     path.resolve(__dirname, '../../../src/backend/.env'),
     path.resolve(__dirname, '../../../../src/backend/.env'),
+    path.resolve(process.cwd(), '../backend/.env'),
+    path.resolve(__dirname, '../../../backend/.env'),
+    path.resolve(__dirname, '../../../../backend/.env'),
+    path.resolve(__dirname, '../../../../../backend/.env'),
+    ...(home ? [path.join(home, 'backend', '.env')] : []),
 ];
 for (const filePath of apiEnvFiles) {
     fillMissing(filePath, ['JWT_SECRET', 'HASHIDS_SALT', 'LOCALHOST']);
@@ -43,12 +76,19 @@ function isLocalhostFlag(value: string | undefined) {
 }
 
 const localhost = isLocalhostFlag(process.env.LOCALHOST);
-const LOCAL_API = 'http://localhost:3000/api';
+// 127.0.0.1 avoids Linux resolving "localhost" to ::1 and refusing an IPv4 listener.
+const LOCAL_API = 'http://127.0.0.1:3000/api';
+const KNOWN_LOCAL_APIS = new Set([
+    LOCAL_API,
+    'http://localhost:3000/api',
+    'http://[::1]:3000/api',
+]);
 const HOSTED_API = 'https://metatest.app/api';
 const configuredApi = (process.env.MAIN_BACKEND_URL || '').trim().replace(/\/+$/, '');
 // LOCALHOST picks the API. A leftover production URL in this file must not
 // send a quiz that was just created on this computer to metatest.app.
-if (!configuredApi || configuredApi === LOCAL_API || configuredApi === HOSTED_API) {
+// A custom URL that is none of these is kept.
+if (!configuredApi || KNOWN_LOCAL_APIS.has(configuredApi) || configuredApi === HOSTED_API) {
     process.env.MAIN_BACKEND_URL = localhost ? LOCAL_API : HOSTED_API;
 }
 if (!process.env.PORT) process.env.PORT = '4000';
