@@ -7,6 +7,7 @@ const cors = require('cors');
 // const router = express.Router();
 const multer = require('multer');
 const { profile, ensureAvatarDir } = require('./runtimeMode');
+const { reportError, logFile } = require('./reportError');
 const uploadDir = ensureAvatarDir(profile);
 const { ensureVisitorCountIds } = require('./visitorCounts');
 const cookieParser = require('cookie-parser');
@@ -466,9 +467,23 @@ app.post('/api/flow', requireToken, async (req, res) => {
                 break;
         }
     } catch (error) {
-        console.error(`Error in action [${action}]:`, error);
-        res.status(500).json({ success: false, message: 'Internal Server Error' });
+        const detail = reportError(`action ${action || '(none)'}`, error);
+        if (!res.headersSent) {
+            res.status(500).json({
+                success: false,
+                message: 'Internal Server Error',
+                code: detail.code || undefined,
+                detail: detail.message,
+            });
+        }
     }
+});
+
+process.on('unhandledRejection', (error) => {
+    reportError('unhandledRejection', error);
+});
+process.on('uncaughtException', (error) => {
+    reportError('uncaughtException', error);
 });
 
 // Start the server
@@ -476,6 +491,7 @@ app.listen(PORT, () => {
     console.log(`Backend server is running on http://localhost:${PORT}`);
     console.log(`[runtime] LOCALHOST=${profile.localhost} base=${profile.appBase} socket=${profile.socketUrl}`);
     console.log(`[runtime] avatars ${uploadDir}`);
+    console.log(`[runtime] errors ${logFile}`);
     ensureVisitorCountIds()
         .catch((err) => console.error('[db] visitor count repair failed:', err.message));
     ensureAdminSchema()

@@ -10,6 +10,40 @@ const { sendOtpSms } = require('../utils/sms');
 const { encodeResultId } = require('../utils/hash');
 const walletController = require('./walletController');
 const policy = require('../subscription/policy');
+const { reportError } = require('../reportError');
+
+function readSocialLinks(value) {
+    if (value == null || value === '') return {};
+    if (typeof value === 'object') return value;
+    try {
+        const parsed = JSON.parse(value);
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (_) {
+        return {};
+    }
+}
+
+async function loadUserRow(userId) {
+    const shared = `id, password_hash, username, email, phone, first_name, last_name, avatar_url, bio,
+                        social_links, xp_level, xp_points, trophies, current_plan, plan_expires_at,
+                        role, status, created_at, last_login, last_login_ip`;
+    try {
+        const [rows] = await db.query(
+            `SELECT ${shared}, referral_code FROM tam24_users WHERE id = ?`,
+            [userId]
+        );
+        return rows;
+    } catch (error) {
+        if (error && error.code === 'ER_BAD_FIELD_ERROR' && /referral_code/i.test(error.sqlMessage || '')) {
+            const [rows] = await db.query(
+                `SELECT ${shared} FROM tam24_users WHERE id = ?`,
+                [userId]
+            );
+            return rows.map((row) => ({ ...row, referral_code: null }));
+        }
+        throw error;
+    }
+}
 
 // ===================== Native Crypto Password Helpers =====================
 const hashPassword = (password) => {
@@ -93,18 +127,10 @@ const handleGetUserInfo = async (req, res) => {
         try {
             await policy.promoteDueReservations(userId);
         } catch (err) {
-            console.error('[plans] promote', err.message);
+            reportError('get_user_info promote', err);
         }
 
-        const [rows] = await db.query(`
-                    SELECT
-                        id, password_hash, username, email, phone, first_name, last_name, avatar_url, bio,
-                        social_links, xp_level, xp_points, trophies, current_plan, plan_expires_at,
-                        role, status, created_at, last_login, last_login_ip, referral_code
-                    FROM tam24_users
-                    WHERE id = ?`,
-            [userId]
-        );
+        const rows = await loadUserRow(userId);
 
         if (rows.length === 0) {
             return res.json({ success: false, message: 'User not found' });
@@ -130,13 +156,11 @@ const handleGetUserInfo = async (req, res) => {
                 );
                 planName = planRows[0]?.name || null;
             } catch (err) {
-                console.error('[plans] name', err.message);
+                reportError('get_user_info plan name', err);
             }
         }
 
-        const socialLinks = typeof user.social_links === 'string'
-            ? JSON.parse(user.social_links)
-            : (user.social_links || {});
+        const socialLinks = readSocialLinks(user.social_links);
 
         let tomanBalance = 0;
         try {
@@ -165,8 +189,15 @@ const handleGetUserInfo = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Error in get_user_info:', error);
-        res.status(500).json({ success: false, message: 'Internal Server Error' });
+        const detail = reportError('get_user_info', error);
+        if (!res.headersSent) {
+            res.status(500).json({
+                success: false,
+                message: 'Internal Server Error',
+                code: detail.code || undefined,
+                detail: detail.message,
+            });
+        }
     }
 };
 

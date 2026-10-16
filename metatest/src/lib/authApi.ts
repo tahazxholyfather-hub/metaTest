@@ -114,8 +114,12 @@ async function request<T = any>(
         const message =
             (data && typeof data === "object" && (data.message || data.error)) ||
             `خطای سرور (${res.status})`;
+        const detail =
+            data && typeof data === "object" && typeof data.detail === "string"
+                ? data.detail
+                : "";
 
-        throw new Error(message);
+        throw new Error(detail ? `${message}: ${detail}` : message);
     }
 
     if (
