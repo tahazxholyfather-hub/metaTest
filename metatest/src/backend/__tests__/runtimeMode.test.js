@@ -32,3 +32,20 @@ test('cPanel profile uses /app, the public socket, and public_html', () => {
     assert.equal(profile.avatarDir, path.resolve('/home/meta/public_html/avatars'));
     assert.ok(profile.corsOrigins.includes('https://metatest.app'));
 });
+
+test('a cPanel app root does not try to create /home/public/avatars', () => {
+    const profile = profileFromEnv(
+        { LOCALHOST: 'true', HOME: '/home' },
+        { backendDir: '/home/tamapp/backend', publicExists: false }
+    );
+    assert.equal(profile.avatarDir, path.resolve('/home/tamapp/public_html/avatars'));
+    assert.equal(profile.webRoot, path.resolve('/home/tamapp/public_html'));
+});
+
+test('a relative WEB_ROOT is resolved from the account home', () => {
+    const profile = profileFromEnv(
+        { LOCALHOST: 'false', HOME: '/home/tamapp', WEB_ROOT: 'public_html' },
+        { backendDir: '/home/tamapp/backend', publicExists: false }
+    );
+    assert.equal(profile.avatarDir, path.resolve('/home/tamapp/public_html/avatars'));
+});

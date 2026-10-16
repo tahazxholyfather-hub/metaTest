@@ -1,13 +1,13 @@
 //server.js
 const path = require('path');
-const fs = require('fs');
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 const express = require('express');
 const cors = require('cors');
 // const router = express.Router();
 const multer = require('multer');
-const { profile } = require('./runtimeMode');
+const { profile, ensureAvatarDir } = require('./runtimeMode');
+const uploadDir = ensureAvatarDir(profile);
 const { ensureVisitorCountIds } = require('./visitorCounts');
 const cookieParser = require('cookie-parser');
 // const jwt = require('jsonwebtoken');
@@ -61,12 +61,6 @@ function requireInternalService(req, res, next) {
 
 app.use(cookieParser());
 
-
-const uploadDir = profile.avatarDir;
-
-if (!fs.existsSync(uploadDir)){
-    fs.mkdirSync(uploadDir, { recursive: true });
-}
 
 // 2. Use diskStorage to save directly to the fixed path
 const storage = multer.diskStorage({
