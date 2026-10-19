@@ -16,6 +16,7 @@ const {
     addTagFilter,
     majorityGradeSql,
     filterTopicsForSelectedGrades,
+    annotateTopicGrade,
 } = require('../utils/questionTags');
 const entitlements = require('../subscription/entitlements');
 const usage = require('../subscription/usage');
@@ -358,7 +359,7 @@ const handleGetChaptersBySubjects = async (req, res) => {
         const [rows] = await pool.query(sql, params);
         res.json({
             success: true,
-            chapters: filterTopicsForSelectedGrades(rows, gradeIds),
+            chapters: filterTopicsForSelectedGrades(rows, gradeIds).map(annotateTopicGrade),
         });
     } catch (error) {
         console.error("❌ SQL Error in handleGetChaptersBySubjects:", error);

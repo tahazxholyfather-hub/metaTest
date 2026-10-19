@@ -39,6 +39,22 @@ const insufficient = (balance) => {
 
 const n = (v) => Math.max(0, Math.floor(Number(v) || 0));
 
+let unlimitedColumnReady = false;
+
+async function ensureUnlimitedColumn(conn) {
+    if (unlimitedColumnReady) return;
+    const [rows] = await conn.query(
+        `SELECT COUNT(*) AS total FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tam24_ai_wallets' AND COLUMN_NAME = 'unlimited_coins'`
+    );
+    if (!Number(rows[0] && rows[0].total)) {
+        await conn.query(
+            `ALTER TABLE tam24_ai_wallets ADD COLUMN unlimited_coins TINYINT(1) NOT NULL DEFAULT 0`
+        );
+    }
+    unlimitedColumnReady = true;
+}
+
 async function ensureWallet(conn, userId) {
     await conn.query(
         `INSERT IGNORE INTO tam24_ai_wallets (user_id, balance, daily_balance, purchased_balance, lifetime_earned, lifetime_spent)
@@ -58,14 +74,16 @@ function shape(row) {
         lifetimeEarned: n(row?.lifetime_earned),
         lifetimeSpent: n(row?.lifetime_spent),
         dailyGrantedOn: row?.daily_granted_on || null,
+        unlimited: Number(row?.unlimited_coins) === 1,
     };
 }
 
 async function getWallet(conn, userId, { forUpdate = false } = {}) {
     await ensureWallet(conn, userId);
+    await ensureUnlimitedColumn(conn);
     const [rows] = await conn.query(
         `SELECT user_id, balance, daily_balance, purchased_balance, lifetime_earned, lifetime_spent,
-                DATE_FORMAT(daily_granted_on, '%Y-%m-%d') AS daily_granted_on
+                unlimited_coins, DATE_FORMAT(daily_granted_on, '%Y-%m-%d') AS daily_granted_on
          FROM tam24_ai_wallets WHERE user_id = ? ${forUpdate ? 'FOR UPDATE' : ''}`,
         [userId]
     );
@@ -174,6 +192,16 @@ async function applyDailyGrant(dbOrConn, userId, planKey) {
 async function reserveCoins(conn, userId, amount, referenceId, { operationType = 'chat', conversationId = null } = {}) {
     const want = Math.max(1, n(amount) || COIN_PRICING.defaultReservation);
     const w = await getWallet(conn, userId, { forUpdate: true });
+    if (w.unlimited) {
+        return {
+            reserved: 0,
+            reservedDaily: 0,
+            reservedPurchased: 0,
+            unlimited: true,
+            balance: w.total,
+            wallet: w,
+        };
+    }
     if (w.total < COIN_PRICING.minBalanceToStart) throw insufficient(w.total);
 
     const { fromDaily, fromPurchased, covered } = splitDebit(w.daily, w.purchased, Math.min(w.total, want));
@@ -207,6 +235,30 @@ async function finalizeCharge(conn, userId, {
 }) {
     const w = await getWallet(conn, userId, { forUpdate: true });
     const reservedAmt = n(reserved);
+    if (w.unlimited) {
+        if (reservedAmt > 0) {
+            const rDaily = reservedDaily == null ? reservedAmt : n(reservedDaily);
+            const rPurch = reservedPurchased == null ? Math.max(0, reservedAmt - rDaily) : n(reservedPurchased);
+            const daily = w.daily + rDaily;
+            const purchased = w.purchased + rPurch;
+            await writeBuckets(conn, userId, daily, purchased);
+            await writeLedger(conn, {
+                userId, type: LEDGER.RESERVATION_RELEASE, dailyDelta: rDaily, purchasedDelta: rPurch,
+                before: w.total, after: daily + purchased,
+                reason: 'آزادسازی رزرو', referenceType: 'ai_reservation', referenceId,
+                operationType, conversationId, messageId,
+            });
+            return {
+                charged: 0, chargedDaily: 0, chargedPurchased: 0, refunded: reservedAmt,
+                balance: daily + purchased, unlimited: true,
+                wallet: { daily, purchased, total: daily + purchased, unlimited: true },
+            };
+        }
+        return {
+            charged: 0, chargedDaily: 0, chargedPurchased: 0, refunded: 0,
+            balance: w.total, unlimited: true, wallet: w,
+        };
+    }
     const rDaily = reservedDaily == null ? reservedAmt : n(reservedDaily);
     const rPurch = reservedPurchased == null ? Math.max(0, reservedAmt - rDaily) : n(reservedPurchased);
     const cost = Math.max(COIN_PRICING.minCharge, Math.ceil(Number(finalCost) || 0));
@@ -276,7 +328,7 @@ async function chargeFlat(dbOrConn, userId, amount, {
     const cost = Math.ceil(Math.max(0, Number(amount) || 0));
     return withConnection(dbOrConn, async (conn) => {
         const w = await getWallet(conn, userId, { forUpdate: true });
-        if (cost === 0) return { charged: 0, balance: w.total, wallet: w };
+        if (w.unlimited || cost === 0) return { charged: 0, balance: w.total, wallet: w };
         if (w.total < cost) throw insufficient(w.total);
 
         const { fromDaily, fromPurchased } = splitDebit(w.daily, w.purchased, cost);
@@ -356,6 +408,77 @@ async function adminAdjust(dbOrConn, userId, delta, { reason, adminId, reference
     });
 }
 
+async function setUnlimited(dbOrConn, userId, enabled) {
+    return withConnection(dbOrConn, async (conn) => {
+        await ensureWallet(conn, userId);
+        await ensureUnlimitedColumn(conn);
+        await conn.query(
+            `UPDATE tam24_ai_wallets SET unlimited_coins = ? WHERE user_id = ?`,
+            [enabled ? 1 : 0, userId]
+        );
+        const w = await getWallet(conn, userId);
+        try {
+            await writeLedger(conn, {
+                userId,
+                type: LEDGER.ADMIN_ADJUSTMENT,
+                before: w.total,
+                after: w.total,
+                reason: enabled ? 'فعال شدن سکه بی‌نهایت' : 'برداشتن سکه بی‌نهایت',
+                referenceType: 'admin',
+                referenceId: `unlimited-${userId}-${Date.now()}`,
+                metadata: { unlimited: Boolean(enabled) },
+            });
+        } catch (err) {
+            console.error('unlimited coins ledger:', err && err.message);
+        }
+        return w;
+    });
+}
+
+function phoneVariants(raw) {
+    const western = String(raw || '').replace(/[۰-۹]/g, (digit) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit))).replace(/[٠-٩]/g, (digit) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)));
+    const digits = western.replace(/[^\d]/g, '');
+    if (!digits) return [];
+    let local = digits;
+    if (local.startsWith('0098')) local = `0${local.slice(4)}`;
+    else if (local.startsWith('98') && local.length === 12) local = `0${local.slice(2)}`;
+    else if (local.length === 10 && local.startsWith('9')) local = `0${local}`;
+    const variants = new Set([local, digits]);
+    if (local.startsWith('0') && local.length === 11) {
+        variants.add(local.slice(1));
+        variants.add(`98${local.slice(1)}`);
+        variants.add(`+98${local.slice(1)}`);
+    }
+    return [...variants].filter(Boolean);
+}
+
+async function setUnlimitedByPhone(db, phone, enabled) {
+    const variants = phoneVariants(phone);
+    if (!variants.length) {
+        return { ok: false, status: 400, message: 'شماره موبایل را وارد کنید.' };
+    }
+    const placeholders = variants.map(() => '?').join(',');
+    const [users] = await db.query(
+        `SELECT id, phone, first_name, last_name, username FROM tam24_users WHERE phone IN (${placeholders}) LIMIT 5`,
+        variants
+    );
+    if (!users.length) {
+        return { ok: false, status: 404, message: 'کاربری با این شماره پیدا نشد.' };
+    }
+    const preferred = users.find((user) => String(user.phone) === variants[0]) || users[0];
+    const wallet = await setUnlimited(db, preferred.id, enabled);
+    const name = [preferred.first_name, preferred.last_name].filter(Boolean).join(' ').trim();
+    return {
+        ok: true,
+        user: {
+            id: preferred.id,
+            phone: preferred.phone,
+            name: name || preferred.username || preferred.phone,
+        },
+        unlimited: Boolean(wallet.unlimited),
+    };
+}
+
 async function listLedger(db, userId, { limit = 30, offset = 0 } = {}) {
     const [rows] = await db.query(
         `SELECT id, type, amount, daily_delta, purchased_delta, balance_before, balance_after, reason,
@@ -383,6 +506,9 @@ module.exports = {
     chargeFlat,
     creditPurchased,
     adminAdjust,
+    setUnlimited,
+    setUnlimitedByPhone,
+    phoneVariants,
     listLedger,
     quoteMessageCost,
     splitDebit,

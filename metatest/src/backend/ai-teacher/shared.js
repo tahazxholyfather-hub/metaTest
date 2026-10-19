@@ -117,7 +117,7 @@ function coinPlanKey(planKey, expiresAt) {
 
 function emptyWallet(planKey) {
     return {
-        daily: 0, purchased: 0, total: 0, balance: 0,
+        daily: 0, purchased: 0, total: 0, balance: 0, unlimited: false,
         dailyQuota: dailyCoinsForPlan(planKey),
         grantedToday: false, grantAmount: 0, nextResetAt: nextResetAtIso(),
     };
@@ -134,6 +134,7 @@ async function walletSnapshot(userId, planKey, expiresAt) {
             purchased: w.purchased,
             total: w.total,
             balance: w.total,
+            unlimited: Boolean(w.unlimited),
             dailyQuota: dailyCoinsForPlan(key),
             grantedToday: grant.granted,
             grantAmount: grant.amount,
@@ -147,6 +148,7 @@ async function walletSnapshot(userId, planKey, expiresAt) {
             const w = await coinWallet.getWallet(db, userId);
             return {
                 daily: w.daily, purchased: w.purchased, total: w.total, balance: w.total,
+                unlimited: Boolean(w.unlimited),
                 dailyQuota: dailyCoinsForPlan(key),
                 grantedToday: false, grantAmount: 0, nextResetAt: nextResetAtIso(),
             };
@@ -161,6 +163,7 @@ function walletFromBuckets(w, planKey, expiresAt) {
     const key = coinPlanKey(planKey, expiresAt);
     return {
         daily: w.daily, purchased: w.purchased, total: w.total, balance: w.total,
+        unlimited: Boolean(w.unlimited),
         dailyQuota: dailyCoinsForPlan(key), nextResetAt: nextResetAtIso(),
     };
 }

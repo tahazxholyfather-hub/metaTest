@@ -30,13 +30,18 @@ async function test(name, fn) {
 
 /** Minimal in-memory stand-in for the two wallet tables (single user). */
 function fakeDb(initial = { daily: 0, purchased: 0, grantedOn: null }) {
-    const state = { user_id: 1, balance: 0, daily_balance: initial.daily, purchased_balance: initial.purchased, lifetime_earned: 0, lifetime_spent: 0, daily_granted_on: initial.grantedOn };
+    const state = { user_id: 1, balance: 0, daily_balance: initial.daily, purchased_balance: initial.purchased, lifetime_earned: 0, lifetime_spent: 0, daily_granted_on: initial.grantedOn, unlimited_coins: initial.unlimited ? 1 : 0 };
     const ledger = [];
     const conn = {
         async query(sql, params = []) {
             const s = sql.replace(/\s+/g, ' ').trim();
             if (s.startsWith('INSERT IGNORE INTO tam24_ai_wallets')) return [{ affectedRows: 0 }];
+            if (s.includes('information_schema.COLUMNS') && s.includes('unlimited_coins')) return [[{ total: 1 }]];
             if (s.startsWith('SELECT user_id, balance, daily_balance')) return [[{ ...state }]];
+            if (s.startsWith('UPDATE tam24_ai_wallets') && s.includes('unlimited_coins = ?') && !s.includes('daily_balance')) {
+                state.unlimited_coins = Number(params[0]) === 1 ? 1 : 0;
+                return [{ affectedRows: 1 }];
+            }
             if (s.startsWith('UPDATE tam24_ai_wallets')) {
                 const [daily, purchased] = params;
                 state.daily_balance = daily; state.purchased_balance = purchased; state.balance = daily + purchased;
@@ -169,6 +174,19 @@ function fakeDb(initial = { daily: 0, purchased: 0, grantedOn: null }) {
         state.daily_balance = 0;
         await assert.rejects(() => coinWallet.reserveCoins(conn, 1, 10, 'ref-3'), (e) => e.code === 'INSUFFICIENT_COINS');
         await assert.rejects(() => coinWallet.chargeFlat(db, 1, 3, { reason: 't' }), (e) => e.code === 'INSUFFICIENT_COINS');
+    });
+
+    await test('wallet: unlimited coins are not debited', async () => {
+        const { conn, state } = fakeDb({ daily: 0, purchased: 0, unlimited: true });
+        const res = await coinWallet.reserveCoins(conn, 1, 20, 'ref-inf');
+        assert.strictEqual(res.unlimited, true);
+        assert.strictEqual(res.reserved, 0);
+        assert.strictEqual(state.daily_balance, 0);
+        assert.strictEqual(state.purchased_balance, 0);
+        const flat = await coinWallet.chargeFlat(conn, 1, 8, { reason: 't' });
+        assert.strictEqual(flat.charged, 0);
+        assert.ok(coinWallet.phoneVariants('۰۹۱۲۱۱۱۲۲۳۳').includes('09121112233'));
+        assert.ok(coinWallet.phoneVariants('+989121112233').includes('09121112233'));
     });
 
     await test('wallet: purchases credit the purchased bucket and are idempotent per reference', async () => {

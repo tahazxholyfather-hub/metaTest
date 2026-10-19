@@ -377,7 +377,7 @@ const voiceTranscribe = async (req, res) => {
         const user = await loadUserRow(userId);
         const wallet = await walletSnapshot(userId, user?.current_plan, user?.plan_expires_at);
         const cost = pricing.flatCoinCost('stt', MODELS.stt);
-        if (wallet.total < cost) return res.status(402).json({ success: false, code: 'INSUFFICIENT_COINS', message: userMessageForError('INSUFFICIENT_COINS'), wallet });
+        if (!wallet.unlimited && wallet.total < cost) return res.status(402).json({ success: false, code: 'INSUFFICIENT_COINS', message: userMessageForError('INSUFFICIENT_COINS'), wallet });
 
         const durationSeconds = Math.max(0, Math.min(600, Number(req.body?.durationSeconds) || 0)) || null;
         const conversationId = idParam(req.body?.conversationId);
@@ -452,7 +452,7 @@ const voiceSpeak = async (req, res) => {
         const user = await loadUserRow(userId);
         const wallet = await walletSnapshot(userId, user?.current_plan, user?.plan_expires_at);
         const cost = pricing.flatCoinCost('tts', MODELS.tts);
-        if (wallet.total < cost) return res.status(402).json({ success: false, code: 'INSUFFICIENT_COINS', message: userMessageForError('INSUFFICIENT_COINS'), wallet });
+        if (!wallet.unlimited && wallet.total < cost) return res.status(402).json({ success: false, code: 'INSUFFICIENT_COINS', message: userMessageForError('INSUFFICIENT_COINS'), wallet });
 
         const speech = sanitizeForSpeech(row.content);
         if (!speech) return fail(res, 422, 'NO_TEXT', 'متنی برای خواندن وجود ندارد.');

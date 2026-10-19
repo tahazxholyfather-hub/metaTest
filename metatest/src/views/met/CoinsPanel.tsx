@@ -72,8 +72,8 @@ export function CoinsPanel({ wallet, onRefresh, onBuy, className = '' }: Props) 
                 <div className="relative flex items-start justify-between gap-3">
                     <div>
                         <div className="text-[11px] text-[var(--text-muted)] font-bold">موجودی سکه</div>
-                        <motion.div key={wallet.total} initial={{ opacity: 0.4, y: -4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25, ease: easeOut }} className="text-[30px] font-black text-[var(--text-primary)] tabular-nums leading-none mt-1.5">
-                            {faNum(wallet.total)}
+                        <motion.div key={wallet.unlimited ? 'inf' : wallet.total} initial={{ opacity: 0.4, y: -4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25, ease: easeOut }} className="text-[30px] font-black text-[var(--text-primary)] tabular-nums leading-none mt-1.5">
+                            {wallet.unlimited ? 'بی‌نهایت' : faNum(wallet.total)}
                         </motion.div>
                     </div>
                     <span className="w-10 h-10 rounded-[14px] grid place-items-center bg-[color-mix(in_srgb,var(--coin)_16%,transparent)] text-[var(--coin)]">

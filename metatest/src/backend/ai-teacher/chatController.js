@@ -235,7 +235,7 @@ const streamChat = async (req, res) => {
         const wallet = grant.wallet;
         const dailyQuota = dailyCoinsForPlan(coinPlan);
         // Fair-use guard: shrink replies quietly when coins run low instead of cutting the student off.
-        const lowBalance = wallet.total <= Math.max(15, Math.round(dailyQuota * 0.15));
+        const lowBalance = !wallet.unlimited && wallet.total <= Math.max(15, Math.round(dailyQuota * 0.15));
 
         const model = promptBuilder.resolveModel(settings, subject, { hasImageAttachment, lowBalance });
         const maxTokens = promptBuilder.resolveMaxOutputTokens(subject, settings, { lowBalance, quizQuestion: !!quizCtx });
@@ -244,7 +244,7 @@ const streamChat = async (req, res) => {
         const maxEst = pricing.estimateMaxCoins({ model, maxOutputTokens: maxTokens, allowImage: featureStatus().imageGeneration });
         const walletView = walletFromBuckets(wallet, coinPlan);
 
-        if (wallet.total < COIN_PRICING.minBalanceToStart) {
+        if (!wallet.unlimited && wallet.total < COIN_PRICING.minBalanceToStart) {
             const text = paid
                 ? 'موجودی سکه کافی نیست. یک بسته سکه بگیرید، یا تا شارژ فردا صبر کنید.'
                 : 'سکه امروز تمام شد. با اشتراک رایگان، گفتگو تا شارژ فردا محدود است. برای ادامه، اشتراک ویژه را فعال کنید.';

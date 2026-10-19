@@ -38,6 +38,7 @@ export interface MetWallet {
     purchased: number;
     total: number;
     balance: number;
+    unlimited?: boolean;
     dailyQuota: number;
     grantedToday?: boolean;
     grantAmount?: number;

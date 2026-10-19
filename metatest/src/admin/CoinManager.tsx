@@ -20,7 +20,7 @@ interface CoinPackage {
 
 const inputClass = 'w-full rounded-xl border border-[#dadce0] dark:border-[#444746] bg-[#f8f9fa] dark:bg-[#131314] px-3 py-2 text-xs';
 
-export default function CoinManager() {
+export default function CoinManager({ isSuper = false }: { isSuper?: boolean }) {
     const [plans, setPlans] = useState<PlanOption[]>([]);
     const [daily, setDaily] = useState<Record<string, number>>({ free: 24 });
     const [packages, setPackages] = useState<CoinPackage[]>([]);
@@ -29,6 +29,8 @@ export default function CoinManager() {
     const [savingPackages, setSavingPackages] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
+    const [phone, setPhone] = useState('');
+    const [savingUnlimited, setSavingUnlimited] = useState(false);
 
     const load = async () => {
         setLoading(true);
@@ -80,6 +82,21 @@ export default function CoinManager() {
         }
     };
 
+    const setUnlimited = async (enabled: boolean) => {
+        setSavingUnlimited(true);
+        setError(null);
+        setNotice(null);
+        try {
+            const res = await adminApi.setUnlimitedCoins(phone.trim(), enabled);
+            if (!res.success) throw new Error(res.message || 'ثبت سکه بی‌نهایت ناموفق بود');
+            setNotice(res.message || (enabled ? 'سکه بی‌نهایت شد.' : 'سکه بی‌نهایت برداشته شد.'));
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'ثبت سکه بی‌نهایت ناموفق بود');
+        } finally {
+            setSavingUnlimited(false);
+        }
+    };
+
     const updatePackage = (index: number, patch: Partial<CoinPackage>) => {
         setPackages((current) => current.map((pack, i) => (i === index ? { ...pack, ...patch } : pack)));
     };
@@ -118,6 +135,31 @@ export default function CoinManager() {
             )}
             {notice && (
                 <div className="p-3 bg-[#e8f0fe] dark:bg-[#1a73e8]/10 text-[#1a73e8] rounded-xl text-xs font-semibold">{notice}</div>
+            )}
+
+            {isSuper && (
+                <div className="bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-[2rem] p-6 shadow-sm flex flex-col gap-3">
+                    <h2 className="text-sm font-bold">سکه بی‌نهایت</h2>
+                    <p className="text-xs text-[#86868b] leading-6 max-w-3xl">
+                        شماره موبایل دانش‌آموز را وارد کنید. اگر حسابی با این شماره باشد، سکه‌های مِت او تمام نمی‌شود و از موجودی کم نمی‌شود.
+                        این گزینه فقط برای مدیر اصلی است.
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                        <input
+                            value={phone}
+                            onChange={(event) => setPhone(event.target.value)}
+                            placeholder="09123456789"
+                            inputMode="tel"
+                            className="sm:w-64 rounded-xl border border-[#dadce0] dark:border-[#444746] bg-[#f8f9fa] dark:bg-[#131314] px-3 py-2 text-xs"
+                        />
+                        <button type="button" onClick={() => setUnlimited(true)} disabled={savingUnlimited || !phone.trim()} className="px-4 py-2 rounded-xl text-xs font-bold bg-[#1a73e8] text-white disabled:opacity-50">
+                            {savingUnlimited ? 'در حال ثبت' : 'سکه بی‌نهایت'}
+                        </button>
+                        <button type="button" onClick={() => setUnlimited(false)} disabled={savingUnlimited || !phone.trim()} className="px-4 py-2 rounded-xl text-xs font-bold border border-[#dadce0] dark:border-[#444746] disabled:opacity-50">
+                            برداشتن
+                        </button>
+                    </div>
+                </div>
             )}
 
             <div className="bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-[2rem] p-6 shadow-sm">

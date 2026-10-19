@@ -8,8 +8,45 @@ const entitlements = require('../subscription/entitlements');
 const usage = require('../subscription/usage');
 const coinWallet = require('../ai-teacher/services/coinWallet');
 const policy = require('../subscription/policy');
+const { profile } = require('../runtimeMode');
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
+
+function looksLikeLocalUrl(value) {
+    return !value || /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?(?:\/.*)?$/i.test(value);
+}
+
+/** Hosted payments must call back https://metatest.app, even if BASE_URL is still the dev address. */
+function publicSiteOrigin() {
+    const raw = String(process.env.FRONTEND_URL || process.env.BASE_URL || '').trim().replace(/\/+$/, '');
+    if (!profile.localhost && looksLikeLocalUrl(raw)) return 'https://metatest.app';
+    return raw || (profile.localhost ? 'http://localhost:5173' : 'https://metatest.app');
+}
+
+function callbackOrigin() {
+    const raw = String(process.env.BASE_URL || '').trim().replace(/\/+$/, '');
+    if (!profile.localhost && looksLikeLocalUrl(raw)) return 'https://metatest.app';
+    return raw || (profile.localhost ? 'http://localhost:3000' : 'https://metatest.app');
+}
+
+function appUrl(pathAndQuery) {
+    let origin = publicSiteOrigin();
+    if (!profile.localhost && !/\/app$/i.test(origin)) origin += '/app';
+    return `${origin}${pathAndQuery.startsWith('/') ? pathAndQuery : `/${pathAndQuery}`}`;
+}
+
+function resultPageUrl(token) {
+    return appUrl(`/payment/result/${token}`);
+}
+
+function gatewayErrorMessage(error, fallback) {
+    const body = error && error.response && error.response.data;
+    const remote = body && body.errors && body.errors.message ? body.errors.message : body && body.message;
+    if (typeof remote === 'string' && remote.trim()) {
+        return `${fallback}: ${remote.trim().slice(0, 160)}`;
+    }
+    return fallback;
+}
 
 function getClientIp(req) {
     return (
@@ -599,8 +636,7 @@ exports.createSubscriptionPayment = async (req, res) => {
             userAgent: req.headers['user-agent'] || null,
         });
 
-        const baseUrl = String(process.env.BASE_URL || '').replace(/\/+$/, '');
-        const callbackUrl = `${baseUrl}/api/payments/zarinpal/callback?paymentId=${paymentId}`;
+        const callbackUrl = `${callbackOrigin()}/api/payments/zarinpal/callback?paymentId=${paymentId}`;
 
         const mobile = metadata?.mobile || req.user.phone;
         const email = metadata?.email || req.user.email;
@@ -650,7 +686,7 @@ exports.createSubscriptionPayment = async (req, res) => {
             console.error('ZarinPal Response Body:', JSON.stringify(error.response.data, null, 2));
         }
 
-        return res.status(500).json({ success: false, message: 'خطا در ایجاد پرداخت' });
+        return res.status(500).json({ success: false, message: gatewayErrorMessage(error, 'خطا در ایجاد پرداخت') });
     } finally {
         connection.release();
     }
@@ -662,10 +698,9 @@ exports.handleZarinpalCallback = async (req, res) => {
     }
     const connection = await pool.getConnection();
 
-    const frontendBase = String(process.env.FRONTEND_URL || process.env.BASE_URL || '').replace(/\/+$/, '');
     const redirectToResult = (paymentId) => {
         const token = createPaymentResultToken(paymentId);
-        return res.redirect(`${frontendBase}/payment/result/${token}`);
+        return res.redirect(resultPageUrl(token));
     };
 
     try {
@@ -1031,8 +1066,7 @@ exports.createCoinPayment = async (req, res) => {
             [req.user.id, pack.id, pack.coins, pack.priceToman]
         );
         purchaseId = ins.insertId;
-        const baseUrl = String(process.env.BASE_URL || '').replace(/\/+$/, '');
-        const callbackUrl = `${baseUrl}/api/payments/zarinpal/callback?coinPurchaseId=${purchaseId}`;
+        const callbackUrl = `${callbackOrigin()}/api/payments/zarinpal/callback?coinPurchaseId=${purchaseId}`;
         const opened = await zarinpal.createPayableUrl({
             amount: toRial(pack.priceToman),
             currency: 'IRR',
@@ -1061,7 +1095,7 @@ exports.createCoinPayment = async (req, res) => {
         if (error && error.expose) {
             return res.status(error.status || 502).json({ success: false, message: error.message });
         }
-        return res.status(500).json({ success: false, message: 'خطا در ایجاد پرداخت سکه' });
+        return res.status(500).json({ success: false, message: gatewayErrorMessage(error, 'خطا در ایجاد پرداخت سکه') });
     } finally {
         connection.release();
     }
@@ -1069,11 +1103,10 @@ exports.createCoinPayment = async (req, res) => {
 
 async function handleCoinPurchaseCallback(req, res) {
     const connection = await pool.getConnection();
-    const frontendBase = String(process.env.FRONTEND_URL || process.env.BASE_URL || '').replace(/\/+$/, '');
     const purchaseId = Number(req.query.coinPurchaseId);
     const statusFromCb = req.query.Status || null;
     const authorityFromCb = req.query.Authority || null;
-    const redirect = (status) => res.redirect(`${frontendBase}/met?coins=${status}`);
+    const redirect = (status) => res.redirect(appUrl(`/met?coins=${encodeURIComponent(status)}`));
     try {
         await usage.ensureReady();
         const [rows] = await connection.execute(

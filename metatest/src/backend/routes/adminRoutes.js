@@ -75,6 +75,7 @@ router.post('/announcements', requireSection('announcements'), wrap(announcement
 router.get('/coins', requireSection('coins'), wrap(coins.handleGetCoins));
 router.put('/coins/packages', requireSection('coins'), wrap(coins.handleSavePackages));
 router.put('/coins/daily', requireSection('coins'), wrap(coins.handleSaveDaily));
+router.post('/coins/unlimited', requireSuperAdmin, wrap(coins.handleSetUnlimited));
 
 router.get('/reports', requireSection('reports'), wrap(ops.handleListReports));
 router.patch('/reports/:id', requireSection('reports'), wrap(ops.handleUpdateReport));

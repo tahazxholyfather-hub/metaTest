@@ -252,6 +252,22 @@ function majorityGradeSql(topicAlias = 't', { requireEditDone = true } = {}) {
     )`;
 }
 
+/** Grades a chapter card belongs to. The title wins over a stray question tag. */
+function topicGradeIds(row) {
+    const named = [...gradesFromTopicTitle(row && row.title)];
+    if (named.length) return named;
+    const majority = Number(row && row.majority_grade_id);
+    if (Number.isInteger(majority) && majority > 0) return [majority];
+    return [];
+}
+
+function annotateTopicGrade(row) {
+    const gradeIds = topicGradeIds(row);
+    const next = { ...row, grade_ids: gradeIds };
+    if (gradeIds.length === 1) next.grade_id = gradeIds[0];
+    return next;
+}
+
 function filterTopicsForSelectedGrades(rows, gradeIds) {
     const selected = toPositiveIds(gradeIds);
     if (!selected.length) return rows;
@@ -281,6 +297,8 @@ module.exports = {
     addTagFilter,
     toPositiveIds,
     gradesFromTopicTitle,
+    topicGradeIds,
+    annotateTopicGrade,
     majorityGradeSql,
     filterTopicsForSelectedGrades,
 };

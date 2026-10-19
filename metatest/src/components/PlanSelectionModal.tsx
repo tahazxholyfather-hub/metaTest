@@ -395,8 +395,11 @@ export default function PlanSelectionModal({
             toast.error('لینک پرداخت از سرور دریافت نشد.', { id: toastId });
         } catch (error) {
             console.error("Payment API Error:", error);
-            setPaymentError('خطا در اتصال به درگاه پرداخت. لطفا دوباره تلاش کنید.');
-            toast.error('خطا در برقراری ارتباط با درگاه پرداخت.', { id: toastId });
+            const errMsg = error instanceof Error && error.message
+                ? error.message
+                : 'خطا در اتصال به درگاه پرداخت. لطفا دوباره تلاش کنید.';
+            setPaymentError(errMsg);
+            toast.error(errMsg, { id: toastId });
         } finally {
             setIsPaying(false);
         }

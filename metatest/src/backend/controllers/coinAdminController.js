@@ -2,6 +2,7 @@
 
 const pool = require('../db');
 const { listCoinPackages, saveCoinPackages } = require('../coinCatalog');
+const coinWallet = require('../ai-teacher/services/coinWallet');
 const { snapshotRuntimeSettings, applyRuntimeOverlay, dailyCoinsForPlan } = require('../ai-teacher/config');
 
 const PLAN_KEY = /^[a-z0-9][a-z0-9_-]{0,39}$/;
@@ -84,4 +85,18 @@ const handleSaveDaily = async (req, res) => {
     return res.json({ success: true, dailyCoins: result.dailyCoins, message: 'سکه روزانه ذخیره شد.' });
 };
 
-module.exports = { handleGetCoins, handleSavePackages, handleSaveDaily };
+const handleSetUnlimited = async (req, res) => {
+    const enabled = req.body?.enabled !== false && req.body?.enabled !== 0 && req.body?.enabled !== '0';
+    const result = await coinWallet.setUnlimitedByPhone(pool, req.body?.phone, enabled);
+    if (!result.ok) return res.status(result.status || 400).json({ success: false, message: result.message });
+    return res.json({
+        success: true,
+        user: result.user,
+        unlimited: result.unlimited,
+        message: result.unlimited
+            ? `سکه ${result.user.name} بی‌نهایت شد.`
+            : `سکه بی‌نهایت ${result.user.name} برداشته شد.`,
+    });
+};
+
+module.exports = { handleGetCoins, handleSavePackages, handleSaveDaily, handleSetUnlimited };

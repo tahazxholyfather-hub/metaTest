@@ -176,7 +176,7 @@ export default function AdminPanel() {
                                 {activeTab === 'withdrawals' && canAccessSection(user, 'withdrawals') && <WithdrawalRequests user={user} />}
                                 {activeTab === 'word-stats' && canAccessSection(user, 'word-stats') && <WordStats />}
                                 {activeTab === 'announcements' && canAccessSection(user, 'announcements') && <AnnouncementsManager />}
-                                {activeTab === 'coins' && canAccessSection(user, 'coins') && <CoinManager />}
+                                {activeTab === 'coins' && canAccessSection(user, 'coins') && <CoinManager isSuper={Boolean(user.isSuper || user.id === 1)} />}
                                 {activeTab === 'reports' && canAccessSection(user, 'reports') && <ReportsManager />}
                                 {activeTab === 'ai-manager' && canAccessSection(user, 'ai-manager') && <AiManager />}
                                 {activeTab === 'admins' && canAccessSection(user, 'admins') && <AdminsManager currentUser={user} />}

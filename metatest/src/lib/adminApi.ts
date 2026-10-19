@@ -156,6 +156,8 @@ export const adminApi = {
         adminRequest<Json>('/coins/packages', { method: 'PUT', body: JSON.stringify({ packages }) }),
     saveDailyCoins: (dailyCoins: Json) =>
         adminRequest<Json>('/coins/daily', { method: 'PUT', body: JSON.stringify({ dailyCoins }) }),
+    setUnlimitedCoins: (phone: string, enabled: boolean) =>
+        adminRequest<Json>('/coins/unlimited', { method: 'POST', body: JSON.stringify({ phone, enabled }) }),
 
     listReports: (params?: Json) => adminRequest<Json>('/reports', { params }),
     updateReport: (id: number, payload: Json) =>

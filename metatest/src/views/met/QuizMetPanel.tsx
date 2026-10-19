@@ -212,7 +212,7 @@ export function QuizMetPanel({ open, onClose, questionId }: Props) {
                                     )}
                                 </div>
                             </div>
-                            {wallet && <CoinChip total={wallet.total} onClick={() => setShowCoins((v) => !v)} compact />}
+                            {wallet && <CoinChip total={wallet.total} unlimited={wallet.unlimited} onClick={() => setShowCoins((v) => !v)} compact />}
                             <button
                                 type="button"
                                 onClick={onClose}
@@ -226,7 +226,7 @@ export function QuizMetPanel({ open, onClose, questionId }: Props) {
                         {showCoins && wallet && (
                             <div className="shrink-0 mx-4 mt-3 rounded-[14px] border border-[var(--border)]/60 px-3 py-2.5 bg-[color-mix(in_srgb,var(--color-primary-500)_8%,var(--bg-card))]">
                                 <div className="text-[11px] font-bold text-[var(--text-secondary)]">موجودی سکه</div>
-                                <div className="text-[20px] font-black tabular-nums text-[var(--text-primary)]">{faNum(wallet.total)}</div>
+                                <div className="text-[20px] font-black tabular-nums text-[var(--text-primary)]">{wallet.unlimited ? 'بی‌نهایت' : faNum(wallet.total)}</div>
                                 <div className="text-[10px] text-[var(--text-muted)]">روزانه {faNum(wallet.daily)} · خریداری‌شده {faNum(wallet.purchased)}</div>
                             </div>
                         )}

@@ -12,7 +12,7 @@ Module.prototype.require = function (id) {
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { gradesFromTopicTitle, filterTopicsForSelectedGrades } = require('../questionTags');
+const { gradesFromTopicTitle, filterTopicsForSelectedGrades, annotateTopicGrade } = require('../questionTags');
 
 test('دهم is not counted inside longer ordinals', () => {
     assert.deepEqual([...gradesFromTopicTitle('فصل یک سیزدهم')], []);
@@ -26,6 +26,12 @@ test('دهم is not counted inside longer ordinals', () => {
 test('absolute value stays grade 11', () => {
     assert.ok(gradesFromTopicTitle('قدرمطلق و جزءصحيح').has(2));
     assert.ok(gradesFromTopicTitle('قدر مطلق و جزء صحیح').has(2));
+});
+
+test('a دوازدهم chapter is not filed under یازدهم because one question is tagged 11', () => {
+    const row = annotateTopicGrade({ id: 43, title: 'تابع دوازدهم', grade_id: 2, majority_grade_id: 3 });
+    assert.deepEqual(row.grade_ids, [3]);
+    assert.equal(row.grade_id, 3);
 });
 
 test('a chapter titled سیزدهم is not forced into grade 10', () => {

@@ -35,6 +35,8 @@ function isRateLimited(body) {
  * so the browser is not sent to a dead checkout.
  */
 async function createPayableUrl(payload) {
+    let opened = null;
+    let networkFailure = null;
     for (let attempt = 1; attempt <= GATEWAY_ATTEMPTS; attempt++) {
         let paymentRequest;
         try {
@@ -53,6 +55,7 @@ async function createPayableUrl(payload) {
         }
 
         const paymentUrl = zarinpal.payments.getRedirectUrl(authority);
+        opened = { authority, paymentUrl, paymentRequest };
         let status = 0;
         let html = '';
         try {
@@ -60,6 +63,7 @@ async function createPayableUrl(payload) {
             status = page.status;
             html = await page.text();
         } catch (error) {
+            networkFailure = error;
             console.error('[zarinpal] StartPay request failed', error.message);
             continue;
         }
@@ -68,9 +72,16 @@ async function createPayableUrl(payload) {
             throw exposeError('درگاه پرداخت شلوغ است. یک دقیقه بعد دوباره تلاش کنید.', 503);
         }
         if (isPayableGatewayPage(status, html)) {
-            return { authority, paymentUrl, paymentRequest };
+            return opened;
         }
+        networkFailure = null;
         console.error('[zarinpal] StartPay unavailable', status, 'attempt', attempt);
+    }
+
+    // cPanel often cannot open the checkout page itself. The browser still can.
+    if (opened && networkFailure) {
+        console.error('[zarinpal] sending the checkout url without a server-side page check');
+        return opened;
     }
 
     throw exposeError('صفحه پرداخت زرین‌پال باز نشد. چند لحظه بعد دوباره تلاش کنید.', 502);

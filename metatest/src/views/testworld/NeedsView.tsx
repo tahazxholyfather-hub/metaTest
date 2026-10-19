@@ -114,6 +114,15 @@ const getGradeId = (item: any): string | null => {
     return gid != null ? String(gid) : null;
 };
 
+/** A chapter titled دوازدهم stays on that grade, even if one question was tagged یازدهم. */
+const chapterGradeIds = (item: any): string[] => {
+    if (Array.isArray(item?.grade_ids) && item.grade_ids.length) {
+        return item.grade_ids.map((id: unknown) => String(id));
+    }
+    const one = getGradeId(item);
+    return one ? [one] : [];
+};
+
 const lookupCache = (cache: Record<string, any>, id: string | number) => cache[String(id)] || null;
 
 const hasId = (ids: Array<string | number>, id: string | number) =>
@@ -498,7 +507,7 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
         let items = currentItems;
 
         if (activeGradeTab !== 'all' && flowData.grades.length > 1) {
-            items = items.filter(item => getGradeId(item) === String(activeGradeTab));
+            items = items.filter(item => chapterGradeIds(item).includes(String(activeGradeTab)));
         }
 
         if (activeSubjectTab !== 'all' && flowData.lessons.length > 1) {

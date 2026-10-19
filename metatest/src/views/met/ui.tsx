@@ -145,35 +145,38 @@ export function IconButton({
 /** Coin balance chip — the only place the number gets a subtle pop animation. */
 export function CoinChip({
     total,
+    unlimited = false,
     onClick,
     compact = false,
     className = '',
 }: {
     total: number;
+    unlimited?: boolean;
     onClick?: () => void;
     compact?: boolean;
     className?: string;
 }) {
-    const low = total <= 0;
+    const low = !unlimited && total <= 0;
+    const label = unlimited ? '∞' : faNum(total);
     const shared = {
         className: `inline-flex items-center gap-1.5 h-8 ${compact ? 'px-2' : 'px-2.5'} rounded-full border border-[var(--border)]/80 bg-[color-mix(in_srgb,var(--bg-card)_70%,transparent)] ${
             onClick ? 'hover:border-[var(--color-primary-500)]/40 transition-colors' : ''
         } ${className}`,
-        'aria-label': `سکه: ${faNum(total)}`,
-        title: 'سکه‌های مِت',
+        'aria-label': unlimited ? 'سکه: بی‌نهایت' : `سکه: ${faNum(total)}`,
+        title: unlimited ? 'سکه بی‌نهایت' : 'سکه‌های مِت',
         dir: 'ltr' as const,
     };
     const inner = (
         <>
             <Coins size={14} className={low ? 'text-rose-400' : 'text-[var(--coin)]'} strokeWidth={2.2} />
             <motion.span
-                key={total}
+                key={unlimited ? 'inf' : total}
                 initial={{ opacity: 0.4, y: -3 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.22, ease: easeOut }}
                 className={`text-[12.5px] font-bold tabular-nums tracking-tight ${low ? 'text-rose-400' : 'text-[var(--text-primary)]'}`}
             >
-                {faNum(total)}
+                {label}
             </motion.span>
         </>
     );

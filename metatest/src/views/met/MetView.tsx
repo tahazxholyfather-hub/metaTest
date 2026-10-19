@@ -311,6 +311,7 @@ export function MetView({ onNavigate, onToggleHeader }: Props) {
                                 metColor={subjectToMetColor(subjectKey)}
                                 audioLevel={audioLevel}
                                 coins={wallet.total}
+                                unlimited={wallet.unlimited}
                                 activePanel={panel}
                                 onTogglePanel={togglePanel}
                                 onChat={() => { setPanel(null); composerRef.current?.focus(); }}

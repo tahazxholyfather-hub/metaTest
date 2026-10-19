@@ -207,7 +207,7 @@ export function ChatScreen({
 
             {isMobile ? (
                 <div ref={menuRef} className="relative flex items-center gap-1.5">
-                    <CoinChip total={wallet.total} onClick={() => onOpenPanel('coins')} compact />
+                    <CoinChip total={wallet.total} unlimited={wallet.unlimited} onClick={() => onOpenPanel('coins')} compact />
                     <IconButton label="بیشتر" size={36} onClick={() => setMenuOpen((open) => !open)}>
                         <MoreVertical size={18} strokeWidth={1.9} />
                     </IconButton>
@@ -247,7 +247,7 @@ export function ChatScreen({
                 </div>
             ) : (
                 <>
-                    <CoinChip total={wallet.total} onClick={() => onOpenPanel('coins')} />
+                    <CoinChip total={wallet.total} unlimited={wallet.unlimited} onClick={() => onOpenPanel('coins')} />
                     <IconButton label="بازی شیمی" size={36} onClick={onOpenGame}>
                         <Gamepad2 size={18} strokeWidth={1.9} />
                     </IconButton>
