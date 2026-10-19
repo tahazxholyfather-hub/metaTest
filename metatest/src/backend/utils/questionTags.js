@@ -234,17 +234,39 @@ function gradesFromTopicTitle(title) {
 }
 
 /**
- * A topic's home grade: most of its primary-tagged فعال/done questions.
+ * Questions a student can be given.
+ * Other subjects stay on فعال + edit_status done.
+ * زیست یازدهم is shown in full: فعال or غیرفعال, any edit status.
+ */
+function playableQuestionSql(alias = 'q') {
+    return `(
+        (${alias}.status = 'فعال' AND ${alias}.edit_status = 'done')
+        OR (
+            ${alias}.status IN ('فعال', 'غیرفعال')
+            AND ${alias}.subject_id IN (SELECT id FROM subjects_tam24 WHERE title LIKE '%زیست%')
+            AND (
+                ${alias}.grade_id IN (SELECT id FROM grades_tam24 WHERE title LIKE '%یازدهم%')
+                OR EXISTS (
+                    SELECT 1 FROM question_grades_tam24 qg_bio11
+                    WHERE qg_bio11.question_id = ${alias}.id
+                      AND qg_bio11.grade_id IN (SELECT id FROM grades_tam24 WHERE title LIKE '%یازدهم%')
+                )
+            )
+        )
+    )`;
+}
+
+/**
+ * A topic's home grade: most of its playable questions.
  * Used when the title does not name a grade (e.g. آمار, مشتق).
  */
 function majorityGradeSql(topicAlias = 't', { requireEditDone = true } = {}) {
-    const editClause = requireEditDone ? "AND q2.edit_status = 'done'" : '';
+    const where = requireEditDone ? playableQuestionSql('q2') : "q2.status = 'فعال'";
     return `(
         SELECT q2.grade_id
         FROM questions_tam24 q2
         WHERE q2.topic_id = ${topicAlias}.id
-          AND q2.status = 'فعال'
-          ${editClause}
+          AND ${where}
           AND q2.grade_id IS NOT NULL
         GROUP BY q2.grade_id
         ORDER BY COUNT(*) DESC, q2.grade_id ASC
@@ -300,5 +322,6 @@ module.exports = {
     topicGradeIds,
     annotateTopicGrade,
     majorityGradeSql,
+    playableQuestionSql,
     filterTopicsForSelectedGrades,
 };

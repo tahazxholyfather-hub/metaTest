@@ -1,5 +1,4 @@
 const { ZarinPal } = require('zarinpal-node-sdk');
-const { isPayableGatewayPage } = require('./gatewayPage');
 
 const isSandbox = String(process.env.ZARINPAL_SANDBOX).toLowerCase() === 'true';
 
@@ -18,14 +17,6 @@ function exposeError(message, status) {
     return err;
 }
 
-function readJson(text) {
-    try {
-        return JSON.parse(text);
-    } catch (_) {
-        return null;
-    }
-}
-
 function isRateLimited(body) {
     const code = body?.errors?.code;
     const message = String(body?.errors?.message || '');
@@ -33,13 +24,12 @@ function isRateLimited(body) {
 }
 
 /**
- * Sandbox StartPay sometimes returns HTTP 500 for a valid authority.
- * Open the page once here and ask for a fresh authority when that happens,
- * so the browser is not sent to a dead checkout.
+ * Ask Zarinpal for an authority and return the URL the browser should open.
+ * The Node app on cPanel often cannot render StartPay itself (redirect or an
+ * empty body). A valid authority is still handed to the user.
  */
 async function createPayableUrl(payload) {
-    let opened = null;
-    let networkFailure = null;
+    let lastReject = 'درگاه پرداخت درخواست را نپذیرفت.';
     for (let attempt = 1; attempt <= GATEWAY_ATTEMPTS; attempt++) {
         let paymentRequest;
         try {
@@ -53,42 +43,24 @@ async function createPayableUrl(payload) {
 
         const requestData = paymentRequest?.data || {};
         const authority = requestData.authority || null;
-        if (requestData.code !== 100 || !authority) {
-            throw exposeError('درگاه پرداخت درخواست را نپذیرفت.', 502);
+        if (requestData.code === 100 && authority) {
+            return {
+                authority,
+                paymentUrl: zarinpal.payments.getRedirectUrl(authority),
+                paymentRequest,
+                sandbox: isSandbox,
+            };
         }
 
-        const paymentUrl = zarinpal.payments.getRedirectUrl(authority);
-        opened = { authority, paymentUrl, paymentRequest, sandbox: isSandbox };
-        if (isSandbox) return opened;
-        let status = 0;
-        let html = '';
-        try {
-            const page = await fetch(paymentUrl, { redirect: 'manual' });
-            status = page.status;
-            html = await page.text();
-        } catch (error) {
-            networkFailure = error;
-            console.error('[zarinpal] StartPay request failed', error.message);
-            continue;
-        }
-
-        if (isRateLimited(readJson(html))) {
+        const remote = String(requestData.message || paymentRequest?.errors?.message || '').trim();
+        if (remote) lastReject = `درگاه پرداخت درخواست را نپذیرفت: ${remote.slice(0, 160)}`;
+        if (isRateLimited(paymentRequest)) {
             throw exposeError('درگاه پرداخت شلوغ است. یک دقیقه بعد دوباره تلاش کنید.', 503);
         }
-        if (isPayableGatewayPage(status, html)) {
-            return opened;
-        }
-        networkFailure = null;
-        console.error('[zarinpal] StartPay unavailable', status, 'attempt', attempt);
+        console.error('[zarinpal] payment request rejected', requestData.code, 'attempt', attempt);
     }
 
-    // cPanel often cannot open the checkout page itself. The browser still can.
-    if (opened && networkFailure) {
-        console.error('[zarinpal] sending the checkout url without a server-side page check');
-        return opened;
-    }
-
-    throw exposeError('صفحه پرداخت زرین‌پال باز نشد. چند لحظه بعد دوباره تلاش کنید.', 502);
+    throw exposeError(lastReject, 502);
 }
 
 zarinpal.createPayableUrl = createPayableUrl;

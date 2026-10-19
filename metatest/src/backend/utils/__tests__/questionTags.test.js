@@ -12,7 +12,7 @@ Module.prototype.require = function (id) {
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { gradesFromTopicTitle, filterTopicsForSelectedGrades, annotateTopicGrade } = require('../questionTags');
+const { gradesFromTopicTitle, filterTopicsForSelectedGrades, annotateTopicGrade, playableQuestionSql } = require('../questionTags');
 
 test('دهم is not counted inside longer ordinals', () => {
     assert.deepEqual([...gradesFromTopicTitle('فصل یک سیزدهم')], []);
@@ -32,6 +32,14 @@ test('a دوازدهم chapter is not filed under یازدهم because one quest
     const row = annotateTopicGrade({ id: 43, title: 'تابع دوازدهم', grade_id: 2, majority_grade_id: 3 });
     assert.deepEqual(row.grade_ids, [3]);
     assert.equal(row.grade_id, 3);
+});
+
+test('زیست یازدهم is playable even when edit_status is not done', () => {
+    const sql = playableQuestionSql('q');
+    assert.match(sql, /q\.edit_status = 'done'/);
+    assert.match(sql, /زیست/);
+    assert.match(sql, /یازدهم/);
+    assert.match(sql, /غیرفعال/);
 });
 
 test('a chapter titled سیزدهم is not forced into grade 10', () => {

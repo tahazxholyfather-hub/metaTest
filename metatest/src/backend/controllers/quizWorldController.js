@@ -15,6 +15,7 @@ const {
     matchTagIn,
     addTagFilter,
     majorityGradeSql,
+    playableQuestionSql,
     filterTopicsForSelectedGrades,
     annotateTopicGrade,
 } = require('../utils/questionTags');
@@ -166,8 +167,7 @@ async function fetchQuestionIdsByDifficulty({
 
     const baseWhere = `
         FROM questions_tam24 q
-        WHERE q.status = 'فعال'
-          AND q.edit_status = 'done'
+        WHERE ${playableQuestionSql('q')}
           AND q.subject_id IN (${subjectPlaceholders})
           ${gradeMatch.sql ? `AND ${gradeMatch.sql}` : ''}
           ${itemMatch.sql ? `AND ${itemMatch.sql}` : ''}
@@ -279,11 +279,12 @@ const generateCode = async (req, res) => {
 
 const handleGetSubjects = async (req, res) => {
     try {
+        await ensureQuestionTagTables();
         const sql = `
             SELECT s.id, s.title, s.icon , COUNT(q.id) AS question_count
             FROM questions_tam24 q
             JOIN subjects_tam24 s ON q.subject_id = s.id
-            WHERE q.status = 'فعال' AND q.edit_status = 'done'
+            WHERE ${playableQuestionSql('q')}
             GROUP BY s.id, s.title, s.icon
             HAVING COUNT(q.id) >= ?
             ORDER BY s.id ASC
@@ -309,8 +310,7 @@ const handleGetGradesBySubjects = async (req, res) => {
             FROM questions_tam24 q
             INNER JOIN grades_tam24 g ON ${joinOnTag('q', 'g', 'grade')}
             WHERE q.subject_id IN (?)
-               AND q.status = 'فعال'
-               AND q.edit_status = 'done'
+               AND ${playableQuestionSql('q')}
             GROUP BY g.id, g.title
             HAVING COUNT(DISTINCT q.id) >= ?
             ORDER BY g.id ASC
@@ -341,8 +341,7 @@ const handleGetChaptersBySubjects = async (req, res) => {
             FROM questions_tam24 q
             JOIN topics_tam24 t ON ${joinOnTag('q', 't', 'topic')}
             WHERE q.subject_id IN (?)
-               AND q.status = 'فعال'
-               AND q.edit_status = 'done'
+               AND ${playableQuestionSql('q')}
         `;
         const params = [subjectIds];
         if (gradeMatch.sql) {
@@ -384,8 +383,7 @@ const handleGetMabahesByChapters = async (req, res) => {
                    MIN(q.topic_id) AS chapter_id, MIN(q.grade_id) AS grade_id, MIN(q.subject_id) AS subject_id
             FROM questions_tam24 q
             JOIN chapters_tam24 c ON ${joinOnTag('q', 'c', 'mabhas')}
-            WHERE q.status = 'فعال'
-               AND q.edit_status = 'done'
+            WHERE ${playableQuestionSql('q')}
                AND ${topicMatch.sql || '1=1'}
         `;
         const params = [...topicMatch.params];
@@ -484,9 +482,8 @@ const handleSearchBankQuestions = async (req, res) => {
 
         const runFilteredCount = async (requireEditDone) => {
             await ensureQuestionTagTables();
-            const parts = ["q.status = 'فعال'"];
+            const parts = [requireEditDone ? playableQuestionSql('q') : "q.status = 'فعال'"];
             const params = [];
-            if (requireEditDone) parts.push("q.edit_status = 'done'");
             addInFilter(parts, params, 'q.subject_id', subjectIds);
             addTagFilter(parts, params, 'q', 'grade', gradeIds);
             addTagFilter(parts, params, 'q', 'topic', topicIds);
@@ -504,8 +501,8 @@ const handleSearchBankQuestions = async (req, res) => {
             return { total: Number(total) || 0, whereSql, params };
         };
 
-        // Prefer curated (done) rows like the wizard, but don't hide the bank
-        // if live data is still marked free/pending — practice uses status only.
+        // Same pool as the wizard, including every زیست یازدهم question.
+        // If that pool is empty, fall back to any فعال row.
         let filtered = await runFilteredCount(true);
         let usedEditDone = true;
         if (filtered.total === 0) {
@@ -682,9 +679,10 @@ const handleCreateQuiz = async (req, res) => {
             if (uniqueIds.length === 0) {
                 return res.json({ success: false, message: "هیچ سوالی انتخاب نشده است." });
             }
+            await ensureQuestionTagTables();
             const [foundRows] = await pool.query(
-                `SELECT id FROM questions_tam24
-                 WHERE id IN (${uniqueIds.map(() => '?').join(',')}) AND status = 'فعال'`,
+                `SELECT id FROM questions_tam24 q
+                 WHERE q.id IN (${uniqueIds.map(() => '?').join(',')}) AND ${playableQuestionSql('q')}`,
                 uniqueIds
             );
             const found = new Set(foundRows.map((r) => Number(r.id)));
