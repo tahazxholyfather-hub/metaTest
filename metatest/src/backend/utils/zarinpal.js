@@ -1,10 +1,13 @@
 const { ZarinPal } = require('zarinpal-node-sdk');
 const { isPayableGatewayPage } = require('./gatewayPage');
 
+const isSandbox = String(process.env.ZARINPAL_SANDBOX).toLowerCase() === 'true';
+
 const zarinpal = new ZarinPal({
     merchantId: process.env.ZARINPAL_MERCHANT_ID,
-    sandbox: String(process.env.ZARINPAL_SANDBOX).toLowerCase() === 'true',
+    sandbox: isSandbox,
 });
+zarinpal.isSandbox = isSandbox;
 
 const GATEWAY_ATTEMPTS = 2;
 
@@ -55,7 +58,8 @@ async function createPayableUrl(payload) {
         }
 
         const paymentUrl = zarinpal.payments.getRedirectUrl(authority);
-        opened = { authority, paymentUrl, paymentRequest };
+        opened = { authority, paymentUrl, paymentRequest, sandbox: isSandbox };
+        if (isSandbox) return opened;
         let status = 0;
         let html = '';
         try {

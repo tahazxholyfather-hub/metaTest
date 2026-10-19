@@ -15,6 +15,8 @@ router.get('/me', requireToken, paymentController.getMySubscriptionStatus);
 
 // Zarinpal callback must stay public
 router.get('/zarinpal/callback', paymentController.handleZarinpalCallback);
+router.get('/sandbox/checkout', paymentController.showSandboxCheckout);
+router.post('/sandbox/complete', paymentController.completeSandboxCheckout);
 
 router.get('/result/:token', paymentController.getPaymentResult);
 

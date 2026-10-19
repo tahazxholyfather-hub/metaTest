@@ -9,6 +9,7 @@ const usage = require('../subscription/usage');
 const coinWallet = require('../ai-teacher/services/coinWallet');
 const policy = require('../subscription/policy');
 const { profile } = require('../runtimeMode');
+const sandboxCheckout = require('../utils/sandboxCheckout');
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -651,7 +652,16 @@ exports.createSubscriptionPayment = async (req, res) => {
             ...(mobile ? { mobile } : {}),
             ...(email ? { email } : {}),
         });
-        const { authority, paymentUrl, paymentRequest } = opened;
+        const { authority, paymentRequest } = opened;
+        const paymentUrl = opened.sandbox
+            ? sandboxCheckout.checkoutPath({
+                kind: 'plan',
+                id: paymentId,
+                authority,
+                amountToman: pricing.finalPrice,
+                title: `اشتراک ${plan.name}`,
+            })
+            : opened.paymentUrl;
 
         await connection.execute(
             `UPDATE payments
@@ -691,6 +701,9 @@ exports.createSubscriptionPayment = async (req, res) => {
         connection.release();
     }
 };
+
+exports.showSandboxCheckout = sandboxCheckout.showSandboxCheckout;
+exports.completeSandboxCheckout = sandboxCheckout.completeSandboxCheckout;
 
 exports.handleZarinpalCallback = async (req, res) => {
     if (req.query.coinPurchaseId) {
@@ -737,16 +750,31 @@ exports.handleZarinpalCallback = async (req, res) => {
         }
 
         const amountInRial = toRial(Number(payment.final_price));
+        const sandboxApproval = sandboxCheckout.readSandboxApproval(req.query);
+        const sandboxPaid = Boolean(
+            sandboxApproval
+            && sandboxApproval.kind === 'plan'
+            && Number(sandboxApproval.id) === paymentId
+            && sandboxApproval.authority === payment.authority
+        );
 
-        const verifyResult = await zarinpal.verifications.verify({
-            amount: amountInRial,
-            authority: authorityFromCb || payment.authority,
-        });
-
-        const verifyData = verifyResult?.data;
-        const verifyCode = verifyData?.code ?? null;
-        const refId = verifyData?.ref_id ?? null;
-        const verifySuccess = verifyCode === 100 || verifyCode === 101;
+        let verifyResult;
+        let verifyCode;
+        let refId;
+        if (sandboxPaid) {
+            refId = Number(String(Date.now()).slice(-9));
+            verifyCode = 100;
+            verifyResult = { data: { code: 100, ref_id: refId, sandbox: true } };
+        } else {
+            verifyResult = await zarinpal.verifications.verify({
+                amount: amountInRial,
+                authority: authorityFromCb || payment.authority,
+            });
+            const verifyData = verifyResult?.data;
+            verifyCode = verifyData?.code ?? null;
+            refId = verifyData?.ref_id ?? null;
+        }
+        const verifySuccess = sandboxPaid || verifyCode === 100 || verifyCode === 101;
 
         if (!verifySuccess) {
             await connection.execute(
@@ -1080,7 +1108,19 @@ exports.createCoinPayment = async (req, res) => {
         );
         return res.json({
             success: true,
-            data: { purchaseId, paymentUrl: opened.paymentUrl, package: pack },
+            data: {
+                purchaseId,
+                paymentUrl: opened.sandbox
+                    ? sandboxCheckout.checkoutPath({
+                        kind: 'coins',
+                        id: purchaseId,
+                        authority: opened.authority,
+                        amountToman: pack.priceToman,
+                        title: `${Number(pack.coins).toLocaleString('fa-IR')} سکه`,
+                    })
+                    : opened.paymentUrl,
+                package: pack,
+            },
         });
     } catch (error) {
         console.error('createCoinPayment error:', error);
@@ -1123,12 +1163,26 @@ async function handleCoinPurchaseCallback(req, res) {
             );
             return redirect('cancelled');
         }
-        const verifyResult = await zarinpal.verifications.verify({
-            amount: toRial(Number(purchase.price_toman)),
-            authority: authorityFromCb || purchase.authority,
-        });
-        const verifyCode = verifyResult?.data?.code ?? null;
-        const refId = verifyResult?.data?.ref_id ?? null;
+        const sandboxApproval = sandboxCheckout.readSandboxApproval(req.query);
+        const sandboxPaid = Boolean(
+            sandboxApproval
+            && sandboxApproval.kind === 'coins'
+            && Number(sandboxApproval.id) === purchaseId
+            && sandboxApproval.authority === purchase.authority
+        );
+        let verifyCode = null;
+        let refId = null;
+        if (sandboxPaid) {
+            verifyCode = 100;
+            refId = Number(String(Date.now()).slice(-9));
+        } else {
+            const verifyResult = await zarinpal.verifications.verify({
+                amount: toRial(Number(purchase.price_toman)),
+                authority: authorityFromCb || purchase.authority,
+            });
+            verifyCode = verifyResult?.data?.code ?? null;
+            refId = verifyResult?.data?.ref_id ?? null;
+        }
         if (verifyCode !== 100 && verifyCode !== 101) {
             await connection.execute(
                 `UPDATE tam24_coin_purchases SET status = 'failed' WHERE id = ? AND status = 'pending'`,
