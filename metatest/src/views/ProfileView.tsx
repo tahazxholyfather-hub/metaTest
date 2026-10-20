@@ -5,8 +5,10 @@ import { toast } from "sonner";
 import {
     CreditCard, Crown, Calendar, CheckCircle2, XCircle,
     Clock, Loader2, Star, Shield as ShieldIcon, Diamond, User as UserIcon,
-    Inbox, Receipt, BadgePercent, UserPlus, Wallet
+    Inbox, Receipt, BadgePercent, UserPlus, Wallet,
+    ArrowDownLeft, ArrowUpRight, Gift, Banknote
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useUser } from "../context/UserContext";
 import { flowApi } from '../lib/authApi';
 import { getCookie } from '../lib/cookies.ts';
@@ -61,6 +63,8 @@ const TAB_CONFIG: { id: Tab; label: string; shortLabel: string; icon: React.Reac
     { id: "wallet", label: "کیف پول", shortLabel: "کیف پول", icon: <Wallet size={19} strokeWidth={1.7} /> },
 ];
 
+const VISIBLE_TABS = TAB_CONFIG.filter((tab) => tab.id !== "social");
+
 const TAB_HEADERS: Record<Tab, { title: string; subtitle: string }> = {
     info: { title: "ویرایش اطلاعات فردی", subtitle: "اطلاعات حساب کاربری خود را در اینجا مدیریت کنید" },
     social: { title: "مدیریت شبکه‌های اجتماعی", subtitle: "راه‌های ارتباطی خود را اضافه کنید تا دیگران راحت‌تر شما را پیدا کنند" },
@@ -90,6 +94,30 @@ const PAYMENT_STATUS_META: Record<string, { label: string; classes: string; icon
 
 const formatPrice = (value: number | string) => `${Number(value || 0).toLocaleString('fa-IR')} ریال`;
 const formatDate = (value?: string | null) => value ? new Date(value).toLocaleDateString('fa-IR') : '—';
+
+const walletTxVisual = (type: string, amount: number) => {
+    if (type === 'referral_reward') return { icon: Gift, chip: 'bg-emerald-500/10 text-emerald-600', label: 'پاداش دعوت' };
+    if (type === 'withdrawal') return { icon: Banknote, chip: 'bg-amber-500/10 text-amber-600', label: 'برداشت' };
+    if (type === 'purchase') return { icon: ArrowUpRight, chip: 'bg-rose-500/10 text-rose-600', label: 'خرید' };
+    if (amount >= 0) return { icon: ArrowDownLeft, chip: 'bg-emerald-500/10 text-emerald-600', label: 'واریز' };
+    return { icon: ArrowUpRight, chip: 'bg-rose-500/10 text-rose-600', label: 'برداشت از موجودی' };
+};
+
+function WalletStat({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: number }) {
+    return (
+        <div className="flex items-center gap-2.5 rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] px-3 py-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--icon-bg)] text-[var(--accent)]">
+                <Icon size={16} strokeWidth={1.8} />
+            </span>
+            <span className="min-w-0">
+                <span className="block truncate text-[10px] text-[var(--text-muted)]">{label}</span>
+                <span className="mt-0.5 block text-[13px] font-black tabular-nums text-[var(--text-primary)]">
+                    {Number(value || 0).toLocaleString('fa-IR')}
+                </span>
+            </span>
+        </div>
+    );
+}
 
 const ProfileInput = ({ icon: Icon, label, value, onChange, type = "text", readOnly = false, placeholder, rightElement }: any) => (
     <div className="group">
@@ -531,7 +559,7 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
             </div>
 
             <div className="hidden lg:flex flex-col gap-2 px-4 pb-4 flex-1">
-                {TAB_CONFIG.map((tab) => (
+                {VISIBLE_TABS.map((tab) => (
                     <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id)}
@@ -666,7 +694,7 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
 
                 <div className="lg:col-span-8 xl:col-span-9 space-y-6 relative z-10">
                     <div className="lg:hidden bg-[var(--bg-elevated)] p-1.5 rounded-2xl flex relative overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                        {TAB_CONFIG.map((tab) => (
+                        {VISIBLE_TABS.map((tab) => (
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
@@ -1202,51 +1230,65 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
                                         </div>
                                     ) : (
                                         <>
-                                            <div className="p-5 rounded-2xl bg-gradient-to-l from-[var(--color-primary-600)] to-[var(--color-primary-500)] text-white">
-                                                <span className="text-[11px] opacity-80">موجودی کیف پول تومانی</span>
-                                                <div className="mt-1 text-3xl font-black tabular-nums" dir="ltr">{(walletData?.balance || 0).toLocaleString('fa-IR')} <span className="text-sm font-bold">تومان</span></div>
+                                            <div className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)]/50 px-4 py-4">
+                                                <div className="min-w-0">
+                                                    <p className="text-[11px] font-medium text-[var(--text-muted)]">موجودی قابل برداشت</p>
+                                                    <p className="mt-1 text-[28px] font-black leading-none tabular-nums text-[var(--text-primary)]">
+                                                        {(walletData?.balance || 0).toLocaleString('fa-IR')}
+                                                        <span className="mr-1.5 text-xs font-bold text-[var(--text-muted)]">تومان</span>
+                                                    </p>
+                                                </div>
+                                                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--accent)]/10 text-[var(--accent)]">
+                                                    <Wallet size={22} strokeWidth={1.7} />
+                                                </span>
                                             </div>
 
-                                            <div className="grid grid-cols-2 gap-3">
-                                                <div className="p-4 rounded-2xl bg-[var(--bg-elevated)]/60 border border-[var(--border)] text-center">
-                                                    <span className="block text-xl font-black text-[var(--text-primary)]">{(walletData?.totalReferralEarned || 0).toLocaleString('fa-IR')}</span>
-                                                    <span className="text-[11px] text-[var(--text-muted)]">درآمد از دعوت (تومان)</span>
-                                                </div>
-                                                <div className="p-4 rounded-2xl bg-[var(--bg-elevated)]/60 border border-[var(--border)] text-center">
-                                                    <span className="block text-xl font-black text-[var(--text-primary)]">{(walletData?.pendingWithdrawal || 0).toLocaleString('fa-IR')}</span>
-                                                    <span className="text-[11px] text-[var(--text-muted)]">در انتظار برداشت</span>
-                                                </div>
+                                            <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-2.5">
+                                                <WalletStat icon={Gift} label="درآمد دعوت" value={walletData?.totalReferralEarned || 0} />
+                                                <WalletStat icon={Clock} label="در انتظار برداشت" value={walletData?.pendingWithdrawal || 0} />
+                                                <WalletStat icon={ArrowDownLeft} label="کل دریافتی" value={walletData?.lifetimeEarned || 0} />
+                                                <WalletStat icon={ArrowUpRight} label="کل خرج‌شده" value={walletData?.lifetimeSpent || 0} />
                                             </div>
 
                                             <button
                                                 onClick={() => setWithdrawOpen(true)}
-                                                disabled={!(walletData?.balance > 0)}
-                                                className="w-full h-12 rounded-xl font-bold text-white bg-[var(--accent)] hover:opacity-90 disabled:opacity-40 transition-opacity flex items-center justify-center gap-2"
+                                                disabled={Number(walletData?.balance || 0) <= 0}
+                                                className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent)] text-sm font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
                                             >
-                                                <Wallet size={18} /> درخواست برداشت وجه
+                                                <Banknote size={17} strokeWidth={1.8} />
+                                                درخواست برداشت
                                             </button>
-                                            <p className="text-[10px] text-[var(--text-muted)] text-center">پس از ثبت درخواست، کارشناسان ما برای پرداخت کارت‌به‌کارت با شما تماس می‌گیرند.</p>
 
                                             <div>
-                                                <h4 className="text-xs font-bold text-[var(--text-primary)] mb-2">تراکنش‌های اخیر</h4>
+                                                <h4 className="mb-2 flex items-center gap-1.5 text-xs font-bold text-[var(--text-primary)]">
+                                                    <Receipt size={14} className="text-[var(--accent)]" />
+                                                    تراکنش‌ها
+                                                </h4>
                                                 {(walletData?.transactions || []).length === 0 ? (
-                                                    <div className="flex flex-col items-center justify-center py-8 gap-2 text-[var(--text-muted)] bg-[var(--bg-elevated)]/40 border border-dashed border-[var(--border)] rounded-2xl">
+                                                    <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-[var(--border)] bg-[var(--bg-elevated)]/40 py-8 text-[var(--text-muted)]">
                                                         <Receipt size={20} />
                                                         <span className="text-xs font-bold">تراکنشی ثبت نشده است.</span>
                                                     </div>
                                                 ) : (
-                                                    <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                                                        {(walletData?.transactions || []).map((tx: any) => (
-                                                            <div key={tx.id} className="flex items-center justify-between p-3 rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)]/40">
-                                                                <div className="flex flex-col min-w-0">
-                                                                    <span className="text-xs font-bold text-[var(--text-primary)] truncate">{tx.description || tx.type}</span>
-                                                                    <span className="text-[10px] text-[var(--text-muted)]">{formatDate(tx.createdAt)}</span>
+                                                    <div className="max-h-[320px] space-y-2 overflow-y-auto pr-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                                                        {(walletData?.transactions || []).map((tx: any) => {
+                                                            const visual = walletTxVisual(String(tx.type || ''), Number(tx.amount));
+                                                            const TxIcon = visual.icon;
+                                                            return (
+                                                                <div key={tx.id} className="flex items-center gap-3 rounded-xl border border-[var(--border)] px-3 py-2.5">
+                                                                    <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${visual.chip}`}>
+                                                                        <TxIcon size={16} strokeWidth={1.8} />
+                                                                    </span>
+                                                                    <div className="min-w-0 flex-1">
+                                                                        <p className="truncate text-xs font-bold text-[var(--text-primary)]">{tx.description || visual.label}</p>
+                                                                        <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">{formatDate(tx.createdAt)}</p>
+                                                                    </div>
+                                                                    <span className={`shrink-0 text-sm font-black tabular-nums ${tx.amount >= 0 ? 'text-emerald-600' : 'text-rose-600'}`} dir="ltr">
+                                                                        {tx.amount >= 0 ? '+' : ''}{Number(tx.amount).toLocaleString('fa-IR')}
+                                                                    </span>
                                                                 </div>
-                                                                <span className={`text-sm font-black tabular-nums ${tx.amount >= 0 ? 'text-emerald-500' : 'text-rose-500'}`} dir="ltr">
-                                                                    {tx.amount >= 0 ? '+' : ''}{Number(tx.amount).toLocaleString('fa-IR')}
-                                                                </span>
-                                                            </div>
-                                                        ))}
+                                                            );
+                                                        })}
                                                     </div>
                                                 )}
                                             </div>

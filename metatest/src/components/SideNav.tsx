@@ -265,65 +265,27 @@ export const SideNav = ({ activeView, onNavigate, theme, onToggleTheme, isCollap
 
                 {/* --- User Plan Progress Section --- */}
                 {isCollapsed ? (
-                    <div className="flex flex-col items-center w-full pb-2 border-b border-[var(--border)]">
-                        {planActive && !unlimited ? (
-                            <CircularProgress
-                                progress={progressPercentage}
-                                days={daysLeft}
-                                colorClass={planDetails.colorClass}
-                            />
-                        ) : planActive ? (
-                            <div
-                                className={`p-2 rounded-xl ${planDetails.bgLight}`}
-                                title={planDetails.label}
-                            >
-                                <PlanIcon
-                                    size={19}
-                                    className={planDetails.colorClass}
+                    planActive ? (
+                        <div className="flex flex-col items-center w-full pb-2 border-b border-[var(--border)]">
+                            {!unlimited ? (
+                                <CircularProgress
+                                    progress={progressPercentage}
+                                    days={daysLeft}
+                                    colorClass={planDetails.colorClass}
                                 />
-                            </div>
-                        ) : null}
-                        {planActive && (
-                            <button
-                                type="button"
-                                onClick={() => setIsPlanModalOpen(true)}
-                                className="mt-2 flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--accent)] text-white"
-                                title="ارتقای پلن"
-                            >
-                                <Rocket size={14} strokeWidth={2.2} />
-                            </button>
-                        )}
-                        {!planActive && (
-                            <button
-                                onClick={() => setIsPlanModalOpen(true)}
-                                className="
-                    relative
-                    overflow-hidden
-                    group
-                    w-8 h-8
-                    flex items-center justify-center
-                    rounded-xl
-                    p-0
-                    bg-[var(--accent)]
-                    hover:brightness-110
-                    text-white
-                    shadow-[0_3px_14px_color-mix(in_srgb,var(--accent)_35%,transparent)]
-                    hover:shadow-[0_4px_18px_color-mix(in_srgb,var(--accent)_45%,transparent)]
-                    hover:-translate-y-0.5
-                    transition-all duration-200
-                "
-                                title="اشتراک ویژه"
-                            >
-                                <Rocket
-                                    size={14}
-                                    strokeWidth={2.2}
-                                    className="relative z-10"
-                                />
-
-                                <div className="btn-shimmer-effect" />
-                            </button>
-                        )}
-                    </div>
+                            ) : (
+                                <div
+                                    className={`p-2 rounded-xl ${planDetails.bgLight}`}
+                                    title={planDetails.label}
+                                >
+                                    <PlanIcon
+                                        size={19}
+                                        className={planDetails.colorClass}
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    ) : null
                 ) : (
                     planActive ? (
                         <div className="bg-[var(--bg-element)] rounded-2xl p-3 border border-[var(--border)] shadow-sm flex flex-col gap-3">

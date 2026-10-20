@@ -2,7 +2,7 @@ import React, {useState} from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     X, Home, BookOpen, FileText, User, LogOut, ChevronLeft,
-    Trophy, Crown, Star, Shield, Diamond, Files
+    Trophy, Crown, Star, Shield, Diamond, Files, Rocket
 } from 'lucide-react';
 import { ThemeSwitch } from './ThemeSwitch';
 import { useUser } from '../context/UserContext';
@@ -174,7 +174,7 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
                             <div className="bg-[var(--bg-element)] rounded-2xl p-4 border border-[var(--border)] shadow-sm">
 
                                 {/* Top: User Info & Circle Progress / Upgrade */}
-                                <div className="flex items-center justify-between mb-5">
+                                <div className={`flex items-center justify-between ${planActive ? 'mb-3' : 'mb-5'}`}>
                                     <div className="flex items-center gap-3">
                                         <div className="w-12 h-12 rounded-full bg-[var(--bg-app)] border border-[var(--border)] flex items-center justify-center overflow-hidden shrink-0">
                                             <img src={`${user?.avatar_url}`} alt={fullName} className="w-full h-full object-cover" />
@@ -193,20 +193,31 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
                                         </div>
                                     </div>
 
-                                    {/* Action Right Side */}
-                                    <div className="flex items-center gap-2">
-                                        {planActive && !unlimited && (
-                                            <CircularProgress progress={progressPercentage} days={daysLeft} colorClass={planDetails.colorClass} />
-                                        )}
+                                    {/* Days ring stays alone. The upgrade control is not a second circle. */}
+                                    {planActive && !unlimited && (
+                                        <CircularProgress progress={progressPercentage} days={daysLeft} colorClass={planDetails.colorClass} />
+                                    )}
+                                    {!planActive && (
                                         <button
                                             onClick={() => setIsPlanModalOpen(true)}
                                             className="flex flex-col items-center justify-center w-14 h-14 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-500 hover:bg-amber-500/20 transition-colors shrink-0"
                                         >
                                             <Crown size={18} className="mb-0.5" />
-                                            <span className="text-[9px] font-bold">{planActive ? 'رزرو' : 'ارتقا'}</span>
+                                            <span className="text-[9px] font-bold">ارتقا</span>
                                         </button>
-                                    </div>
+                                    )}
                                 </div>
+
+                                {planActive && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsPlanModalOpen(true)}
+                                        className="mb-4 inline-flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--bg-app)] px-2.5 text-[11px] font-bold text-[var(--accent)]"
+                                    >
+                                        <Rocket size={13} strokeWidth={2.2} />
+                                        ارتقای پلن
+                                    </button>
+                                )}
 
                                 {/* Bottom: Trophies & XP (Side by Side) */}
                                 <div className="flex items-center gap-4 bg-[var(--bg-app)] rounded-xl p-3 border border-[var(--border)]">

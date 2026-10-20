@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import {
     Search, History, ChevronLeft, Target, Clock,
     Award, CheckCircle2, XCircle, MinusCircle, Calendar,
-    Loader2, AlertTriangle, ArrowUpRight, BarChart3
+    Loader2, AlertTriangle, ArrowUpRight, BarChart3, Gauge
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -52,6 +52,42 @@ const getAccuracyClasses = (accuracy: number) => {
     return 'text-rose-700 bg-rose-50 border-rose-200/60 dark:bg-rose-500/10 dark:border-rose-500/20 dark:text-rose-400';
 };
 
+const rateTone = (value: number) => {
+    if (value >= 80) return { ring: 'text-emerald-500', text: 'text-emerald-600 dark:text-emerald-400' };
+    if (value >= 60) return { ring: 'text-yellow-500', text: 'text-yellow-600 dark:text-yellow-400' };
+    if (value >= 40) return { ring: 'text-orange-500', text: 'text-orange-600 dark:text-orange-400' };
+    return { ring: 'text-red-500', text: 'text-red-600 dark:text-red-400' };
+};
+
+function RateRing({ value, label }: { value: number; label: string }) {
+    const pct = Math.max(0, Math.min(100, value));
+    const tone = rateTone(pct);
+    const radius = 16;
+    const circumference = 2 * Math.PI * radius;
+    const offset = circumference - (pct / 100) * circumference;
+
+    return (
+        <div className="flex w-[58px] flex-col items-center gap-1" aria-label={`${label} ${Math.round(pct)}`}>
+            <div className="relative h-[52px] w-[52px]">
+                <svg className="h-full w-full -rotate-90" viewBox="0 0 40 40">
+                    <circle cx="20" cy="20" r={radius} stroke="currentColor" strokeWidth="3" fill="none" className="text-[var(--bg-element)]" />
+                    <circle
+                        cx="20" cy="20" r={radius}
+                        stroke="currentColor" strokeWidth="3" fill="none" strokeLinecap="round"
+                        className={tone.ring}
+                        strokeDasharray={circumference}
+                        strokeDashoffset={offset}
+                    />
+                </svg>
+                <span className={`absolute inset-0 flex items-center justify-center text-[12px] font-black tabular-nums ${tone.text}`}>
+                    {Math.round(pct).toLocaleString('fa-IR')}
+                </span>
+            </div>
+            <span className="text-[10px] font-bold text-[var(--text-muted)]">{label}</span>
+        </div>
+    );
+}
+
 // total_time_spent is stored in seconds; format as "۱۲ دقیقه" / "۴۵ ثانیه" / "۱ ساعت ۵ دقیقه"
 const formatTimeSpent = (totalSeconds: number) => {
     const hours = Math.floor(totalSeconds / 3600);
@@ -60,6 +96,15 @@ const formatTimeSpent = (totalSeconds: number) => {
     if (hours > 0) return `${hours} ساعت ${minutes} دقیقه`;
     if (minutes > 0) return `${minutes} دقیقه`;
     return `${seconds} ثانیه`;
+};
+
+const formatTimeCompact = (totalSeconds: number) => {
+    const seconds = Math.max(0, Math.floor(totalSeconds || 0));
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    if (hours > 0) return `${hours.toLocaleString('fa-IR')} س`;
+    if (minutes > 0) return `${minutes.toLocaleString('fa-IR')} د`;
+    return `${(seconds % 60).toLocaleString('fa-IR')} ث`;
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -223,42 +268,62 @@ export function QuizHistoryView({ onBack, onStateChange }: QuizHistoryViewProps)
                         <div className="md:hidden flex flex-col gap-3">
                             {processedHistory.map((item) => {
                                 const difficulty = getDifficultyConfig(item.difficulty);
-                                const accuracy = Math.max(0, Math.min(100, item.accuracyRate));
+                                const stats = [
+                                    { key: 'correct', icon: CheckCircle2, value: item.correctCount.toLocaleString('fa-IR'), label: 'درست', iconClass: 'text-emerald-500' },
+                                    { key: 'wrong', icon: XCircle, value: item.incorrectCount.toLocaleString('fa-IR'), label: 'غلط', iconClass: 'text-rose-500' },
+                                    { key: 'blank', icon: MinusCircle, value: item.unansweredCount.toLocaleString('fa-IR'), label: 'نزده', iconClass: 'text-[var(--text-muted)]' },
+                                    { key: 'time', icon: Clock, value: formatTimeCompact(item.totalTimeSpent), label: 'زمان', iconClass: 'text-[var(--accent)]' },
+                                    { key: 'level', icon: Gauge, value: difficulty.label, label: 'سطح', iconClass: 'text-[var(--accent)]' },
+                                ];
                                 return (
-                                    <button
+                                    <article
                                         key={item.resultId}
-                                        type="button"
-                                        onClick={() => handleViewResult(item.resultId)}
-                                        className="w-full text-right rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] px-4 py-3.5 shadow-sm active:scale-[0.99] transition-transform"
+                                        className="relative overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] shadow-sm"
                                     >
-                                        <div className="flex items-start justify-between gap-4">
-                                            <div className="min-w-0">
-                                                <p className="text-[15px] font-bold text-[var(--text-primary)] leading-6 line-clamp-2">{item.title}</p>
-                                                <p className="mt-1 text-[12px] text-[var(--text-muted)]">
-                                                    {[item.quizType, difficulty.label, item.date].filter(Boolean).join(' · ')}
-                                                </p>
-                                            </div>
-                                            <div className="shrink-0 text-left">
-                                                <p className="text-[22px] font-black leading-none text-[var(--accent)] tabular-nums">{item.totalScore.toLocaleString('fa-IR')}</p>
-                                                <p className="mt-1 text-[11px] text-[var(--text-muted)]">امتیاز</p>
+                                        <span aria-hidden className="pointer-events-none absolute inset-y-0 right-0 z-10 w-1.5 bg-[var(--accent)]" />
+                                        <div className="flex items-start justify-between gap-2 px-3.5 pt-3.5">
+                                            <h3 className="min-w-0 flex-1 text-[15px] font-bold leading-6 text-[var(--text-primary)] line-clamp-2">
+                                                {item.title}
+                                            </h3>
+                                            <div className="flex shrink-0 items-start gap-1">
+                                                <RateRing value={item.totalScore} label="نمره" />
+                                                <RateRing value={item.accuracyRate} label="دقت" />
                                             </div>
                                         </div>
-                                        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--bg-element)]">
-                                            <div className="h-full rounded-full bg-[var(--accent)]" style={{ width: `${accuracy}%` }} />
+
+                                        <div className="mx-3.5 mt-2 flex overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-element)]/35">
+                                            {stats.map((stat, index) => {
+                                                const Icon = stat.icon;
+                                                return (
+                                                    <div
+                                                        key={stat.key}
+                                                        title={stat.label}
+                                                        className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-0.5 py-2.5 ${index < stats.length - 1 ? 'border-l border-[var(--border)]' : ''}`}
+                                                    >
+                                                        <Icon size={15} strokeWidth={2} className={stat.iconClass} aria-hidden />
+                                                        <span className="max-w-full truncate text-[11px] font-black leading-none text-[var(--text-primary)]">
+                                                            {stat.value}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
-                                        <div className="mt-2.5 flex items-center justify-between gap-3 text-[12px]">
-                                            <span className="text-[var(--text-secondary)]">
-                                                {item.accuracyRate.toFixed(0)}٪ دقت
-                                                <span className="mx-1.5 text-[var(--text-muted)]">·</span>
-                                                {item.correctCount} درست
-                                                <span className="mx-1.5 text-[var(--text-muted)]">·</span>
-                                                {item.incorrectCount} غلط
-                                                <span className="mx-1.5 text-[var(--text-muted)]">·</span>
-                                                {item.unansweredCount} نزده
+
+                                        <div className="mt-2.5 flex items-center justify-between gap-3 border-t border-[var(--border)] px-3.5 py-2.5">
+                                            <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[var(--text-muted)]">
+                                                <Calendar size={13} />
+                                                {item.date}
                                             </span>
-                                            <span className="shrink-0 font-bold text-[var(--accent)]">{formatTimeSpent(item.totalTimeSpent)}</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleViewResult(item.resultId)}
+                                                className="inline-flex items-center gap-1 rounded-lg bg-[var(--accent)] px-3 py-1.5 text-[12px] font-bold text-white"
+                                            >
+                                                مشاهده
+                                                <ChevronLeft size={14} />
+                                            </button>
                                         </div>
-                                    </button>
+                                    </article>
                                 );
                             })}
                         </div>
@@ -271,7 +336,7 @@ export function QuizHistoryView({ onBack, onStateChange }: QuizHistoryViewProps)
                                         <th className="px-6 py-4">سطح</th>
                                         <th className="px-6 py-4 text-center">دقت</th>
                                         <th className="px-6 py-4 text-center">پاسخ‌ها</th>
-                                        <th className="px-6 py-4 text-center">امتیاز</th>
+                                        <th className="px-6 py-4 text-center">نمره</th>
                                         <th className="px-6 py-4 text-center">زمان</th>
                                         <th className="px-6 py-4">تاریخ</th>
                                         <th className="px-6 py-4 text-center">جزئیات</th>
