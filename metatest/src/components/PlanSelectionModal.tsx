@@ -243,7 +243,7 @@ export default function PlanSelectionModal({ isOpen, onClose, onActivated }: Pla
                                 type="button"
                                 onClick={handleApplyDiscount}
                                 disabled={!discountCode.trim() || isApplyingDiscount || !selectedPlan}
-                                className="h-8 shrink-0 rounded-lg bg-[var(--accent)] px-3 text-[11px] font-bold text-white disabled:opacity-40"
+                                className="h-9 shrink-0 cursor-pointer rounded-lg bg-[var(--accent)] px-3 text-[11px] font-bold text-white disabled:opacity-40"
                             >
                                 {isApplyingDiscount ? <Loader2 size={14} className="animate-spin" /> : 'اعمال'}
                             </button>
@@ -271,7 +271,7 @@ export default function PlanSelectionModal({ isOpen, onClose, onActivated }: Pla
                                 role="switch"
                                 aria-checked={payWithWallet}
                                 onClick={() => setPayWithWallet((value) => !value)}
-                                className={`relative h-6 w-11 rounded-full transition-colors ${payWithWallet ? 'bg-[var(--accent)]' : 'bg-[var(--border)]'}`}
+                                className={`relative h-6 w-11 cursor-pointer rounded-full transition-colors ${payWithWallet ? 'bg-[var(--accent)]' : 'bg-[var(--border)]'}`}
                             >
                                 <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${payWithWallet ? 'left-0.5' : 'right-0.5'}`} />
                             </button>
@@ -287,7 +287,7 @@ export default function PlanSelectionModal({ isOpen, onClose, onActivated }: Pla
                             type="button"
                             onClick={handlePay}
                             disabled={isPaying || !selectedPlan || isLoadingPlans}
-                            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-5 text-[13px] font-bold text-white disabled:opacity-40"
+                            className="inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-5 text-[13px] font-bold text-white disabled:opacity-40"
                         >
                             {isPaying ? <Loader2 size={16} className="animate-spin" /> : null}
                             پرداخت
@@ -329,7 +329,7 @@ export default function PlanSelectionModal({ isOpen, onClose, onActivated }: Pla
                                         key={plan.id}
                                         type="button"
                                         onClick={() => setSelectedPlanId(plan.id)}
-                                        className={`relative flex-1 rounded-xl px-2 py-2 text-[12px] font-bold ${active ? 'text-white' : 'text-[var(--text-muted)]'}`}
+                                        className={`relative min-h-11 flex-1 cursor-pointer rounded-xl px-2 py-2 text-[12px] font-bold ${active ? 'text-white' : 'text-[var(--text-muted)]'}`}
                                     >
                                         {active && (
                                             <motion.span layoutId="planDurationTab" className="absolute inset-0 rounded-xl bg-[var(--accent)]" transition={{ duration: 0.22 }} />

@@ -287,13 +287,12 @@ export function QuizHistoryView({ onBack, onStateChange }: QuizHistoryViewProps)
                                             type="button"
                                             onClick={() => setOpenCardId(open ? null : item.resultId)}
                                             aria-expanded={open}
-                                            className="flex w-full items-center gap-2 px-3 py-2.5 text-right"
+                                            className="flex min-h-14 w-full cursor-pointer items-center gap-2 px-3 py-2 text-right focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
                                         >
                                             <div className="min-w-0 flex-1">
                                                 <h3 className="truncate text-[13px] font-bold text-[var(--text-primary)]">
                                                     {item.title}
                                                 </h3>
-                                                <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{item.date}</p>
                                             </div>
                                             <RateRing value={item.totalScore} label="نمره" compact />
                                             <RateRing value={item.accuracyRate} label="دقت" compact />
@@ -334,7 +333,7 @@ export function QuizHistoryView({ onBack, onStateChange }: QuizHistoryViewProps)
                                                         <button
                                                             type="button"
                                                             onClick={() => handleViewResult(item.resultId)}
-                                                            className="inline-flex items-center gap-1 rounded-lg bg-[var(--accent)] px-2.5 py-1 text-[11px] font-bold text-white"
+                                                            className="inline-flex min-h-11 cursor-pointer items-center gap-1 rounded-lg bg-[var(--accent)] px-3 text-[12px] font-bold text-white"
                                                         >
                                                             مشاهده
                                                             <ChevronLeft size={13} />

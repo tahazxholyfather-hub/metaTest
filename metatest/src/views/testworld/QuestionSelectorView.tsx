@@ -108,7 +108,7 @@ function ChipList({
                         key={String(item.id)}
                         type="button"
                         onClick={() => onToggle(item.id)}
-                        className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors ${
+                        className={`cursor-pointer rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors ${
                             active
                                 ? 'bg-[var(--accent)] text-white'
                                 : 'bg-[var(--bg-element)] text-[var(--text-secondary)]'
@@ -500,7 +500,7 @@ export function QuestionSelectorView({
                                         setDifficulties([]);
                                         setSearch('');
                                     }}
-                                    className="text-[11px] text-[var(--text-muted)] hover:text-[var(--error)]"
+                                    className="cursor-pointer text-[11px] text-[var(--text-muted)] hover:text-[var(--error)]"
                                 >
                                     حذف فیلترها
                                 </button>
@@ -516,7 +516,7 @@ export function QuestionSelectorView({
                                         key={tab.id}
                                         type="button"
                                         onClick={() => setMode(tab.id as 'manual' | 'auto')}
-                                        className={`flex flex-1 items-center justify-center gap-1 rounded-full py-1.5 text-[11px] font-bold ${
+                                        className={`flex min-h-9 flex-1 cursor-pointer items-center justify-center gap-1 rounded-full py-1.5 text-[11px] font-bold ${
                                             mode === tab.id ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-muted)]'
                                         }`}
                                     >
@@ -557,7 +557,7 @@ export function QuestionSelectorView({
                                                 key={d}
                                                 type="button"
                                                 onClick={() => setDifficulties((p) => (active ? p.filter((x) => x !== d) : [...p, d]))}
-                                                className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold ${
+                                                className={`min-h-9 flex-1 cursor-pointer rounded-lg py-1.5 text-[11px] font-bold ${
                                                     active ? difficultyTone(d) : 'bg-[var(--bg-element)] text-[var(--text-muted)]'
                                                 }`}
                                             >
@@ -590,7 +590,7 @@ export function QuestionSelectorView({
                                 type="button"
                                 onClick={applyFilters}
                                 disabled={loading}
-                                className="mt-3 w-full py-2.5 rounded-xl bg-[var(--accent)] text-white text-[13px] font-bold flex items-center justify-center gap-2 disabled:opacity-60 shrink-0"
+                                className="mt-3 flex min-h-11 w-full shrink-0 cursor-pointer items-center justify-center gap-2 rounded-xl bg-[var(--accent)] py-2.5 text-[13px] font-bold text-white disabled:opacity-60"
                             >
                                 {loading ? <Loader2 size={16} className="animate-spin" /> : <Filter size={16} />}
                                 اعمال فیلتر
@@ -598,21 +598,16 @@ export function QuestionSelectorView({
                         </div>
                     </aside>
 
-                    <section className="flex-1 min-w-0 w-full space-y-3">
-                        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl px-4 py-3 flex flex-wrap items-center justify-between gap-2">
-                            <div className="text-[12px] font-bold text-[var(--text-primary)]">
+                    <section className="flex-1 min-w-0 w-full space-y-2">
+                        <div className="flex items-center justify-between gap-2 px-1">
+                            <p className="text-[12px] font-bold text-[var(--text-secondary)]">
                                 {hasApplied ? `${total.toLocaleString('fa-IR')} سوال` : 'فیلتر را اعمال کنید'}
-                                {selected.length > 0 && (
-                                    <span className="mr-2 text-[var(--accent)]">{selected.length.toLocaleString('fa-IR')} انتخاب</span>
-                                )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                                {mode === 'manual' && questions.length > 0 && (
-                                    <button type="button" onClick={addVisible} className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-[var(--bg-element)]">
-                                        افزودن همین صفحه
-                                    </button>
-                                )}
-                            </div>
+                            </p>
+                            {mode === 'manual' && questions.length > 0 && (
+                                <button type="button" onClick={addVisible} className="cursor-pointer text-[11px] font-bold text-[var(--accent)]">
+                                    افزودن همین صفحه
+                                </button>
+                            )}
                         </div>
 
                         {loading && (
@@ -645,25 +640,24 @@ export function QuestionSelectorView({
                                         key={q.id}
                                         initial={{ opacity: 0, y: 8 }}
                                         animate={{ opacity: 1, y: 0 }}
-                                        className={`rounded-xl border bg-[var(--bg-card)] p-3 ${
+                                        className={`rounded-xl border bg-[var(--bg-card)] px-3 py-2.5 ${
                                             isOn ? 'border-[var(--accent)]' : 'border-[var(--border)]'
                                         }`}
                                     >
-                                        <div className="flex items-start justify-between gap-3 mb-2">
-                                            <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
-                                                <span className="font-black text-[var(--text-muted)]">{((page - 1) * PAGE_SIZE) + idx + 1}</span>
-                                                {q.subject_title && <span className="px-2 py-0.5 rounded-md bg-[var(--bg-element)]">{q.subject_title}</span>}
-                                                {q.grade_title && <span className="px-2 py-0.5 rounded-md bg-[var(--bg-element)]">{q.grade_title}</span>}
-                                                {q.topic_title && <span className="px-2 py-0.5 rounded-md bg-[var(--bg-element)]">{q.topic_title}</span>}
-                                                <span className={`px-2 py-0.5 rounded-md font-bold ${difficultyTone(q.difficulty)}`}>{q.difficulty}</span>
+                                        <div className="mb-1.5 flex items-center justify-between gap-2">
+                                            <div className="flex min-w-0 flex-wrap items-center gap-1 text-[10px] text-[var(--text-muted)]">
+                                                <span className="font-black">{(((page - 1) * PAGE_SIZE) + idx + 1).toLocaleString('fa-IR')}</span>
+                                                {q.subject_title && <span>{q.subject_title}</span>}
+                                                {q.grade_title && <span>{q.grade_title}</span>}
+                                                <span className={`rounded-full px-1.5 py-0.5 font-bold ${difficultyTone(q.difficulty)}`}>{q.difficulty}</span>
                                             </div>
                                             <button
                                                 type="button"
                                                 onClick={() => toggleQuestion(q)}
-                                                className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center border-2 transition-colors ${
+                                                className={`flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 transition-colors ${
                                                     isOn
-                                                        ? 'bg-[var(--accent)] border-[var(--accent)] text-white'
-                                                        : 'bg-white dark:bg-[var(--bg-element)] border-[var(--accent)] text-[var(--accent)]'
+                                                        ? 'border-[var(--accent)] bg-[var(--accent)] text-white'
+                                                        : 'border-[var(--accent)] bg-white text-[var(--accent)] dark:bg-[var(--bg-element)]'
                                                 }`}
                                                 aria-label={isOn ? 'حذف از آزمون' : 'افزودن به آزمون'}
                                                 title={isOn ? 'حذف از آزمون' : 'افزودن به آزمون'}
@@ -671,7 +665,7 @@ export function QuestionSelectorView({
                                                 {isOn ? <Minus size={16} strokeWidth={2.5} /> : <Plus size={16} strokeWidth={2.5} />}
                                             </button>
                                         </div>
-                                        <div className="text-[13px] text-[var(--text-primary)] leading-7">
+                                        <div className="text-[13px] leading-6 text-[var(--text-primary)]">
                                             <MathRenderer text={q.text} />
                                         </div>
                                         {q.image && (
@@ -682,27 +676,23 @@ export function QuestionSelectorView({
                                             />
                                         )}
                                         {q.options && q.options.length > 0 && (
-                                            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            <div className="mt-2 divide-y divide-[var(--border)] overflow-hidden rounded-lg border border-[var(--border)]">
                                                 {q.options.map((opt, i) => (
                                                     <div
                                                         key={opt.id}
-                                                        className="px-3 py-2 rounded-xl bg-[var(--bg-element)] border border-[var(--border)] text-[12px] text-[var(--text-primary)] leading-7"
+                                                        className="px-2.5 py-1.5 text-[12px] leading-6 text-[var(--text-primary)]"
                                                     >
-                                                        <span className="font-bold ml-1 text-[var(--text-muted)]">{i + 1})</span>
+                                                        <span className="ml-1 font-bold text-[var(--text-muted)]">{(i + 1).toLocaleString('fa-IR')})</span>
                                                         <MathRenderer text={opt.text} inline />
                                                     </div>
                                                 ))}
                                             </div>
                                         )}
-                                        <div className="mt-3">
+                                        <div className="mt-2">
                                             <button
                                                 type="button"
                                                 onClick={() => toggleAnswer(q)}
-                                                className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl border text-[12px] font-bold transition-colors ${
-                                                    answerOpen
-                                                        ? 'border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]'
-                                                        : 'border-[var(--border)] bg-[var(--bg-element)] text-[var(--text-secondary)] hover:border-[var(--accent)]'
-                                                }`}
+                                                className="inline-flex min-h-9 cursor-pointer items-center gap-1 text-[12px] font-bold text-[var(--accent)]"
                                             >
                                                 <span>پاسخ و گزینه درست</span>
                                                 <ChevronDown size={16} className={`transition-transform ${answerOpen ? 'rotate-180' : ''}`} />
@@ -842,7 +832,7 @@ export function QuestionSelectorView({
                         type="button"
                         onClick={handleStartQuiz}
                         disabled={isCreating || selected.length === 0}
-                        className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--accent)] text-white text-[13px] font-bold disabled:opacity-50"
+                        className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 text-[13px] font-bold text-white disabled:opacity-50"
                     >
                         {isCreating ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} className="rotate-180" />}
                         {visibility === 'public' ? 'ساخت آزمون' : 'ساخت و شروع'}

@@ -981,7 +981,7 @@ export function DashboardView({
                                 </h2>
                                 <div className="flex shrink-0 rounded-lg bg-[var(--bg-element)] p-0.5">
                                     {(['7d','1m','1y'] as const).map((filter, index) => (
-                                        <button key={`time-${filter}-${index}`} onClick={() => setTimeFilter(filter)} className={`relative z-10 rounded-md px-2 py-1 text-[10px] font-bold transition-colors duration-300 ${timeFilter === filter ? 'text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}>
+                                        <button key={`time-${filter}-${index}`} onClick={() => setTimeFilter(filter)} className={`relative z-10 cursor-pointer rounded-md px-2 py-1 text-[10px] font-bold transition-colors duration-200 ${timeFilter === filter ? 'text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}>
                                             {timeFilter === filter && <motion.div layoutId="activeTimeFilter" className="absolute inset-0 -z-10 rounded-md bg-[var(--color-primary-500)] shadow-sm" transition={smoothTween} />}
                                             <span className="relative z-10">{filter === '7d' ? 'هفته' : filter === '1m' ? 'ماه' : 'سال'}</span>
                                         </button>
