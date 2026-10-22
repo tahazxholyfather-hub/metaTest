@@ -32,10 +32,14 @@ function addDays(start, days) {
 }
 
 function calculatePricing(plan, coupon, loyaltyPercent = 0) {
-    const basePrice = Number(plan.price);
-    const planDiscountPercent = Number(plan.plan_discount_percent || plan.planDiscountPercent || 0);
-    const planDiscountAmount = Math.round((basePrice * planDiscountPercent) / 100);
-    const priceAfterPlanDiscount = Math.max(0, basePrice - planDiscountAmount);
+    // The stored price is what the student pays. compare_price is only the
+    // crossed figure an admin typed. A percent never reduces the charge.
+    const payPrice = Math.max(0, Math.round(Number(plan.price) || 0));
+    const listed = Math.round(Number(plan.compare_price ?? plan.comparePrice ?? 0) || 0);
+    const comparePrice = listed > payPrice ? listed : null;
+    const planDiscountAmount = comparePrice ? comparePrice - payPrice : 0;
+    const planDiscountPercent = comparePrice ? Math.round((planDiscountAmount / comparePrice) * 100) : 0;
+    const priceAfterPlanDiscount = payPrice;
 
     const loyalty = Math.min(100, Math.max(0, Number(loyaltyPercent) || 0));
     const loyaltyDiscountAmount = Math.round((priceAfterPlanDiscount * loyalty) / 100);
@@ -46,7 +50,9 @@ function calculatePricing(plan, coupon, loyaltyPercent = 0) {
     const finalPrice = Math.max(0, priceAfterLoyalty - couponDiscountAmount);
 
     return {
-        basePrice,
+        basePrice: comparePrice || payPrice,
+        payPrice,
+        comparePrice,
         planDiscountPercent,
         planDiscountAmount,
         priceAfterPlanDiscount,

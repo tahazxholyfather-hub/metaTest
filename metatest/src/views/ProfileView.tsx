@@ -3,7 +3,7 @@ import Cropper from "react-easy-crop";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import {
-    CreditCard, Crown, Calendar, CheckCircle2, XCircle,
+    CreditCard, Crown, Calendar, Check, CheckCircle2, XCircle,
     Clock, Loader2, Star, Shield as ShieldIcon, Diamond, User as UserIcon,
     Inbox, Receipt, BadgePercent, UserPlus, Wallet,
     ArrowDownLeft, ArrowUpRight, Gift, Banknote
@@ -18,6 +18,7 @@ import { avatarSrc } from "../lib/asset";
 // --- FIX 2: Import your custom ResponsiveModal component ---
 import { ResponsiveModal } from "../components/ResponsiveModal"; // Adjust the path if necessary
 import PlanSelectionModal from "../components/PlanSelectionModal";
+import { DaysRing, PlanLordIcon, planBenefitLines, type ShopPlan } from "../components/plan/PlanMarks";
 
 // --- Icons (no changes) ---
 const Icons = {
@@ -91,6 +92,32 @@ const PAYMENT_STATUS_META: Record<string, { label: string; classes: string; icon
     cancelled: { label: 'لغو شده', classes: 'text-slate-500 bg-slate-500/10 border-slate-500/20', icon: XCircle },
     expired: { label: 'منقضی شده', classes: 'text-slate-500 bg-slate-500/10 border-slate-500/20', icon: Clock },
 };
+
+const FREE_PLAN_LINES = [
+    'یک پاسخ تشریحی در هر درس',
+    'یک پرسش از مِت در هر درس',
+    'یک آزمون شخصی در هر ۲۴ ساعت',
+    'روزانه ۲۴ سکه هوش مصنوعی',
+];
+
+function toShopPlan(plan: any): ShopPlan {
+    return {
+        id: String(plan.id),
+        name: plan.name || '',
+        days: plan.unlimited === true || plan.days == null ? null : Number(plan.days || 0),
+        unlimited: plan.unlimited === true || plan.days == null,
+        price: Number(plan.price || 0),
+        comparePrice: plan.comparePrice ? Number(plan.comparePrice) : null,
+        attributes: Array.isArray(plan.attributes) ? plan.attributes : [],
+        iconKey: plan.iconKey || null,
+        dailyCoins: plan.dailyCoins == null ? null : Number(plan.dailyCoins),
+        savings: plan.savings?.amount
+            ? { amount: Number(plan.savings.amount), versusName: String(plan.savings.versusName || '') }
+            : null,
+        purchasable: plan.purchasable !== false,
+        iconColors: plan.iconColors,
+    };
+}
 
 const formatPrice = (value: number | string) => `${Number(value || 0).toLocaleString('fa-IR')} ریال`;
 const formatDate = (value?: string | null) => value ? new Date(value).toLocaleDateString('fa-IR') : '—';
@@ -198,6 +225,7 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
     const [paymentsLoading, setPaymentsLoading] = useState(false);
     const [paymentsError, setPaymentsError] = useState<string | null>(null);
     const [planModalOpen, setPlanModalOpen] = useState(false);
+    const [shopPlans, setShopPlans] = useState<ShopPlan[]>([]);
 
     const [invitesData, setInvitesData] = useState<{ list: any[]; totalInvited: number; activeInvites: number } | null>(null);
     const [invitesLoading, setInvitesLoading] = useState(false);
@@ -296,7 +324,14 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
         if (activeTab === 'wallet' && !walletData && !walletLoading) {
             fetchWallet();
         }
-    }, [activeTab, paymentsData, paymentsLoading, invitesData, invitesLoading, fetchPayments, fetchInvites, walletData, walletLoading, fetchWallet]);
+        if (activeTab === 'plan' && shopPlans.length === 0) {
+            flowApi.subscriptionPlans()
+                .then((res) => {
+                    if (res.success && Array.isArray(res.data)) setShopPlans(res.data.map(toShopPlan));
+                })
+                .catch(() => undefined);
+        }
+    }, [activeTab, paymentsData, paymentsLoading, invitesData, invitesLoading, fetchPayments, fetchInvites, walletData, walletLoading, fetchWallet, shopPlans.length]);
 
     useEffect(() => {
         let cancelled = false;
@@ -913,62 +948,99 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
                                                 icon: Crown,
                                                 totalDays: 30,
                                             };
-                                            const PlanIcon = meta.icon;
                                             const unlimited = Boolean(sub?.unlimited);
                                             const daysRemaining = unlimited ? null : (sub?.daysRemaining || 0);
-                                            const progress = !unlimited && meta.totalDays > 0 ? Math.min(100, Math.max(0, ((daysRemaining || 0) / meta.totalDays) * 100)) : 0;
                                             const paidPayments = (paymentsData?.payments || []).filter((p: any) => p.status === 'paid');
                                             const expired = sub?.expiredPlan;
                                             const queue = Array.isArray(sub?.queue) ? sub.queue : [];
+                                            const currentShop = shopPlans.find((plan) => plan.id === planKey)
+                                                || shopPlans.find((plan) => plan.name === (sub?.planName || meta.label));
+                                            const totalDays = Number(user?.plan_days || currentShop?.days || meta.totalDays || 0);
+                                            const ringProgress = !unlimited && totalDays > 0
+                                                ? Math.min(100, Math.max(0, ((daysRemaining || 0) / totalDays) * 100))
+                                                : 0;
+                                            const currentLines = planKey === 'free'
+                                                ? FREE_PLAN_LINES
+                                                : (currentShop ? planBenefitLines(currentShop) : ['دسترسی به امکانات ویژه', 'آزمون چندنفره و لابی', 'پاسخ تشریحی بدون سقف']);
+                                            const nextPlan = shopPlans
+                                                .filter((plan) => plan.purchasable !== false && plan.id !== currentShop?.id)
+                                                .sort((a, b) => a.price - b.price)
+                                                .find((plan) => planKey === 'free' || plan.price > (currentShop?.price || 0));
+                                            const extraLines = nextPlan
+                                                ? planBenefitLines(nextPlan).filter((line) => !currentLines.includes(line))
+                                                : [];
+                                            const statusLine = planKey === 'free'
+                                                ? (expired
+                                                    ? `اشتراک ${expired.name || 'قبلی'} در ${formatDate(expired.expiredAt)} تمام شد.`
+                                                    : 'اشتراک فعالی ندارید.')
+                                                : unlimited
+                                                    ? 'این اشتراک نامحدود است.'
+                                                    : `اعتبار تا ${formatDate(sub?.planExpiresAt)}`;
 
                                             return (
                                                 <>
-                                                    {/* Active plan card */}
-                                                    <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)]/60 p-5">
-                                                        <div className="flex items-center justify-between flex-wrap gap-3">
-                                                            <div className="flex items-center gap-3">
-                                                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${meta.bgClass}`}>
-                                                                    <PlanIcon size={24} className={meta.colorClass} />
-                                                                </div>
-                                                                <div>
-                                                                    <h4 className={`text-base font-black ${meta.colorClass}`}>{meta.label}</h4>
-                                                                    <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                                                                        {planKey === 'free'
-                                                                            ? (expired
-                                                                                ? `اشتراک ${expired.name || 'قبلی'} در ${formatDate(expired.expiredAt)} به پایان رسیده است.`
-                                                                                : 'شما در حال حاضر اشتراک فعالی ندارید.')
-                                                                            : unlimited
-                                                                                ? 'این اشتراک نامحدود است.'
-                                                                                : `اعتبار تا ${formatDate(sub?.planExpiresAt)}`}
-                                                                    </p>
-                                                                </div>
+                                                    <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)]/60 p-4">
+                                                        <div className="flex items-center justify-between gap-4">
+                                                            <div className="flex min-w-0 flex-col items-center text-center">
+                                                                <span className={`flex h-[72px] w-[72px] items-center justify-center rounded-2xl ${meta.bgClass}`}>
+                                                                    <PlanLordIcon
+                                                                        iconKey={currentShop?.iconKey || user?.plan_icon_key}
+                                                                        planId={planKey}
+                                                                        name={currentShop?.name || meta.label}
+                                                                        color={currentShop?.iconColors?.primary || user?.plan_icon_primary}
+                                                                        size={58}
+                                                                        playKey={`profile-${planKey}`}
+                                                                    />
+                                                                </span>
+                                                                <h4 className={`mt-1.5 max-w-[9rem] truncate text-[13px] font-black ${meta.colorClass}`}>{currentShop?.name || meta.label}</h4>
+                                                                <p className="mt-0.5 max-w-[11rem] text-[10px] leading-4 text-[var(--text-muted)]">{statusLine}</p>
                                                             </div>
-                                                            {planKey !== 'free' && (
-                                                                <div className="text-center px-4 py-2 rounded-xl bg-[var(--bg-card)] border border-[var(--border)]">
-                                                                    <span className="block text-2xl font-black text-[var(--text-primary)] leading-none">
-                                                                        {unlimited ? '∞' : (daysRemaining || 0).toLocaleString('fa-IR')}
-                                                                    </span>
-                                                                    <span className="text-[10px] text-[var(--text-muted)]">{unlimited ? 'نامحدود' : 'روز باقی‌مانده'}</span>
+                                                            {planKey !== 'free' && !unlimited ? (
+                                                                <div className="flex flex-col items-center">
+                                                                    <DaysRing progress={ringProgress} days={daysRemaining || 0} size={96} caption="روز" />
+                                                                    <span className="mt-1 text-[11px] font-bold text-[var(--text-muted)]">باقی‌مانده</span>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="text-center">
+                                                                    <span className="block text-3xl font-black leading-none text-[var(--text-primary)]">{unlimited ? '∞' : '۰'}</span>
+                                                                    <span className="mt-1 block text-[11px] font-bold text-[var(--text-muted)]">{unlimited ? 'نامحدود' : 'روز باقی‌مانده'}</span>
                                                                 </div>
                                                             )}
                                                         </div>
-                                                        {planKey !== 'free' && !unlimited && meta.totalDays > 0 && (
-                                                            <div className="mt-4 h-2 w-full bg-[var(--bg-element)] rounded-full overflow-hidden border border-[var(--border)]/60">
-                                                                <motion.div
-                                                                    initial={{ width: 0 }}
-                                                                    animate={{ width: `${progress}%` }}
-                                                                    transition={{ duration: 0.9, ease: "easeOut" }}
-                                                                    className="h-full rounded-full bg-[var(--accent)]"
-                                                                />
+
+                                                        <ul className="mt-4 space-y-1.5">
+                                                            {currentLines.map((line) => (
+                                                                <li key={line} className="flex items-start gap-2 text-[12px] leading-5 text-[var(--text-primary)]">
+                                                                    <Check size={14} strokeWidth={2.6} className="mt-0.5 shrink-0 text-emerald-500" />
+                                                                    <span>{line}</span>
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+
+                                                        {nextPlan && extraLines.length > 0 && (
+                                                            <div className="mt-4 rounded-xl border border-dashed border-[var(--border)] bg-[var(--bg-card)] px-3 py-3">
+                                                                <p className="text-[12px] font-black text-[var(--text-primary)]">با ارتقا به {nextPlan.name}</p>
+                                                                <ul className="mt-2 space-y-1.5">
+                                                                    {extraLines.map((line) => (
+                                                                        <li key={line} className="flex items-start gap-2 text-[12px] leading-5 text-[var(--text-secondary)]">
+                                                                            <Check size={14} strokeWidth={2.6} className="mt-0.5 shrink-0 text-emerald-500" />
+                                                                            <span>{line}</span>
+                                                                        </li>
+                                                                    ))}
+                                                                </ul>
                                                             </div>
                                                         )}
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setPlanModalOpen(true)}
-                                                            className="mt-4 w-full rounded-xl bg-[var(--accent)] py-3 text-xs font-black text-white"
-                                                        >
-                                                            {planKey === 'free' ? 'خرید اشتراک' : 'ارتقای پلن'}
-                                                        </button>
+
+                                                        <div className="mt-4 flex">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setPlanModalOpen(true)}
+                                                                className="inline-flex h-9 items-center gap-1.5 rounded-full bg-[var(--accent)] px-4 text-[12px] font-bold text-white"
+                                                            >
+                                                                <Crown size={14} />
+                                                                {planKey === 'free' ? 'خرید اشتراک' : 'ارتقای پلن'}
+                                                            </button>
+                                                        </div>
                                                         {queue.length > 0 && (
                                                             <div className="mt-4 space-y-2">
                                                                 <p className="text-[11px] font-bold text-[var(--text-muted)]">صف رزرو</p>

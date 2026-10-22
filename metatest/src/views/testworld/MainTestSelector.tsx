@@ -63,22 +63,13 @@ const TEST_TYPES: TestType[] = [
     },
     {
         id: 'selector',
-        label: 'بانک سوال',
-        title: 'انتخاب سوال از بانک',
-        description: 'با فیلترهای کناری درس، پایه، فصل، مبحث و سطح سختی، سوال‌ها را ببین، سریع عوض کن و آزمون بساز.',
+        label: 'بانک تست',
+        title: 'بانک تست',
+        description: 'درس، پایه، فصل و سطح را صاف کنید، سوال را بردارید و آزمون را بسازید.',
         image: 'images/compressed_Background%20(3).webp',
-        color: '#6366f1',
-        hasOnlineLobby: true,
+        color: '#0f766e',
+        hasOnlineLobby: false,
         locked: false,
-    },
-    {
-        id: 'comprehensive',
-        label: 'جامع',
-        title: 'آزمون‌های جامع سنتر',
-        description: 'شبیه‌سازی کامل فضای کنکور با استانداردترین سوالات تالیفی و شناسنامه‌دار برای آمادگی ۱۰۰ درصدی.',
-        image: 'images/compressed_photo1769697454.webp',
-        color: '#10b981',
-        locked: true,
     },
     {
         id: 'konkur',
@@ -140,7 +131,7 @@ export default function MainTestSelector({
     }, []);
 
     // محاسبه رنگ با توجه به تم واقعی اکتیو
-    const currentColor = (index === 0 || index === 1) ? (isDark ? '#8b5cf6' : '#1C4070') : current.color;
+    const currentColor = current.id === 'needs' ? (isDark ? '#8b5cf6' : '#1C4070') : current.color;
 
     const [isLobbyModalOpen, setIsLobbyModalOpen] = useState(false);
     const [otp, setOtp] = useState(['', '', '', '', '', '']);

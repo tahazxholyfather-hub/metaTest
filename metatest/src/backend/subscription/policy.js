@@ -136,6 +136,29 @@ async function ensureInner() {
         }
         await pool.query(`INSERT IGNORE INTO subscription_schema_flags (flag) VALUES ('loyalty_matrix_v1')`);
     }
+
+    if (!(await columnExists('subscription_plans', 'compare_price'))) {
+        await pool.query(`ALTER TABLE subscription_plans ADD COLUMN compare_price INT NULL`);
+    }
+    if (!(await columnExists('subscription_plans', 'attributes'))) {
+        await pool.query(`ALTER TABLE subscription_plans ADD COLUMN attributes TEXT NULL`);
+    }
+    if (!(await columnExists('subscription_plans', 'icon_key'))) {
+        await pool.query(`ALTER TABLE subscription_plans ADD COLUMN icon_key VARCHAR(40) NULL`);
+    }
+
+    const [priceFlag] = await pool.query(
+        `SELECT flag FROM subscription_schema_flags WHERE flag = 'compare_price_v1' LIMIT 1`
+    );
+    if (!priceFlag.length) {
+        await pool.query(
+            `UPDATE subscription_plans
+             SET compare_price = price,
+                 price = GREATEST(0, ROUND(price * (100 - plan_discount_percent) / 100))
+             WHERE plan_discount_percent > 0 AND compare_price IS NULL`
+        );
+        await pool.query(`INSERT IGNORE INTO subscription_schema_flags (flag) VALUES ('compare_price_v1')`);
+    }
 }
 
 function ensureSubscriptionCatalog() {
@@ -442,15 +465,40 @@ async function subscriptionSnapshot(userId) {
     };
 }
 
+function parseAttributes(raw) {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw.map((item) => String(item).trim()).filter(Boolean);
+    try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed.map((item) => String(item).trim()).filter(Boolean);
+    } catch (_) { /* plain text */ }
+    return String(raw).split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
+}
+
+function defaultIconKey(id, name) {
+    const key = String(id || '').toLowerCase();
+    const label = String(name || '');
+    if (key.includes('diamond') || key === 'epic' || label.includes('الماس')) return 'gem';
+    if (key.includes('gold') || label.includes('طلا')) return 'coin';
+    if (key.includes('silver') || label.includes('نقر')) return 'stars';
+    if (key.includes('bronze') || label.includes('برنز')) return 'ribbon';
+    return 'lab';
+}
+
 function publicPlan(row, loyaltyPercent) {
     const days = row.days == null ? null : Number(row.days);
+    const price = Number(row.price);
+    const listed = row.compare_price == null || row.compare_price === '' ? null : Number(row.compare_price);
     return {
         id: row.id,
         name: row.name,
         days,
         unlimited: days == null,
-        price: Number(row.price),
-        planDiscountPercent: Number(row.plan_discount_percent || 0),
+        price,
+        comparePrice: listed && listed > price ? listed : null,
+        attributes: parseAttributes(row.attributes),
+        iconKey: row.icon_key || defaultIconKey(row.id, row.name),
+        planDiscountPercent: 0,
         purchasable: Number(row.purchasable) !== 0,
         iconColors: { primary: row.icon_primary, secondary: row.icon_secondary },
         shimmerClass: row.shimmer_class,
@@ -478,4 +526,5 @@ module.exports = {
     loyaltyContext,
     subscriptionSnapshot,
     publicPlan,
+    defaultIconKey,
 };

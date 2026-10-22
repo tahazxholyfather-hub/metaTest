@@ -38,10 +38,29 @@ function cleanHours(value) {
     return hours;
 }
 
+function cleanComparePrice(value) {
+    if (value === '' || value === null || value === undefined) return null;
+    return cleanPrice(value);
+}
+
+function cleanAttributes(value) {
+    const list = Array.isArray(value) ? value : String(value || '').split(/\r?\n/);
+    const cleaned = list.map((item) => String(item).trim()).filter(Boolean).slice(0, 16);
+    if (cleaned.some((item) => item.length > 120)) return null;
+    return cleaned;
+}
+
+function cleanIconKey(value) {
+    if (value === '' || value === null || value === undefined) return null;
+    const key = String(value).trim().toLowerCase();
+    if (!/^[a-z0-9-]{1,40}$/.test(key)) return undefined;
+    return key;
+}
+
 async function handleGetCatalog(_req, res) {
     await policy.ensureSubscriptionCatalog();
     const [plans] = await pool.query(
-        `SELECT id, name, days, price, plan_discount_percent, popular, is_active, purchasable, sort_order
+        `SELECT id, name, days, price, compare_price, attributes, icon_key, popular, is_active, purchasable, sort_order
          FROM subscription_plans
          ORDER BY sort_order ASC, price ASC`
     );
@@ -58,6 +77,17 @@ async function handleGetCatalog(_req, res) {
                 days: row.days == null ? null : Number(row.days),
                 unlimited: row.days == null,
                 price: Number(row.price),
+                comparePrice: row.compare_price == null ? null : Number(row.compare_price),
+                attributes: (() => {
+                    if (!row.attributes) return [];
+                    try {
+                        const parsed = JSON.parse(row.attributes);
+                        return Array.isArray(parsed) ? parsed : [];
+                    } catch (_) {
+                        return [];
+                    }
+                })(),
+                iconKey: row.icon_key || null,
                 popular: Number(row.popular) === 1,
                 isActive: Number(row.is_active) === 1,
                 purchasable: Number(row.purchasable) !== 0,
@@ -111,14 +141,25 @@ async function handleSavePlan(req, res) {
     if (!name) return res.status(400).json({ success: false, message: 'نام اشتراک را وارد کنید.' });
     if (price == null) return res.status(400).json({ success: false, message: 'قیمت نامعتبر است.' });
     if (days === undefined) return res.status(400).json({ success: false, message: 'مدت اشتراک باید بین ۱ تا ۳۶۵۰ روز باشد، یا نامحدود.' });
+    const comparePrice = cleanComparePrice(req.body?.comparePrice);
+    if (req.body?.comparePrice !== '' && req.body?.comparePrice != null && comparePrice == null) {
+        return res.status(400).json({ success: false, message: 'قیمت خط‌خورده نامعتبر است.' });
+    }
+    const attributes = cleanAttributes(req.body?.attributes);
+    if (attributes == null) return res.status(400).json({ success: false, message: 'هر ویژگی حداکثر ۱۲۰ حرف است.' });
+    const iconKey = cleanIconKey(req.body?.iconKey);
+    if (iconKey === undefined) return res.status(400).json({ success: false, message: 'آیکون پلن نامعتبر است.' });
 
     await pool.query(
         `UPDATE subscription_plans
-         SET name = ?, price = ?, days = ?, popular = ?, is_active = ?, purchasable = ?, sort_order = ?
+         SET name = ?, price = ?, compare_price = ?, attributes = ?, icon_key = ?, days = ?, popular = ?, is_active = ?, purchasable = ?, sort_order = ?
          WHERE id = ?`,
         [
             name,
             price,
+            comparePrice,
+            JSON.stringify(attributes),
+            iconKey,
             days,
             flag(req.body?.popular) ? 1 : 0,
             flag(req.body?.isActive) ? 1 : 0,
@@ -188,6 +229,14 @@ async function handleCreatePlan(req, res) {
     if (!name) return res.status(400).json({ success: false, message: 'نام اشتراک را وارد کنید.' });
     if (price == null) return res.status(400).json({ success: false, message: 'قیمت نامعتبر است.' });
     if (days === undefined) return res.status(400).json({ success: false, message: 'مدت اشتراک باید بین ۱ تا ۳۶۵۰ روز باشد، یا نامحدود.' });
+    const comparePrice = cleanComparePrice(req.body?.comparePrice);
+    if (req.body?.comparePrice !== '' && req.body?.comparePrice != null && comparePrice == null) {
+        return res.status(400).json({ success: false, message: 'قیمت خط‌خورده نامعتبر است.' });
+    }
+    const attributes = cleanAttributes(req.body?.attributes);
+    if (attributes == null) return res.status(400).json({ success: false, message: 'هر ویژگی حداکثر ۱۲۰ حرف است.' });
+    const iconKey = cleanIconKey(req.body?.iconKey);
+    if (iconKey === undefined) return res.status(400).json({ success: false, message: 'آیکون پلن نامعتبر است.' });
 
     const [existing] = await pool.query(`SELECT id FROM subscription_plans WHERE id = ? LIMIT 1`, [id]);
     if (existing.length) return res.status(400).json({ success: false, message: 'این شناسه قبلاً استفاده شده است.' });
@@ -202,10 +251,16 @@ async function handleCreatePlan(req, res) {
         await connection.beginTransaction();
         await connection.query(
             `INSERT INTO subscription_plans
-                (id, name, days, price, plan_discount_percent, icon_primary, icon_secondary,
+                (id, name, days, price, compare_price, attributes, icon_key, plan_discount_percent, icon_primary, icon_secondary,
                  shimmer_class, active_shadow, active_border, popular, is_active, purchasable, sort_order)
-             VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, 0, 1, 1, ?)`,
-            [id, name, days, price, look[0], look[1], look[2], look[3], look[4], sortOrder]
+             VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, 0, 1, 1, ?)`,
+            [
+                id, name, days, price,
+                comparePrice,
+                JSON.stringify(attributes),
+                iconKey,
+                look[0], look[1], look[2], look[3], look[4], sortOrder,
+            ]
         );
         const ids = plans.map((row) => String(row.id)).concat(id);
         for (const fromId of ids) {

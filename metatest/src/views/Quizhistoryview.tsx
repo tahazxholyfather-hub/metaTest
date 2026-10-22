@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-    Search, History, ChevronLeft, Target, Clock,
-    Award, CheckCircle2, XCircle, MinusCircle, Calendar,
+    Search, History, ChevronLeft, ChevronDown, Target, Clock,
+    CheckCircle2, XCircle, MinusCircle, Calendar,
     Loader2, AlertTriangle, ArrowUpRight, BarChart3, Gauge
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -59,16 +59,17 @@ const rateTone = (value: number) => {
     return { ring: 'text-red-500', text: 'text-red-600 dark:text-red-400' };
 };
 
-function RateRing({ value, label }: { value: number; label: string }) {
+function RateRing({ value, label, compact = false }: { value: number; label: string; compact?: boolean }) {
     const pct = Math.max(0, Math.min(100, value));
     const tone = rateTone(pct);
     const radius = 16;
     const circumference = 2 * Math.PI * radius;
     const offset = circumference - (pct / 100) * circumference;
+    const box = compact ? 36 : 52;
 
     return (
-        <div className="flex w-[58px] flex-col items-center gap-1" aria-label={`${label} ${Math.round(pct)}`}>
-            <div className="relative h-[52px] w-[52px]">
+        <div className={`flex flex-col items-center gap-0.5 ${compact ? 'w-10' : 'w-[58px]'}`} aria-label={`${label} ${Math.round(pct)}`}>
+            <div className="relative" style={{ width: box, height: box }}>
                 <svg className="h-full w-full -rotate-90" viewBox="0 0 40 40">
                     <circle cx="20" cy="20" r={radius} stroke="currentColor" strokeWidth="3" fill="none" className="text-[var(--bg-element)]" />
                     <circle
@@ -79,11 +80,11 @@ function RateRing({ value, label }: { value: number; label: string }) {
                         strokeDashoffset={offset}
                     />
                 </svg>
-                <span className={`absolute inset-0 flex items-center justify-center text-[12px] font-black tabular-nums ${tone.text}`}>
+                <span className={`absolute inset-0 flex items-center justify-center font-black tabular-nums ${tone.text} ${compact ? 'text-[10px]' : 'text-[12px]'}`}>
                     {Math.round(pct).toLocaleString('fa-IR')}
                 </span>
             </div>
-            <span className="text-[10px] font-bold text-[var(--text-muted)]">{label}</span>
+            <span className="text-[9px] font-bold text-[var(--text-muted)]">{label}</span>
         </div>
     );
 }
@@ -130,6 +131,7 @@ export function QuizHistoryView({ onBack, onStateChange }: QuizHistoryViewProps)
 
     // --- API States ---
     const [history, setHistory] = useState<QuizHistoryItem[]>([]);
+    const [openCardId, setOpenCardId] = useState<string | number | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -265,9 +267,10 @@ export function QuizHistoryView({ onBack, onStateChange }: QuizHistoryViewProps)
                         </div>
                     ) : processedHistory.length > 0 ? (
                         <>
-                        <div className="md:hidden flex flex-col gap-3">
+                        <div className="md:hidden flex flex-col gap-2">
                             {processedHistory.map((item) => {
                                 const difficulty = getDifficultyConfig(item.difficulty);
+                                const open = openCardId === item.resultId;
                                 const stats = [
                                     { key: 'correct', icon: CheckCircle2, value: item.correctCount.toLocaleString('fa-IR'), label: 'درست', iconClass: 'text-emerald-500' },
                                     { key: 'wrong', icon: XCircle, value: item.incorrectCount.toLocaleString('fa-IR'), label: 'غلط', iconClass: 'text-rose-500' },
@@ -278,51 +281,68 @@ export function QuizHistoryView({ onBack, onStateChange }: QuizHistoryViewProps)
                                 return (
                                     <article
                                         key={item.resultId}
-                                        className="relative overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] shadow-sm"
+                                        className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-card)]"
                                     >
-                                        <span aria-hidden className="pointer-events-none absolute inset-y-0 right-0 z-10 w-1.5 bg-[var(--accent)]" />
-                                        <div className="flex items-start justify-between gap-2 px-3.5 pt-3.5">
-                                            <h3 className="min-w-0 flex-1 text-[15px] font-bold leading-6 text-[var(--text-primary)] line-clamp-2">
-                                                {item.title}
-                                            </h3>
-                                            <div className="flex shrink-0 items-start gap-1">
-                                                <RateRing value={item.totalScore} label="نمره" />
-                                                <RateRing value={item.accuracyRate} label="دقت" />
+                                        <button
+                                            type="button"
+                                            onClick={() => setOpenCardId(open ? null : item.resultId)}
+                                            aria-expanded={open}
+                                            className="flex w-full items-center gap-2 px-3 py-2.5 text-right"
+                                        >
+                                            <div className="min-w-0 flex-1">
+                                                <h3 className="truncate text-[13px] font-bold text-[var(--text-primary)]">
+                                                    {item.title}
+                                                </h3>
+                                                <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{item.date}</p>
                                             </div>
-                                        </div>
-
-                                        <div className="mx-3.5 mt-2 flex overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-element)]/35">
-                                            {stats.map((stat, index) => {
-                                                const Icon = stat.icon;
-                                                return (
-                                                    <div
-                                                        key={stat.key}
-                                                        title={stat.label}
-                                                        className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-0.5 py-2.5 ${index < stats.length - 1 ? 'border-l border-[var(--border)]' : ''}`}
-                                                    >
-                                                        <Icon size={15} strokeWidth={2} className={stat.iconClass} aria-hidden />
-                                                        <span className="max-w-full truncate text-[11px] font-black leading-none text-[var(--text-primary)]">
-                                                            {stat.value}
-                                                        </span>
+                                            <RateRing value={item.totalScore} label="نمره" compact />
+                                            <RateRing value={item.accuracyRate} label="دقت" compact />
+                                            <ChevronDown size={16} className={`shrink-0 text-[var(--text-muted)] transition-transform ${open ? 'rotate-180' : ''}`} />
+                                        </button>
+                                        <AnimatePresence initial={false}>
+                                            {open && (
+                                                <motion.div
+                                                    initial={{ height: 0, opacity: 0 }}
+                                                    animate={{ height: 'auto', opacity: 1 }}
+                                                    exit={{ height: 0, opacity: 0 }}
+                                                    transition={{ duration: 0.22, ease: 'easeOut' }}
+                                                    className="overflow-hidden"
+                                                >
+                                                    <div className="mx-3 mb-2 flex overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-element)]/40">
+                                                        {stats.map((stat, index) => {
+                                                            const Icon = stat.icon;
+                                                            return (
+                                                                <div
+                                                                    key={stat.key}
+                                                                    title={stat.label}
+                                                                    className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-0.5 py-2 ${index < stats.length - 1 ? 'border-l border-[var(--border)]' : ''}`}
+                                                                >
+                                                                    <Icon size={13} strokeWidth={2} className={stat.iconClass} aria-hidden />
+                                                                    <span className="max-w-full truncate text-[11px] font-black leading-none text-[var(--text-primary)]">
+                                                                        {stat.value}
+                                                                    </span>
+                                                                    <span className="text-[9px] text-[var(--text-muted)]">{stat.label}</span>
+                                                                </div>
+                                                            );
+                                                        })}
                                                     </div>
-                                                );
-                                            })}
-                                        </div>
-
-                                        <div className="mt-2.5 flex items-center justify-between gap-3 border-t border-[var(--border)] px-3.5 py-2.5">
-                                            <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[var(--text-muted)]">
-                                                <Calendar size={13} />
-                                                {item.date}
-                                            </span>
-                                            <button
-                                                type="button"
-                                                onClick={() => handleViewResult(item.resultId)}
-                                                className="inline-flex items-center gap-1 rounded-lg bg-[var(--accent)] px-3 py-1.5 text-[12px] font-bold text-white"
-                                            >
-                                                مشاهده
-                                                <ChevronLeft size={14} />
-                                            </button>
-                                        </div>
+                                                    <div className="flex items-center justify-between gap-3 border-t border-[var(--border)] px-3 py-2">
+                                                        <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[var(--text-muted)]">
+                                                            <Calendar size={12} />
+                                                            {item.date}
+                                                        </span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleViewResult(item.resultId)}
+                                                            className="inline-flex items-center gap-1 rounded-lg bg-[var(--accent)] px-2.5 py-1 text-[11px] font-bold text-white"
+                                                        >
+                                                            مشاهده
+                                                            <ChevronLeft size={13} />
+                                                        </button>
+                                                    </div>
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
                                     </article>
                                 );
                             })}
@@ -403,10 +423,9 @@ export function QuizHistoryView({ onBack, onStateChange }: QuizHistoryViewProps)
 
                                                         {/* Score */}
                                                         <td className="px-6 py-5 align-top text-center">
-                                                            <div className="inline-flex items-center justify-center gap-1.5 text-xs font-bold text-[var(--color-primary-600)]">
-                                                                <Award size={14} />
-                                                                <span>{item.totalScore.toLocaleString('fa-IR')}</span>
-                                                            </div>
+                                                            <span className="text-base font-black tabular-nums text-[var(--text-primary)]">
+                                                                {item.totalScore.toLocaleString('fa-IR')}
+                                                            </span>
                                                         </td>
 
                                                         {/* Time spent */}

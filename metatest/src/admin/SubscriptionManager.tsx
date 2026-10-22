@@ -7,6 +7,9 @@ type PlanDraft = {
     id: string;
     name: string;
     price: string;
+    comparePrice: string;
+    attributes: string;
+    iconKey: string;
     days: string;
     unlimited: boolean;
     isActive: boolean;
@@ -14,6 +17,16 @@ type PlanDraft = {
     popular: boolean;
     sortOrder: string;
 };
+
+const PLAN_ICONS = [
+    { id: '', label: 'پیش‌فرض پلن' },
+    { id: 'ribbon', label: 'روبان' },
+    { id: 'coin', label: 'سکه' },
+    { id: 'gem', label: 'گوهر' },
+    { id: 'stars', label: 'ستاره' },
+    { id: 'lab', label: 'آزمایشگاه' },
+    { id: 'sphere', label: 'کره' },
+];
 
 type RuleDraft = {
     fromPlanId: string;
@@ -59,7 +72,7 @@ export default function SubscriptionManager() {
     const [showNew, setShowNew] = useState(false);
     const [creating, setCreating] = useState(false);
     const [deletingId, setDeletingId] = useState<string | null>(null);
-    const [draft, setDraft] = useState({ id: '', name: '', price: '', days: '30', unlimited: false, look: 'silver' });
+    const [draft, setDraft] = useState({ id: '', name: '', price: '', comparePrice: '', attributes: '', iconKey: '', days: '30', unlimited: false, look: 'silver' });
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -71,6 +84,9 @@ export default function SubscriptionManager() {
                     id: String(plan.id),
                     name: plan.name || '',
                     price: String(plan.price ?? 0),
+                    comparePrice: plan.comparePrice == null ? '' : String(plan.comparePrice),
+                    attributes: Array.isArray(plan.attributes) ? plan.attributes.join('\n') : '',
+                    iconKey: plan.iconKey || '',
                     days: plan.days == null ? '' : String(plan.days),
                     unlimited: Boolean(plan.unlimited || plan.days == null),
                     isActive: Boolean(plan.isActive),
@@ -133,6 +149,9 @@ export default function SubscriptionManager() {
             const res: any = await adminApi.saveSubscriptionPlan(plan.id, {
                 name: plan.name,
                 price: Number(plan.price),
+                comparePrice: plan.comparePrice === '' ? null : Number(plan.comparePrice),
+                attributes: plan.attributes.split('\n').map((line) => line.trim()).filter(Boolean),
+                iconKey: plan.iconKey || null,
                 days: plan.unlimited ? null : Number(plan.days),
                 unlimited: plan.unlimited,
                 isActive: plan.isActive,
@@ -155,12 +174,15 @@ export default function SubscriptionManager() {
                 id: draft.id.trim().toLowerCase(),
                 name: draft.name,
                 price: Number(draft.price),
+                comparePrice: draft.comparePrice === '' ? null : Number(draft.comparePrice),
+                attributes: draft.attributes.split('\n').map((line) => line.trim()).filter(Boolean),
+                iconKey: draft.iconKey || null,
                 days: draft.unlimited ? null : Number(draft.days),
                 unlimited: draft.unlimited,
                 look: draft.look,
             });
             toast.success(res?.message || 'اشتراک اضافه شد.');
-            setDraft({ id: '', name: '', price: '', days: '30', unlimited: false, look: 'silver' });
+            setDraft({ id: '', name: '', price: '', comparePrice: '', attributes: '', iconKey: '', days: '30', unlimited: false, look: 'silver' });
             setShowNew(false);
             await load();
         } catch (err: any) {
@@ -216,7 +238,7 @@ export default function SubscriptionManager() {
             <section className="rounded-2xl border border-[#dadce0] dark:border-[#333537] bg-white dark:bg-[#1e1f20] p-6">
                 <h2 className="text-base font-bold text-gray-800 dark:text-gray-100">پلن‌های اشتراک</h2>
                 <p className="text-xs text-[#86868b] mt-1 leading-6">
-                    اشتراک تازه بسازید یا یکی را حذف کنید. اسم، قیمت به تومان و مدت هر اشتراک از همین‌جا عوض می‌شود. «نمایش در فروشگاه» کارت را به کاربر نشان می‌دهد.
+                    اشتراک تازه بسازید یا یکی را حذف کنید. «قیمت پرداخت» همان مبلغی است که کاربر می‌پردازد. «قیمت خط‌خورده» فقط روی کارت خط می‌خورد و از قیمت کم نمی‌شود. هر خط از ویژگی‌ها یک مورد با تیک سبز است. «نمایش در فروشگاه» کارت را به کاربر نشان می‌دهد.
                     «قابل خرید» را خاموش کنید تا کارت با پوشش خاکستری دیده شود و دکمه پرداخت برایش کار نکند.
                     مدت خالی یا نامحدود یعنی تاریخ انقضا ندارد.
                 </p>
@@ -242,8 +264,22 @@ export default function SubscriptionManager() {
                                 <input className={`${inputClass} mt-1`} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
                             </label>
                             <label className="block">
-                                <span className="text-[11px] font-bold text-[#86868b]">قیمت (تومان)</span>
+                                <span className="text-[11px] font-bold text-[#86868b]">قیمت پرداخت (تومان)</span>
                                 <input className={`${inputClass} mt-1`} type="number" min={0} value={draft.price} onChange={(event) => setDraft({ ...draft, price: event.target.value })} />
+                            </label>
+                            <label className="block">
+                                <span className="text-[11px] font-bold text-[#86868b]">قیمت خط‌خورده (تومان)</span>
+                                <input className={`${inputClass} mt-1`} type="number" min={0} value={draft.comparePrice} placeholder="خالی، اگر تخفیف ندارد" onChange={(event) => setDraft({ ...draft, comparePrice: event.target.value })} />
+                            </label>
+                            <label className="block">
+                                <span className="text-[11px] font-bold text-[#86868b]">آیکون</span>
+                                <select className={`${inputClass} mt-1`} value={draft.iconKey} onChange={(event) => setDraft({ ...draft, iconKey: event.target.value })}>
+                                    {PLAN_ICONS.map((icon) => <option key={icon.id || 'auto'} value={icon.id}>{icon.label}</option>)}
+                                </select>
+                            </label>
+                            <label className="block md:col-span-2">
+                                <span className="text-[11px] font-bold text-[#86868b]">ویژگی‌ها، هر کدام یک خط</span>
+                                <textarea className={`${inputClass} mt-1 min-h-20`} value={draft.attributes} onChange={(event) => setDraft({ ...draft, attributes: event.target.value })} />
                             </label>
                             <label className="block">
                                 <span className="text-[11px] font-bold text-[#86868b]">ظاهر کارت</span>
@@ -294,8 +330,22 @@ export default function SubscriptionManager() {
                                     <input className={`${inputClass} mt-1`} value={plan.name} onChange={(event) => updatePlan(plan.id, { name: event.target.value })} />
                                 </label>
                                 <label className="block">
-                                    <span className="text-[11px] font-bold text-[#86868b]">قیمت (تومان)</span>
+                                    <span className="text-[11px] font-bold text-[#86868b]">قیمت پرداخت (تومان)</span>
                                     <input className={`${inputClass} mt-1`} type="number" min={0} value={plan.price} onChange={(event) => updatePlan(plan.id, { price: event.target.value })} />
+                                </label>
+                                <label className="block">
+                                    <span className="text-[11px] font-bold text-[#86868b]">قیمت خط‌خورده (تومان)</span>
+                                    <input className={`${inputClass} mt-1`} type="number" min={0} value={plan.comparePrice} placeholder="خالی بماند اگر تخفیف ندارد" onChange={(event) => updatePlan(plan.id, { comparePrice: event.target.value })} />
+                                </label>
+                                <label className="block">
+                                    <span className="text-[11px] font-bold text-[#86868b]">آیکون</span>
+                                    <select className={`${inputClass} mt-1`} value={plan.iconKey} onChange={(event) => updatePlan(plan.id, { iconKey: event.target.value })}>
+                                        {PLAN_ICONS.map((icon) => <option key={icon.id || 'auto'} value={icon.id}>{icon.label}</option>)}
+                                    </select>
+                                </label>
+                                <label className="block md:col-span-2">
+                                    <span className="text-[11px] font-bold text-[#86868b]">ویژگی‌ها، هر کدام یک خط</span>
+                                    <textarea className={`${inputClass} mt-1 min-h-24`} value={plan.attributes} onChange={(event) => updatePlan(plan.id, { attributes: event.target.value })} />
                                 </label>
                                 <label className="block">
                                     <span className="text-[11px] font-bold text-[#86868b]">مدت (روز)</span>

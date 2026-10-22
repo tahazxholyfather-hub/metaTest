@@ -71,16 +71,16 @@ function FilterBlock({
 }) {
     const [open, setOpen] = useState(defaultOpen);
     return (
-        <div className="border-b border-[var(--border)] last:border-b-0">
+        <div className="border-b border-[var(--border)]/70 last:border-b-0">
             <button
                 type="button"
                 onClick={() => setOpen((v) => !v)}
-                className="w-full flex items-center justify-between py-3 text-sm font-bold text-[var(--text-primary)]"
+                className="flex w-full items-center justify-between py-2 text-[12px] font-bold text-[var(--text-primary)]"
             >
                 {title}
-                <ChevronDown size={16} className={`text-[var(--text-muted)] transition-transform ${open ? 'rotate-180' : ''}`} />
+                <ChevronDown size={14} className={`text-[var(--text-muted)] transition-transform ${open ? 'rotate-180' : ''}`} />
             </button>
-            {open && <div className="pb-3 space-y-1.5">{children}</div>}
+            {open && <div className="space-y-1.5 pb-2">{children}</div>}
         </div>
     );
 }
@@ -100,7 +100,7 @@ function ChipList({
         return <p className="text-[11px] text-[var(--text-muted)] px-1">{emptyLabel || 'ابتدا فیلتر بالاتر را انتخاب کنید.'}</p>;
     }
     return (
-        <div className="flex flex-col gap-1 max-h-44 overflow-y-auto [&::-webkit-scrollbar]:hidden">
+        <div className="flex max-h-28 flex-wrap gap-1 overflow-y-auto [&::-webkit-scrollbar]:hidden">
             {items.map((item) => {
                 const active = selected.map(String).includes(String(item.id));
                 return (
@@ -108,10 +108,10 @@ function ChipList({
                         key={String(item.id)}
                         type="button"
                         onClick={() => onToggle(item.id)}
-                        className={`w-full text-right px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${
+                        className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors ${
                             active
                                 ? 'bg-[var(--accent)] text-white'
-                                : 'bg-[var(--bg-element)] text-[var(--text-secondary)] hover:bg-[var(--border)]'
+                                : 'bg-[var(--bg-element)] text-[var(--text-secondary)]'
                         }`}
                     >
                         {item.title}
@@ -145,7 +145,7 @@ export function QuestionSelectorView({
     const [search, setSearch] = useState('');
     const [mode, setMode] = useState<'manual' | 'auto'>('manual');
     const [autoCount, setAutoCount] = useState(10);
-    const [filtersOpen, setFiltersOpen] = useState(true);
+    const [filtersOpen, setFiltersOpen] = useState(false);
 
     const [questions, setQuestions] = useState<BankQuestion[]>([]);
     const [total, setTotal] = useState(0);
@@ -463,11 +463,8 @@ export function QuestionSelectorView({
     return (
         <div className="w-full min-h-full bg-[var(--bg-app)] pb-36 lg:pb-28" dir="rtl">
             <div className="max-w-[1500px] mx-auto px-3 sm:px-5 lg:px-6 pt-5">
-                <div className="flex items-start justify-between gap-3 mb-4">
-                    <div>
-                        <h3 className="text-xl font-bold text-[var(--text-primary)]">بانک سوال</h3>
-                        <p className="text-[12px] text-[var(--text-muted)] mt-1">فیلتر کن، اعمال کن، سوال‌ها را ببین و آزمون بساز.</p>
-                    </div>
+                <div className="mb-3 flex items-center justify-between gap-3">
+                    <h3 className="text-[15px] font-black text-[var(--text-primary)]">بانک تست</h3>
                     <div className="flex items-center gap-2">
                         <button
                             type="button"
@@ -487,7 +484,7 @@ export function QuestionSelectorView({
 
                 <div className="flex flex-col lg:flex-row gap-4 items-start pb-36 lg:pb-28">
                     <aside className={`w-full lg:w-[300px] shrink-0 ${filtersOpen ? 'block' : 'hidden lg:block'}`}>
-                        <div className="lg:sticky lg:top-4 bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-4 shadow-sm flex flex-col max-h-[min(70vh,calc(100vh-10rem))]">
+                        <div className="flex max-h-[min(62vh,calc(100vh-9rem))] flex-col rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-3 lg:sticky lg:top-4">
                             <div className="flex items-center justify-between mb-1">
                                 <div className="flex items-center gap-2 text-sm font-bold text-[var(--text-primary)]">
                                     <Filter size={16} className="text-[var(--accent)]" />
@@ -510,16 +507,16 @@ export function QuestionSelectorView({
                             </div>
 
                             <div className="flex-1 min-h-0 overflow-y-auto [&::-webkit-scrollbar]:hidden mt-3">
-                            <div className="flex bg-[var(--bg-element)] p-1 rounded-xl mb-3">
+                            <div className="mb-2 flex rounded-full bg-[var(--bg-element)] p-0.5">
                                 {[
-                                    { id: 'manual', label: 'انتخاب دستی', icon: ListFilter },
-                                    { id: 'auto', label: 'انتخاب خودکار', icon: Activity },
+                                    { id: 'manual', label: 'دستی', icon: ListFilter },
+                                    { id: 'auto', label: 'خودکار', icon: Activity },
                                 ].map((tab) => (
                                     <button
                                         key={tab.id}
                                         type="button"
                                         onClick={() => setMode(tab.id as 'manual' | 'auto')}
-                                        className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[11px] font-bold ${
+                                        className={`flex flex-1 items-center justify-center gap-1 rounded-full py-1.5 text-[11px] font-bold ${
                                             mode === tab.id ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-muted)]'
                                         }`}
                                     >
@@ -604,9 +601,9 @@ export function QuestionSelectorView({
                     <section className="flex-1 min-w-0 w-full space-y-3">
                         <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl px-4 py-3 flex flex-wrap items-center justify-between gap-2">
                             <div className="text-[12px] font-bold text-[var(--text-primary)]">
-                                {hasApplied ? `${total} سوال مطابق فیلتر` : 'هنوز فیلتری اعمال نشده'}
+                                {hasApplied ? `${total.toLocaleString('fa-IR')} سوال` : 'فیلتر را اعمال کنید'}
                                 {selected.length > 0 && (
-                                    <span className="mr-2 text-[var(--accent)]">· {selected.length} انتخاب‌شده</span>
+                                    <span className="mr-2 text-[var(--accent)]">{selected.length.toLocaleString('fa-IR')} انتخاب</span>
                                 )}
                             </div>
                             <div className="flex items-center gap-2">
@@ -648,7 +645,7 @@ export function QuestionSelectorView({
                                         key={q.id}
                                         initial={{ opacity: 0, y: 8 }}
                                         animate={{ opacity: 1, y: 0 }}
-                                        className={`bg-[var(--bg-card)] border rounded-2xl p-4 shadow-sm ${
+                                        className={`rounded-xl border bg-[var(--bg-card)] p-3 ${
                                             isOn ? 'border-[var(--accent)]' : 'border-[var(--border)]'
                                         }`}
                                     >
@@ -775,11 +772,11 @@ export function QuestionSelectorView({
                 </div>
             </div>
 
-            <div className="fixed bottom-16 lg:bottom-4 left-3 right-3 lg:left-auto lg:right-[max(1rem,calc((100vw-1500px)/2+1rem))] lg:w-[min(720px,calc(100vw-340px))] z-40">
-                <div className="bg-[var(--bg-card)] border border-[var(--border)] shadow-xl rounded-2xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center gap-3">
-                    <div className="flex items-center gap-2 text-[12px] font-bold text-[var(--text-primary)] min-w-[110px]">
-                        <BookOpen size={16} className="text-[var(--accent)]" />
-                        {selected.length} / {MAX_SELECTED} سوال
+            <div className="fixed bottom-16 left-3 right-3 z-40 lg:bottom-3 lg:left-auto lg:right-[max(1rem,calc((100vw-1500px)/2+1rem))] lg:w-[min(680px,calc(100vw-340px))]">
+                <div className="flex flex-wrap items-center gap-1.5 rounded-2xl border border-[var(--border)] bg-[var(--bg-card)]/95 px-2 py-2 shadow-lg backdrop-blur-md">
+                    <div className="flex items-center gap-1.5 px-1 text-[12px] font-black tabular-nums text-[var(--text-primary)]">
+                        <BookOpen size={14} className="text-[var(--accent)]" />
+                        {selected.length.toLocaleString('fa-IR')}/{MAX_SELECTED.toLocaleString('fa-IR')}
                     </div>
                     <input
                         value={quizName}

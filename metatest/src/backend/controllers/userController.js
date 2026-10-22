@@ -148,13 +148,23 @@ const handleGetUserInfo = async (req, res) => {
         }
 
         let planName = null;
+        let planDays = null;
+        let planIconKey = null;
+        let planIconPrimary = null;
+        let planIconSecondary = null;
         if (planActive && user.current_plan) {
             try {
+                await policy.ensureSubscriptionCatalog();
                 const [planRows] = await db.query(
-                    `SELECT name FROM subscription_plans WHERE id = ? LIMIT 1`,
+                    `SELECT name, days, icon_key, icon_primary, icon_secondary
+                     FROM subscription_plans WHERE id = ? LIMIT 1`,
                     [user.current_plan]
                 );
                 planName = planRows[0]?.name || null;
+                planDays = planRows[0]?.days == null ? null : Number(planRows[0].days);
+                planIconKey = planRows[0]?.icon_key || policy.defaultIconKey(user.current_plan, planName);
+                planIconPrimary = planRows[0]?.icon_primary || null;
+                planIconSecondary = planRows[0]?.icon_secondary || null;
             } catch (err) {
                 reportError('get_user_info plan name', err);
             }
@@ -180,6 +190,10 @@ const handleGetUserInfo = async (req, res) => {
                 days_remaining: planUnlimited ? null : daysRemaining,
                 plan_unlimited: planUnlimited,
                 plan_name: planName,
+                plan_days: planDays,
+                plan_icon_key: planIconKey,
+                plan_icon_primary: planIconPrimary,
+                plan_icon_secondary: planIconSecondary,
                 password_set: !!user.password_hash,
                 password_hash: undefined,
                 plan_expires_at: undefined,

@@ -20,6 +20,11 @@ export type UserData = {
     days_remaining?: number | null;
     plan_unlimited?: boolean;
     plan_name?: string | null;
+    plan_days?: number | null;
+    plan_icon_key?: string | null;
+    plan_icon_primary?: string | null;
+    plan_icon_secondary?: string | null;
+    toman_balance?: number;
     role?: 'user' | 'guest' | 'admin' | 'developer';
     status?: string;
     trophies?: number;

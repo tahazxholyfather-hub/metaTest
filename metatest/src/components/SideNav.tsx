@@ -24,6 +24,7 @@ import type { View } from '../types';
 import { useUser } from '../context/UserContext';
 import { ThemeSwitch } from './ThemeSwitch';
 import PlanSelectionModal from './PlanSelectionModal';
+import { DaysRing, PlanLordIcon } from './plan/PlanMarks';
 import { MetNavIcon } from './met';
 import { avatarSrc } from '../lib/asset';
 
@@ -104,7 +105,7 @@ export const SideNav = ({ activeView, onNavigate, theme, onToggleTheme, isCollap
     } : PLAN_CONFIG.free);
 
     const daysLeft = user?.days_remaining || 0;
-    const totalDays = planDetails.totalDays;
+    const totalDays = user?.plan_days || planDetails.totalDays;
     const isPro = currentPlanKey !== 'free';
     const unlimited = Boolean(user?.plan_unlimited);
     const hasDaysLeft = isPro && daysLeft > 0;
@@ -112,15 +113,6 @@ export const SideNav = ({ activeView, onNavigate, theme, onToggleTheme, isCollap
     const progressPercentage = hasDaysLeft && totalDays > 0 ? Math.min(100, Math.max(0, (daysLeft / totalDays) * 100)) : 0;
 
     const PlanIcon = planDetails.icon;
-
-    // Shimmer style for premium plans
-    const shimmerStyle = isPro ? {
-        backgroundImage: `linear-gradient(90deg, ${planDetails.hexColor} 0%, #ffffff 50%, ${planDetails.hexColor} 100%)`,
-        backgroundSize: '200% auto',
-        WebkitBackgroundClip: 'text',
-        WebkitTextFillColor: 'transparent',
-        animation: 'shimmerText 3.5s linear infinite'
-    } as React.CSSProperties : {};
 
     return (
         <aside
@@ -288,42 +280,34 @@ export const SideNav = ({ activeView, onNavigate, theme, onToggleTheme, isCollap
                     ) : null
                 ) : (
                     planActive ? (
-                        <div className="bg-[var(--bg-element)] rounded-2xl p-3 border border-[var(--border)] shadow-sm flex flex-col gap-3">
-                            <div className="flex items-center justify-between">
-                                <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg ${planDetails.bgLight}`}>
-                                    <PlanIcon size={14} className={planDetails.colorClass} />
-                                    <span className="text-xs font-bold" style={shimmerStyle}>
-                                        {planDetails.label}
-                                    </span>
-                                </div>
-                                {hasDaysLeft && (
-                                    <span className="text-[10px] font-bold text-[var(--text-muted)] bg-[var(--bg-app)] px-2 py-1 rounded-md border border-[var(--border)]">
-                                        {daysLeft} روز
-                                    </span>
-                                )}
+                        <div className="flex w-full items-center justify-between gap-2 rounded-2xl border border-[var(--border)] bg-[var(--bg-element)] px-2.5 py-2">
+                            <div className="flex min-w-0 flex-col items-center">
+                                <PlanLordIcon
+                                    iconKey={user?.plan_icon_key}
+                                    planId={currentPlanKey}
+                                    name={planDetails.label}
+                                    color={user?.plan_icon_primary || planDetails.hexColor}
+                                    size={34}
+                                    playKey={currentPlanKey}
+                                />
+                                <span className="mt-0.5 max-w-[76px] truncate text-[10px] font-bold text-[var(--text-primary)]">
+                                    {planDetails.label}
+                                </span>
                             </div>
-
-                            {hasDaysLeft && !unlimited && (
-                                <div className="h-1.5 w-full bg-[var(--hover-overlay)] rounded-full overflow-hidden border border-[var(--border)]/50">
-                                    <motion.div
-                                        initial={{ width: 0 }}
-                                        animate={{ width: `${progressPercentage}%` }}
-                                        transition={{ duration: 1, ease: "easeOut", delay: 0.2 }}
-                                        className="h-full rounded-full"
-                                        style={{ backgroundColor: planDetails.hexColor }}
-                                    />
-                                </div>
-                            )}
-                            {unlimited && (
-                                <span className="text-[10px] font-bold text-[var(--text-muted)]">نامحدود</span>
-                            )}
-                            <button
-                                type="button"
-                                onClick={() => setIsPlanModalOpen(true)}
-                                className="w-full rounded-xl bg-[var(--accent)] py-2 text-[11px] font-extrabold text-white"
-                            >
-                                ارتقای پلن
-                            </button>
+                            <div className="flex flex-col items-center gap-1.5">
+                                {unlimited ? (
+                                    <span className="text-lg font-black text-[var(--text-primary)]">∞</span>
+                                ) : (
+                                    <DaysRing progress={progressPercentage} days={daysLeft} size={52} />
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => setIsPlanModalOpen(true)}
+                                    className="h-7 rounded-lg bg-[var(--accent)] px-2.5 text-[10px] font-bold text-white"
+                                >
+                                    ارتقا
+                                </button>
+                            </div>
                         </div>
                     ) : (
                         <button

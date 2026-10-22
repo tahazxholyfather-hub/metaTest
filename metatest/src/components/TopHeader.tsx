@@ -246,6 +246,19 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                             <div className="header-tour-bell">
                                 <NotificationBell />
                             </div>
+
+                            <button
+                                type="button"
+                                onClick={() => onNavigate('profile')}
+                                className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                                aria-label="پروفایل"
+                            >
+                                <img
+                                    src={avatarSrc(user?.avatar_url)}
+                                    alt=""
+                                    className="h-10 w-10 rounded-full border-2 border-[var(--border)] object-cover"
+                                />
+                            </button>
                         </div>
                     </div>
 
@@ -253,11 +266,18 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                     <div className="md:hidden h-full flex items-center justify-between">
                         {/* Left: avatar then ONLY coin counter */}
                         <div className="flex items-center gap-3">
-                            <img
-                                src={avatarSrc(user?.avatar_url)}
-                                alt="آواتار"
-                                className="w-10 h-10 rounded-full border-2 border-[var(--border)] object-cover"
-                            />
+                            <button
+                                type="button"
+                                onClick={() => onNavigate('profile')}
+                                className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                                aria-label="پروفایل"
+                            >
+                                <img
+                                    src={avatarSrc(user?.avatar_url)}
+                                    alt=""
+                                    className="h-10 w-10 rounded-full border-2 border-[var(--border)] object-cover"
+                                />
+                            </button>
                             <div ref={scoreTagRef} className="header-tour-coins-mobile" aria-label={`سکه‌ها ${coinCount}`} role="status">
                                 <CoinBadge count={coinCount} />
                             </div>

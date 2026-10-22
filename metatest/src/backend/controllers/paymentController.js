@@ -8,6 +8,7 @@ const entitlements = require('../subscription/entitlements');
 const usage = require('../subscription/usage');
 const coinWallet = require('../ai-teacher/services/coinWallet');
 const policy = require('../subscription/policy');
+const { dailyCoinsForPlan } = require('../ai-teacher/config');
 const { profile } = require('../runtimeMode');
 const sandboxCheckout = require('../utils/sandboxCheckout');
 
@@ -190,7 +191,7 @@ function verifyPaymentResultToken(token) {
 
 async function fetchActivePlan(connection, planId) {
     const [rows] = await connection.execute(
-        `SELECT id, name, days, price, plan_discount_percent, is_active, purchasable
+        `SELECT id, name, days, price, compare_price, plan_discount_percent, is_active, purchasable
          FROM subscription_plans
          WHERE id = ?
          LIMIT 1`,
@@ -327,7 +328,8 @@ exports.getSubscriptionPlans = async (req, res) => {
         }
         const [rows] = await connection.execute(
             `SELECT
-                 id, name, days, price, plan_discount_percent, purchasable,
+                 id, name, days, price, compare_price, attributes, icon_key,
+                 plan_discount_percent, purchasable,
                  icon_primary, icon_secondary, shimmer_class,
                  active_shadow, active_border, popular
              FROM subscription_plans
@@ -338,7 +340,22 @@ exports.getSubscriptionPlans = async (req, res) => {
         const loyalty = req.user?.id
             ? await policy.loyaltyContext(connection, req.user.id)
             : { open: false, queueEnabled: (await policy.loadSettings(connection)).queueEnabled, rules: {}, hoursLeft: null, fromPlanName: null, enabled: false, windowHours: 72 };
-        const plans = rows.map((row) => policy.publicPlan(row, loyalty.rules?.[row.id]));
+        const mapped = rows.map((row) => ({
+            ...policy.publicPlan(row, loyalty.rules?.[row.id]),
+            dailyCoins: dailyCoinsForPlan(row.id),
+        }));
+        const reference = mapped
+            .filter((plan) => plan.purchasable !== false && plan.days && plan.price > 0)
+            .sort((a, b) => a.days - b.days || a.price - b.price)[0];
+        const plans = mapped.map((plan) => {
+            let savings = null;
+            if (reference && plan.id !== reference.id && plan.days && reference.days) {
+                const equivalent = Math.round((reference.price / reference.days) * plan.days);
+                const amount = equivalent - plan.price;
+                if (amount > 0) savings = { amount, versusName: reference.name };
+            }
+            return { ...plan, savings };
+        });
 
         return res.json({
             success: true,

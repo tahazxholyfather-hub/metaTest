@@ -12,17 +12,22 @@ const {
     normalizePlanKey,
 } = require('../policyMath');
 
-test('pricing stacks plan discount, then loyalty, then coupon', () => {
+test('pricing uses the admin pay price, then loyalty, then coupon', () => {
     const pricing = calculatePricing(
-        { price: 100000, plan_discount_percent: 10 },
+        { price: 90000, compare_price: 100000, plan_discount_percent: 50 },
         { percent: 10 },
         10
     );
+    assert.equal(pricing.payPrice, 90000);
     assert.equal(pricing.priceAfterPlanDiscount, 90000);
+    assert.equal(pricing.planDiscountAmount, 10000);
     assert.equal(pricing.loyaltyDiscountAmount, 9000);
     assert.equal(pricing.priceAfterLoyalty, 81000);
     assert.equal(pricing.couponDiscountAmount, 8100);
     assert.equal(pricing.finalPrice, 72900);
+    const untouched = calculatePricing({ price: 100000, plan_discount_percent: 10 }, null, 0);
+    assert.equal(untouched.finalPrice, 100000);
+    assert.equal(untouched.comparePrice, null);
 });
 
 test('expired paid plan is inactive and unlimited null expiry stays active', () => {
