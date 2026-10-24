@@ -267,200 +267,200 @@ export function QuizHistoryView({ onBack, onStateChange }: QuizHistoryViewProps)
                         </div>
                     ) : processedHistory.length > 0 ? (
                         <>
-                        <div className="md:hidden flex flex-col gap-2">
-                            {processedHistory.map((item) => {
-                                const difficulty = getDifficultyConfig(item.difficulty);
-                                const open = openCardId === item.resultId;
-                                const stats = [
-                                    { key: 'correct', icon: CheckCircle2, value: item.correctCount.toLocaleString('fa-IR'), label: 'درست', iconClass: 'text-emerald-500' },
-                                    { key: 'wrong', icon: XCircle, value: item.incorrectCount.toLocaleString('fa-IR'), label: 'غلط', iconClass: 'text-rose-500' },
-                                    { key: 'blank', icon: MinusCircle, value: item.unansweredCount.toLocaleString('fa-IR'), label: 'نزده', iconClass: 'text-[var(--text-muted)]' },
-                                    { key: 'time', icon: Clock, value: formatTimeCompact(item.totalTimeSpent), label: 'زمان', iconClass: 'text-[var(--accent)]' },
-                                    { key: 'level', icon: Gauge, value: difficulty.label, label: 'سطح', iconClass: 'text-[var(--accent)]' },
-                                ];
-                                return (
-                                    <article
-                                        key={item.resultId}
-                                        className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-card)]"
-                                    >
-                                        <button
-                                            type="button"
-                                            onClick={() => setOpenCardId(open ? null : item.resultId)}
-                                            aria-expanded={open}
-                                            className="flex min-h-14 w-full cursor-pointer items-center gap-2 px-3 py-2 text-right focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                            <div className="md:hidden flex flex-col gap-2">
+                                {processedHistory.map((item) => {
+                                    const difficulty = getDifficultyConfig(item.difficulty);
+                                    const open = openCardId === item.resultId;
+                                    const stats = [
+                                        { key: 'correct', icon: CheckCircle2, value: item.correctCount.toLocaleString('fa-IR'), label: 'درست', iconClass: 'text-emerald-500' },
+                                        { key: 'wrong', icon: XCircle, value: item.incorrectCount.toLocaleString('fa-IR'), label: 'غلط', iconClass: 'text-rose-500' },
+                                        { key: 'blank', icon: MinusCircle, value: item.unansweredCount.toLocaleString('fa-IR'), label: 'نزده', iconClass: 'text-[var(--text-muted)]' },
+                                        { key: 'time', icon: Clock, value: formatTimeCompact(item.totalTimeSpent), label: 'زمان', iconClass: 'text-[var(--accent)]' },
+                                        { key: 'level', icon: Gauge, value: difficulty.label, label: 'سطح', iconClass: 'text-[var(--accent)]' },
+                                    ];
+                                    return (
+                                        <article
+                                            key={item.resultId}
+                                            className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-card)]"
                                         >
-                                            <div className="min-w-0 flex-1">
-                                                <h3 className="truncate text-[13px] font-bold text-[var(--text-primary)]">
-                                                    {item.title}
-                                                </h3>
-                                            </div>
-                                            <RateRing value={item.totalScore} label="نمره" compact />
-                                            <RateRing value={item.accuracyRate} label="دقت" compact />
-                                            <ChevronDown size={16} className={`shrink-0 text-[var(--text-muted)] transition-transform ${open ? 'rotate-180' : ''}`} />
-                                        </button>
-                                        <AnimatePresence initial={false}>
-                                            {open && (
-                                                <motion.div
-                                                    initial={{ height: 0, opacity: 0 }}
-                                                    animate={{ height: 'auto', opacity: 1 }}
-                                                    exit={{ height: 0, opacity: 0 }}
-                                                    transition={{ duration: 0.22, ease: 'easeOut' }}
-                                                    className="overflow-hidden"
-                                                >
-                                                    <div className="mx-3 mb-2 flex overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-element)]/40">
-                                                        {stats.map((stat, index) => {
-                                                            const Icon = stat.icon;
-                                                            return (
-                                                                <div
-                                                                    key={stat.key}
-                                                                    title={stat.label}
-                                                                    className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-0.5 py-2 ${index < stats.length - 1 ? 'border-l border-[var(--border)]' : ''}`}
-                                                                >
-                                                                    <Icon size={13} strokeWidth={2} className={stat.iconClass} aria-hidden />
-                                                                    <span className="max-w-full truncate text-[11px] font-black leading-none text-[var(--text-primary)]">
+                                            <button
+                                                type="button"
+                                                onClick={() => setOpenCardId(open ? null : item.resultId)}
+                                                aria-expanded={open}
+                                                className="flex min-h-14 w-full cursor-pointer items-center gap-2 px-3 py-2 text-right focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                                            >
+                                                <div className="min-w-0 flex-1">
+                                                    <h3 className="truncate text-[13px] font-bold text-[var(--text-primary)]">
+                                                        {item.title}
+                                                    </h3>
+                                                </div>
+                                                <RateRing value={item.totalScore} label="نمره" compact />
+                                                <RateRing value={item.accuracyRate} label="دقت" compact />
+                                                <ChevronDown size={16} className={`shrink-0 text-[var(--text-muted)] transition-transform ${open ? 'rotate-180' : ''}`} />
+                                            </button>
+                                            <AnimatePresence initial={false}>
+                                                {open && (
+                                                    <motion.div
+                                                        initial={{ height: 0, opacity: 0 }}
+                                                        animate={{ height: 'auto', opacity: 1 }}
+                                                        exit={{ height: 0, opacity: 0 }}
+                                                        transition={{ duration: 0.22, ease: 'easeOut' }}
+                                                        className="overflow-hidden"
+                                                    >
+                                                        <div className="mx-3 mb-2 flex overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-element)]/40">
+                                                            {stats.map((stat, index) => {
+                                                                const Icon = stat.icon;
+                                                                return (
+                                                                    <div
+                                                                        key={stat.key}
+                                                                        title={stat.label}
+                                                                        className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-0.5 py-2 ${index < stats.length - 1 ? 'border-l border-[var(--border)]' : ''}`}
+                                                                    >
+                                                                        <Icon size={13} strokeWidth={2} className={stat.iconClass} aria-hidden />
+                                                                        <span className="max-w-full truncate text-[11px] font-black leading-none text-[var(--text-primary)]">
                                                                         {stat.value}
                                                                     </span>
-                                                                    <span className="text-[9px] text-[var(--text-muted)]">{stat.label}</span>
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                    <div className="flex items-center justify-between gap-3 border-t border-[var(--border)] px-3 py-2">
+                                                                        <span className="text-[9px] text-[var(--text-muted)]">{stat.label}</span>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                        <div className="flex items-center justify-between gap-3 border-t border-[var(--border)] px-3 py-2">
                                                         <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[var(--text-muted)]">
                                                             <Calendar size={12} />
                                                             {item.date}
                                                         </span>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleViewResult(item.resultId)}
-                                                            className="inline-flex min-h-11 cursor-pointer items-center gap-1 rounded-lg bg-[var(--accent)] px-3 text-[12px] font-bold text-white"
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleViewResult(item.resultId)}
+                                                                className="inline-flex min-h-7 cursor-pointer items-center gap-1 rounded-lg bg-[var(--accent)] p-1 text-[11px] font-bold text-white"
+                                                            >
+                                                                کارنامه
+                                                                <ChevronLeft size={13} />
+                                                            </button>
+                                                        </div>
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
+                                        </article>
+                                    );
+                                })}
+                            </div>
+                            <div className="hidden md:block bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl overflow-hidden shadow-sm">
+                                <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                                    <table className="w-full text-right min-w-[1000px] border-collapse">
+                                        <thead>
+                                        <tr className="bg-[var(--bg-element)]/50 border-b border-[var(--border)] text-[var(--text-muted)] text-xs font-bold uppercase tracking-wider">
+                                            <th className="px-6 py-4">عنوان آزمون</th>
+                                            <th className="px-6 py-4">سطح</th>
+                                            <th className="px-6 py-4 text-center">دقت</th>
+                                            <th className="px-6 py-4 text-center">پاسخ‌ها</th>
+                                            <th className="px-6 py-4 text-center">نمره</th>
+                                            <th className="px-6 py-4 text-center">زمان</th>
+                                            <th className="px-6 py-4">تاریخ</th>
+                                            <th className="px-6 py-4 text-center">جزئیات</th>
+                                        </tr>
+                                        </thead>
+                                        <AnimatePresence mode="wait" initial={false}>
+                                            <motion.tbody
+                                                key={rowsKey}
+                                                initial={{ opacity: 0 }}
+                                                animate={{ opacity: 1 }}
+                                                exit={{ opacity: 0 }}
+                                                transition={{ duration: 0.18, ease: 'easeOut' }}
+                                                className="divide-y divide-[var(--border)]"
+                                            >
+                                                {processedHistory.map((item) => {
+                                                    const difficulty = getDifficultyConfig(item.difficulty);
+                                                    const accuracyClasses = getAccuracyClasses(item.accuracyRate);
+
+                                                    return (
+                                                        <tr
+                                                            key={item.resultId}
+                                                            className="hover:bg-[var(--bg-element)]/30 transition-colors duration-200"
                                                         >
-                                                            مشاهده
-                                                            <ChevronLeft size={13} />
-                                                        </button>
-                                                    </div>
-                                                </motion.div>
-                                            )}
-                                        </AnimatePresence>
-                                    </article>
-                                );
-                            })}
-                        </div>
-                        <div className="hidden md:block bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl overflow-hidden shadow-sm">
-                            <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                                <table className="w-full text-right min-w-[1000px] border-collapse">
-                                    <thead>
-                                    <tr className="bg-[var(--bg-element)]/50 border-b border-[var(--border)] text-[var(--text-muted)] text-xs font-bold uppercase tracking-wider">
-                                        <th className="px-6 py-4">عنوان آزمون</th>
-                                        <th className="px-6 py-4">سطح</th>
-                                        <th className="px-6 py-4 text-center">دقت</th>
-                                        <th className="px-6 py-4 text-center">پاسخ‌ها</th>
-                                        <th className="px-6 py-4 text-center">نمره</th>
-                                        <th className="px-6 py-4 text-center">زمان</th>
-                                        <th className="px-6 py-4">تاریخ</th>
-                                        <th className="px-6 py-4 text-center">جزئیات</th>
-                                    </tr>
-                                    </thead>
-                                    <AnimatePresence mode="wait" initial={false}>
-                                        <motion.tbody
-                                            key={rowsKey}
-                                            initial={{ opacity: 0 }}
-                                            animate={{ opacity: 1 }}
-                                            exit={{ opacity: 0 }}
-                                            transition={{ duration: 0.18, ease: 'easeOut' }}
-                                            className="divide-y divide-[var(--border)]"
-                                        >
-                                            {processedHistory.map((item) => {
-                                                const difficulty = getDifficultyConfig(item.difficulty);
-                                                const accuracyClasses = getAccuracyClasses(item.accuracyRate);
+                                                            {/* Title + type */}
+                                                            <td className="px-6 py-5 align-top min-w-[220px]">
+                                                                <p className="text-sm font-semibold text-[var(--text-primary)] leading-relaxed line-clamp-1">
+                                                                    {item.title}
+                                                                </p>
+                                                                {item.quizType && (
+                                                                    <span className="text-[11px] text-[var(--text-muted)] font-medium">{item.quizType}</span>
+                                                                )}
+                                                            </td>
 
-                                                return (
-                                                    <tr
-                                                        key={item.resultId}
-                                                        className="hover:bg-[var(--bg-element)]/30 transition-colors duration-200"
-                                                    >
-                                                        {/* Title + type */}
-                                                        <td className="px-6 py-5 align-top min-w-[220px]">
-                                                            <p className="text-sm font-semibold text-[var(--text-primary)] leading-relaxed line-clamp-1">
-                                                                {item.title}
-                                                            </p>
-                                                            {item.quizType && (
-                                                                <span className="text-[11px] text-[var(--text-muted)] font-medium">{item.quizType}</span>
-                                                            )}
-                                                        </td>
+                                                            {/* Difficulty */}
+                                                            <td className="px-6 py-5 align-top">
+                                                                <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold ${difficulty.classes}`}>
+                                                                    <BarChart3 size={14} strokeWidth={2.5} />
+                                                                    <span>{difficulty.label}</span>
+                                                                </div>
+                                                            </td>
 
-                                                        {/* Difficulty */}
-                                                        <td className="px-6 py-5 align-top">
-                                                            <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold ${difficulty.classes}`}>
-                                                                <BarChart3 size={14} strokeWidth={2.5} />
-                                                                <span>{difficulty.label}</span>
-                                                            </div>
-                                                        </td>
+                                                            {/* Accuracy */}
+                                                            <td className="px-6 py-5 align-top text-center">
+                                                                <div className={`inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold min-w-[70px] ${accuracyClasses}`}>
+                                                                    <Target size={13} />
+                                                                    <span dir="ltr">{item.accuracyRate.toFixed(0)}٪</span>
+                                                                </div>
+                                                            </td>
 
-                                                        {/* Accuracy */}
-                                                        <td className="px-6 py-5 align-top text-center">
-                                                            <div className={`inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold min-w-[70px] ${accuracyClasses}`}>
-                                                                <Target size={13} />
-                                                                <span dir="ltr">{item.accuracyRate.toFixed(0)}٪</span>
-                                                            </div>
-                                                        </td>
-
-                                                        {/* Correct / Incorrect / Unanswered */}
-                                                        <td className="px-6 py-5 align-top text-center">
-                                                            <div className="flex items-center justify-center gap-3 text-xs font-bold">
+                                                            {/* Correct / Incorrect / Unanswered */}
+                                                            <td className="px-6 py-5 align-top text-center">
+                                                                <div className="flex items-center justify-center gap-3 text-xs font-bold">
                                                                 <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
                                                                     <CheckCircle2 size={14} />{item.correctCount}
                                                                 </span>
-                                                                <span className="flex items-center gap-1 text-rose-600 dark:text-rose-400">
+                                                                    <span className="flex items-center gap-1 text-rose-600 dark:text-rose-400">
                                                                     <XCircle size={14} />{item.incorrectCount}
                                                                 </span>
-                                                                <span className="flex items-center gap-1 text-[var(--text-muted)]">
+                                                                    <span className="flex items-center gap-1 text-[var(--text-muted)]">
                                                                     <MinusCircle size={14} />{item.unansweredCount}
                                                                 </span>
-                                                            </div>
-                                                        </td>
+                                                                </div>
+                                                            </td>
 
-                                                        {/* Score */}
-                                                        <td className="px-6 py-5 align-top text-center">
+                                                            {/* Score */}
+                                                            <td className="px-6 py-5 align-top text-center">
                                                             <span className="text-base font-black tabular-nums text-[var(--text-primary)]">
                                                                 {item.totalScore.toLocaleString('fa-IR')}
                                                             </span>
-                                                        </td>
+                                                            </td>
 
-                                                        {/* Time spent */}
-                                                        <td className="px-6 py-5 align-top text-center whitespace-nowrap">
-                                                            <div className="inline-flex items-center justify-center gap-1.5 text-xs font-medium text-[var(--text-muted)]">
-                                                                <Clock size={14} />
-                                                                <span>{formatTimeSpent(item.totalTimeSpent)}</span>
-                                                            </div>
-                                                        </td>
+                                                            {/* Time spent */}
+                                                            <td className="px-6 py-5 align-top text-center whitespace-nowrap">
+                                                                <div className="inline-flex items-center justify-center gap-1.5 text-xs font-medium text-[var(--text-muted)]">
+                                                                    <Clock size={14} />
+                                                                    <span>{formatTimeSpent(item.totalTimeSpent)}</span>
+                                                                </div>
+                                                            </td>
 
-                                                        {/* Date */}
-                                                        <td className="px-6 py-5 align-top whitespace-nowrap">
-                                                            <div className="flex items-center gap-2 text-xs font-medium text-[var(--text-muted)]">
-                                                                <Calendar size={14} />
-                                                                <span>{item.date}</span>
-                                                            </div>
-                                                        </td>
+                                                            {/* Date */}
+                                                            <td className="px-6 py-5 align-top whitespace-nowrap">
+                                                                <div className="flex items-center gap-2 text-xs font-medium text-[var(--text-muted)]">
+                                                                    <Calendar size={14} />
+                                                                    <span>{item.date}</span>
+                                                                </div>
+                                                            </td>
 
-                                                        {/* Result button */}
-                                                        <td className="px-6 py-5 align-top text-center">
-                                                            <button
-                                                                onClick={() => handleViewResult(item.resultId)}
-                                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[var(--color-primary-500)]/10 text-[var(--color-primary-600)] hover:bg-[var(--color-primary-500)] hover:text-white transition-colors duration-200"
-                                                            >
-                                                                <span>مشاهده</span>
-                                                                <ArrowUpRight size={13} />
-                                                            </button>
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </motion.tbody>
-                                    </AnimatePresence>
-                                </table>
+                                                            {/* Result button */}
+                                                            <td className="px-6 py-5 align-top text-center">
+                                                                <button
+                                                                    onClick={() => handleViewResult(item.resultId)}
+                                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[var(--color-primary-500)]/10 text-[var(--color-primary-600)] hover:bg-[var(--color-primary-500)] hover:text-white transition-colors duration-200"
+                                                                >
+                                                                    <span>مشاهده</span>
+                                                                    <ArrowUpRight size={13} />
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </motion.tbody>
+                                        </AnimatePresence>
+                                    </table>
+                                </div>
                             </div>
-                        </div>
                         </>
                     ) : (
                         <div className="flex flex-col items-center justify-center py-24 text-center bg-[var(--bg-card)] rounded-3xl border border-[var(--border)] border-dashed">
