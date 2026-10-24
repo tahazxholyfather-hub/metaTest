@@ -7,7 +7,7 @@ import {
 import { ThemeSwitch } from './ThemeSwitch';
 import { useUser } from '../context/UserContext';
 import PlanSelectionModal from "./PlanSelectionModal";
-import { DaysRing, PlanLordIcon } from './plan/PlanMarks';
+import { PlanRemainBar, PlanRibbonBadge } from './plan/PlanMarks';
 import { MetNavIcon } from './met';
 
 type MobileMenuProps = {
@@ -76,7 +76,6 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
     const isPro = currentPlanKey !== 'free';
     const unlimited = Boolean(user?.plan_unlimited);
     const hasDaysLeft = isPro && daysLeft > 0;
-    const planActive = isPro && (unlimited || hasDaysLeft);
     const progressPercentage = hasDaysLeft && totalDays > 0 ? Math.min(100, Math.max(0, (daysLeft / totalDays) * 100)) : 0;
 
     // Stats Mapping
@@ -135,36 +134,6 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
                                     <img src={`${user?.avatar_url}`} alt={fullName} className="h-12 w-12 shrink-0 rounded-full border border-[var(--border)] object-cover" />
                                 </div>
 
-                                <div className="mb-3 grid grid-cols-3 items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg-app)] px-3 py-2">
-                                    <div className="flex flex-col items-center justify-self-start">
-                                        <PlanLordIcon
-                                            iconKey={user?.plan_icon_key}
-                                            planId={currentPlanKey}
-                                            name={planDetails.label}
-                                            color={user?.plan_icon_primary || planDetails.hexColor}
-                                            size={30}
-                                            playKey={`menu-${currentPlanKey}`}
-                                        />
-                                        <span className="mt-0.5 max-w-[64px] truncate text-[9px] font-bold text-[var(--text-primary)]">{planDetails.label}</span>
-                                    </div>
-                                    <div className="justify-self-center">
-                                        {planActive && !unlimited ? (
-                                            <DaysRing progress={progressPercentage} days={daysLeft} size={52} />
-                                        ) : (
-                                            <span className="text-[11px] font-bold text-[var(--text-muted)]">{unlimited ? 'نامحدود' : 'بدون اشتراک'}</span>
-                                        )}
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsPlanModalOpen(true)}
-                                        className="flex h-12 w-12 shrink-0 flex-col items-center justify-center justify-self-end rounded-full border border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-500"
-                                        aria-label="ارتقای پلن"
-                                    >
-                                        <Crown size={16} />
-                                        <span className="text-[8px] font-bold">ارتقا</span>
-                                    </button>
-                                </div>
-
                                 {/* Bottom: Trophies & XP (Side by Side) */}
                                 <div className="flex items-center gap-4 bg-[var(--bg-app)] rounded-xl p-3 border border-[var(--border)]">
 
@@ -191,6 +160,26 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
                                     </div>
 
                                 </div>
+
+                                {isPro && (
+                                    <div className="mt-3 flex items-center gap-3 px-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsPlanModalOpen(true)}
+                                            className="border-0 bg-transparent p-0"
+                                            aria-label="انتخاب اشتراک"
+                                        >
+                                            <PlanRibbonBadge
+                                                planId={currentPlanKey}
+                                                name={planDetails.label}
+                                                color={user?.plan_icon_primary || planDetails.hexColor}
+                                                size={32}
+                                                playKey={`menu-${currentPlanKey}`}
+                                            />
+                                        </button>
+                                        <PlanRemainBar progress={progressPercentage} days={daysLeft} unlimited={unlimited} />
+                                    </div>
+                                )}
                             </div>
 
                             {/* Nav Menu */}

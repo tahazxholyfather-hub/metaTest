@@ -18,7 +18,7 @@ import { avatarSrc } from "../lib/asset";
 // --- FIX 2: Import your custom ResponsiveModal component ---
 import { ResponsiveModal } from "../components/ResponsiveModal"; // Adjust the path if necessary
 import PlanSelectionModal from "../components/PlanSelectionModal";
-import { DaysRing, PlanLordIcon, planBenefitLines, type ShopPlan } from "../components/plan/PlanMarks";
+import { Hourglass, PlanRibbonBadge, planBenefitLines, planTint, type ShopPlan } from "../components/plan/PlanMarks";
 
 // --- Icons (no changes) ---
 const Icons = {
@@ -99,6 +99,41 @@ const FREE_PLAN_LINES = [
     'یک آزمون شخصی در هر ۲۴ ساعت',
     'روزانه ۲۴ سکه هوش مصنوعی',
 ];
+
+function RotatingBenefit({ lines }: { lines: string[] }) {
+    const [index, setIndex] = useState(0);
+    const signature = lines.join('\n');
+
+    useEffect(() => {
+        setIndex(0);
+    }, [signature]);
+
+    useEffect(() => {
+        if (lines.length < 2) return;
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        const id = window.setInterval(() => setIndex((value) => (value + 1) % lines.length), 2400);
+        return () => window.clearInterval(id);
+    }, [lines.length, signature]);
+
+    const line = lines[index] || lines[0];
+    if (!line) return null;
+    return (
+        <div className="relative h-5 min-w-0 flex-1 overflow-hidden">
+            <AnimatePresence mode="wait">
+                <motion.p
+                    key={`${index}-${line}`}
+                    initial={{ y: 10, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    exit={{ y: -10, opacity: 0 }}
+                    transition={{ duration: 0.28 }}
+                    className="truncate text-[12px] font-bold text-[var(--text-primary)]"
+                >
+                    {line}
+                </motion.p>
+            </AnimatePresence>
+        </div>
+    );
+}
 
 function toShopPlan(plan: any): ShopPlan {
     return {
@@ -977,72 +1012,47 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
                                                     ? 'این اشتراک نامحدود است.'
                                                     : `اعتبار تا ${formatDate(sub?.planExpiresAt)}`;
 
+                                            const tint = planTint(planKey, currentShop?.name || meta.label, currentShop?.iconColors?.primary || user?.plan_icon_primary);
                                             return (
                                                 <>
-                                                    <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)]/60 p-4">
-                                                        <div className="flex items-center justify-between gap-4">
+                                                    <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)]/60">
+                                                        <div className="flex items-center justify-between gap-3 p-4">
                                                             <div className="flex min-w-0 flex-col items-center text-center">
-                                                                <span className={`flex h-[72px] w-[72px] items-center justify-center rounded-2xl ${meta.bgClass}`}>
-                                                                    <PlanLordIcon
-                                                                        iconKey={currentShop?.iconKey || user?.plan_icon_key}
-                                                                        planId={planKey}
-                                                                        name={currentShop?.name || meta.label}
-                                                                        color={currentShop?.iconColors?.primary || user?.plan_icon_primary}
-                                                                        size={58}
-                                                                        playKey={`profile-${planKey}`}
-                                                                    />
-                                                                </span>
-                                                                <h4 className={`mt-1.5 max-w-[9rem] truncate text-[13px] font-black ${meta.colorClass}`}>{currentShop?.name || meta.label}</h4>
+                                                                <PlanRibbonBadge
+                                                                    planId={planKey}
+                                                                    name={currentShop?.name || meta.label}
+                                                                    color={tint}
+                                                                    size={64}
+                                                                    playKey={`profile-${planKey}`}
+                                                                />
+                                                                <h4 className={`mt-1 max-w-[9rem] truncate text-[13px] font-black ${meta.colorClass}`}>{currentShop?.name || meta.label}</h4>
                                                                 <p className="mt-0.5 max-w-[11rem] text-[10px] leading-4 text-[var(--text-muted)]">{statusLine}</p>
                                                             </div>
-                                                            {planKey !== 'free' && !unlimited ? (
-                                                                <div className="flex flex-col items-center">
-                                                                    <DaysRing progress={ringProgress} days={daysRemaining || 0} size={96} caption="روز" />
-                                                                    <span className="mt-1 text-[11px] font-bold text-[var(--text-muted)]">باقی‌مانده</span>
-                                                                </div>
-                                                            ) : (
-                                                                <div className="text-center">
-                                                                    <span className="block text-3xl font-black leading-none text-[var(--text-primary)]">{unlimited ? '∞' : '۰'}</span>
-                                                                    <span className="mt-1 block text-[11px] font-bold text-[var(--text-muted)]">{unlimited ? 'نامحدود' : 'روز باقی‌مانده'}</span>
-                                                                </div>
-                                                            )}
+                                                            <Hourglass
+                                                                progress={planKey === 'free' ? 0 : unlimited ? 100 : ringProgress}
+                                                                days={unlimited ? '∞' : (daysRemaining || 0)}
+                                                                color={tint}
+                                                                caption={unlimited ? 'نامحدود' : 'روز باقی‌مانده'}
+                                                                size={108}
+                                                            />
                                                         </div>
 
-                                                        <ul className="mt-4 space-y-1.5">
-                                                            {currentLines.map((line) => (
-                                                                <li key={line} className="flex items-start gap-2 text-[12px] leading-5 text-[var(--text-primary)]">
-                                                                    <Check size={14} strokeWidth={2.6} className="mt-0.5 shrink-0 text-emerald-500" />
+                                                        <div className="grid grid-cols-1 gap-2 px-4 pb-4 sm:grid-cols-2">
+                                                            {currentLines.map((line, index) => (
+                                                                <div
+                                                                    key={line}
+                                                                    className={`flex items-start gap-2 rounded-xl border border-[color-mix(in_srgb,var(--accent)_22%,transparent)] bg-[color-mix(in_srgb,var(--accent)_9%,var(--bg-card))] px-3 py-2.5 text-[12px] leading-5 text-[var(--text-primary)] ${currentLines.length % 2 === 1 && index === currentLines.length - 1 ? 'sm:col-span-2' : ''}`}
+                                                                >
+                                                                    <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-white">
+                                                                        <Check size={11} strokeWidth={3} />
+                                                                    </span>
                                                                     <span>{line}</span>
-                                                                </li>
+                                                                </div>
                                                             ))}
-                                                        </ul>
-
-                                                        {nextPlan && extraLines.length > 0 && (
-                                                            <div className="mt-4 rounded-xl border border-dashed border-[var(--border)] bg-[var(--bg-card)] px-3 py-3">
-                                                                <p className="text-[12px] font-black text-[var(--text-primary)]">با ارتقا به {nextPlan.name}</p>
-                                                                <ul className="mt-2 space-y-1.5">
-                                                                    {extraLines.map((line) => (
-                                                                        <li key={line} className="flex items-start gap-2 text-[12px] leading-5 text-[var(--text-secondary)]">
-                                                                            <Check size={14} strokeWidth={2.6} className="mt-0.5 shrink-0 text-emerald-500" />
-                                                                            <span>{line}</span>
-                                                                        </li>
-                                                                    ))}
-                                                                </ul>
-                                                            </div>
-                                                        )}
-
-                                                        <div className="mt-4 flex">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => setPlanModalOpen(true)}
-                                                                className="inline-flex h-9 items-center gap-1.5 rounded-full bg-[var(--accent)] px-4 text-[12px] font-bold text-white"
-                                                            >
-                                                                <Crown size={14} />
-                                                                {planKey === 'free' ? 'خرید اشتراک' : 'ارتقای پلن'}
-                                                            </button>
                                                         </div>
+
                                                         {queue.length > 0 && (
-                                                            <div className="mt-4 space-y-2">
+                                                            <div className="space-y-2 px-4 pb-3">
                                                                 <p className="text-[11px] font-bold text-[var(--text-muted)]">صف رزرو</p>
                                                                 {queue.map((item: any) => (
                                                                     <div key={item.id} className="flex items-center justify-between rounded-xl border border-[var(--border)] px-3 py-2 text-[11px]">
@@ -1055,6 +1065,23 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
                                                                 ))}
                                                             </div>
                                                         )}
+
+                                                        <div className="flex items-center gap-3 border-t border-[color-mix(in_srgb,var(--accent)_18%,var(--border))] bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] px-3 py-2.5">
+                                                            {extraLines.length > 0 && (
+                                                                <div className="flex min-w-0 flex-1 items-center gap-2">
+                                                                    <span className="shrink-0 text-[11px] font-black text-[var(--accent)]">با ارتقا</span>
+                                                                    <RotatingBenefit lines={extraLines} />
+                                                                </div>
+                                                            )}
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setPlanModalOpen(true)}
+                                                                className="inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full bg-[var(--accent)] px-4 text-[12px] font-bold text-white"
+                                                            >
+                                                                <Crown size={14} />
+                                                                {planKey === 'free' ? 'خرید اشتراک' : 'ارتقای پلن'}
+                                                            </button>
+                                                        </div>
                                                     </div>
 
                                                     {/* Purchase history (paid packages) */}

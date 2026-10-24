@@ -210,6 +210,52 @@
     animation: shimmer 8s linear infinite;
 }
 
+.eq-figure {
+    color: var(--accent);
+    text-shadow: 0 0 16px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.eq-pill {
+    animation: eq-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes eq-pulse {
+    0%, 100% {
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent);
+    }
+    50% {
+        box-shadow:
+            inset 0 0 0 1px var(--accent),
+            0 0 22px color-mix(in srgb, var(--accent) 34%, transparent);
+    }
+}
+
+.hourglass-grain {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: hourglass-fall 0.85s linear infinite;
+}
+.hourglass-grain-b { animation-delay: 0.42s; }
+.hourglass-stream {
+    stroke-dasharray: 1.6 2.6;
+    animation: hourglass-stream 0.55s linear infinite;
+}
+
+@keyframes hourglass-fall {
+    0% { transform: translateY(-1px); opacity: 0; }
+    18% { opacity: 1; }
+    100% { transform: translateY(16px); opacity: 0; }
+}
+@keyframes hourglass-stream {
+    to { stroke-dashoffset: -12; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .eq-pill,
+    .hourglass-grain,
+    .hourglass-stream { animation: none; }
+}
+
 
 /* ---------------------------
    NEW UI POLISH & MASKS

@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Check, Loader2, Wallet } from 'lucide-react';
+import { Check, CreditCard, Loader2, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 import { flowApi } from '../lib/authApi';
 import { useUser } from '../context/UserContext';
 import { ResponsiveModal } from './ResponsiveModal';
-import { PlanLordIcon, durationTabLabel, planBenefitLines, pricePerDay, type ShopPlan } from './plan/PlanMarks';
+import { PlanRibbonBadge, durationTabLabel, equivalentPerDay, planBenefitLines, planTint, type ShopPlan } from './plan/PlanMarks';
 
 type Plan = ShopPlan & {
     shimmerClass: string;
@@ -57,6 +57,52 @@ function mapBackendPlan(plan: any): Plan {
     };
 }
 
+function BenefitSlide({ lines }: { lines: string[] }) {
+    const [index, setIndex] = useState(0);
+    const extra = lines.length > 3;
+    const signature = lines.join('\n');
+
+    useEffect(() => {
+        setIndex(0);
+    }, [signature]);
+
+    useEffect(() => {
+        if (!extra) return;
+        const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (reduced) return;
+        const id = window.setInterval(() => setIndex((value) => (value + 1) % lines.length), 2200);
+        return () => window.clearInterval(id);
+    }, [extra, lines.length, signature]);
+
+    const shown = extra
+        ? [0, 1, 2].map((offset) => {
+            const at = (index + offset) % lines.length;
+            return { line: lines[at], at };
+        })
+        : lines.map((line, at) => ({ line, at }));
+
+    return (
+        <ul className={`relative w-full overflow-hidden text-right ${extra ? 'mt-3 h-[4.8rem] md:mt-4' : 'mt-3 space-y-1.5 md:mt-4'}`}>
+            <AnimatePresence mode="popLayout" initial={false}>
+                {shown.map(({ line, at }) => (
+                    <motion.li
+                        layout
+                        key={`${at}-${line}`}
+                        initial={extra ? { opacity: 0, y: 14 } : false}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -14 }}
+                        transition={{ duration: 0.28 }}
+                        className="flex items-start gap-2 py-0.5 text-[12.5px] leading-5 text-[var(--text-primary)] md:text-[13px]"
+                    >
+                        <Check size={14} className="mt-0.5 shrink-0 text-emerald-500" />
+                        <span>{line}</span>
+                    </motion.li>
+                ))}
+            </AnimatePresence>
+        </ul>
+    );
+}
+
 function quote(plan: Plan | undefined, coupon: CouponState | null) {
     const pay = plan?.price || 0;
     const loyaltyPercent = plan?.loyaltyPercent || 0;
@@ -86,7 +132,7 @@ export default function PlanSelectionModal({ isOpen, onClose, onActivated }: Pla
     const visiblePlans = useMemo(() => plans.filter((plan) => plan.purchasable !== false), [plans]);
     const selectedPlan = visiblePlans.find((plan) => plan.id === selectedPlanId) || visiblePlans[0];
     const bill = useMemo(() => quote(selectedPlan, couponData), [selectedPlan, couponData]);
-    const daily = selectedPlan ? pricePerDay(bill.finalPrice, selectedPlan.days) : null;
+    const daily = selectedPlan ? equivalentPerDay(bill.finalPrice, selectedPlan.days) : null;
     const benefits = selectedPlan ? planBenefitLines(selectedPlan) : [];
 
     useEffect(() => {
@@ -215,7 +261,7 @@ export default function PlanSelectionModal({ isOpen, onClose, onActivated }: Pla
         }
     };
 
-    const discountBadge = bill.crossed ? Math.round(((bill.crossed - bill.pay) / bill.crossed) * 100) : 0;
+    const tint = selectedPlan ? planTint(selectedPlan.id, selectedPlan.name, selectedPlan.iconColors?.primary) : undefined;
 
     return (
         <ResponsiveModal
@@ -224,9 +270,25 @@ export default function PlanSelectionModal({ isOpen, onClose, onActivated }: Pla
             title="انتخاب اشتراک"
             maxWidthClass="md:w-[min(860px,96vw)] md:max-w-[96vw]"
             footer={
-                <div className="space-y-3" dir="rtl">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                        <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-xl border border-[var(--border)] bg-[var(--bg-app)] px-2 py-1.5">
+                <div className="space-y-2" dir="rtl">
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            role="switch"
+                            aria-checked={payWithWallet}
+                            aria-label="پرداخت با کیف پول"
+                            onClick={() => setPayWithWallet((value) => !value)}
+                            className="inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-full bg-[var(--bg-element)] px-2"
+                        >
+                            <span className={`relative h-4 w-7 rounded-full transition-colors ${payWithWallet ? 'bg-[var(--accent)]' : 'bg-[var(--border)]'}`}>
+                                <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-all ${payWithWallet ? 'left-0.5' : 'right-0.5'}`} />
+                            </span>
+                            <Wallet size={13} className="text-[var(--accent)]" />
+                            <span className="text-[11px] font-bold tabular-nums text-[var(--text-primary)]">
+                                {(walletBalance ?? user?.toman_balance ?? 0).toLocaleString('fa-IR')}
+                            </span>
+                        </button>
+                        <div className="flex h-8 min-w-0 flex-1 items-center rounded-full bg-[var(--bg-element)] px-2">
                             <input
                                 type="text"
                                 value={discountCode}
@@ -237,61 +299,40 @@ export default function PlanSelectionModal({ isOpen, onClose, onActivated }: Pla
                                 }}
                                 placeholder="کد تخفیف"
                                 disabled={!selectedPlan || isApplyingDiscount}
-                                className="min-w-0 flex-1 bg-transparent px-1 py-1 text-[12px] outline-none"
+                                className="h-8 min-w-0 flex-1 border-0 bg-transparent px-1 py-0 text-[12px] shadow-none outline-none ring-0 focus:border-transparent focus:shadow-none"
                             />
                             <button
                                 type="button"
                                 onClick={handleApplyDiscount}
                                 disabled={!discountCode.trim() || isApplyingDiscount || !selectedPlan}
-                                className="h-9 shrink-0 cursor-pointer rounded-lg bg-[var(--accent)] px-3 text-[11px] font-bold text-white disabled:opacity-40"
+                                className="shrink-0 cursor-pointer px-1 text-[11px] font-bold text-[var(--accent)] disabled:opacity-40"
                             >
-                                {isApplyingDiscount ? <Loader2 size={14} className="animate-spin" /> : 'اعمال'}
+                                {isApplyingDiscount ? <Loader2 size={13} className="animate-spin" /> : 'اعمال'}
                             </button>
                         </div>
-                        <p className={`text-[11px] font-bold sm:max-w-[220px] ${couponError ? 'text-rose-600' : 'text-emerald-600'}`}>
-                            {couponError || (couponData ? `${couponData.percent.toLocaleString('fa-IR')}٪ از مبلغ این پلن کم شد` : '')}
-                        </p>
                     </div>
-
-                    {selectedPlan && (
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[var(--text-muted)]">
-                            {bill.crossed && <span className="line-through">{bill.crossed.toLocaleString('fa-IR')}</span>}
-                            <span>قیمت پلن {bill.pay.toLocaleString('fa-IR')}</span>
-                            {bill.loyaltyOff > 0 && <span>تمدید −{bill.loyaltyOff.toLocaleString('fa-IR')}</span>}
-                            {bill.couponOff > 0 && <span>کد −{bill.couponOff.toLocaleString('fa-IR')}</span>}
-                            <span className="font-black text-[var(--text-primary)]">قابل پرداخت {bill.finalPrice.toLocaleString('fa-IR')} تومان</span>
-                        </div>
+                    {(couponError || paymentError || couponData) && (
+                        <p className={`truncate text-[10px] font-bold ${couponError || paymentError ? 'text-rose-600' : 'text-emerald-600'}`}>
+                            {couponError || paymentError || (couponData ? `${couponData.percent.toLocaleString('fa-IR')}٪ کم شد` : '')}
+                        </p>
                     )}
-                    {paymentError && <p className="text-[11px] font-bold text-rose-600">{paymentError}</p>}
-
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                            <button
-                                type="button"
-                                role="switch"
-                                aria-checked={payWithWallet}
-                                onClick={() => setPayWithWallet((value) => !value)}
-                                className={`relative h-6 w-11 cursor-pointer rounded-full transition-colors ${payWithWallet ? 'bg-[var(--accent)]' : 'bg-[var(--border)]'}`}
-                            >
-                                <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${payWithWallet ? 'left-0.5' : 'right-0.5'}`} />
-                            </button>
-                            <span className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[var(--text-primary)]">
-                                <Wallet size={14} className="text-[var(--accent)]" />
-                                کیف پول
-                                <span className="font-medium text-[var(--text-muted)]">
-                                    {(walletBalance ?? user?.toman_balance ?? 0).toLocaleString('fa-IR')} تومان
-                                </span>
-                            </span>
-                        </div>
+                    <div className="flex items-center gap-3">
                         <button
                             type="button"
                             onClick={handlePay}
                             disabled={isPaying || !selectedPlan || isLoadingPlans}
-                            className="inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-5 text-[13px] font-bold text-white disabled:opacity-40"
+                            className="inline-flex h-12 min-w-0 flex-1 cursor-pointer items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-4 text-[14px] font-bold text-white disabled:opacity-40"
                         >
-                            {isPaying ? <Loader2 size={16} className="animate-spin" /> : null}
+                            {isPaying ? <Loader2 size={18} className="animate-spin" /> : <CreditCard size={18} />}
                             پرداخت
                         </button>
+                        <p
+                            className="shrink-0 text-[30px] font-black leading-none tabular-nums tracking-tight text-[var(--text-primary)]"
+                            style={{ textShadow: '0 10px 24px color-mix(in srgb, var(--accent) 32%, transparent)' }}
+                            aria-label="مبلغ قابل پرداخت"
+                        >
+                            {(selectedPlan ? bill.finalPrice : 0).toLocaleString('fa-IR')}
+                        </p>
                     </div>
                 </div>
             }
@@ -321,23 +362,25 @@ export default function PlanSelectionModal({ isOpen, onClose, onActivated }: Pla
                     <p className="py-16 text-center text-[13px] text-[var(--text-muted)]">الان پلنی برای خرید باز نیست.</p>
                 ) : (
                     <>
-                        <div className="mb-5 flex w-full rounded-2xl border border-[var(--border)] bg-[var(--bg-element)] p-1">
-                            {visiblePlans.map((plan) => {
-                                const active = plan.id === selectedPlan?.id;
-                                return (
-                                    <button
-                                        key={plan.id}
-                                        type="button"
-                                        onClick={() => setSelectedPlanId(plan.id)}
-                                        className={`relative min-h-11 flex-1 cursor-pointer rounded-xl px-2 py-2 text-[12px] font-bold ${active ? 'text-white' : 'text-[var(--text-muted)]'}`}
-                                    >
-                                        {active && (
-                                            <motion.span layoutId="planDurationTab" className="absolute inset-0 rounded-xl bg-[var(--accent)]" transition={{ duration: 0.22 }} />
-                                        )}
-                                        <span className="relative z-10">{durationTabLabel(plan.days, plan.unlimited)}</span>
-                                    </button>
-                                );
-                            })}
+                        <div className="mb-4 flex justify-center">
+                            <div className="inline-flex max-w-full gap-0.5 overflow-x-auto rounded-full bg-[var(--bg-element)] p-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                                {visiblePlans.map((plan) => {
+                                    const active = plan.id === selectedPlan?.id;
+                                    return (
+                                        <button
+                                            key={plan.id}
+                                            type="button"
+                                            onClick={() => setSelectedPlanId(plan.id)}
+                                            className={`relative h-6 shrink-0 cursor-pointer rounded-full px-2 text-[10px] font-bold md:h-7 md:px-3 md:text-[11px] ${active ? 'text-white' : 'text-[var(--text-muted)]'}`}
+                                        >
+                                            {active && (
+                                                <motion.span layoutId="planDurationTab" className="absolute inset-0 rounded-full bg-[var(--accent)]" transition={{ duration: 0.22 }} />
+                                            )}
+                                            <span className="relative z-10">{durationTabLabel(plan.days, plan.unlimited)}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         </div>
 
                         <AnimatePresence mode="wait">
@@ -348,54 +391,46 @@ export default function PlanSelectionModal({ isOpen, onClose, onActivated }: Pla
                                     animate={{ opacity: 1, y: 0 }}
                                     exit={{ opacity: 0, y: -8 }}
                                     transition={{ duration: 0.22 }}
-                                    className="grid grid-cols-2 items-start gap-3 sm:gap-6"
+                                    className="flex flex-col items-center gap-3 md:grid md:grid-cols-2 md:items-center md:gap-8"
                                 >
-                                    <div className="text-right">
-                                        <h3 className={`text-2xl font-black leading-none sm:text-4xl ${selectedPlan.shimmerClass}`}>{selectedPlan.name}</h3>
-                                        <p className="mt-3 text-[13px] font-bold text-[var(--text-secondary)]">
-                                            {selectedPlan.unlimited || selectedPlan.days == null
-                                                ? 'بدون تاریخ پایان'
-                                                : `${selectedPlan.days.toLocaleString('fa-IR')} روز`}
-                                            {daily != null && (
-                                                <span className="mr-2 font-medium text-[var(--text-muted)]">
-                                                    روزانه {daily.toLocaleString('fa-IR')} تومان
+                                    <div className="order-2 w-full text-center md:order-1 md:text-right">
+                                        <h3 className={`text-[22px] font-black leading-none md:text-4xl ${selectedPlan.shimmerClass}`}>{selectedPlan.name}</h3>
+                                        {daily != null && (
+                                            <div className="eq-pill mt-3 inline-flex items-center gap-2 rounded-2xl bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] px-3 py-2">
+                                                <span className="text-[12px] font-black text-[var(--accent)]">معادل</span>
+                                                <span className="eq-figure text-[26px] font-black leading-none tabular-nums md:text-[30px]">
+                                                    {daily.toLocaleString('fa-IR')}
                                                 </span>
-                                            )}
-                                        </p>
-                                        <ul className="mt-5 space-y-2">
-                                            {benefits.map((line) => (
-                                                <li key={line} className="flex items-start gap-2 text-[13px] leading-6 text-[var(--text-primary)]">
-                                                    <Check size={15} className="mt-1 shrink-0 text-emerald-500" />
-                                                    <span>{line}</span>
-                                                </li>
-                                            ))}
-                                        </ul>
+                                                <span className="text-[11px] font-bold text-[var(--text-secondary)]">تومان</span>
+                                            </div>
+                                        )}
+                                        <BenefitSlide lines={benefits} />
                                     </div>
-                                    <div className="flex flex-col items-center">
-                                        <PlanLordIcon
-                                            iconKey={selectedPlan.iconKey}
-                                            planId={selectedPlan.id}
-                                            name={selectedPlan.name}
-                                            color={selectedPlan.iconColors?.primary}
-                                            size={112}
-                                            playKey={selectedPlan.id}
-                                        />
-                                        <div className="mt-2 text-center">
-                                            {bill.crossed && (
-                                                <div className="mb-1 flex items-center justify-center gap-2">
-                                                    <span className="text-[12px] text-[var(--text-muted)] line-through">{bill.crossed.toLocaleString('fa-IR')}</span>
-                                                    {discountBadge > 0 && (
-                                                        <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-black text-emerald-600">
-                                                            {discountBadge.toLocaleString('fa-IR')}٪
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            )}
-                                            <p className="text-4xl font-black tabular-nums leading-none text-[var(--text-primary)]">
-                                                {bill.finalPrice.toLocaleString('fa-IR')}
-                                            </p>
-                                            <p className="mt-1 text-[12px] font-bold text-[var(--text-muted)]">تومان</p>
-                                        </div>
+                                    <div className="order-1 flex flex-col items-center md:order-2">
+                                        <span className="md:hidden">
+                                            <PlanRibbonBadge
+                                                planId={selectedPlan.id}
+                                                name={selectedPlan.name}
+                                                color={tint}
+                                                size={72}
+                                                playKey={`${selectedPlan.id}-m`}
+                                            />
+                                        </span>
+                                        <span className="hidden md:inline-flex">
+                                            <PlanRibbonBadge
+                                                planId={selectedPlan.id}
+                                                name={selectedPlan.name}
+                                                color={tint}
+                                                size={132}
+                                                playKey={`${selectedPlan.id}-d`}
+                                            />
+                                        </span>
+                                        <p className="mt-1 hidden text-center md:block">
+                                            <span className="block text-4xl font-black tabular-nums leading-none text-[var(--text-primary)]">
+                                                {bill.pay.toLocaleString('fa-IR')}
+                                            </span>
+                                            <span className="mt-1 block text-[12px] font-bold text-[var(--text-muted)]">تومان</span>
+                                        </p>
                                     </div>
                                 </motion.div>
                             )}

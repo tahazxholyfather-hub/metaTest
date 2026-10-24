@@ -6,8 +6,6 @@ import {
     Home,
     BookOpen,
     User,
-    Moon,
-    Sun,
     LogOut,
     ClipboardCheck,
     PanelLeftClose,
@@ -22,9 +20,8 @@ import {
 } from 'lucide-react';
 import type { View } from '../types';
 import { useUser } from '../context/UserContext';
-import { ThemeSwitch } from './ThemeSwitch';
 import PlanSelectionModal from './PlanSelectionModal';
-import { DaysRing, PlanLordIcon } from './plan/PlanMarks';
+import { PlanRemainBar, PlanRibbonBadge } from './plan/PlanMarks';
 import { MetNavIcon } from './met';
 import { avatarSrc } from '../lib/asset';
 
@@ -47,35 +44,7 @@ const PLAN_CONFIG: Record<string, { label: string, totalDays: number, colorClass
     diamond: { label: 'الماسی', totalDays: 365, colorClass: 'text-cyan-600 dark:text-cyan-400', hexColor: '#06b6d4', icon: Diamond, bgLight: 'bg-cyan-500/10' },
 };
 
-// --- Compact Circular Progress Component for Collapsed State ---
-const CircularProgress = ({ progress, days, colorClass }: { progress: number, days: number, colorClass: string }) => {
-    const radius = 18;
-    const circumference = 2 * Math.PI * radius;
-    const offset = circumference - (progress / 100) * circumference;
-
-    return (
-        <div className="relative flex items-center justify-center w-12 h-12" title={`${days} روز باقی‌مانده`}>
-            <svg className="w-full h-full -rotate-90" viewBox="0 0 44 44">
-                <circle cx="22" cy="22" r={radius} stroke="currentColor" strokeWidth="2.5" fill="transparent" className="text-[var(--border)]" />
-                <motion.circle
-                    cx="22" cy="22" r={radius} stroke="currentColor" strokeWidth="2.5" fill="transparent"
-                    strokeLinecap="round"
-                    className={colorClass}
-                    strokeDasharray={circumference}
-                    initial={{ strokeDashoffset: circumference }}
-                    animate={{ strokeDashoffset: offset }}
-                    transition={{ duration: 1, ease: "easeOut" }}
-                />
-            </svg>
-            <div className="absolute flex flex-col items-center justify-center mt-0.5">
-                <span className="text-[11px] font-bold leading-none mb-0.5 text-[var(--text-primary)]">{days}</span>
-                <span className="text-[7px] text-[var(--text-muted)] leading-none">روز</span>
-            </div>
-        </div>
-    );
-};
-
-export const SideNav = ({ activeView, onNavigate, theme, onToggleTheme, isCollapsed, onLogout, onToggleCollapse }: SideNavProps) => {
+export const SideNav = ({ activeView, onNavigate, theme, isCollapsed, onLogout, onToggleCollapse }: SideNavProps) => {
     const navItems: { id: View; label: string; icon: React.ElementType | null; selectorClass: string }[] = [
         { id: 'dashboard', label: 'داشبورد', icon: Home, selectorClass: 'sidenav-tour-dashboard' },
         { id: 'practice', label: 'تمرین', icon: BookOpen, selectorClass: 'sidenav-tour-practice' },
@@ -111,8 +80,6 @@ export const SideNav = ({ activeView, onNavigate, theme, onToggleTheme, isCollap
     const hasDaysLeft = isPro && daysLeft > 0;
     const planActive = isPro && (unlimited || hasDaysLeft);
     const progressPercentage = hasDaysLeft && totalDays > 0 ? Math.min(100, Math.max(0, (daysLeft / totalDays) * 100)) : 0;
-
-    const PlanIcon = planDetails.icon;
 
     return (
         <aside
@@ -258,56 +225,35 @@ export const SideNav = ({ activeView, onNavigate, theme, onToggleTheme, isCollap
                 {/* --- User Plan Progress Section --- */}
                 {isCollapsed ? (
                     planActive ? (
-                        <div className="flex flex-col items-center w-full pb-2 border-b border-[var(--border)]">
-                            {!unlimited ? (
-                                <CircularProgress
-                                    progress={progressPercentage}
-                                    days={daysLeft}
-                                    colorClass={planDetails.colorClass}
-                                />
-                            ) : (
-                                <div
-                                    className={`p-2 rounded-xl ${planDetails.bgLight}`}
-                                    title={planDetails.label}
-                                >
-                                    <PlanIcon
-                                        size={19}
-                                        className={planDetails.colorClass}
-                                    />
-                                </div>
-                            )}
-                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setIsPlanModalOpen(true)}
+                            className="flex w-full flex-col items-center gap-1.5 border-0 bg-transparent p-0 pb-2"
+                            aria-label="اشتراک"
+                        >
+                            <PlanRibbonBadge
+                                planId={currentPlanKey}
+                                name={planDetails.label}
+                                color={user?.plan_icon_primary || planDetails.hexColor}
+                                size={30}
+                                playKey={`rail-${currentPlanKey}`}
+                            />
+                            <span className="w-full px-2">
+                                <PlanRemainBar progress={progressPercentage} days={daysLeft} unlimited={unlimited} compact />
+                            </span>
+                        </button>
                     ) : null
                 ) : (
                     planActive ? (
-                        <div className="flex w-full items-center justify-between gap-2 rounded-2xl border border-[var(--border)] bg-[var(--bg-element)] px-2.5 py-2">
-                            <div className="flex min-w-0 flex-col items-center">
-                                <PlanLordIcon
-                                    iconKey={user?.plan_icon_key}
-                                    planId={currentPlanKey}
-                                    name={planDetails.label}
-                                    color={user?.plan_icon_primary || planDetails.hexColor}
-                                    size={34}
-                                    playKey={currentPlanKey}
-                                />
-                                <span className="mt-0.5 max-w-[76px] truncate text-[10px] font-bold text-[var(--text-primary)]">
-                                    {planDetails.label}
-                                </span>
-                            </div>
-                            <div className="flex flex-col items-center gap-1.5">
-                                {unlimited ? (
-                                    <span className="text-lg font-black text-[var(--text-primary)]">∞</span>
-                                ) : (
-                                    <DaysRing progress={progressPercentage} days={daysLeft} size={52} />
-                                )}
-                                <button
-                                    type="button"
-                                    onClick={() => setIsPlanModalOpen(true)}
-                                    className="h-7 rounded-lg bg-[var(--accent)] px-2.5 text-[10px] font-bold text-white"
-                                >
-                                    ارتقا
-                                </button>
-                            </div>
+                        <div className="flex w-full items-center gap-3 px-1">
+                            <PlanRibbonBadge
+                                planId={currentPlanKey}
+                                name={planDetails.label}
+                                color={user?.plan_icon_primary || planDetails.hexColor}
+                                size={36}
+                                playKey={`nav-${currentPlanKey}`}
+                            />
+                            <PlanRemainBar progress={progressPercentage} days={daysLeft} unlimited={unlimited} />
                         </div>
                     ) : (
                         <button
@@ -341,23 +287,6 @@ export const SideNav = ({ activeView, onNavigate, theme, onToggleTheme, isCollap
                         </button>
                     )
                 )}
-
-                {/* --- Theme Toggle --- */}
-                {isCollapsed ? (
-                    <button
-                        onClick={onToggleTheme}
-                        className="p-2.5 rounded-xl text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--hover-overlay)] transition-colors"
-                        title={theme === 'dark' ? 'تغییر به تم روشن' : 'تغییر به تم تاریک'}
-                    >
-                        {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-                    </button>
-                ) : (
-                    <div className="flex items-center justify-between px-2 py-1">
-                        <span className="text-sm font-medium text-[var(--text-muted)]">حالت شب  </span>
-                        <ThemeSwitch theme={theme} onToggle={onToggleTheme} />
-                    </div>
-                )}
-
 
                 {/* --- Profile & Logout Section --- */}
                 {isCollapsed ? (

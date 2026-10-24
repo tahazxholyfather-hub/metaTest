@@ -1,6 +1,6 @@
 // src/components/TopHeader.tsx
 import React, { useRef, useState, useEffect } from "react";
-import { Menu, Bell, Check, CheckCircle2 } from "lucide-react";
+import { Menu, Bell, Check, CheckCircle2, Moon, Sun } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { CoinBadge } from "./CoinBadge";
 import { XpBadge } from "./XpBadge";
@@ -249,8 +249,17 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
 
                             <button
                                 type="button"
+                                onClick={onToggleTheme}
+                                aria-label={theme === 'dark' ? 'پوسته روشن' : 'پوسته تاریک'}
+                                className="inline-flex h-10 w-10 items-center justify-center rounded-full border-0 bg-transparent p-0 text-[var(--text-secondary)] hover:bg-[var(--hover-overlay)] hover:text-[var(--text-primary)]"
+                            >
+                                {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+                            </button>
+
+                            <button
+                                type="button"
                                 onClick={() => onNavigate('profile')}
-                                className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                                className="rounded-full border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
                                 aria-label="پروفایل"
                             >
                                 <img
@@ -269,7 +278,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                             <button
                                 type="button"
                                 onClick={() => onNavigate('profile')}
-                                className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                                className="rounded-full border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
                                 aria-label="پروفایل"
                             >
                                 <img
