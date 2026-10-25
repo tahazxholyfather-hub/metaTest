@@ -1036,7 +1036,10 @@ export function QuizView({
         return (
             <div key={option.id} className="relative group">
                 <button
-                    onClick={() => { if (!isAnswered && !isChecking) setSelectedOptionId(option.id); }}
+                    onClick={() => {
+                        if (isAnswered || isChecking) return;
+                        setSelectedOptionId((current) => sameOption(current, option.id) ? null : option.id);
+                    }}
                     disabled={isAnswered || isChecking}
                     className={`relative w-full text-right p-4 rounded-xl border-2 transition-all duration-300 flex items-center justify-between min-h-[4.5rem] ${containerClass}`}
                 >

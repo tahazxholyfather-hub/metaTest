@@ -183,21 +183,15 @@ export function MetView({ onNavigate, onToggleHeader }: Props) {
         return () => onToggleHeader?.(false);
     }, [gamePhase, isMobile, onToggleHeader]);
 
-    const gameScreen = (
-        <div className={isMobile
-            ? 'fixed inset-0 z-[80] flex min-h-0 flex-col bg-[#030605]'
-            : 'flex h-full min-h-0 min-w-0 flex-1 flex-col bg-[#030605]'}>
-            {gamePhase === 'loading' ? (
-                <div className="flex-1 grid place-items-center text-[#eef2fb]" dir="rtl">
-                    <div className="flex flex-col items-center gap-4">
-                        <GraySpinner size={28} />
-                        <p className="text-sm font-extrabold">در حال آماده‌سازی بازی</p>
-                    </div>
-                </div>
-            ) : (
-                <ChemballGame onExit={closeGame} />
-            )}
+    const gameInner = gamePhase === 'loading' ? (
+        <div className="grid h-full min-h-0 place-items-center text-[#eef2fb]" dir="rtl">
+            <div className="flex flex-col items-center gap-4">
+                <GraySpinner size={28} />
+                <p className="text-sm font-extrabold">در حال آماده‌سازی بازی</p>
+            </div>
         </div>
+    ) : (
+        <ChemballGame onExit={closeGame} />
     );
 
     /* ── Render states ───────────────────────────────────────────────── */
@@ -218,7 +212,15 @@ export function MetView({ onNavigate, onToggleHeader }: Props) {
                             </button>
                         </div>
                     </div>
-                ) : gameScreen}
+                ) : isMobile ? (
+                    <div className="fixed inset-0 z-[80] bg-[#030605]">{gameInner}</div>
+                ) : (
+                    <div className="flex h-full items-center justify-center p-5">
+                        <div className="h-[min(740px,100%)] aspect-[9/17.2] max-w-full overflow-hidden rounded-[2rem] bg-[#0B0B10] shadow-[0_28px_70px_rgba(11,18,32,0.28)]">
+                            <div className="h-full w-full">{gameInner}</div>
+                        </div>
+                    </div>
+                )}
             </div>
         );
     }
@@ -273,7 +275,13 @@ export function MetView({ onNavigate, onToggleHeader }: Props) {
             {unavailableBanner}
 
             <div className="relative flex-1 flex min-h-0">
-                {gamePhase !== 'off' && !isMobile ? gameScreen : (
+                {gamePhase !== 'off' && !isMobile ? (
+                    <div className="flex h-full min-h-0 min-w-0 flex-1 items-center justify-center bg-[var(--bg-app)] p-5">
+                        <div className="h-[min(740px,100%)] aspect-[9/17.2] max-w-full overflow-hidden rounded-[2rem] bg-[#0B0B10] shadow-[0_28px_70px_rgba(11,18,32,0.28)]">
+                            <div className="h-full w-full">{gameInner}</div>
+                        </div>
+                    </div>
+                ) : (
                 <div className={`flex-1 flex flex-col min-w-0 min-h-0 ${isMobile ? '' : 'pl-[76px]'}`}>
                     <ChatScreen
                         chat={chat}
@@ -340,7 +348,9 @@ export function MetView({ onNavigate, onToggleHeader }: Props) {
                 )}
             </div>
 
-            {isMobile && gamePhase !== 'off' && gameScreen}
+            {isMobile && gamePhase !== 'off' && (
+                <div className="fixed inset-0 z-[80] flex min-h-0 flex-col bg-[#030605]">{gameInner}</div>
+            )}
 
             {isMobile && (
                 <ResponsiveModal isOpen={panel !== null} onClose={() => setPanel(null)} title={panel ? PANEL_TITLES[panel] : ''}>

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, type CSSProperties } from 'react';
 import { motion } from 'framer-motion';
 import { Player } from '@lordicon/react';
 import ribbon from '../../assets/wired-gradient-3235-badge-ribbon-in-reveal.json';
@@ -208,13 +208,11 @@ export function PlanDaysCircle({
     progress,
     days,
     size = 58,
-    color,
     unlimited = false,
 }: {
     progress: number;
     days: number | string;
     size?: number;
-    color?: string;
     unlimited?: boolean;
 }) {
     const pct = unlimited ? 100 : Math.max(0, Math.min(100, progress));
@@ -232,32 +230,28 @@ export function PlanDaysCircle({
         return () => window.cancelAnimationFrame(id);
     }, [pct]);
     const offset = circumference - (drawn / 100) * circumference;
-    const stroke = color || 'var(--accent)';
     const label = unlimited ? '∞' : (typeof days === 'number' ? days.toLocaleString('fa-IR') : days);
-    const numberSize = Math.max(12, Math.round(size * 0.28));
-    const captionSize = Math.max(8, Math.round(size * 0.15));
+    const numberSize = Math.max(9, Math.round(size * 0.17));
+    const captionSize = Math.max(7, Math.round(size * 0.09));
     return (
         <div className="relative shrink-0" style={{ width: size, height: size }} aria-label={unlimited ? 'نامحدود' : `${label} روز`}>
             <svg className="h-full w-full -rotate-90" viewBox="0 0 40 40">
-                <circle cx="20" cy="20" r={radius} stroke={stroke} strokeOpacity="0.18" strokeWidth="3" fill="none" />
+                <circle cx="20" cy="20" r={radius} stroke="var(--border-strong)" strokeWidth="3" fill="none" />
                 <circle
                     cx="20"
                     cy="20"
                     r={radius}
-                    stroke={stroke}
+                    stroke="var(--accent)"
                     strokeWidth="3"
                     fill="none"
                     strokeLinecap="round"
                     strokeDasharray={circumference}
                     strokeDashoffset={offset}
-                    style={{
-                        transition: 'stroke-dashoffset 900ms cubic-bezier(0.22, 1, 0.36, 1)',
-                        filter: `drop-shadow(0 0 4px ${stroke})`,
-                    }}
+                    style={{ transition: 'stroke-dashoffset 900ms cubic-bezier(0.22, 1, 0.36, 1)' }}
                 />
             </svg>
             <span className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="font-black leading-none tabular-nums" style={{ fontSize: numberSize, color: stroke }}>{label}</span>
+                <span className="font-black leading-none tabular-nums text-[var(--accent)]" style={{ fontSize: numberSize }}>{label}</span>
                 {!unlimited && (
                     <span className="mt-0.5 font-bold leading-none text-[var(--text-muted)]" style={{ fontSize: captionSize }}>روز</span>
                 )}
@@ -288,18 +282,17 @@ export function PlanStatusCard({
     onClick?: () => void;
 }) {
     const tint = planTint(planId, name, color);
-    const shimmer = planShimmerClass(planId, name);
     const body = (
         <>
             <span className="flex shrink-0 flex-col items-center">
                 <PlanRibbonBadge planId={planId} name={name} color={tint} size={iconSize} playKey={`status-${planId}-${name}`} />
-                <span className={`mt-1 whitespace-nowrap text-center text-[11px] font-black leading-none ${shimmer}`}>{name}</span>
+                <span className="plan-title-shine mt-1 whitespace-nowrap text-center text-[11px] font-black leading-none" style={{ '--shine': tint } as CSSProperties}>{name}</span>
             </span>
-            <PlanDaysCircle progress={progress} days={days} unlimited={unlimited} color={tint} size={circleSize} />
+            <PlanDaysCircle progress={progress} days={days} unlimited={unlimited} size={circleSize} />
         </>
     );
     const className = 'flex w-full items-center justify-between gap-2 rounded-2xl border border-solid bg-transparent px-2.5 py-2 shadow-none';
-    const style = { borderColor: tint };
+    const style = { borderColor: tint, borderWidth: 2 };
     if (onClick) {
         return (
             <button type="button" onClick={onClick} className={`${className} cursor-pointer`} style={style} aria-label={name}>

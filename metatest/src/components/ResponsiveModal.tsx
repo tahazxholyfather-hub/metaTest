@@ -1,6 +1,6 @@
 //  src/components/ResponsiveModal.tsx
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 
@@ -12,8 +12,24 @@ interface ResponsiveModalProps {
     /** Pinned under the scrolling body. */
     footer?: React.ReactNode;
     className?: string;
+    /** Extra classes for the scrolling body. */
+    bodyClassName?: string;
     /** Desktop width. Mobile is always a full-width sheet. */
     maxWidthClass?: string;
+}
+
+let modalTicket = 0;
+let bodyLocks = 0;
+let modalGateUntil = 0;
+const modalClosers = new Map<number, () => void>();
+
+function lockBody() {
+    bodyLocks += 1;
+    document.body.style.overflow = 'hidden';
+    return () => {
+        bodyLocks = Math.max(0, bodyLocks - 1);
+        if (bodyLocks === 0) document.body.style.overflow = 'unset';
+    };
 }
 
 const easeOut = [0.22, 1, 0.36, 1] as const;
@@ -48,14 +64,48 @@ export const ResponsiveModal: React.FC<ResponsiveModalProps> = ({
                                                                     onClose,
                                                                     title,
                                                                     children,
-                                                                    footer,
-                                                                    className = '',
-                                                                    maxWidthClass = 'md:w-[700px] md:max-w-[90vw]',
-                                                                }) => {
+    footer,
+    className = '',
+    bodyClassName = '',
+    maxWidthClass = 'md:w-[700px] md:max-w-[90vw]',
+}) => {
     const [isDesktop, setIsDesktop] = useState(() =>
         typeof window !== 'undefined' ? window.innerWidth >= 768 : false
     );
     const [reduceMotion, setReduceMotion] = useState(false);
+    const [hold, setHold] = useState(false);
+    const onCloseRef = useRef(onClose);
+    onCloseRef.current = onClose;
+
+    useLayoutEffect(() => {
+        if (!isOpen) {
+            setHold(false);
+            return;
+        }
+        const token = ++modalTicket;
+        const previous = [...modalClosers.entries()];
+        modalClosers.set(token, () => onCloseRef.current());
+        if (previous.length > 0) {
+            previous.forEach(([id, close]) => {
+                modalClosers.delete(id);
+                close();
+            });
+            modalGateUntil = Date.now() + (reduceMotion ? 0 : 320);
+        }
+        const wait = Math.max(0, modalGateUntil - Date.now());
+        if (wait === 0) {
+            setHold(false);
+            return () => { modalClosers.delete(token); };
+        }
+        setHold(true);
+        const timer = window.setTimeout(() => setHold(false), wait);
+        return () => {
+            window.clearTimeout(timer);
+            modalClosers.delete(token);
+        };
+    }, [isOpen, reduceMotion]);
+
+    const shown = isOpen && !hold;
 
     useEffect(() => {
         const handleResize = () => {
@@ -76,14 +126,8 @@ export const ResponsiveModal: React.FC<ResponsiveModalProps> = ({
 
     // جلوگیری از اسکرول شدن پس‌زمینه وقتی مودال باز است
     useEffect(() => {
-        if (isOpen) {
-            document.body.style.overflow = 'hidden';
-        } else {
-            document.body.style.overflow = 'unset';
-        }
-        return () => {
-            document.body.style.overflow = 'unset';
-        };
+        if (!isOpen) return;
+        return lockBody();
     }, [isOpen]);
 
     const fadeIn = reduceMotion ? { duration: 0.01 } : { duration: 0.34, ease: easeOut };
@@ -96,7 +140,7 @@ export const ResponsiveModal: React.FC<ResponsiveModalProps> = ({
 
     return (
         <AnimatePresence>
-            {isOpen && (
+            {shown && (
                 <motion.div
                     key="responsive-modal-backdrop"
                     className="fixed inset-0 z-[100] bg-black/45 backdrop-blur-[2px]"
@@ -106,7 +150,7 @@ export const ResponsiveModal: React.FC<ResponsiveModalProps> = ({
                     onClick={onClose}
                 />
             )}
-            {isOpen && (
+            {shown && (
                 <motion.div
                     key="responsive-modal-panel"
                     className={`pointer-events-auto flex flex-col overflow-hidden bg-[var(--bg-card)] ${panelPosition} ${maxWidthClass} ${className}`}
@@ -165,7 +209,7 @@ export const ResponsiveModal: React.FC<ResponsiveModalProps> = ({
                         </button>
                     </div>
 
-                    <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4 text-[var(--text-primary)] custom-scrollbar [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <div className={`min-h-0 flex-1 overflow-y-auto px-6 py-4 text-[var(--text-primary)] custom-scrollbar [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${bodyClassName}`}>
                         {children}
                     </div>
                     {footer && (

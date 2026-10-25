@@ -239,6 +239,50 @@
     .shimmer-diamond { animation: none; }
 }
 
+@keyframes planTitleShine {
+    0% { background-position: 140% 0; }
+    100% { background-position: -40% 0; }
+}
+.plan-title-shine {
+    background-image: linear-gradient(
+        105deg,
+        var(--shine, var(--accent)) 0%,
+        var(--shine, var(--accent)) 40%,
+        color-mix(in srgb, white 72%, var(--shine, var(--accent))) 50%,
+        var(--shine, var(--accent)) 60%,
+        var(--shine, var(--accent)) 100%
+    );
+    background-size: 220% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    animation: planTitleShine 2.8s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+    .plan-title-shine { animation: none; }
+}
+
+@keyframes mathSkel {
+    0% { background-position: 100% 0; }
+    100% { background-position: -100% 0; }
+}
+.math-skeleton {
+    display: block;
+    border-radius: 6px;
+    background-image: linear-gradient(
+        90deg,
+        var(--bg-element) 0%,
+        color-mix(in srgb, var(--text-primary) 16%, var(--bg-element)) 50%,
+        var(--bg-element) 100%
+    );
+    background-size: 220% 100%;
+    animation: mathSkel 1.15s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+    .math-skeleton { animation: none; }
+}
+
 .eq-figure {
     color: var(--accent);
     text-shadow: 0 0 16px color-mix(in srgb, var(--accent) 55%, transparent);

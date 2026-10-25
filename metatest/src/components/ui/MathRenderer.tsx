@@ -1,6 +1,6 @@
 // src/components/MathRenderer.tsx
 
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 // =====================================================================
 // MathRenderer — self-contained MathJax v4 renderer (fully local/offline)
@@ -169,6 +169,12 @@ export const MathRenderer: React.FC<MathRendererProps> = ({
                                                               inline = false,
                                                           }) => {
     const containerRef = useRef<HTMLElement | null>(null);
+    const [ready, setReady] = useState(false);
+    const [trackedText, setTrackedText] = useState(text);
+    if (trackedText !== text) {
+        setTrackedText(text);
+        setReady(false);
+    }
 
     const processedText = useMemo(() => {
         if (!text) return '';
@@ -179,17 +185,30 @@ export const MathRenderer: React.FC<MathRendererProps> = ({
         let cancelled = false;
         const element = containerRef.current;
         if (!element || !processedText) return;
+        setReady(false);
+
+        const finish = () => {
+            if (!cancelled) setReady(true);
+        };
 
         loadMathJax().then((loaded) => {
-            if (!loaded || cancelled || !containerRef.current) return;
+            if (!loaded || cancelled || !containerRef.current) {
+                finish();
+                return;
+            }
             try {
                 // Clear previous typeset state for this element, then typeset only this node
                 window.MathJax.typesetClear?.([containerRef.current]);
                 window.MathJax
                     .typesetPromise([containerRef.current])
-                    .catch((err: any) => console.error('MathRenderer typeset failed:', err));
+                    .then(finish)
+                    .catch((err: any) => {
+                        console.error('MathRenderer typeset failed:', err);
+                        finish();
+                    });
             } catch (err) {
                 console.error('MathRenderer typeset failed:', err);
+                finish();
             }
         });
 
@@ -202,22 +221,32 @@ export const MathRenderer: React.FC<MathRendererProps> = ({
     }, [processedText]);
 
     const classes = `whitespace-pre-wrap break-words leading-relaxed math-renderer ${className}`;
+    const plainLength = processedText.replace(/[$\\{}]/g, '').trim().length;
+    const skeletonWidth = inline
+        ? `${Math.min(12, Math.max(2.2, plainLength * 0.45))}em`
+        : 'min(100%, 16em)';
 
-    // The key forces a remount when the text changes, so React never has to
-    // reconcile DOM that MathJax rewrote (this caused the v3 glitches where
-    // stale formulas stayed on screen after navigating between questions).
-    if (inline) {
-        return (
-            <span key={processedText} ref={containerRef as React.RefObject<HTMLSpanElement>} className={classes} dir="auto">
-                {processedText}
-            </span>
-        );
-    }
-
-    return (
-        <div key={processedText} ref={containerRef as React.RefObject<HTMLDivElement>} className={classes} dir="auto">
+    const formula = inline ? (
+        <span key={processedText} ref={containerRef as React.RefObject<HTMLSpanElement>} className={`${classes} ${ready ? '' : 'absolute inset-0 opacity-0'}`} dir="auto">
+            {processedText}
+        </span>
+    ) : (
+        <div key={processedText} ref={containerRef as React.RefObject<HTMLDivElement>} className={`${classes} ${ready ? '' : 'absolute inset-x-0 top-0 opacity-0'}`} dir="auto">
             {processedText}
         </div>
+    );
+
+    return (
+        <span className={`relative ${inline ? 'inline-block align-middle' : 'block w-full'}`} aria-busy={!ready}>
+            {!ready && processedText && (
+                <span
+                    className="math-skeleton"
+                    style={{ width: skeletonWidth, height: inline ? '0.95em' : '2.3em' }}
+                    aria-hidden
+                />
+            )}
+            {formula}
+        </span>
     );
 };
 

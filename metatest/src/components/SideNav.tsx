@@ -235,7 +235,6 @@ export const SideNav = ({ activeView, onNavigate, theme, isCollapsed, onLogout, 
                                 progress={unlimited ? 100 : progressPercentage}
                                 days={daysLeft}
                                 unlimited={unlimited}
-                                color={user?.plan_icon_primary || planDetails.hexColor}
                                 size={46}
                             />
                         </button>

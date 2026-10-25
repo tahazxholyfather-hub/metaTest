@@ -1094,7 +1094,8 @@ export default function QuizPage({ quizData: initialQuizData, onExit }: QuizPage
         currentFocusDurationRef.current = 0;
 
         setAnswers((prev) => {
-            if (prev[questionId] !== optionId) {
+            const already = prev[questionId] === optionId;
+            if (!already) {
                 selectionLogRef.current.push({
                     questionId,
                     optionId,
@@ -1103,7 +1104,9 @@ export default function QuizPage({ quizData: initialQuizData, onExit }: QuizPage
                 });
             }
 
-            const nextAnswers = { ...prev, [questionId]: optionId };
+            const nextAnswers = { ...prev };
+            if (already) delete nextAnswers[questionId];
+            else nextAnswers[questionId] = optionId;
 
             if (!isPrivatePreviewRef.current && socket && joinedLobbyRef.current && currentUserId && hashedQuizId && lobbyCodeRef.current) {
                 updateMemberProgress(socket, {
