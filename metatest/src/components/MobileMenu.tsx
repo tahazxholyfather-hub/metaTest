@@ -7,7 +7,7 @@ import {
 import { ThemeSwitch } from './ThemeSwitch';
 import { useUser } from '../context/UserContext';
 import PlanSelectionModal from "./PlanSelectionModal";
-import { PlanRemainBar, PlanRibbonBadge } from './plan/PlanMarks';
+import { PlanStatusCard } from './plan/PlanMarks';
 import { MetNavIcon } from './met';
 
 type MobileMenuProps = {
@@ -160,27 +160,19 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
                                     </div>
 
                                 </div>
-
-                                {isPro && (
-                                    <div className="mt-3 flex items-center gap-3 px-1">
-                                        <button
-                                            type="button"
-                                            onClick={() => setIsPlanModalOpen(true)}
-                                            className="border-0 bg-transparent p-0"
-                                            aria-label="انتخاب اشتراک"
-                                        >
-                                            <PlanRibbonBadge
-                                                planId={currentPlanKey}
-                                                name={planDetails.label}
-                                                color={user?.plan_icon_primary || planDetails.hexColor}
-                                                size={32}
-                                                playKey={`menu-${currentPlanKey}`}
-                                            />
-                                        </button>
-                                        <PlanRemainBar progress={progressPercentage} days={daysLeft} unlimited={unlimited} />
-                                    </div>
-                                )}
                             </div>
+
+                            {isPro && (
+                                <PlanStatusCard
+                                    planId={currentPlanKey}
+                                    name={user?.plan_name || planDetails.label}
+                                    color={user?.plan_icon_primary || planDetails.hexColor}
+                                    progress={unlimited ? 100 : progressPercentage}
+                                    days={daysLeft}
+                                    unlimited={unlimited}
+                                    onClick={() => setIsPlanModalOpen(true)}
+                                />
+                            )}
 
                             {/* Nav Menu */}
                             <nav>

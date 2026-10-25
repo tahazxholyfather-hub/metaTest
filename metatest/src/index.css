@@ -210,6 +210,35 @@
     animation: shimmer 8s linear infinite;
 }
 
+@keyframes textShimmer {
+    0% { background-position: 100% 0; }
+    100% { background-position: -100% 0; }
+}
+.shimmer-bronze,
+.shimmer-silver,
+.shimmer-golden,
+.shimmer-diamond {
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: textShimmer 4s linear infinite;
+}
+.shimmer-bronze { background-image: linear-gradient(90deg, #854d0e 0%, #d97706 40%, #fbbf24 50%, #d97706 60%, #854d0e 100%); }
+.shimmer-silver { background-image: linear-gradient(90deg, #334155 0%, #64748b 40%, #94a3b8 50%, #64748b 60%, #334155 100%); }
+.shimmer-golden { background-image: linear-gradient(90deg, #b45309 0%, #d97706 40%, #fbbf24 50%, #d97706 60%, #b45309 100%); }
+.shimmer-diamond { background-image: linear-gradient(90deg, #1d4ed8 0%, #0284c7 40%, #38bdf8 50%, #0284c7 60%, #1d4ed8 100%); }
+.dark .shimmer-bronze { background-image: linear-gradient(90deg, #f59e0b 0%, #fde68a 40%, #fffbeb 50%, #fde68a 60%, #f59e0b 100%); }
+.dark .shimmer-silver { background-image: linear-gradient(90deg, #94a3b8 0%, #e2e8f0 40%, #ffffff 50%, #e2e8f0 60%, #94a3b8 100%); }
+.dark .shimmer-golden { background-image: linear-gradient(90deg, #fbbf24 0%, #fde68a 40%, #fffbeb 50%, #fde68a 60%, #fbbf24 100%); }
+.dark .shimmer-diamond { background-image: linear-gradient(90deg, #38bdf8 0%, #bae6fd 40%, #f0f9ff 50%, #bae6fd 60%, #38bdf8 100%); }
+@media (prefers-reduced-motion: reduce) {
+    .shimmer-bronze,
+    .shimmer-silver,
+    .shimmer-golden,
+    .shimmer-diamond { animation: none; }
+}
+
 .eq-figure {
     color: var(--accent);
     text-shadow: 0 0 16px color-mix(in srgb, var(--accent) 55%, transparent);

@@ -18,7 +18,7 @@ import { avatarSrc } from "../lib/asset";
 // --- FIX 2: Import your custom ResponsiveModal component ---
 import { ResponsiveModal } from "../components/ResponsiveModal"; // Adjust the path if necessary
 import PlanSelectionModal from "../components/PlanSelectionModal";
-import { Hourglass, PlanRibbonBadge, planBenefitLines, planTint, type ShopPlan } from "../components/plan/PlanMarks";
+import { PlanDaysCircle, PlanRibbonBadge, planBenefitLines, planShimmerClass, planTint, type ShopPlan } from "../components/plan/PlanMarks";
 
 // --- Icons (no changes) ---
 const Icons = {
@@ -1025,15 +1025,15 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
                                                                     size={64}
                                                                     playKey={`profile-${planKey}`}
                                                                 />
-                                                                <h4 className={`mt-1 max-w-[9rem] truncate text-[13px] font-black ${meta.colorClass}`}>{currentShop?.name || meta.label}</h4>
+                                                                <h4 className={`mt-1 max-w-[9rem] truncate text-[15px] font-black ${planShimmerClass(planKey, currentShop?.name || meta.label)}`}>{currentShop?.name || meta.label}</h4>
                                                                 <p className="mt-0.5 max-w-[11rem] text-[10px] leading-4 text-[var(--text-muted)]">{statusLine}</p>
                                                             </div>
-                                                            <Hourglass
-                                                                progress={planKey === 'free' ? 0 : unlimited ? 100 : ringProgress}
-                                                                days={unlimited ? '∞' : (daysRemaining || 0)}
+                                                            <PlanDaysCircle
+                                                                progress={planKey === 'free' ? 0 : ringProgress}
+                                                                days={daysRemaining || 0}
+                                                                unlimited={Boolean(unlimited) && planKey !== 'free'}
                                                                 color={tint}
-                                                                caption={unlimited ? 'نامحدود' : 'روز باقی‌مانده'}
-                                                                size={108}
+                                                                size={112}
                                                             />
                                                         </div>
 

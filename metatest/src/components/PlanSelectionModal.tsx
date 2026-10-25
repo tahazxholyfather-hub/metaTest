@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
 import { Check, CreditCard, Loader2, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 import { flowApi } from '../lib/authApi';
 import { useUser } from '../context/UserContext';
 import { ResponsiveModal } from './ResponsiveModal';
-import { PlanRibbonBadge, durationTabLabel, equivalentPerDay, planBenefitLines, planTint, type ShopPlan } from './plan/PlanMarks';
+import { PlanRibbonBadge, durationTabLabel, equivalentPerDay, planBenefitLines, planShimmerClass, planTint, type ShopPlan } from './plan/PlanMarks';
 
 type Plan = ShopPlan & {
     shimmerClass: string;
@@ -57,52 +56,6 @@ function mapBackendPlan(plan: any): Plan {
     };
 }
 
-function BenefitSlide({ lines }: { lines: string[] }) {
-    const [index, setIndex] = useState(0);
-    const extra = lines.length > 3;
-    const signature = lines.join('\n');
-
-    useEffect(() => {
-        setIndex(0);
-    }, [signature]);
-
-    useEffect(() => {
-        if (!extra) return;
-        const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        if (reduced) return;
-        const id = window.setInterval(() => setIndex((value) => (value + 1) % lines.length), 2200);
-        return () => window.clearInterval(id);
-    }, [extra, lines.length, signature]);
-
-    const shown = extra
-        ? [0, 1, 2].map((offset) => {
-            const at = (index + offset) % lines.length;
-            return { line: lines[at], at };
-        })
-        : lines.map((line, at) => ({ line, at }));
-
-    return (
-        <ul className={`relative w-full overflow-hidden text-right ${extra ? 'mt-3 h-[4.8rem] md:mt-4' : 'mt-3 space-y-1.5 md:mt-4'}`}>
-            <AnimatePresence mode="popLayout" initial={false}>
-                {shown.map(({ line, at }) => (
-                    <motion.li
-                        layout
-                        key={`${at}-${line}`}
-                        initial={extra ? { opacity: 0, y: 14 } : false}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -14 }}
-                        transition={{ duration: 0.28 }}
-                        className="flex items-start gap-2 py-0.5 text-[12.5px] leading-5 text-[var(--text-primary)] md:text-[13px]"
-                    >
-                        <Check size={14} className="mt-0.5 shrink-0 text-emerald-500" />
-                        <span>{line}</span>
-                    </motion.li>
-                ))}
-            </AnimatePresence>
-        </ul>
-    );
-}
-
 function quote(plan: Plan | undefined, coupon: CouponState | null) {
     const pay = plan?.price || 0;
     const loyaltyPercent = plan?.loyaltyPercent || 0;
@@ -132,8 +85,6 @@ export default function PlanSelectionModal({ isOpen, onClose, onActivated }: Pla
     const visiblePlans = useMemo(() => plans.filter((plan) => plan.purchasable !== false), [plans]);
     const selectedPlan = visiblePlans.find((plan) => plan.id === selectedPlanId) || visiblePlans[0];
     const bill = useMemo(() => quote(selectedPlan, couponData), [selectedPlan, couponData]);
-    const daily = selectedPlan ? equivalentPerDay(bill.finalPrice, selectedPlan.days) : null;
-    const benefits = selectedPlan ? planBenefitLines(selectedPlan) : [];
 
     useEffect(() => {
         if (!isOpen) return;
@@ -261,34 +212,44 @@ export default function PlanSelectionModal({ isOpen, onClose, onActivated }: Pla
         }
     };
 
-    const tint = selectedPlan ? planTint(selectedPlan.id, selectedPlan.name, selectedPlan.iconColors?.primary) : undefined;
+    const walletShown = walletBalance ?? user?.toman_balance ?? 0;
+    const gridClass = visiblePlans.length <= 1
+        ? 'mx-auto grid max-w-sm grid-cols-1'
+        : visiblePlans.length === 2
+            ? 'grid grid-cols-1 gap-3 md:grid-cols-2'
+            : 'grid grid-cols-1 gap-3 md:grid-cols-3';
 
     return (
         <ResponsiveModal
             isOpen={isOpen}
             onClose={handleClose}
             title="انتخاب اشتراک"
-            maxWidthClass="md:w-[min(860px,96vw)] md:max-w-[96vw]"
+            maxWidthClass="md:w-[min(1080px,96vw)] md:max-w-[96vw]"
             footer={
-                <div className="space-y-2" dir="rtl">
-                    <div className="flex items-center gap-2">
-                        <button
-                            type="button"
-                            role="switch"
-                            aria-checked={payWithWallet}
-                            aria-label="پرداخت با کیف پول"
-                            onClick={() => setPayWithWallet((value) => !value)}
-                            className="inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-full bg-[var(--bg-element)] px-2"
-                        >
-                            <span className={`relative h-4 w-7 rounded-full transition-colors ${payWithWallet ? 'bg-[var(--accent)]' : 'bg-[var(--border)]'}`}>
-                                <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-all ${payWithWallet ? 'left-0.5' : 'right-0.5'}`} />
+                <div className="space-y-3" dir="rtl">
+                    <div className="grid grid-cols-2 gap-2.5">
+                        <div className="flex min-w-0 items-center justify-between gap-2 rounded-2xl bg-[var(--bg-element)] px-2.5 py-2">
+                            <span className="flex min-w-0 items-center gap-1.5">
+                                <Wallet size={16} className="shrink-0 text-[var(--accent)]" />
+                                <span className="min-w-0 text-right">
+                                    <span className="block truncate text-[11px] font-bold leading-tight text-[var(--text-primary)]">کیف پول</span>
+                                    <span className="block truncate text-[10px] font-bold tabular-nums leading-tight text-[var(--text-muted)]">
+                                        {walletShown.toLocaleString('fa-IR')}
+                                    </span>
+                                </span>
                             </span>
-                            <Wallet size={13} className="text-[var(--accent)]" />
-                            <span className="text-[11px] font-bold tabular-nums text-[var(--text-primary)]">
-                                {(walletBalance ?? user?.toman_balance ?? 0).toLocaleString('fa-IR')}
-                            </span>
-                        </button>
-                        <div className="flex h-8 min-w-0 flex-1 items-center rounded-full bg-[var(--bg-element)] px-2">
+                            <button
+                                type="button"
+                                role="switch"
+                                aria-checked={payWithWallet}
+                                aria-label="پرداخت با کیف پول"
+                                onClick={() => setPayWithWallet((value) => !value)}
+                                className={`relative h-5 w-9 shrink-0 cursor-pointer rounded-full border-0 p-0 transition-colors ${payWithWallet ? 'bg-[var(--accent)]' : 'bg-[var(--border)]'}`}
+                            >
+                                <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-all ${payWithWallet ? 'left-0.5' : 'right-0.5'}`} />
+                            </button>
+                        </div>
+                        <div className="flex min-w-0 items-center gap-1 rounded-2xl bg-[var(--bg-element)] py-1 pe-1 ps-2">
                             <input
                                 type="text"
                                 value={discountCode}
@@ -297,15 +258,18 @@ export default function PlanSelectionModal({ isOpen, onClose, onActivated }: Pla
                                     setCouponError('');
                                     if (couponData && event.target.value.trim() !== couponData.code) setCouponData(null);
                                 }}
+                                onKeyDown={(event) => {
+                                    if (event.key === 'Enter') handleApplyDiscount();
+                                }}
                                 placeholder="کد تخفیف"
                                 disabled={!selectedPlan || isApplyingDiscount}
-                                className="h-8 min-w-0 flex-1 border-0 bg-transparent px-1 py-0 text-[12px] shadow-none outline-none ring-0 focus:border-transparent focus:shadow-none"
+                                className="h-8 min-w-0 flex-1 border-0 bg-transparent px-0 py-0 text-[12px] shadow-none outline-none ring-0 focus:border-transparent focus:shadow-none focus-visible:border-transparent focus-visible:shadow-none focus-visible:outline-none"
                             />
                             <button
                                 type="button"
                                 onClick={handleApplyDiscount}
                                 disabled={!discountCode.trim() || isApplyingDiscount || !selectedPlan}
-                                className="shrink-0 cursor-pointer px-1 text-[11px] font-bold text-[var(--accent)] disabled:opacity-40"
+                                className="inline-flex h-7 shrink-0 cursor-pointer items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--accent)_45%,transparent)] bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] px-2.5 py-0 text-[11px] font-black text-[var(--accent)] disabled:opacity-40"
                             >
                                 {isApplyingDiscount ? <Loader2 size={13} className="animate-spin" /> : 'اعمال'}
                             </button>
@@ -316,126 +280,136 @@ export default function PlanSelectionModal({ isOpen, onClose, onActivated }: Pla
                             {couponError || paymentError || (couponData ? `${couponData.percent.toLocaleString('fa-IR')}٪ کم شد` : '')}
                         </p>
                     )}
-                    <div className="flex items-center gap-3">
-                        <button
-                            type="button"
-                            onClick={handlePay}
-                            disabled={isPaying || !selectedPlan || isLoadingPlans}
-                            className="inline-flex h-12 min-w-0 flex-1 cursor-pointer items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-4 text-[14px] font-bold text-white disabled:opacity-40"
-                        >
-                            {isPaying ? <Loader2 size={18} className="animate-spin" /> : <CreditCard size={18} />}
-                            پرداخت
-                        </button>
+                    <div className="grid grid-cols-2 items-center gap-2.5">
+                        <div className="flex justify-start">
+                            <button
+                                type="button"
+                                onClick={handlePay}
+                                disabled={isPaying || !selectedPlan || isLoadingPlans}
+                                className="inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border-0 bg-[var(--accent)] px-5 py-0 text-[13px] font-bold text-white disabled:opacity-40"
+                            >
+                                {isPaying ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}
+                                پرداخت
+                            </button>
+                        </div>
                         <p
-                            className="shrink-0 text-[30px] font-black leading-none tabular-nums tracking-tight text-[var(--text-primary)]"
-                            style={{ textShadow: '0 10px 24px color-mix(in srgb, var(--accent) 32%, transparent)' }}
+                            className="flex items-baseline justify-end gap-1 text-[var(--text-primary)]"
                             aria-label="مبلغ قابل پرداخت"
                         >
-                            {(selectedPlan ? bill.finalPrice : 0).toLocaleString('fa-IR')}
+                            <span className="text-[20px] font-black leading-none tabular-nums md:text-[26px]">
+                                {(selectedPlan ? bill.finalPrice : 0).toLocaleString('fa-IR')}
+                            </span>
+                            <span className="text-[12px] font-bold text-[var(--text-muted)]">تومان</span>
                         </p>
                     </div>
                 </div>
             }
         >
             <div dir="rtl">
-                <style>{`
-                    @keyframes textShimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
-                    .shimmer-bronze, .shimmer-silver, .shimmer-golden, .shimmer-diamond {
-                        background-size: 200% auto; -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-                        animation: textShimmer 4s linear infinite;
-                    }
-                    .shimmer-bronze { background-image: linear-gradient(90deg, #854d0e 0%, #d97706 40%, #fde68a 50%, #d97706 60%, #854d0e 100%); }
-                    .shimmer-silver { background-image: linear-gradient(90deg, #334155 0%, #94a3b8 40%, #f8fafc 50%, #94a3b8 60%, #334155 100%); }
-                    .shimmer-golden { background-image: linear-gradient(90deg, #b45309 0%, #fbbf24 40%, #fff7d6 50%, #fbbf24 60%, #b45309 100%); }
-                    .shimmer-diamond { background-image: linear-gradient(90deg, #1d4ed8 0%, #38bdf8 40%, #e0f2fe 50%, #38bdf8 60%, #1d4ed8 100%); }
-                    @media (prefers-reduced-motion: reduce) {
-                        .shimmer-bronze, .shimmer-silver, .shimmer-golden, .shimmer-diamond { animation: none; }
-                    }
-                `}</style>
-
                 {plansError && <p className="mb-3 text-center text-[12px] font-bold text-rose-600">{plansError}</p>}
                 {isLoadingPlans ? (
-                    <div className="flex min-h-[240px] items-center justify-center">
+                    <div className="flex min-h-[280px] items-center justify-center">
                         <Loader2 className="animate-spin text-[var(--accent)]" />
                     </div>
                 ) : visiblePlans.length === 0 ? (
                     <p className="py-16 text-center text-[13px] text-[var(--text-muted)]">الان پلنی برای خرید باز نیست.</p>
                 ) : (
-                    <>
-                        <div className="mb-4 flex justify-center">
-                            <div className="inline-flex max-w-full gap-0.5 overflow-x-auto rounded-full bg-[var(--bg-element)] p-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                                {visiblePlans.map((plan) => {
-                                    const active = plan.id === selectedPlan?.id;
-                                    return (
-                                        <button
-                                            key={plan.id}
-                                            type="button"
-                                            onClick={() => setSelectedPlanId(plan.id)}
-                                            className={`relative h-6 shrink-0 cursor-pointer rounded-full px-2 text-[10px] font-bold md:h-7 md:px-3 md:text-[11px] ${active ? 'text-white' : 'text-[var(--text-muted)]'}`}
-                                        >
-                                            {active && (
-                                                <motion.span layoutId="planDurationTab" className="absolute inset-0 rounded-full bg-[var(--accent)]" transition={{ duration: 0.22 }} />
-                                            )}
-                                            <span className="relative z-10">{durationTabLabel(plan.days, plan.unlimited)}</span>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-
-                        <AnimatePresence mode="wait">
-                            {selectedPlan && (
-                                <motion.div
-                                    key={selectedPlan.id}
-                                    initial={{ opacity: 0, y: 8 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0, y: -8 }}
-                                    transition={{ duration: 0.22 }}
-                                    className="flex flex-col items-center gap-3 md:grid md:grid-cols-2 md:items-center md:gap-8"
+                    <div className={gridClass}>
+                        {visiblePlans.map((plan) => {
+                            const selected = plan.id === selectedPlan?.id;
+                            const tint = planTint(plan.id, plan.name, plan.iconColors?.primary);
+                            const shimmer = planShimmerClass(plan.id, plan.name);
+                            const daily = equivalentPerDay(plan.price, plan.days);
+                            const compare = plan.comparePrice && plan.comparePrice > plan.price ? plan.comparePrice : null;
+                            const offPercent = compare ? Math.round((1 - plan.price / compare) * 100) : 0;
+                            const lines = planBenefitLines(plan).filter((line) => !line.includes('کمتر از قیمت اصلی'));
+                            return (
+                                <button
+                                    key={plan.id}
+                                    type="button"
+                                    aria-pressed={selected}
+                                    onClick={() => setSelectedPlanId(plan.id)}
+                                    className="relative flex h-full min-h-[300px] cursor-pointer flex-col items-center rounded-3xl border bg-transparent px-3.5 py-5 text-center transition-shadow md:min-h-[440px] md:px-4 md:py-6"
+                                    style={{
+                                        borderColor: tint,
+                                        borderWidth: selected ? 2 : 1,
+                                        background: `color-mix(in srgb, ${tint} ${selected ? 16 : 5}%, transparent)`,
+                                        boxShadow: selected
+                                            ? `0 0 0 4px color-mix(in srgb, ${tint} 28%, transparent), 0 14px 32px color-mix(in srgb, ${tint} 20%, transparent)`
+                                            : 'none',
+                                    }}
                                 >
-                                    <div className="order-2 w-full text-center md:order-1 md:text-right">
-                                        <h3 className={`text-[22px] font-black leading-none md:text-4xl ${selectedPlan.shimmerClass}`}>{selectedPlan.name}</h3>
-                                        {daily != null && (
-                                            <div className="eq-pill mt-3 inline-flex items-center gap-2 rounded-2xl bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] px-3 py-2">
-                                                <span className="text-[12px] font-black text-[var(--accent)]">معادل</span>
-                                                <span className="eq-figure text-[26px] font-black leading-none tabular-nums md:text-[30px]">
-                                                    {daily.toLocaleString('fa-IR')}
+                                    {plan.popular && (
+                                        <span className="absolute top-3 left-3 rounded-full bg-[var(--accent)] px-2 py-0.5 text-[10px] font-bold text-white">
+                                            محبوب
+                                        </span>
+                                    )}
+                                    <PlanRibbonBadge
+                                        planId={plan.id}
+                                        name={plan.name}
+                                        color={tint}
+                                        size={78}
+                                        playKey={`offer-${plan.id}`}
+                                    />
+                                    <h3 className={`mt-1 text-[20px] font-black leading-none md:text-[22px] ${shimmer}`}>{plan.name}</h3>
+                                    <p className="mt-1 text-[11px] font-bold text-[var(--text-muted)]">{durationTabLabel(plan.days, plan.unlimited)}</p>
+                                    <p className="mt-3 flex items-baseline justify-center gap-1 text-[var(--text-primary)]">
+                                        <span className="text-[22px] font-black leading-none tabular-nums md:text-[26px]">
+                                            {plan.price.toLocaleString('fa-IR')}
+                                        </span>
+                                        <span className="text-[11px] font-bold text-[var(--text-muted)]">تومان</span>
+                                    </p>
+                                    {(compare || plan.loyaltyPercent) ? (
+                                        <div className="mt-1.5 flex flex-wrap items-center justify-center gap-1.5">
+                                            {compare && (
+                                                <span className="text-[11px] font-bold tabular-nums text-[var(--text-muted)] line-through">
+                                                    {compare.toLocaleString('fa-IR')}
                                                 </span>
-                                                <span className="text-[11px] font-bold text-[var(--text-secondary)]">تومان</span>
-                                            </div>
-                                        )}
-                                        <BenefitSlide lines={benefits} />
-                                    </div>
-                                    <div className="order-1 flex flex-col items-center md:order-2">
-                                        <span className="md:hidden">
-                                            <PlanRibbonBadge
-                                                planId={selectedPlan.id}
-                                                name={selectedPlan.name}
-                                                color={tint}
-                                                size={72}
-                                                playKey={`${selectedPlan.id}-m`}
-                                            />
+                                            )}
+                                            {offPercent > 0 && (
+                                                <span
+                                                    className="rounded-full px-1.5 py-0.5 text-[10px] font-black"
+                                                    style={{ color: tint, background: `color-mix(in srgb, ${tint} 16%, transparent)` }}
+                                                >
+                                                    {offPercent.toLocaleString('fa-IR')}٪
+                                                </span>
+                                            )}
+                                            {!!plan.loyaltyPercent && (
+                                                <span
+                                                    className="rounded-full px-1.5 py-0.5 text-[10px] font-bold"
+                                                    style={{ color: tint, background: `color-mix(in srgb, ${tint} 16%, transparent)` }}
+                                                >
+                                                    وفاداری {plan.loyaltyPercent.toLocaleString('fa-IR')}٪
+                                                </span>
+                                            )}
+                                        </div>
+                                    ) : null}
+                                    {daily != null && (
+                                        <span
+                                            className="mt-2 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold"
+                                            style={{
+                                                color: tint,
+                                                borderColor: `color-mix(in srgb, ${tint} 35%, transparent)`,
+                                                background: `color-mix(in srgb, ${tint} 8%, transparent)`,
+                                            }}
+                                        >
+                                            <span>معادل</span>
+                                            <span className="tabular-nums">{daily.toLocaleString('fa-IR')}</span>
+                                            <span className="font-medium opacity-75">در روز</span>
                                         </span>
-                                        <span className="hidden md:inline-flex">
-                                            <PlanRibbonBadge
-                                                planId={selectedPlan.id}
-                                                name={selectedPlan.name}
-                                                color={tint}
-                                                size={132}
-                                                playKey={`${selectedPlan.id}-d`}
-                                            />
-                                        </span>
-                                        <p className="mt-1 hidden text-center md:block">
-                                            <span className="block text-4xl font-black tabular-nums leading-none text-[var(--text-primary)]">
-                                                {bill.pay.toLocaleString('fa-IR')}
-                                            </span>
-                                            <span className="mt-1 block text-[12px] font-bold text-[var(--text-muted)]">تومان</span>
-                                        </p>
-                                    </div>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
-                    </>
+                                    )}
+                                    <ul className="mt-4 w-full space-y-1.5 text-right">
+                                        {lines.map((line) => (
+                                            <li key={line} className="flex items-start gap-1.5 text-[11px] leading-5 text-[var(--text-secondary)]">
+                                                <Check size={12} className="mt-0.5 shrink-0" style={{ color: tint }} />
+                                                <span>{line}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </button>
+                            );
+                        })}
+                    </div>
                 )}
             </div>
         </ResponsiveModal>

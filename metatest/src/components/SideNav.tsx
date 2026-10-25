@@ -21,7 +21,7 @@ import {
 import type { View } from '../types';
 import { useUser } from '../context/UserContext';
 import PlanSelectionModal from './PlanSelectionModal';
-import { PlanRemainBar, PlanRibbonBadge } from './plan/PlanMarks';
+import { PlanDaysCircle, PlanStatusCard } from './plan/PlanMarks';
 import { MetNavIcon } from './met';
 import { avatarSrc } from '../lib/asset';
 
@@ -228,33 +228,29 @@ export const SideNav = ({ activeView, onNavigate, theme, isCollapsed, onLogout, 
                         <button
                             type="button"
                             onClick={() => setIsPlanModalOpen(true)}
-                            className="flex w-full flex-col items-center gap-1.5 border-0 bg-transparent p-0 pb-2"
-                            aria-label="اشتراک"
+                            className="border-0 bg-transparent p-0 shadow-none"
+                            aria-label={planDetails.label}
                         >
-                            <PlanRibbonBadge
-                                planId={currentPlanKey}
-                                name={planDetails.label}
+                            <PlanDaysCircle
+                                progress={unlimited ? 100 : progressPercentage}
+                                days={daysLeft}
+                                unlimited={unlimited}
                                 color={user?.plan_icon_primary || planDetails.hexColor}
-                                size={30}
-                                playKey={`rail-${currentPlanKey}`}
+                                size={46}
                             />
-                            <span className="w-full px-2">
-                                <PlanRemainBar progress={progressPercentage} days={daysLeft} unlimited={unlimited} compact />
-                            </span>
                         </button>
                     ) : null
                 ) : (
                     planActive ? (
-                        <div className="flex w-full items-center gap-3 px-1">
-                            <PlanRibbonBadge
-                                planId={currentPlanKey}
-                                name={planDetails.label}
-                                color={user?.plan_icon_primary || planDetails.hexColor}
-                                size={36}
-                                playKey={`nav-${currentPlanKey}`}
-                            />
-                            <PlanRemainBar progress={progressPercentage} days={daysLeft} unlimited={unlimited} />
-                        </div>
+                        <PlanStatusCard
+                            planId={currentPlanKey}
+                            name={user?.plan_name || planDetails.label}
+                            color={user?.plan_icon_primary || planDetails.hexColor}
+                            progress={unlimited ? 100 : progressPercentage}
+                            days={daysLeft}
+                            unlimited={unlimited}
+                            onClick={() => setIsPlanModalOpen(true)}
+                        />
                     ) : (
                         <button
                             type="button"
