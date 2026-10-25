@@ -363,6 +363,7 @@ export function ChatScreen({
                                         busy={chat.busy}
                                         onSpeak={onSpeak}
                                         onRegenerate={(id) => void chat.regenerate(id)}
+                                        onContinue={m.truncated && m.id === chat.lastAssistantId ? (id) => void chat.continueReply(id) : undefined}
                                         onRetry={retry}
                                         onChatAction={onChatAction}
                                     />

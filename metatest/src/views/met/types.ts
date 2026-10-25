@@ -244,6 +244,7 @@ export type ChatStreamEvent =
     | { event: 'user_message'; data: MetMessage }
     | { event: 'assistant_start'; data: { conversationId: number } }
     | { event: 'delta'; data: { text: string } }
+    | { event: 'revise'; data: { text: string } }
     | { event: 'tool'; data: { name: string; status: 'running' | 'done' | 'error' } }
     | { event: 'attachment'; data: MetAttachment }
     | {

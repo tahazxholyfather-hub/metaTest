@@ -137,7 +137,7 @@ async function deleteConversation(db, userId, conversationId) {
 }
 
 const MESSAGE_COLUMNS = `id, conversation_id, role, content, input_tokens, output_tokens, total_tokens,
-        coin_cost, model, is_starter, attachments, status, latency_ms, regenerated_from, created_at`;
+        coin_cost, model, is_starter, attachments, status, latency_ms, regenerated_from, finish_reason, created_at`;
 
 /** Replies that were regenerated stay in the DB for audit but are hidden from the transcript. */
 const NOT_SUPERSEDED = `AND id NOT IN (
@@ -172,7 +172,7 @@ async function getRecentMessages(db, conversationId, limit = CONTEXT_LIMITS.rece
 async function getMessageForUser(db, messageId, userId) {
     const [[row]] = await db.query(
         `SELECT m.id, m.conversation_id, m.role, m.content, m.input_tokens, m.output_tokens, m.total_tokens,
-                m.coin_cost, m.model, m.is_starter, m.attachments, m.status, m.latency_ms, m.regenerated_from, m.created_at,
+                m.coin_cost, m.model, m.is_starter, m.attachments, m.status, m.latency_ms, m.regenerated_from, m.finish_reason, m.created_at,
                 c.user_id, c.subject_key AS conversation_subject
          FROM tam24_ai_messages m JOIN tam24_ai_conversations c ON c.id = m.conversation_id
          WHERE m.id = ? AND c.user_id = ? AND c.archived_at IS NULL LIMIT 1`,

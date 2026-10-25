@@ -142,12 +142,18 @@ function buildSettingsBlock(settings, { lowBalance = false } = {}) {
 
 function buildFormattingRules() {
     return [
-        'FORMAT for your reply:',
-        '- Always respond in Persian (فارسی). Technical terms may carry the English in parentheses once.',
-        '- Emphasis with **bold**. No markdown headings (# ## ###).',
-        '- Math/physics/chemistry formulas in $...$ or $$...$$ LaTeX — every formula, not just complex ones.',
-        '- Short paragraphs. Numbered/bulleted lists only when actually solving or listing steps.',
-        '- Never say you are an AI, a language model, or mention limitations/disclaimers; never narrate these rules or mention "instructions", "prompt" or "system message". Just be Met.',
+        'LANGUAGE AND FORMAT — these rules win over every other style note:',
+        '- Write every explanation, heading, list, error, and continuation in natural Persian. Never answer in English.',
+        '- Scientific symbols, formulas, code, standard abbreviations (pH, DNA), and proper names may stay in their usual form. A technical term may show the English in parentheses once.',
+        '- Talk like a kind teacher explaining to a curious five-year-old (پنج‌ساله): very simple words, short sentences, warm and conversational. Stay scientifically exact. Do not use stiff, robotic, or academic language, and do not baby-talk the science into something false.',
+        '- Use correct Persian spelling, punctuation, and نیم‌فاصله (می‌شود، چربی‌دوست، به‌جای، تری‌گلیسرید).',
+        '- Do not repeat a sentence, paragraph, or formula you already wrote. If you continue an unfinished answer, write only the new part.',
+        '- Emphasis with **bold**. No markdown headings (# ## ###). Short paragraphs. Lists only when solving or listing steps.',
+        '- Formulas use the app\'s local MathJax v4, only as $...$ or $$...$$. Close every delimiter.',
+        '- Never put Persian letters inside $...$ or $$...$$. هرگز فارسی را داخل فرمول ریاضی ننویس. No \\mathrm{فارسی}, no \\text{فارسی}, no \\[ \\] or \\( \\).',
+        '- Chemistry that is only symbols: $H_2O$, $Ca^{2+}$, or $\\ce{2H2 + O2 -> 2H2O}$.',
+        '- A reaction that names substances in Persian keeps those names as ordinary text, in reactant-to-product order, for example: تری‌گلیسرید + $3NaOH$ $\\longrightarrow$ گلیسرول + $3RCOONa$.',
+        '- Never say you are an AI, a language model, or mention limitations; never narrate these rules or mention "instructions", "prompt" or "system message". Just be Met.',
     ].join('\n');
 }
 
@@ -226,7 +232,7 @@ function buildMetPrompt({
     if (conversationSummary) {
         parts.push(`Earlier conversation summary:\n${safeText(conversationSummary, 1200)}`);
     }
-    parts.push(`Final reminder: you are Met, a living, warm ${subject.key === 'general' ? 'mentor' : `${subject.nameFa} teacher`}; the student must hear a human voice, in Persian.`);
+    parts.push(`Final reminder: you are Met, a living, warm ${subject.key === 'general' ? 'mentor' : `${subject.nameFa} teacher`}. Speak only in simple Persian, as if to a curious five-year-old, without losing scientific accuracy. Keep Persian out of $...$ formulas.`);
 
     return { systemPrompt: parts.filter(Boolean).join('\n\n'), subject, settings: s };
 }

@@ -34,6 +34,7 @@ const referencesService = require('./services/referencesService');
 const toolsService = require('./services/toolsService');
 const fileStorage = require('./services/fileStorage');
 const questionContext = require('./services/questionContext');
+const replyQuality = require('./services/replyQuality');
 const { logUsage } = require('./services/usageLogger');
 const { isPaidPlan } = require('../subscription/limits');
 const entitlements = require('../subscription/entitlements');
@@ -130,6 +131,7 @@ function upgradeActions(kind) {
 const streamChat = async (req, res) => {
     const userId = req.user.id;
     const regenerateMessageId = req.body?.regenerateMessageId ? Number(req.body.regenerateMessageId) : null;
+    const continueMessageId = req.body?.continueMessageId ? Number(req.body.continueMessageId) : null;
     let message = String(req.body?.message || '').trim();
     let conversationId = req.body?.conversationId ? Number(req.body.conversationId) : null;
     const requestedSubject = req.body?.subjectKey ? String(req.body.subjectKey).toLowerCase() : null;
@@ -137,7 +139,10 @@ const streamChat = async (req, res) => {
     const requestQuestionId = req.body?.questionId ? Number(req.body.questionId) : null;
     const intentKey = req.body?.intent ? String(req.body.intent) : null;
 
-    if (!regenerateMessageId && !message && !(Array.isArray(req.body?.attachments) && req.body.attachments.length)) {
+    if (continueMessageId && regenerateMessageId) {
+        return res.status(400).json({ success: false, code: 'BAD_REQUEST', message: 'ادامه و ساخت دوباره را با هم نمی‌شود خواست.' });
+    }
+    if (!regenerateMessageId && !continueMessageId && !message && !(Array.isArray(req.body?.attachments) && req.body.attachments.length)) {
         return res.status(400).json({ success: false, code: 'EMPTY_MESSAGE', message: 'پیام نمی‌تواند خالی باشد.' });
     }
     if (message.length > CONTEXT_LIMITS.maxUserMessageChars) {
@@ -203,10 +208,24 @@ const streamChat = async (req, res) => {
             await db.query(`UPDATE tam24_users SET ai_last_subject = ? WHERE id = ?`, [subjectKey, userId]);
         }
 
-        // ── Regenerate: reuse the original user turn ────────────────────────
+        // ── Regenerate or continue: reuse the stored turn ──────────────────
         let attachments = [];
         let previousAssistant = null;
-        if (regenerateMessageId) {
+        let continueRow = null;
+        if (continueMessageId) {
+            continueRow = await conversationService.getMessageForUser(db, continueMessageId, userId);
+            if (!continueRow || continueRow.role !== 'assistant' || continueRow.conversation_id !== conversationId) {
+                throw Object.assign(new Error('message not found'), { code: 'MESSAGE_NOT_FOUND' });
+            }
+            if (!replyQuality.isContinuableFinish(continueRow.finish_reason, continueRow.content, continueRow.status)) {
+                throw Object.assign(new Error('not truncated'), { code: 'NOT_TRUNCATED' });
+            }
+            const [[newer]] = await db.query(
+                `SELECT id FROM tam24_ai_messages WHERE conversation_id = ? AND id > ? AND status <> 'error' LIMIT 1`,
+                [conversationId, continueRow.id]
+            );
+            if (newer) throw Object.assign(new Error('not the latest reply'), { code: 'NOT_LAST_MESSAGE' });
+        } else if (regenerateMessageId) {
             previousAssistant = await conversationService.getMessageForUser(db, regenerateMessageId, userId);
             if (!previousAssistant || previousAssistant.role !== 'assistant' || previousAssistant.conversation_id !== conversationId) {
                 throw Object.assign(new Error('message not found'), { code: 'MESSAGE_NOT_FOUND' });
@@ -244,6 +263,10 @@ const streamChat = async (req, res) => {
         const maxEst = pricing.estimateMaxCoins({ model, maxOutputTokens: maxTokens, allowImage: featureStatus().imageGeneration });
         const walletView = walletFromBuckets(wallet, coinPlan);
 
+        if (!wallet.unlimited && wallet.total < COIN_PRICING.minBalanceToStart && continueMessageId) {
+            throw Object.assign(new Error('insufficient coins'), { code: 'INSUFFICIENT_COINS', balance: wallet.total });
+        }
+
         if (!wallet.unlimited && wallet.total < COIN_PRICING.minBalanceToStart) {
             const text = paid
                 ? 'موجودی سکه کافی نیست. یک بسته سکه بگیرید، یا تا شارژ فردا صبر کنید.'
@@ -257,7 +280,7 @@ const streamChat = async (req, res) => {
             return out.end();
         }
 
-        if (quizCtx && !paid) {
+        if (quizCtx && !paid && !continueMessageId) {
             const askGate = await entitlements.consumeAskMet(null, {
                 userId,
                 subjectKey: quizCtx.subjectKey,
@@ -298,7 +321,7 @@ const streamChat = async (req, res) => {
         const isFirstExchange = Number(conversation.message_count || 0) === 0;
 
         // ── Persist the user turn ───────────────────────────────────────────
-        if (!regenerateMessageId) {
+        if (!regenerateMessageId && !continueMessageId) {
             const [ins] = await db.query(
                 `INSERT INTO tam24_ai_messages (conversation_id, role, content, attachments, subject_key) VALUES (?, 'user', ?, ?, ?)`,
                 [conversationId, message, attachments.length ? JSON.stringify(stripTransient(attachments)) : null, subjectKey]
@@ -312,15 +335,23 @@ const streamChat = async (req, res) => {
 
         // ── Context ─────────────────────────────────────────────────────────
         const f = featureStatus();
+        let retrievalQuery = message;
+        if (continueRow && !retrievalQuery) {
+            const priorUser = await conversationService.getUserTurnBefore(db, conversationId, continueRow.id);
+            retrievalQuery = String(priorUser?.content || continueRow.content || '').slice(0, 500);
+        }
         const [memories, summary, recent, ragContext, knowledgeContext, referenceContext] = await Promise.all([
             f.memory && settings.memoryEnabled ? memoryService.getActiveMemories(db, userId, CONTEXT_LIMITS.maxMemoryItems, { subjectKey }).catch(() => []) : [],
             memoryService.maybeSummarizeConversation(db, conversation, { userId }).catch(() => conversation.summary || null),
             conversationService.getRecentMessages(db, conversationId, CONTEXT_LIMITS.recentMessages),
-            subjectKey !== 'general' ? ragService.retrieveContext(db, { subjectKey, queryText: message }).catch(() => null) : null,
-            f.knowledgeBase && settings.knowledgeEnabled ? knowledgeService.retrieveKnowledge(db, { subjectKey, queryText: message }).catch(() => null) : null,
-            f.pdfReferences && settings.pdfReferencesEnabled ? referencesService.retrieveReferenceContext(db, { conversationId, queryText: message }).catch(() => null) : null,
+            subjectKey !== 'general' ? ragService.retrieveContext(db, { subjectKey, queryText: retrievalQuery }).catch(() => null) : null,
+            f.knowledgeBase && settings.knowledgeEnabled ? knowledgeService.retrieveKnowledge(db, { subjectKey, queryText: retrievalQuery }).catch(() => null) : null,
+            f.pdfReferences && settings.pdfReferencesEnabled ? referencesService.retrieveReferenceContext(db, { conversationId, queryText: retrievalQuery }).catch(() => null) : null,
         ]);
         const recentWithoutCurrent = recent.filter((m) => m.id !== userMessageId && m.id !== regenerateMessageId);
+        const historyForPrompt = continueRow
+            ? recentWithoutCurrent.map((m) => (m.id === continueRow.id ? { ...m, content: replyQuality.rewindForPrompt(m.content) } : m))
+            : recentWithoutCurrent;
 
         const { systemPrompt } = promptBuilder.buildMetPrompt({
             subjectKey, subjectRow, user, memories, settings, conversationSummary: summary,
@@ -328,8 +359,11 @@ const streamChat = async (req, res) => {
             questionContext: quizCtx ? { questionId: quizCtx.questionId, promptText: questionContext.formatForPrompt(quizCtx) } : null,
             hasImageAttachment, hasAudioTranscript: inputMode === 'voice', lowBalance,
         });
+        const turnUserText = continueRow
+            ? replyQuality.continuationInstruction(String(continueRow.content || '').slice(-180))
+            : providerUserText;
         let providerMessages = promptBuilder.toProviderMessages({
-            systemPrompt, recentMessages: recentWithoutCurrent, currentUserMessage: providerUserText, currentAttachments: attachments,
+            systemPrompt, recentMessages: historyForPrompt, currentUserMessage: turnUserText, currentAttachments: continueRow ? [] : attachments,
         });
 
         // ── Optional tool round ─────────────────────────────────────────────
@@ -337,7 +371,7 @@ const streamChat = async (req, res) => {
         const toolCallLog = [];
         let toolCoinSurcharge = 0;
         let retrievedQuestionIds = [];
-        const wantsTools = f.tools && !hasImageAttachment
+        const wantsTools = !continueMessageId && f.tools && !hasImageAttachment
             && (DATA_TOOL_TRIGGERS.test(message) || QUESTION_TOOL_TRIGGERS.test(message) || (f.imageGeneration && IMAGE_TOOL_TRIGGERS.test(message)));
 
         if (wantsTools) {
@@ -380,65 +414,104 @@ const streamChat = async (req, res) => {
         out.send('assistant_start', { conversationId });
 
         const startedAt = Date.now();
-        let fullText = '';
+        const priorText = continueRow ? String(continueRow.content || '') : '';
+        let fullText = priorText;
+        let sentText = priorText;
         let usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, cachedTokens: 0 };
         let usedModel = model;
         let stopped = false;
+        let userAborted = false;
         let finishReason = null;
-        let truncated = false;
         generating = true;
 
-        const consumeStream = async (messages, tokenBudget) => {
+        const absorbUsage = (chunk) => {
+            if (!chunk.usage) return;
+            usage = {
+                inputTokens: (usage.inputTokens || 0) + (chunk.usage.inputTokens || 0),
+                outputTokens: (usage.outputTokens || 0) + (chunk.usage.outputTokens || 0),
+                totalTokens: (usage.totalTokens || 0) + (chunk.usage.totalTokens || 0),
+                cachedTokens: (usage.cachedTokens || 0) + (chunk.usage.cachedTokens || 0),
+            };
+            usedModel = chunk.model || usedModel;
+            stopped = stopped || !!chunk.stopped;
+            finishReason = chunk.finishReason || finishReason;
+        };
+
+        /** @returns {Promise<string>} text produced by this provider call only */
+        const readProvider = async (messages, tokenBudget, { emit }) => {
+            let local = '';
             for await (const chunk of aiProvider.stream({
                 messages, model, maxTokens: tokenBudget, temperature: promptBuilder.resolveTemperature(settings), signal: abort.signal,
             })) {
                 if (chunk.type === 'delta') {
-                    fullText += chunk.text;
-                    out.send('delta', { text: chunk.text });
+                    local += chunk.text;
+                    if (emit) {
+                        fullText += chunk.text;
+                        sentText = fullText;
+                        out.send('delta', { text: chunk.text });
+                    }
                 } else if (chunk.type === 'done') {
-                    if (chunk.content && chunk.content.length > fullText.length) {
-                        const extra = chunk.content.slice(fullText.length);
-                        if (extra) { fullText = chunk.content; out.send('delta', { text: extra }); }
+                    if (chunk.content && chunk.content.length > local.length) {
+                        const extra = chunk.content.slice(local.length);
+                        local = chunk.content;
+                        if (emit && extra) {
+                            fullText += extra;
+                            sentText = fullText;
+                            out.send('delta', { text: extra });
+                        }
                     }
-                    if (chunk.usage) {
-                        usage = {
-                            inputTokens: (usage.inputTokens || 0) + (chunk.usage.inputTokens || 0),
-                            outputTokens: (usage.outputTokens || 0) + (chunk.usage.outputTokens || 0),
-                            totalTokens: (usage.totalTokens || 0) + (chunk.usage.totalTokens || 0),
-                            cachedTokens: (usage.cachedTokens || 0) + (chunk.usage.cachedTokens || 0),
-                        };
-                    }
-                    usedModel = chunk.model || model;
-                    stopped = stopped || !!chunk.stopped;
-                    finishReason = chunk.finishReason || finishReason;
+                    absorbUsage(chunk);
                 }
             }
+            return local;
+        };
+
+        const resumeFrom = async (messages) => {
+            const beforeReason = finishReason;
+            const addition = await readProvider(messages, maxTokens, { emit: false });
+            if (!addition.trim()) {
+                finishReason = beforeReason || finishReason;
+                return;
+            }
+            fullText = replyQuality.stitchContinuation(fullText, addition);
         };
 
         try {
-            await consumeStream(providerMessages, maxTokens);
-            if (finishReason === 'length' && !stopped && fullText.trim()) {
-                truncated = true;
-                await consumeStream(
-                    [
+            if (!continueRow) await readProvider(providerMessages, maxTokens, { emit: true });
+            const cutByLimit = finishReason === 'length' && !stopped && fullText.trim();
+            if (continueRow || cutByLimit) {
+                const messages = continueRow
+                    ? providerMessages
+                    : [
                         ...providerMessages,
-                        { role: 'assistant', content: fullText },
-                        { role: 'user', content: 'از همان‌جا ادامه بده. چیزی را تکرار نکن و پاسخ را کامل کن.' },
-                    ],
-                    Math.min(maxTokens, 800)
-                );
-                if (finishReason !== 'length') truncated = false;
+                        { role: 'assistant', content: replyQuality.rewindForPrompt(fullText) },
+                        { role: 'user', content: replyQuality.continuationInstruction(fullText.slice(-180)) },
+                    ];
+                await resumeFrom(messages);
             }
         } catch (err) {
             if ((err.code === 'AI_STOPPED' || err.code === 'AI_TIMEOUT') && !fullText.trim()) throw err;
             if (err.code === 'AI_STOPPED' || err.code === 'AI_TIMEOUT') {
                 stopped = true;
-                finishReason = finishReason || (err.code === 'AI_TIMEOUT' ? 'timeout' : 'stop');
+                if (err.code === 'AI_STOPPED') userAborted = true;
+                finishReason = err.code === 'AI_TIMEOUT' ? 'timeout' : (finishReason || 'stop');
             } else throw err;
         } finally {
             generating = false;
         }
+        fullText = replyQuality.collapseRepeatedParagraphs(replyQuality.normalizeAssistantText(fullText));
+        if (fullText !== sentText) {
+            if (sentText && fullText.startsWith(sentText)) out.send('delta', { text: fullText.slice(sentText.length) });
+            else out.send('revise', { text: fullText });
+        }
         if (stopped && !usage.totalTokens) usage = aiProvider.estimateUsage(providerMessages, fullText);
+        const assessment = replyQuality.assessReply(fullText, finishReason, {
+            outputTokens: usage.outputTokens,
+            maxTokens,
+            userStopped: userAborted && finishReason !== 'length' && finishReason !== 'timeout',
+        });
+        const storedReason = replyQuality.storedFinishReason(assessment);
+        const truncated = assessment.incomplete;
 
         if (!String(fullText).trim() && !collectedAttachments.length) {
             throw Object.assign(new Error('empty response'), { code: 'EMPTY_RESPONSE' });
@@ -453,30 +526,61 @@ const streamChat = async (req, res) => {
         conn = await db.getConnection();
         await conn.beginTransaction();
 
-        const [assistantIns] = await conn.query(
-            `INSERT INTO tam24_ai_messages
-             (conversation_id, role, content, input_tokens, output_tokens, cached_tokens, total_tokens, coin_cost, cost_usd, cost_irr, exchange_rate_irr,
-              model, attachments, subject_key, status, latency_ms, regenerated_from, finish_reason)
-             VALUES (?, 'assistant', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-                conversationId, fullText, usage.inputTokens, usage.outputTokens, usage.cachedTokens || 0, usage.totalTokens, quote.coins,
-                quote.usd, quote.irr, quote.exchangeRateIrr, usedModel,
-                collectedAttachments.length ? JSON.stringify(collectedAttachments) : null, subjectKey,
-                stopped ? 'stopped' : 'complete', durationMs, regenerateMessageId || null,
-                finishReason || (truncated ? 'length' : null),
-            ]
-        );
-        const assistantMsgId = assistantIns.insertId;
+        const messageStatus = stopped ? 'stopped' : 'complete';
+        const prevCoins = continueRow ? Number(continueRow.coin_cost || 0) : 0;
+        let assistantMsgId;
+        if (continueRow) {
+            assistantMsgId = continueRow.id;
+            await conn.query(
+                `UPDATE tam24_ai_messages
+                    SET content = ?,
+                        input_tokens = input_tokens + ?,
+                        output_tokens = output_tokens + ?,
+                        cached_tokens = COALESCE(cached_tokens, 0) + ?,
+                        total_tokens = total_tokens + ?,
+                        coin_cost = coin_cost + ?,
+                        cost_usd = COALESCE(cost_usd, 0) + ?,
+                        cost_irr = COALESCE(cost_irr, 0) + ?,
+                        exchange_rate_irr = ?,
+                        model = ?,
+                        status = ?,
+                        latency_ms = ?,
+                        finish_reason = ?
+                  WHERE id = ?`,
+                [
+                    fullText, usage.inputTokens, usage.outputTokens, usage.cachedTokens || 0, usage.totalTokens, quote.coins,
+                    quote.usd, quote.irr, quote.exchangeRateIrr, usedModel, messageStatus, durationMs, storedReason, assistantMsgId,
+                ]
+            );
+        } else {
+            const [assistantIns] = await conn.query(
+                `INSERT INTO tam24_ai_messages
+                 (conversation_id, role, content, input_tokens, output_tokens, cached_tokens, total_tokens, coin_cost, cost_usd, cost_irr, exchange_rate_irr,
+                  model, attachments, subject_key, status, latency_ms, regenerated_from, finish_reason)
+                 VALUES (?, 'assistant', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    conversationId, fullText, usage.inputTokens, usage.outputTokens, usage.cachedTokens || 0, usage.totalTokens, quote.coins,
+                    quote.usd, quote.irr, quote.exchangeRateIrr, usedModel,
+                    collectedAttachments.length ? JSON.stringify(collectedAttachments) : null, subjectKey,
+                    messageStatus, durationMs, regenerateMessageId || null, storedReason,
+                ]
+            );
+            assistantMsgId = assistantIns.insertId;
+        }
 
         const charge = await coinWallet.finalizeCharge(conn, userId, {
             reserved: reservation.reserved, reservedDaily: reservation.reservedDaily, reservedPurchased: reservation.reservedPurchased,
             finalCost: quote.coins, referenceId: reservationRef, operationType: 'chat', conversationId, messageId: assistantMsgId,
-            metadata: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, model: usedModel, usd: quote.usd, stopped },
+            metadata: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, model: usedModel, usd: quote.usd, stopped, continued: !!continueRow },
         });
         reservation = null;
 
-        await conn.query(`UPDATE tam24_ai_messages SET coin_cost = ? WHERE id = ?`, [charge.charged, assistantMsgId]);
-        await conversationService.touchConversation(conn, conversationId, { messagesAdded: regenerateMessageId ? 1 : 2, tokens: usage.totalTokens });
+        const shownCoins = prevCoins + charge.charged;
+        await conn.query(`UPDATE tam24_ai_messages SET coin_cost = ? WHERE id = ?`, [shownCoins, assistantMsgId]);
+        await conversationService.touchConversation(conn, conversationId, {
+            messagesAdded: continueRow ? 0 : regenerateMessageId ? 1 : 2,
+            tokens: usage.totalTokens,
+        });
         if (collectedAttachments.length) {
             await fileStorage.attachFileToMessage(conn, collectedAttachments.map((a) => a.fileId).filter(Boolean), { conversationId, messageId: assistantMsgId });
         }
@@ -500,12 +604,23 @@ const streamChat = async (req, res) => {
         }
 
         const walletAfter = walletFromBuckets(charge.wallet, coinPlan);
+        const shownTokens = {
+            inputTokens: (continueRow ? Number(continueRow.input_tokens || 0) : 0) + usage.inputTokens,
+            outputTokens: (continueRow ? Number(continueRow.output_tokens || 0) : 0) + usage.outputTokens,
+            totalTokens: (continueRow ? Number(continueRow.total_tokens || 0) : 0) + usage.totalTokens,
+        };
+        const keptAttachments = continueRow
+            ? (continueRow.attachments || []).filter((item) => item && item.type !== 'ui_actions')
+            : collectedAttachments;
         out.send('done', {
             message: {
-                id: assistantMsgId, conversationId, role: 'assistant', content: fullText, coinCost: charge.charged,
-                inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, totalTokens: usage.totalTokens, model: usedModel,
-                attachments: collectedAttachments, status: stopped ? 'stopped' : 'complete', latencyMs: durationMs,
-                regeneratedFrom: regenerateMessageId || null, createdAt: new Date().toISOString(),
+                id: assistantMsgId, conversationId, role: 'assistant', content: fullText, coinCost: shownCoins,
+                ...shownTokens, model: usedModel,
+                attachments: keptAttachments, status: messageStatus, latencyMs: durationMs,
+                regeneratedFrom: regenerateMessageId || null,
+                createdAt: continueRow?.created_at ? new Date(continueRow.created_at).toISOString() : new Date().toISOString(),
+                finishReason: storedReason,
+                truncated,
             },
             wallet: walletAfter,
             charged: charge.charged,
@@ -514,14 +629,14 @@ const streamChat = async (req, res) => {
             durationMs,
             stopped,
             truncated,
-            finishReason,
+            finishReason: storedReason,
         });
         out.send('status', { status: 'ready' });
 
         // Title and memory run after the answer is already delivered. A failure
         // here must not turn a finished reply into the rose error bubble.
         try {
-            if (!stopped) {
+            if (!stopped && !continueRow) {
                 await memoryService.maybeUpdateMemory(db, {
                     userId, conversationId, messageCount: (conversation.message_count || 0) + 2, userMessage: message, assistantMessage: fullText,
                     subjectKey, sourceMessageId: assistantMsgId, enabled: settings.memoryEnabled,

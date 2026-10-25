@@ -194,6 +194,7 @@ export const metApi = {
             message: string;
             attachments?: { fileId: number }[];
             regenerateMessageId?: number | null;
+            continueMessageId?: number | null;
             inputMode?: 'text' | 'voice';
             questionId?: number | null;
             intent?: string | null;

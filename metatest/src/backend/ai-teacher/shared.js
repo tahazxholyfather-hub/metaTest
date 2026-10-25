@@ -7,6 +7,7 @@ const { SUBJECT_LIST } = require('./subjects');
 const coinWallet = require('./services/coinWallet');
 const conversationService = require('./services/conversationService');
 const promptBuilder = require('./services/promptBuilder');
+const replyQuality = require('./services/replyQuality');
 
 /** Shared shaping + loaders used by both controllers. */
 
@@ -27,6 +28,8 @@ function publicMessage(row) {
         attachments,
         actions: Array.isArray(carrier?.actions) ? carrier.actions : [],
         status: row.status || 'complete',
+        finishReason: row.finish_reason || null,
+        truncated: replyQuality.isContinuableFinish(row.finish_reason, row.content, row.status),
         latencyMs: row.latency_ms ?? null,
         regeneratedFrom: row.regenerated_from ?? null,
         createdAt: row.created_at,
@@ -220,6 +223,9 @@ function userMessageForError(code, fallback = 'در پردازش درخواست 
         case 'PDF_NO_TEXT': return 'متنی از این PDF استخراج نشد (احتمالاً اسکن تصویری است).';
         case 'NOT_FOUND': return 'موردی یافت نشد.';
         case 'QUESTION_NOT_ANSWERED': return 'اول پاسخ این سوال را ثبت کن، بعد از مِت بپرس.';
+        case 'NOT_TRUNCATED': return 'این پاسخ کامل است و ادامه‌ای ندارد.';
+        case 'NOT_LAST_MESSAGE': return 'فقط آخرین پاسخ را می‌شود ادامه داد.';
+        case 'MESSAGE_NOT_FOUND': return 'این پیام پیدا نشد.';
         default: return fallback;
     }
 }

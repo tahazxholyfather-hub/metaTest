@@ -20,6 +20,7 @@ type Props = {
     /** Resolve (and bill once) the spoken version of this message; returns the audio URL. */
     onSpeak?: (messageId: number) => Promise<string | null>;
     onRegenerate?: (messageId: number) => void;
+    onContinue?: (messageId: number) => void;
     onRetry?: (message: MetMessage) => void;
     onChatAction?: (action: string) => void;
 };
@@ -83,6 +84,7 @@ export function Message({
     busy = false,
     onSpeak,
     onRegenerate,
+    onContinue,
     onRetry,
     onChatAction,
 }: Props) {
@@ -175,8 +177,7 @@ export function Message({
                 {isGroupStart && (
                     <div className="flex items-center gap-2 mb-1 justify-end pr-1" dir="rtl">
                         <span className="text-[11px] font-extrabold text-[var(--text-secondary)]">مِت</span>
-                        {message.status === 'stopped' && <span className="text-[10px] text-[var(--text-muted)]">· متوقف شد</span>}
-                        {message.truncated && message.status !== 'stopped' && <span className="text-[10px] text-[var(--text-muted)]">· پاسخ طولانی بود و ادامه داده شد</span>}
+                        {message.status === 'stopped' && !message.truncated && <span className="text-[10px] text-[var(--text-muted)]">· متوقف شد</span>}
                     </div>
                 )}
 
@@ -223,6 +224,19 @@ export function Message({
                                 </div>
                             )}
                             <AttachmentGallery attachments={message.attachments} align="end" />
+                            {message.truncated && !message.streaming && persisted && onContinue && (
+                                <div className="mt-3 flex items-center justify-between gap-3 border-t border-[var(--border)]/70 pt-2.5" dir="rtl">
+                                    <p className="m-0 text-[12.5px] leading-relaxed text-[var(--text-secondary)]">این پاسخ ناتمام ماند.</p>
+                                    <button
+                                        type="button"
+                                        disabled={busy}
+                                        onClick={() => onContinue(numericId)}
+                                        className="h-8 shrink-0 rounded-full bg-[var(--accent)] px-3.5 text-[12.5px] font-extrabold text-white disabled:opacity-50"
+                                    >
+                                        ادامه
+                                    </button>
+                                </div>
+                            )}
                             {empty && (
                                 <p className="flex items-center gap-1.5 text-[12px] text-[var(--text-muted)] m-0">
                                     <ImageOff size={13} /> پاسخی دریافت نشد.

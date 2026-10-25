@@ -61,7 +61,8 @@ export function useMetChat({ subjectKey, onWallet, onConversationChange, onStatu
     const [draftRestore, setDraftRestore] = useState<string | null>(null);
 
     const abortRef = useRef<AbortController | null>(null);
-    const streamingIdRef = useRef<string | null>(null);
+    const streamingIdRef = useRef<string | number | null>(null);
+    const continueTargetRef = useRef<number | null>(null);
     const successTimer = useRef<number | null>(null);
     const conversationRef = useRef<MetConversation | null>(null);
     conversationRef.current = conversation;
@@ -198,9 +199,23 @@ export function useMetChat({ subjectKey, onWallet, onConversationChange, onStatu
                         break;
                     case 'assistant_start': {
                         // Wait for the first delta so we never flash an empty bubble
-                        // next to the typing indicator.
-                        streamingIdRef.current = null;
+                        // next to the typing indicator. A continuation keeps the same bubble.
+                        streamingIdRef.current = continueTargetRef.current;
                         setStatusSafe('generating');
+                        break;
+                    }
+                    case 'revise': {
+                        const text = ev.data.text;
+                        if (!streamingIdRef.current) {
+                            const id = continueTargetRef.current ?? tempId('a');
+                            streamingIdRef.current = id;
+                            setMessages((prev) => {
+                                if (prev.some((m) => m.id === id)) return prev.map((m) => (m.id === id ? { ...m, content: text, streaming: true } : m));
+                                return [...prev, { id, role: 'assistant', content: text, attachments: [], status: 'streaming', streaming: true, createdAt: new Date().toISOString() }];
+                            });
+                        } else {
+                            patchStreaming((m) => ({ ...m, content: text, streaming: true }));
+                        }
                         break;
                     }
                     case 'delta': {
@@ -233,7 +248,10 @@ export function useMetChat({ subjectKey, onWallet, onConversationChange, onStatu
                         });
                         onWallet(ev.data.wallet);
                         const c = conversationRef.current;
-                        if (c) setConversationBoth({ ...c, messageCount: (c.messageCount || 0) + (payload.regenerateMessageId ? 1 : 2), lastMessageAt: new Date().toISOString() });
+                        if (c) {
+                            const added = payload.continueMessageId ? 0 : payload.regenerateMessageId ? 1 : 2;
+                            setConversationBoth({ ...c, messageCount: (c.messageCount || 0) + added, lastMessageAt: new Date().toISOString() });
+                        }
                         setToolLabel(null);
                         flashSuccess();
                         break;
@@ -246,9 +264,17 @@ export function useMetChat({ subjectKey, onWallet, onConversationChange, onStatu
                     case 'error': {
                         if (gotDone) break;
                         const sid = streamingIdRef.current;
+                        const continuingId = continueTargetRef.current;
                         streamingIdRef.current = null;
                         setToolLabel(null);
                         if (ev.data.wallet) onWallet(ev.data.wallet);
+                        if (continuingId != null) {
+                            setMessages((prev) => prev.map((m) => (m.id === continuingId ? { ...m, streaming: false, truncated: true } : m)));
+                            toast.error(ev.data.message);
+                            setStatusSafe('error');
+                            window.setTimeout(() => setStatusSafe('ready'), 1600);
+                            break;
+                        }
 
                         const persisted = ev.data.userMessageId || userPersistedId;
                         if (ev.data.code === 'AI_STOPPED') {
@@ -283,7 +309,12 @@ export function useMetChat({ subjectKey, onWallet, onConversationChange, onStatu
                 await metApi.streamChat(payload, handle, controller.signal);
                 if (!gotDone && streamingIdRef.current) {
                     // Connection ended mid-stream without a `done` frame.
-                    patchStreaming((m) => ({ ...m, streaming: false, status: 'stopped' }));
+                    if (continueTargetRef.current != null) {
+                        const id = continueTargetRef.current;
+                        setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, streaming: false, truncated: true } : m)));
+                    } else {
+                        patchStreaming((m) => ({ ...m, streaming: false, status: 'stopped' }));
+                    }
                     streamingIdRef.current = null;
                 }
                 if (!gotDone) setStatusSafe('ready');
@@ -294,11 +325,25 @@ export function useMetChat({ subjectKey, onWallet, onConversationChange, onStatu
                 }
                 if (controller.signal.aborted) {
                     // User stopped locally; keep whatever streamed so far.
-                    patchStreaming((m) => ({ ...m, streaming: false, status: 'stopped' }));
+                    if (continueTargetRef.current != null) {
+                        const id = continueTargetRef.current;
+                        setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, streaming: false, truncated: true } : m)));
+                    } else {
+                        patchStreaming((m) => ({ ...m, streaming: false, status: 'stopped' }));
+                    }
                     streamingIdRef.current = null;
                     setStatusSafe('ready');
                     // The server settles the partial reply after our socket closes; pick up the real balance.
                     window.setTimeout(() => metApi.wallet().then(onWallet).catch(() => {}), 1500);
+                    return;
+                }
+                if (continueTargetRef.current != null) {
+                    const id = continueTargetRef.current;
+                    setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, streaming: false, truncated: true } : m)));
+                    streamingIdRef.current = null;
+                    toast.error(err instanceof MetApiError ? err.message : errorMessage(err, 'ادامهٔ پاسخ انجام نشد.'));
+                    setStatusSafe('error');
+                    window.setTimeout(() => setStatusSafe('ready'), 1600);
                     return;
                 }
                 const apiErr = err instanceof MetApiError ? err : null;
@@ -370,6 +415,27 @@ export function useMetChat({ subjectKey, onWallet, onConversationChange, onStatu
         [busy, questionId, runTurn]
     );
 
+    const continueReply = useCallback(
+        async (assistantMessageId: number) => {
+            const c = conversationRef.current;
+            if (!c || busy || !assistantMessageId) return;
+            continueTargetRef.current = assistantMessageId;
+            streamingIdRef.current = assistantMessageId;
+            setMessages((prev) => prev.map((m) => (m.id === assistantMessageId ? { ...m, streaming: true, truncated: false } : m)));
+            try {
+                await runTurn({
+                    conversationId: c.id,
+                    message: '',
+                    continueMessageId: assistantMessageId,
+                    questionId: questionId || null,
+                }, null);
+            } finally {
+                continueTargetRef.current = null;
+            }
+        },
+        [busy, questionId, runTurn]
+    );
+
     const stop = useCallback(() => {
         abortRef.current?.abort();
     }, []);
@@ -408,6 +474,7 @@ export function useMetChat({ subjectKey, onWallet, onConversationChange, onStatu
         loadOlder,
         send,
         regenerate,
+        continueReply,
         stop,
         setConversation: setConversationBoth,
     };

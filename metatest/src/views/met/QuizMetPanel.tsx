@@ -262,6 +262,7 @@ export function QuizMetPanel({ open, onClose, questionId }: Props) {
                                         return r.url;
                                     }}
                                     onRegenerate={(id) => void chat.regenerate(id)}
+                                    onContinue={m.truncated && m.id === chat.lastAssistantId ? (id) => void chat.continueReply(id) : undefined}
                                     onRetry={() => void chat.regenerate(chat.lastAssistantId || 0)}
                                     onChatAction={(action) => {
                                         if (action === 'open_plans') setPlansOpen(true);

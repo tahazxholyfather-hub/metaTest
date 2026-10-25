@@ -1,6 +1,7 @@
 // src/components/MathRenderer.tsx
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { normalizeAssistantText } from '../../backend/ai-teacher/services/replyQuality.js';
 
 // =====================================================================
 // MathRenderer — self-contained MathJax v4 renderer (fully local/offline)
@@ -144,13 +145,19 @@ const isChemistrySubject = (subject?: number | string): boolean =>
  *   $H2O + CO2 -> H2CO3$  becomes  $\ce{H2O + CO2 -> H2CO3}$
  * Already-wrapped formulas are left untouched.
  */
+const shouldWrapCe = (formula: string) => !/\\/.test(formula) && !/[\u0600-\u06FF]/.test(formula);
+
 const formatChemistryText = (text: string): string => {
     if (!text) return '';
     let result = text;
-    // Display math $$...$$
-    result = result.replace(/\$\$(?!\s*\\ce\{)([\s\S]*?)\$\$/g, (_, formula) => `$$\\ce{${formula.trim()}}$$`);
+    // Display math $$...$$. Commands and Persian stay as written; mhchem only wraps plain formulas.
+    result = result.replace(/\$\$(?!\s*\\ce\{)([\s\S]*?)\$\$/g, (all, formula) => (
+        shouldWrapCe(formula) ? `$$\\ce{${formula.trim()}}$$` : all
+    ));
     // Inline math $...$
-    result = result.replace(/\$(?!\$|\s*\\ce\{)(.*?)\$/g, (_, formula) => `$\\ce{${formula.trim()}}$`);
+    result = result.replace(/\$(?!\$|\s*\\ce\{)(.*?)\$/g, (all, formula) => (
+        shouldWrapCe(formula) ? `$\\ce{${formula.trim()}}$` : all
+    ));
     return result;
 };
 
@@ -178,7 +185,8 @@ export const MathRenderer: React.FC<MathRendererProps> = ({
 
     const processedText = useMemo(() => {
         if (!text) return '';
-        return isChemistrySubject(subject) ? formatChemistryText(text) : text;
+        const normalized = normalizeAssistantText(text);
+        return isChemistrySubject(subject) ? formatChemistryText(normalized) : normalized;
     }, [text, subject]);
 
     useEffect(() => {
