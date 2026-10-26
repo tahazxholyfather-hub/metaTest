@@ -19,8 +19,7 @@ import {
     Trophy,
     ChevronLeft,
     ChevronRight,
-    UserX,
-    Loader2,
+    UserX
 } from 'lucide-react';
 import {
     PieChart,
@@ -43,11 +42,11 @@ import {
     StatCard,
     ScoreCard,
     LessonCircleCard,
+    QuestionSkeleton
 } from './SharedComponents';
-import { useUser } from '../../context/UserContext';
-import { avatarSrc } from '../../runtime';
 
 import MathRenderer from '../../components/ui/MathRenderer';
+import { avatarSrc } from '../../runtime';
 import { ResponsiveModal } from '../../components/ResponsiveModal';
 import { clsx } from 'clsx';
 import { flowApi } from '../../lib/authApi';
@@ -142,10 +141,14 @@ function MemberSlider({ members, activeMemberId, onSelectMember, loadingMemberId
                                             <div className="w-4 h-4 border-2 border-[var(--color-primary-500)] border-t-transparent rounded-full animate-spin" />
                                         </div>
                                     ) : (
-                                        <ResultAvatar
-                                            src={member.avatar}
-                                            name={member.name}
-                                            className="h-full w-full rounded-full object-cover"
+                                        <img
+                                            src={avatarSrc(member.avatar)}
+                                            alt={member.name}
+                                            onError={(event) => {
+                                                event.currentTarget.onerror = null;
+                                                event.currentTarget.src = avatarSrc(null);
+                                            }}
+                                            className="w-full h-full rounded-full object-cover bg-[var(--bg-card)] transition-all duration-300"
                                         />
                                     )}
                                 </div>
@@ -180,45 +183,151 @@ function MemberSlider({ members, activeMemberId, onSelectMember, loadingMemberId
     );
 }
 
-function ResultAvatar({ src, name, className }) {
-    const [failed, setFailed] = useState(false);
-    const resolved = failed ? avatarSrc(null) : avatarSrc(src);
-    const initial = String(name || 'م').trim().charAt(0);
-    if (!resolved) {
-        return (
-            <span className={cn('grid place-items-center bg-[var(--accent)] text-sm font-black text-white', className)}>
-                {initial}
-            </span>
-        );
-    }
-    return (
-        <img
-            src={resolved}
-            alt={name || ''}
-            className={cn('bg-[var(--bg-card)]', className)}
-            onError={() => setFailed(true)}
-        />
-    );
-}
+/* HIGH-FIDELITY SMOOTH SHIMMER SKELETON LOADERS */
 
-function ResultSpinner() {
-    return (
-        <div className="flex min-h-[52vh] w-full items-center justify-center">
-            <div className="flex flex-col items-center gap-3 text-[var(--text-muted)]">
-                <Loader2 className="h-8 w-8 animate-spin text-[var(--accent)]" />
-                <span className="text-sm font-bold">در حال آماده‌سازی نتیجه</span>
+const SliderSkeleton = () => (
+    <div className="flex items-center gap-1.5 w-full select-none py-1 mb-6">
+        <div className="p-2 rounded-2xl border border-[var(--border)] shrink-0 w-8 h-8 shimmer-bg" />
+        <div className="flex-1 flex items-center justify-between gap-4 overflow-hidden px-1 py-1 w-full">
+            {Array(5).fill(0).map((_, i) => (
+                <div key={i} className="flex flex-col items-center gap-1.5 shrink-0 flex-1">
+                    <div className="w-12 h-12 rounded-full border border-[var(--border)] shimmer-bg" />
+                    <div className="w-10 h-2 rounded-full shimmer-bg" />
+                </div>
+            ))}
+        </div>
+        <div className="p-2 rounded-2xl border border-[var(--border)] shrink-0 w-8 h-8 shimmer-bg" />
+    </div>
+);
+
+const ScoreCardSkeleton = () => (
+    <Card className="p-5 md:p-6 h-[200px] border border-[var(--border)] rounded-3xl flex flex-col justify-between relative overflow-hidden bg-[var(--bg-card)]">
+        <div className="flex items-center justify-between w-full">
+            <div className="space-y-3">
+                <div className="w-24 h-4 rounded-md shimmer-bg" />
+                <div className="w-32 h-8 rounded-md shimmer-bg" />
+            </div>
+            <div className="w-20 h-20 rounded-full border-[6px] border-[var(--bg-elevated)] flex items-center justify-center relative overflow-hidden shrink-0">
+                <div className="absolute inset-0 rounded-full shimmer-bg opacity-30" />
             </div>
         </div>
-    );
-}
+        <div className="flex gap-2">
+            <div className="w-16 h-5 rounded-full shimmer-bg" />
+            <div className="w-20 h-5 rounded-full shimmer-bg" />
+        </div>
+    </Card>
+);
 
+const StatCardSkeleton = () => (
+    <Card className="p-4 h-[100px] border border-[var(--border)] rounded-3xl flex flex-col justify-between bg-[var(--bg-card)] overflow-hidden relative">
+        <div className="flex items-center justify-between">
+            <div className="w-12 h-3.5 rounded-md shimmer-bg" />
+            <div className="w-6 h-6 rounded-lg shimmer-bg shrink-0" />
+        </div>
+        <div className="space-y-1.5">
+            <div className="w-16 h-6 rounded-md shimmer-bg" />
+            <div className="w-20 h-2.5 rounded-md shimmer-bg" />
+        </div>
+    </Card>
+);
+
+const PieChartSkeleton = () => (
+    <Card className="p-5 md:p-6 min-h-[320px] flex flex-col justify-between bg-[var(--bg-card)] border border-[var(--border)] rounded-3xl lg:col-span-1 relative overflow-hidden">
+        <div className="flex items-center gap-2 mb-3">
+            <div className="w-5 h-5 rounded-md shimmer-bg" />
+            <div className="w-28 h-4 rounded-md shimmer-bg" />
+        </div>
+        <div className="flex-1 flex items-center justify-center py-4">
+            <div className="w-[150px] h-[150px] rounded-full border-[16px] border-[var(--bg-elevated)] relative overflow-hidden flex items-center justify-center">
+                <div className="absolute inset-0 rounded-full shimmer-bg opacity-25" />
+            </div>
+        </div>
+        <div className="flex justify-center gap-2">
+            <div className="w-14 h-6 rounded-full shimmer-bg" />
+            <div className="w-14 h-6 rounded-full shimmer-bg" />
+            <div className="w-14 h-6 rounded-full shimmer-bg" />
+        </div>
+    </Card>
+);
+
+const AreaChartSkeleton = () => (
+    <Card className="p-5 md:p-6 min-h-[320px] flex flex-col justify-between bg-[var(--bg-card)] border border-[var(--border)] rounded-3xl lg:col-span-2 relative overflow-hidden">
+        <div className="flex items-center gap-2 mb-4">
+            <div className="w-5 h-5 rounded-md shimmer-bg" />
+            <div className="w-36 h-4 rounded-md shimmer-bg" />
+        </div>
+        <div className="flex-1 flex flex-col justify-end gap-3 px-2 py-4">
+            <div className="w-full h-[150px] relative shimmer-bg rounded-2xl opacity-40 overflow-hidden" />
+            <div className="flex justify-between w-full px-1">
+                {Array(6).fill(0).map((_, i) => (
+                    <div key={i} className="w-6 h-3 rounded shimmer-bg" />
+                ))}
+            </div>
+        </div>
+    </Card>
+);
+
+const LessonsGridSkeleton = () => (
+    <Card className="p-5 md:p-6 bg-[var(--bg-card)] border border-[var(--border)] rounded-3xl relative overflow-hidden">
+        <div className="flex items-center gap-2 mb-6">
+            <div className="w-5 h-5 rounded-md shimmer-bg" />
+            <div className="w-24 h-4 rounded-md shimmer-bg" />
+        </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {Array(4).fill(0).map((_, i) => (
+                <div key={i} className="p-4 rounded-3xl border border-[var(--border)] bg-[var(--bg-card)] flex flex-col items-center gap-3">
+                    <div className="w-16 h-16 rounded-full border-[5px] border-[var(--bg-elevated)] relative overflow-hidden flex items-center justify-center">
+                        <div className="absolute inset-0 rounded-full shimmer-bg opacity-30" />
+                    </div>
+                    <div className="w-20 h-4 rounded-md shimmer-bg" />
+                    <div className="flex gap-2 w-full justify-center">
+                        <div className="w-8 h-2 rounded shimmer-bg" />
+                        <div className="w-8 h-2 rounded shimmer-bg" />
+                    </div>
+                </div>
+            ))}
+        </div>
+    </Card>
+);
+
+const SidebarSkeleton = () => (
+    <Card className="overflow-hidden xl:sticky xl:top-8 xl:h-[calc(100vh-4rem)] flex flex-col bg-[var(--bg-card)] border border-[var(--border)] rounded-3xl relative">
+        <div className="border-b border-[var(--border)] bg-[var(--bg-card)] px-5 py-4 shrink-0 flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl shimmer-bg" />
+            <div className="w-24 h-5 rounded-md shimmer-bg" />
+        </div>
+        <div className="flex-1 overflow-y-auto p-3 space-y-3 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+            {Array(4).fill(0).map((_, i) => (
+                <div key={i} className="rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-4 flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-full shimmer-bg" />
+                            <div className="w-16 h-5 rounded-full shimmer-bg" />
+                        </div>
+                        <div className="w-14 h-5 rounded-full shimmer-bg" />
+                    </div>
+                    <div className="space-y-1.5">
+                        <div className="w-full h-3.5 rounded shimmer-bg" />
+                        <div className="w-3/4 h-3.5 rounded shimmer-bg" />
+                    </div>
+                    <div className="flex items-center justify-end gap-1.5 mt-2">
+                        {Array(4).fill(0).map((_, optIdx) => (
+                            <div key={optIdx} className="w-6 h-6 rounded-full shimmer-bg" />
+                        ))}
+                    </div>
+                </div>
+            ))}
+        </div>
+    </Card>
+);
+
+// Helper: map raw API result data into local state shape
 function mapResultData(data) {
     const totalTimeInSeconds = Math.floor(data.total_time_spent || 0);
 
     const userInfo = {
         id: data.userId || data.id,
         name: data.userName || data.full_name || 'کاربر',
-        avatar: data.avatarUrl || data.avatar_url || data.avatar || null,
         score: data.score || 0,
         accuracy: parseFloat(data.accuracyRate) || 0,
         correct: data.correctCount || 0,
@@ -281,7 +390,6 @@ const scrollResultsToTop = () => {
 export default function ResultDashboard() {
     const { resultId: hashedresultId } = useParams();
     const navigate = useNavigate();
-    const { user } = useUser();
 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -337,7 +445,6 @@ export default function ResultDashboard() {
                 // Override name: this is always "شما" for own result
                 userInfo.name = 'شما';
                 userInfo.isSelf = true;
-                userInfo.avatar = userInfo.avatar || user?.avatar_url || null;
                 scrollResultsToTop();
                 setActiveUser(userInfo);
                 setOriginalUser(userInfo);
@@ -364,7 +471,7 @@ export default function ResultDashboard() {
         } finally {
             setLoading(false);
         }
-    }, [hashedresultId, user?.avatar_url]);
+    }, [hashedresultId]);
 
     useEffect(() => {
         fetchResultData();
@@ -395,7 +502,7 @@ export default function ResultDashboard() {
                         return {
                             id: mId,
                             name: isSelf ? 'شما' : (m.fullName || m.name || 'کاربر'),
-                            avatar: (isSelf ? (m.avatar || m.avatarUrl || user?.avatar_url) : (m.avatar || m.avatarUrl)) || null,
+                            avatar: m.avatar || m.avatarUrl || null,
                             rank: m.rank ?? idx + 1,
                             isSelf,
                         };
@@ -414,7 +521,7 @@ export default function ResultDashboard() {
         };
 
         fetchMembers();
-    }, [isPublic, quizId, originalUser, user?.avatar_url]);
+    }, [isPublic, quizId, originalUser]);
 
     // ─── Fetch another member's result when avatar clicked ───────────────────
     const handleSelectMember = useCallback(async (memberId) => {
@@ -548,7 +655,7 @@ export default function ResultDashboard() {
                         animate={{ opacity: 1, y: 0 }}
                         className="mb-5 border-b border-[var(--border)] bg-[var(--bg-card)] px-4 py-3 w-full sm:border-y sm:rounded-3xl sm:border sm:px-6 sm:py-4"
                     >
-                            <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center justify-between">
                             {/* Leave button → goes to /dashboard */}
                             <button
                                 onClick={handleLeave}
@@ -557,17 +664,6 @@ export default function ResultDashboard() {
                                 <LogOut className="h-5 w-5 sm:h-4 sm:w-4" />
                                 <span className="hidden sm:inline">خروج</span>
                             </button>
-
-                            <div className="flex min-w-0 items-center gap-2">
-                                <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-[var(--border)]">
-                                    <ResultAvatar
-                                        src={activeUser?.avatar || user?.avatar_url}
-                                        name={activeUser?.name || 'شما'}
-                                        className="h-full w-full object-cover"
-                                    />
-                                </div>
-                                <span className="truncate text-sm font-black text-[var(--text-primary)]">{activeUser?.name || 'شما'}</span>
-                            </div>
 
                             {/* Action Buttons */}
                             <div className="flex items-center gap-2 sm:gap-3">
@@ -584,7 +680,27 @@ export default function ResultDashboard() {
 
                     <div className="px-3 sm:px-0">
                         {loading ? (
-                            <ResultSpinner />
+                            <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.45fr)_420px]">
+                                <div className="flex min-w-0 flex-col gap-6">
+                                    <SliderSkeleton />
+                                    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(320px,440px)_minmax(0,1fr)]">
+                                        <ScoreCardSkeleton />
+                                        <div className="grid grid-cols-2 gap-3 md:gap-4">
+                                            {Array(4).fill(0).map((_, i) => (
+                                                <StatCardSkeleton key={i} />
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                                        <PieChartSkeleton />
+                                        <AreaChartSkeleton />
+                                    </div>
+                                    <LessonsGridSkeleton />
+                                </div>
+                                <div className="min-w-0">
+                                    <SidebarSkeleton />
+                                </div>
+                            </div>
                         ) : (
                             <motion.div
                                 variants={containerVars}
@@ -598,9 +714,7 @@ export default function ResultDashboard() {
                                     {isPublic && (
                                         <div className="flex flex-col gap-2 w-full">
                                             {membersLoading ? (
-                                                <div className="flex items-center justify-center py-3">
-                                                    <Loader2 className="h-5 w-5 animate-spin text-[var(--accent)]" />
-                                                </div>
+                                                <SliderSkeleton />
                                             ) : members.length > 0 ? (
                                                 <MemberSlider
                                                     members={members}
@@ -849,9 +963,7 @@ export default function ResultDashboard() {
                                                     <p className="text-sm font-semibold">اطلاعات سوالات برای این کاربر در دسترس نیست.</p>
                                                 </div>
                                             ) : questions.length === 0 ? (
-                                                <div className="flex min-h-[200px] items-center justify-center text-sm font-semibold text-[var(--text-muted)]">
-                                                    سوالی برای نمایش نیست.
-                                                </div>
+                                                Array(5).fill(0).map((_, i) => <QuestionSkeleton key={i} />)
                                             ) : (
                                                 questions.map((q, index) => {
                                                     const validStatuses = ['correct', 'wrong', 'unanswered'];

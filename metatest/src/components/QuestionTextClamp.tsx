@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { MathRenderer } from './ui/MathRenderer';
 
-const COLLAPSED_PX = 120;
+/** About four lines of the quiz type size. Short questions stay at their natural height. */
+const LIMIT_PX = 96;
 
 type QuestionTextClampProps = {
     text: string;
@@ -19,26 +20,21 @@ export function QuestionTextClamp({
     className = '',
     inline = false,
 }: QuestionTextClampProps) {
-    const bodyRef = useRef<HTMLDivElement>(null);
+    const contentRef = useRef<HTMLDivElement>(null);
     const [open, setOpen] = useState(false);
-    const [overflows, setOverflows] = useState(false);
-    const [fullHeight, setFullHeight] = useState(0);
+    const [height, setHeight] = useState(0);
 
-    useEffect(() => {
+    useLayoutEffect(() => {
         setOpen(false);
     }, [resetKey, text]);
 
-    useEffect(() => {
-        const el = bodyRef.current;
+    useLayoutEffect(() => {
+        const el = contentRef.current;
         if (!el) return;
 
         const measure = () => {
-            const previous = el.style.maxHeight;
-            el.style.maxHeight = 'none';
-            const next = el.scrollHeight;
-            el.style.maxHeight = previous;
-            setFullHeight(next);
-            setOverflows(next > COLLAPSED_PX + 6);
+            const next = Math.ceil(el.scrollHeight);
+            setHeight((current) => (current === next ? current : next));
         };
 
         measure();
@@ -47,13 +43,13 @@ export function QuestionTextClamp({
         return () => observer.disconnect();
     }, [text, resetKey]);
 
+    const overflows = height > LIMIT_PX + 8;
     const collapsed = overflows && !open;
-    const maxHeight = collapsed ? COLLAPSED_PX : Math.max(fullHeight, COLLAPSED_PX);
 
     return (
         <div className="question-text-clamp" dir="rtl">
             <div
-                className={`relative rounded-2xl ${collapsed ? 'cursor-pointer' : ''}`}
+                className={collapsed ? 'relative cursor-pointer' : undefined}
                 onClick={collapsed ? () => setOpen(true) : undefined}
                 onKeyDown={collapsed ? (event) => {
                     if (event.key === 'Enter' || event.key === ' ') {
@@ -63,28 +59,28 @@ export function QuestionTextClamp({
                 } : undefined}
                 role={collapsed ? 'button' : undefined}
                 tabIndex={collapsed ? 0 : undefined}
-                aria-expanded={!collapsed}
+                aria-expanded={overflows ? !collapsed : undefined}
             >
                 <div
-                    ref={bodyRef}
-                    className={`overflow-hidden transition-[max-height] duration-300 ease-out motion-reduce:transition-none ${className}`}
-                    style={{
-                        maxHeight,
-                        minHeight: COLLAPSED_PX,
+                    className={`overflow-hidden ${overflows ? 'transition-[max-height] duration-300 ease-out motion-reduce:transition-none' : ''}`}
+                    style={overflows ? {
+                        maxHeight: collapsed ? LIMIT_PX : height,
                         WebkitMaskImage: collapsed
-                            ? 'linear-gradient(to bottom, #000 0%, #000 58%, transparent 100%)'
+                            ? 'linear-gradient(to bottom, #000 62%, transparent 100%)'
                             : undefined,
                         maskImage: collapsed
-                            ? 'linear-gradient(to bottom, #000 0%, #000 58%, transparent 100%)'
+                            ? 'linear-gradient(to bottom, #000 62%, transparent 100%)'
                             : undefined,
-                    }}
+                    } : undefined}
                 >
-                    <MathRenderer text={text} subject={subject} inline={inline} />
+                    <div ref={contentRef} className={className}>
+                        <MathRenderer text={text} subject={subject} inline={inline} />
+                    </div>
                 </div>
 
                 {collapsed && (
-                    <div className="pointer-events-none absolute inset-x-0 bottom-1 flex items-end justify-center">
-                        <span className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--bg-card)] px-2.5 py-1 text-[12px] font-black text-[var(--accent)] shadow-sm">
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center pb-0.5">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-[var(--bg-card)] px-2 py-0.5 text-[12px] font-black text-[var(--accent)]">
                             <span>ادامه متن</span>
                             <ChevronDown className="h-3.5 w-3.5" strokeWidth={2.5} />
                         </span>
@@ -96,10 +92,10 @@ export function QuestionTextClamp({
                 <button
                     type="button"
                     onClick={() => setOpen(false)}
-                    className="mt-2 inline-flex h-8 items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--bg-card)] px-2.5 text-[12px] font-black text-[var(--accent)]"
+                    className="mt-1.5 inline-flex h-8 cursor-pointer items-center gap-1 rounded-full px-2 text-[12px] font-black text-[var(--accent)]"
                 >
                     <span>بستن</span>
-                    <ChevronUp className="h-4 w-4" strokeWidth={2.5} />
+                    <ChevronUp className="h-3.5 w-3.5" strokeWidth={2.5} />
                 </button>
             )}
         </div>

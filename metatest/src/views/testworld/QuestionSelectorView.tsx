@@ -75,7 +75,7 @@ function CheckRow({
             role="checkbox"
             aria-checked={checked}
             onClick={onToggle}
-            className="flex w-full items-center gap-2.5 rounded-xl px-1.5 py-1.5 text-right transition-colors hover:bg-[var(--bg-element)]"
+            className="flex min-h-11 w-full cursor-pointer items-center gap-2.5 rounded-xl px-1.5 py-1.5 text-right transition-colors hover:bg-[var(--bg-element)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
         >
             <span
                 className={`grid h-5 w-5 shrink-0 place-items-center rounded-md border-2 transition-all duration-200 ${
@@ -97,10 +97,12 @@ function Switch({
     on,
     label,
     onClick,
+    compact = false,
 }: {
     on: boolean;
     label: string;
     onClick: () => void;
+    compact?: boolean;
 }) {
     return (
         <button
@@ -108,7 +110,11 @@ function Switch({
             role="switch"
             aria-checked={on}
             onClick={onClick}
-            className="flex w-full items-center justify-between gap-3 rounded-2xl border border-[var(--border)] bg-[var(--bg-element)] px-3 py-2.5"
+            className={`cursor-pointer items-center gap-2 border border-[var(--border)] bg-[var(--bg-element)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${
+                compact
+                    ? 'inline-flex h-10 shrink-0 rounded-xl px-3'
+                    : 'flex w-full justify-between rounded-2xl px-3 py-2.5'
+            }`}
         >
             <span className="text-[13px] font-bold text-[var(--text-primary)]">{label}</span>
             <span className={`relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 ${on ? 'bg-[var(--accent)]' : 'bg-[var(--border)]'}`}>
@@ -578,18 +584,19 @@ export function QuestionSelectorView({
         return <QuizCountdown durationMs={3000} onComplete={() => navigate(`/quiz/${createdPrivateQuizId}`)} />;
     }
 
-    const filters = (
+    const renderFilters = () => (
         <div className="space-y-4">
             <Switch on={mode === 'auto'} label={mode === 'auto' ? 'انتخاب خودکار' : 'انتخاب دستی'} onClick={() => { unlockSelection(); setMode((value) => (value === 'manual' ? 'auto' : 'manual')); }} />
-            <div className="relative">
+            <label className="relative block">
                 <Search size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
                 <input
                     value={search}
                     onChange={(event) => { unlockSelection(); setSearch(event.target.value); }}
                     placeholder="جستجو در متن سوال"
-                    className="w-full rounded-xl border border-[var(--border)] bg-[var(--bg-card)] py-2.5 pr-9 pl-3 text-[13px] outline-none focus:border-[var(--accent)]"
+                    aria-label="جستجو در متن سوال"
+                    className="h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--bg-app)] py-0 pr-9 pl-3 text-[13px] outline-none focus:border-[var(--accent)]"
                 />
-            </div>
+            </label>
             <FilterGroup title="درس" empty="درسی پیدا نشد.">
                 {subjects.map((item) => (
                     <CheckRow key={String(item.id)} label={item.title} checked={selectedSubjects.map(String).includes(String(item.id))} onToggle={() => { unlockSelection(); setSelectedSubjects((prev) => toggleIn(prev, item.id)); }} />
@@ -620,7 +627,7 @@ export function QuestionSelectorView({
                                 key={level}
                                 type="button"
                                 onClick={() => { unlockSelection(); setDifficulties((prev) => (active ? prev.filter((item) => item !== level) : [...prev, level])); }}
-                                className={`h-10 rounded-xl px-2 text-[12px] font-black ${active ? difficultyTone(level) : 'bg-[var(--bg-element)] text-[var(--text-muted)]'}`}
+                                className={`h-10 cursor-pointer rounded-xl px-2 text-[12px] font-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${active ? difficultyTone(level) : 'bg-[var(--bg-app)] text-[var(--text-muted)]'}`}
                             >
                                 {level}
                             </button>
@@ -634,8 +641,8 @@ export function QuestionSelectorView({
                         <span>تعداد سوال خودکار</span>
                         <span className="text-[var(--accent)]">{fa(autoCount)}</span>
                     </div>
-                    <input type="range" min={1} max={MAX_SELECTED} value={autoCount} onChange={(event) => { unlockSelection(); setAutoCount(Number(event.target.value)); }} className="w-full accent-[var(--accent)]" />
-                    <button type="button" onClick={() => { unlockSelection(); fetchQuestions(1); }} className="mt-2 h-9 w-full rounded-xl bg-[var(--bg-card)] px-2 text-[12px] font-black text-[var(--accent)]">
+                    <input type="range" min={1} max={MAX_SELECTED} value={autoCount} onChange={(event) => { unlockSelection(); setAutoCount(Number(event.target.value)); }} className="w-full accent-[var(--accent)]" aria-label="تعداد سوال خودکار" />
+                    <button type="button" onClick={() => { unlockSelection(); fetchQuestions(1); }} className="mt-2 h-10 w-full cursor-pointer rounded-xl bg-[var(--bg-app)] px-2 text-[12px] font-black text-[var(--accent)]">
                         نمونه‌گیری دوباره
                     </button>
                 </div>
@@ -651,274 +658,294 @@ export function QuestionSelectorView({
                     setDifficulties([]);
                     setSearch('');
                 }}
-                className="h-9 px-2 text-[12px] font-bold text-[var(--text-muted)]"
+                className="h-10 cursor-pointer px-1 text-[12px] font-bold text-[var(--text-muted)]"
             >
                 پاک کردن فیلترها
             </button>
         </div>
     );
 
-    const setup = (
-        <div className="space-y-3">
-            <input
-                value={quizName}
-                onChange={(event) => setQuizName(event.target.value)}
-                placeholder="نام آزمون (اختیاری)"
-                className="w-full rounded-xl border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2.5 text-[13px] outline-none focus:border-[var(--accent)]"
-            />
-            <div className="flex flex-wrap gap-1.5">
-                {[10, 20, 30].map((minutes) => (
-                    <button
-                        key={minutes}
-                        type="button"
-                        onClick={() => { setIsCustomTime(false); setTime(minutes); }}
-                        className={`h-9 rounded-xl px-3 text-[12px] font-black ${!isCustomTime && time === minutes ? 'bg-[var(--accent)] text-white' : 'bg-[var(--bg-element)] text-[var(--text-secondary)]'}`}
-                    >
-                        {fa(minutes)} دقیقه
-                    </button>
-                ))}
-                <button
-                    type="button"
-                    onClick={() => setIsCustomTime(true)}
-                    className={`h-9 rounded-xl px-3 text-[12px] font-black ${isCustomTime ? 'bg-[var(--accent)] text-white' : 'bg-[var(--bg-element)] text-[var(--text-secondary)]'}`}
-                >
-                    دلخواه
-                </button>
-                {isCustomTime && (
+    const setup = (layout: 'bar' | 'stack') => {
+        const bar = layout === 'bar';
+        return (
+            <div className={bar ? 'flex flex-col gap-2' : 'space-y-3'}>
+                <div className={bar ? 'flex flex-wrap items-center gap-2' : 'space-y-3'}>
                     <input
-                        type="number"
-                        value={time || ''}
-                        onChange={(event) => setTime(parseInt(event.target.value, 10) || 0)}
-                        className="h-9 w-16 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] text-center text-[12px]"
+                        value={quizName}
+                        onChange={(event) => setQuizName(event.target.value)}
+                        placeholder="نام آزمون"
+                        aria-label="نام آزمون"
+                        className={`h-10 rounded-xl border border-[var(--border)] bg-[var(--bg-app)] px-3 text-[13px] outline-none focus:border-[var(--accent)] ${bar ? 'w-44' : 'w-full'}`}
                     />
-                )}
-            </div>
-            <Switch
-                on={visibility === 'public'}
-                label={visibility === 'public' ? 'آزمون عمومی' : 'آزمون شخصی'}
-                onClick={() => setVisibility((value) => (value === 'private' ? 'public' : 'private'))}
-            />
-            {visibility === 'public' && (
-                <div className="flex items-center gap-2 text-[12px] font-bold text-[var(--text-secondary)]">
-                    <Users size={14} />
-                    <span>سقف اعضا</span>
-                    {[5, 10, 15].map((limit) => (
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        {[10, 20, 30].map((minutes) => (
+                            <button
+                                key={minutes}
+                                type="button"
+                                onClick={() => { setIsCustomTime(false); setTime(minutes); }}
+                                className={`h-10 cursor-pointer rounded-xl px-3 text-[12px] font-black ${!isCustomTime && time === minutes ? 'bg-[var(--accent)] text-white' : 'bg-[var(--bg-element)] text-[var(--text-secondary)]'}`}
+                            >
+                                {fa(minutes)} دقیقه
+                            </button>
+                        ))}
                         <button
-                            key={limit}
                             type="button"
-                            onClick={() => setMemberLimit(limit)}
-                            className={`h-8 rounded-lg px-2 ${memberLimit === limit ? 'bg-[var(--accent)] text-white' : 'bg-[var(--bg-element)]'}`}
+                            onClick={() => setIsCustomTime(true)}
+                            className={`h-10 cursor-pointer rounded-xl px-3 text-[12px] font-black ${isCustomTime ? 'bg-[var(--accent)] text-white' : 'bg-[var(--bg-element)] text-[var(--text-secondary)]'}`}
                         >
-                            {fa(limit)}
+                            دلخواه
                         </button>
-                    ))}
-                </div>
-            )}
-            <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-element)] p-3">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                    <p className="text-[12px] font-black">کد اشتراک و تاریخچه</p>
-                    {savedCode && (
-                        <button type="button" onClick={() => copyCode(savedCode)} className="inline-flex h-8 items-center gap-1 rounded-lg bg-[var(--bg-card)] px-2 text-[11px] font-black text-[var(--accent)]">
-                            <Copy size={12} />
-                            {savedCode}
+                        {isCustomTime && (
+                            <input
+                                type="number"
+                                value={time || ''}
+                                aria-label="زمان دلخواه به دقیقه"
+                                onChange={(event) => setTime(parseInt(event.target.value, 10) || 0)}
+                                className="h-10 w-16 rounded-xl border border-[var(--border)] bg-[var(--bg-app)] text-center text-[12px]"
+                            />
+                        )}
+                    </div>
+                    <Switch
+                        compact={bar}
+                        on={visibility === 'public'}
+                        label={visibility === 'public' ? 'آزمون عمومی' : 'آزمون شخصی'}
+                        onClick={() => setVisibility((value) => (value === 'private' ? 'public' : 'private'))}
+                    />
+                    {visibility === 'public' && (
+                        <div className="flex items-center gap-1.5 text-[12px] font-bold text-[var(--text-secondary)]">
+                            <Users size={14} />
+                            {[5, 10, 15].map((limit) => (
+                                <button
+                                    key={limit}
+                                    type="button"
+                                    onClick={() => setMemberLimit(limit)}
+                                    className={`h-10 cursor-pointer rounded-xl px-2.5 ${memberLimit === limit ? 'bg-[var(--accent)] text-white' : 'bg-[var(--bg-element)]'}`}
+                                >
+                                    {fa(limit)} نفر
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                    {bar && (
+                        <button
+                            type="button"
+                            onClick={handleStartQuiz}
+                            disabled={isCreating || selected.length === 0}
+                            className="ms-auto inline-flex h-11 cursor-pointer items-center gap-2 rounded-xl bg-[var(--accent)] px-4 text-[13px] font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            {isCreating ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} className="rotate-180" />}
+                            {visibility === 'public' ? 'ساخت آزمون' : 'ساخت و شروع'}
                         </button>
                     )}
                 </div>
-                <p className="mb-2 text-[11px] leading-5 text-[var(--text-muted)]">
-                    کد را برای دوستت بفرست یا بعداً همین انتخاب را دوباره باز کن.
-                </p>
-                <div className="flex gap-1.5">
-                    <button type="button" disabled={saving} onClick={() => saveSelection(false)} className="h-10 flex-1 rounded-xl bg-[var(--accent)] px-3 text-[12px] font-black text-white disabled:opacity-60">
+
+                <div className={bar ? 'flex flex-wrap items-center gap-1.5' : 'rounded-2xl border border-[var(--border)] bg-[var(--bg-element)] p-3'}>
+                    {!bar && <p className="mb-1 text-[12px] font-black">کد اشتراک و تاریخچه</p>}
+                    <button type="button" disabled={saving} onClick={() => saveSelection(false)} className="h-10 cursor-pointer rounded-xl bg-[var(--accent)] px-3 text-[12px] font-black text-white disabled:opacity-60">
                         {saving ? 'در حال ذخیره' : 'ذخیره'}
                     </button>
-                    <button type="button" disabled={saving} onClick={() => saveSelection(true)} className="h-10 rounded-xl bg-[var(--bg-card)] px-3 text-[12px] font-black text-[var(--text-secondary)]">
+                    <button type="button" disabled={saving} onClick={() => saveSelection(true)} className="h-10 cursor-pointer rounded-xl bg-[var(--bg-element)] px-3 text-[12px] font-black text-[var(--text-secondary)]">
                         کد تازه
                     </button>
-                </div>
-                <div className="mt-2 flex gap-1.5">
+                    {savedCode && (
+                        <button type="button" onClick={() => copyCode(savedCode)} className="inline-flex h-10 cursor-pointer items-center gap-1 rounded-xl bg-[var(--bg-element)] px-2.5 text-[12px] font-black tracking-wider text-[var(--accent)]">
+                            <Copy size={13} />
+                            {savedCode}
+                        </button>
+                    )}
                     <input
                         value={loadInput}
                         onChange={(event) => setLoadInput(event.target.value.toUpperCase())}
                         placeholder="ورود کد"
-                        className="h-10 min-w-0 flex-1 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] px-3 text-[12px] tracking-wider"
+                        aria-label="ورود کد"
+                        className="h-10 w-28 rounded-xl border border-[var(--border)] bg-[var(--bg-app)] px-3 text-[12px] tracking-wider"
                     />
-                    <button type="button" onClick={() => loadByCode(loadInput)} className="h-10 rounded-xl bg-[var(--text-primary)] px-3 text-[12px] font-black text-[var(--bg-card)]">
+                    <button type="button" onClick={() => loadByCode(loadInput)} className="h-10 cursor-pointer rounded-xl bg-[var(--text-primary)] px-3 text-[12px] font-black text-[var(--bg-card)]">
                         بارگذاری
                     </button>
+                    {mySaves.length > 0 && (
+                        <div className={`flex gap-1.5 ${bar ? 'max-w-full overflow-x-auto' : 'mt-2 w-full flex-col'}`}>
+                            {mySaves.map((item) => (
+                                <button
+                                    key={item.code}
+                                    type="button"
+                                    onClick={() => loadByCode(item.code)}
+                                    className={`cursor-pointer text-right ${bar ? 'h-8 shrink-0 rounded-full bg-[var(--bg-element)] px-2.5 text-[11px] font-bold' : 'flex w-full items-center justify-between gap-2 rounded-xl bg-[var(--bg-card)] px-2.5 py-2 text-[12px] font-bold'}`}
+                                >
+                                    <span className="truncate">{item.title}</span>
+                                    {bar ? <span className="ms-1 font-black text-[var(--accent)]">{item.code}</span> : <span className="shrink-0 font-black text-[var(--accent)]">{item.code} · {fa(item.count)}</span>}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                 </div>
-                {mySaves.length > 0 && (
-                    <div className="mt-3 space-y-1.5">
-                        {mySaves.map((item) => (
-                            <button
-                                key={item.code}
-                                type="button"
-                                onClick={() => loadByCode(item.code)}
-                                className="flex w-full items-center justify-between gap-2 rounded-xl bg-[var(--bg-card)] px-2.5 py-2 text-right"
-                            >
-                                <span className="min-w-0 truncate text-[12px] font-bold">{item.title}</span>
-                                <span className="shrink-0 text-[11px] font-black text-[var(--accent)]">{item.code} · {fa(item.count)}</span>
-                            </button>
-                        ))}
-                    </div>
+
+                {!bar && (
+                    <button
+                        type="button"
+                        onClick={handleStartQuiz}
+                        disabled={isCreating || selected.length === 0}
+                        className="flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] text-[14px] font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        {isCreating ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} className="rotate-180" />}
+                        {visibility === 'public' ? 'ساخت آزمون' : 'ساخت و شروع'}
+                    </button>
                 )}
             </div>
-            <button
-                type="button"
-                onClick={handleStartQuiz}
-                disabled={isCreating || selected.length === 0}
-                className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] text-[14px] font-black text-white disabled:opacity-50"
-            >
-                {isCreating ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} className="rotate-180" />}
-                {visibility === 'public' ? 'ساخت آزمون' : 'ساخت و شروع'}
-            </button>
-        </div>
-    );
+        );
+    };
 
     return (
-        <div className="bank-shell flex h-full min-h-0 flex-col bg-[var(--bg-app)]" dir="rtl">
-            <header className="flex shrink-0 items-center gap-2 border-b border-[var(--border)] px-3 py-3 lg:px-5">
+        <div className="bank-shell flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-[var(--bg-app)]" dir="rtl">
+            <header className="flex h-14 shrink-0 items-center gap-2 border-b border-[var(--border)] bg-[var(--bg-card)] px-3 lg:px-4">
                 {onBack && (
-                    <button type="button" onClick={onBack} aria-label="بازگشت" className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--bg-element)] p-0 text-[var(--text-secondary)]">
+                    <button type="button" onClick={onBack} aria-label="بازگشت" className="grid h-10 w-10 cursor-pointer place-items-center rounded-xl bg-[var(--bg-element)] p-0 text-[var(--text-secondary)]">
                         <ChevronRight size={18} />
                     </button>
                 )}
-                <div className="min-w-0 flex-1">
-                    <h2 className="truncate text-[15px] font-black">بانک تست</h2>
-                    <p className="truncate text-[11px] text-[var(--text-muted)]">سوال‌ها را بچین، ذخیره کن، یا با کد به اشتراک بگذار</p>
-                </div>
-                <button type="button" onClick={() => setFiltersOpen(true)} className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] px-3 text-[12px] font-black lg:hidden">
+                <h2 className="min-w-0 flex-1 truncate text-[15px] font-black">بانک تست</h2>
+                <span className="hidden text-[12px] font-bold text-[var(--text-muted)] sm:inline">{fa(selected.length)} انتخاب</span>
+                <button type="button" onClick={() => setFiltersOpen(true)} className="inline-flex h-10 cursor-pointer items-center gap-1.5 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] px-3 text-[12px] font-black lg:hidden">
                     <SlidersHorizontal size={14} />
                     فیلتر
                 </button>
-                <button type="button" onClick={() => setSetupOpen(true)} className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-[var(--accent)] px-3 text-[12px] font-black text-white lg:hidden">
+                <button type="button" onClick={() => setSetupOpen(true)} className="inline-flex h-10 cursor-pointer items-center gap-1.5 rounded-xl bg-[var(--accent)] px-3 text-[12px] font-black text-white lg:hidden">
                     <Clock3 size={14} />
-                    {fa(selected.length)}
+                    آزمون
                 </button>
             </header>
 
-            <div className="flex min-h-0 flex-1">
-                <aside className="hidden w-[340px] shrink-0 flex-col border-l border-[var(--border)] bg-[var(--bg-card)] lg:flex">
-                    <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">{filters}</div>
-                    <div className="max-h-[46%] shrink-0 overflow-y-auto border-t border-[var(--border)] px-4 py-3">{setup}</div>
+            <div className="grid min-h-0 flex-1 lg:grid-cols-[300px_minmax(0,1fr)]">
+                <aside className="hidden min-h-0 overflow-y-auto border-l border-[var(--border)] bg-[var(--bg-card)] px-3 py-3 lg:block">
+                    {renderFilters()}
                 </aside>
 
-                <section className="flex min-w-0 flex-1 flex-col">
-                    <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--border)] px-3 py-2 lg:px-5">
+                <section className="flex min-h-0 min-w-0 flex-col">
+                    <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--border)] px-3 py-2 lg:px-4">
                         <div className="flex items-center gap-1 rounded-full bg-[var(--bg-element)] p-1">
-                            <button type="button" onClick={() => setShowPicked(false)} className={`h-8 rounded-full px-3 text-[12px] font-black ${!showPicked ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm' : 'text-[var(--text-muted)]'}`}>همه</button>
-                            <button type="button" onClick={() => setShowPicked(true)} className={`h-8 rounded-full px-3 text-[12px] font-black ${showPicked ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm' : 'text-[var(--text-muted)]'}`}>انتخاب‌شده · {fa(selected.length)}</button>
+                            <button type="button" onClick={() => setShowPicked(false)} className={`h-8 cursor-pointer rounded-full px-3 text-[12px] font-black ${!showPicked ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm' : 'text-[var(--text-muted)]'}`}>همه</button>
+                            <button type="button" onClick={() => setShowPicked(true)} className={`h-8 cursor-pointer rounded-full px-3 text-[12px] font-black ${showPicked ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm' : 'text-[var(--text-muted)]'}`}>انتخاب‌شده · {fa(selected.length)}</button>
                         </div>
                         <div className="flex items-center gap-2">
                             {!showPicked && hasApplied && <span className="hidden text-[12px] font-bold text-[var(--text-muted)] sm:inline">{fa(total)} سوال</span>}
                             {mode === 'manual' && visibleQuestions.length > 0 && !showPicked && (
-                                <button type="button" onClick={addVisible} className="h-8 rounded-lg px-2 text-[12px] font-black text-[var(--accent)]">افزودن این صفحه</button>
+                                <button type="button" onClick={addVisible} className="h-8 cursor-pointer rounded-lg px-2 text-[12px] font-black text-[var(--accent)]">افزودن این صفحه</button>
                             )}
                             {selected.length > 0 && (
-                                <button type="button" onClick={() => setSelected([])} aria-label="پاک کردن انتخاب" className="grid h-8 w-8 place-items-center rounded-lg p-0 text-[var(--text-muted)] hover:text-[var(--error)]">
+                                <button type="button" onClick={() => setSelected([])} aria-label="پاک کردن انتخاب" className="grid h-8 w-8 cursor-pointer place-items-center rounded-lg p-0 text-[var(--text-muted)] hover:text-[var(--error)]">
                                     <Trash2 size={15} />
                                 </button>
                             )}
                         </div>
                     </div>
 
-                    <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3 pb-28 lg:px-5 lg:pb-6">
-                        {loading && (
-                            <div className="flex min-h-[40vh] items-center justify-center">
-                                <Loader2 className="h-7 w-7 animate-spin text-[var(--accent)]" />
-                            </div>
-                        )}
+                    <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3 pb-28 lg:px-5 lg:pb-5">
+                        <div className="mx-auto flex w-full max-w-3xl flex-col">
+                            {loading && (
+                                <div className="flex min-h-[40vh] items-center justify-center">
+                                    <Loader2 className="h-7 w-7 animate-spin text-[var(--accent)]" />
+                                </div>
+                            )}
 
-                        {!loading && !hasApplied && !showPicked && (
-                            <EmptyState
-                                icon={Library}
-                                title="بانک هنوز خالی است"
-                                text="از فیلترها یک درس را انتخاب کن تا سوال‌ها صفحه‌به‌صفحه بیایند."
-                            />
-                        )}
+                            {!loading && !hasApplied && !showPicked && (
+                                <EmptyState
+                                    icon={Library}
+                                    title="بانک هنوز خالی است"
+                                    text="از فیلترها یک درس را انتخاب کن تا سوال‌ها صفحه‌به‌صفحه بیایند."
+                                />
+                            )}
 
-                        {!loading && showPicked && selected.length === 0 && (
-                            <EmptyState icon={BookOpen} title="هنوز سوالی برنداشتی" text="از فهرست سوال‌ها هر کدام را که می‌خواهی علامت بزن." />
-                        )}
+                            {!loading && showPicked && selected.length === 0 && (
+                                <EmptyState icon={BookOpen} title="هنوز سوالی برنداشتی" text="از فهرست سوال‌ها هر کدام را که می‌خواهی علامت بزن." />
+                            )}
 
-                        {!loading && hasApplied && !showPicked && questions.length === 0 && (
-                            <EmptyState icon={Search} title="سوالی پیدا نشد" text="فیلتر یا عبارت جستجو را عوض کن." />
-                        )}
+                            {!loading && hasApplied && !showPicked && questions.length === 0 && (
+                                <EmptyState icon={Search} title="سوالی پیدا نشد" text="فیلتر یا عبارت جستجو را عوض کن." />
+                            )}
 
-                        {!loading && visibleQuestions.length > 0 && (
-                            <div className="space-y-3">
-                                {visibleQuestions.map((question, index) => {
-                                    const picked = selectedIds.has(question.id);
-                                    const number = showPicked ? index + 1 : ((page - 1) * PAGE_SIZE) + index + 1;
-                                    return (
-                                        <article
-                                            key={question.id}
-                                            className={`rounded-2xl border bg-[var(--bg-card)] p-3 transition-colors ${picked ? 'border-[var(--accent)]' : 'border-[var(--border)]'}`}
-                                        >
-                                            <div className="mb-2 flex items-start gap-2">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => toggleQuestion(question)}
-                                                    aria-label={picked ? 'حذف از آزمون' : 'افزودن به آزمون'}
-                                                    className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl border-2 p-0 transition-all ${picked ? 'border-[var(--accent)] bg-[var(--accent)] text-white' : 'border-[var(--border)] text-[var(--accent)]'}`}
-                                                >
-                                                    {picked ? <Check size={16} strokeWidth={3} /> : <span className="text-[12px] font-black">{fa(number)}</span>}
-                                                </button>
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="mb-1 flex flex-wrap items-center gap-1 text-[10px] font-bold text-[var(--text-muted)]">
-                                                        {question.subject_title && <span>{question.subject_title}</span>}
-                                                        {question.grade_title && <span>· {question.grade_title}</span>}
-                                                        <span className={`rounded-full px-1.5 py-0.5 ${difficultyTone(question.difficulty)}`}>{question.difficulty}</span>
-                                                    </div>
-                                                    <div className="text-[14px] font-semibold leading-7 text-[var(--text-primary)]">
-                                                        <MathRenderer text={question.text} />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            {question.image && (
-                                                <img src={`${IMAGE_BASE}${question.image}`} alt="" className="mb-2 max-h-40 rounded-xl border border-[var(--border)] bg-white object-contain" />
-                                            )}
-                                            {question.options && question.options.length > 0 && (
-                                                <div className="grid grid-cols-2 gap-1.5">
-                                                    {question.options.map((option, optionIndex) => (
-                                                        <div key={option.id} className="rounded-xl border border-[var(--border)] bg-[var(--bg-element)] px-2 py-1.5 text-[12px] leading-6 text-[var(--text-primary)]">
-                                                            <span className="ml-1 font-black text-[var(--text-muted)]">{fa(optionIndex + 1)}.</span>
-                                                            <MathRenderer text={option.text} inline />
+                            {!loading && visibleQuestions.length > 0 && (
+                                <div className="space-y-2.5">
+                                    {visibleQuestions.map((question, index) => {
+                                        const picked = selectedIds.has(question.id);
+                                        const number = showPicked ? index + 1 : ((page - 1) * PAGE_SIZE) + index + 1;
+                                        return (
+                                            <article
+                                                key={question.id}
+                                                className={`rounded-2xl border bg-[var(--bg-card)] p-3 ${picked ? 'border-[var(--accent)]' : 'border-[var(--border)]'}`}
+                                            >
+                                                <div className="flex items-start gap-2.5">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => toggleQuestion(question)}
+                                                        aria-label={picked ? 'حذف از آزمون' : 'افزودن به آزمون'}
+                                                        aria-pressed={picked}
+                                                        className={`grid h-11 w-11 shrink-0 cursor-pointer place-items-center rounded-xl border-2 p-0 transition-colors ${picked ? 'border-[var(--accent)] bg-[var(--accent)] text-white' : 'border-[var(--border)] text-[var(--accent)]'}`}
+                                                    >
+                                                        {picked ? <Check size={16} strokeWidth={3} /> : <span className="text-[12px] font-black">{fa(number)}</span>}
+                                                    </button>
+                                                    <div className="min-w-0 flex-1 pt-0.5">
+                                                        <div className="mb-1 flex flex-wrap items-center gap-1.5 text-[11px] font-bold text-[var(--text-muted)]">
+                                                            {question.subject_title && <span>{question.subject_title}</span>}
+                                                            {question.grade_title && <span>{question.grade_title}</span>}
+                                                            <span className={`rounded-full px-1.5 py-0.5 ${difficultyTone(question.difficulty)}`}>{question.difficulty}</span>
                                                         </div>
-                                                    ))}
+                                                        <div className="text-[15px] font-semibold leading-7 text-[var(--text-primary)]">
+                                                            <MathRenderer text={question.text} />
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                            )}
-                                        </article>
-                                    );
-                                })}
-                            </div>
-                        )}
+                                                {question.image && (
+                                                    <img src={`${IMAGE_BASE}${question.image}`} alt="" className="mx-auto mt-2 max-h-36 rounded-xl border border-[var(--border)] bg-white object-contain" />
+                                                )}
+                                                {question.options && question.options.length > 0 && (
+                                                    <div className="mt-2 grid grid-cols-1 gap-1.5 min-[520px]:grid-cols-2">
+                                                        {question.options.map((option, optionIndex) => (
+                                                            <div key={option.id} className="flex min-h-10 items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--bg-element)] px-2.5 py-1.5 text-[13px] leading-5 text-[var(--text-primary)]">
+                                                                <span className="shrink-0 text-[11px] font-black text-[var(--text-muted)]">{fa(optionIndex + 1)}</span>
+                                                                <span className="min-w-0">
+                                                                    <MathRenderer text={option.text} inline />
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </article>
+                                        );
+                                    })}
+                                </div>
+                            )}
 
-                        {!showPicked && mode === 'manual' && hasApplied && pageCount > 1 && (
-                            <div className="mt-4 flex flex-wrap items-center justify-center gap-1.5">
-                                <button type="button" disabled={page <= 1 || loading} onClick={() => fetchQuestions(page - 1)} className="grid h-9 w-9 place-items-center rounded-xl bg-[var(--bg-card)] p-0 disabled:opacity-40">
-                                    <ChevronRight size={16} />
-                                </button>
-                                {pageNumbers.map((number) => (
-                                    <button
-                                        key={number}
-                                        type="button"
-                                        onClick={() => fetchQuestions(number)}
-                                        className={`h-9 min-w-9 rounded-xl px-2 text-[12px] font-black ${number === page ? 'bg-[var(--accent)] text-white' : 'bg-[var(--bg-card)] text-[var(--text-secondary)]'}`}
-                                    >
-                                        {fa(number)}
+                            {!showPicked && mode === 'manual' && hasApplied && pageCount > 1 && (
+                                <div className="mt-4 flex flex-wrap items-center justify-center gap-1.5">
+                                    <button type="button" disabled={page <= 1 || loading} onClick={() => fetchQuestions(page - 1)} aria-label="صفحه قبل" className="grid h-10 w-10 cursor-pointer place-items-center rounded-xl bg-[var(--bg-card)] p-0 disabled:opacity-40">
+                                        <ChevronRight size={16} />
                                     </button>
-                                ))}
-                                <button type="button" disabled={page >= pageCount || loading} onClick={() => fetchQuestions(page + 1)} className="grid h-9 w-9 place-items-center rounded-xl bg-[var(--bg-card)] p-0 disabled:opacity-40">
-                                    <ChevronLeft size={16} />
-                                </button>
-                            </div>
-                        )}
+                                    {pageNumbers.map((number) => (
+                                        <button
+                                            key={number}
+                                            type="button"
+                                            onClick={() => fetchQuestions(number)}
+                                            className={`h-10 min-w-10 cursor-pointer rounded-xl px-2 text-[12px] font-black ${number === page ? 'bg-[var(--accent)] text-white' : 'bg-[var(--bg-card)] text-[var(--text-secondary)]'}`}
+                                        >
+                                            {fa(number)}
+                                        </button>
+                                    ))}
+                                    <button type="button" disabled={page >= pageCount || loading} onClick={() => fetchQuestions(page + 1)} aria-label="صفحه بعد" className="grid h-10 w-10 cursor-pointer place-items-center rounded-xl bg-[var(--bg-card)] p-0 disabled:opacity-40">
+                                        <ChevronLeft size={16} />
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </section>
             </div>
 
-            <Sheet open={filtersOpen} title="فیلتر سوالات" onClose={() => setFiltersOpen(false)}>{filters}</Sheet>
-            <Sheet open={setupOpen} title="تنظیم آزمون" onClose={() => setSetupOpen(false)}>{setup}</Sheet>
+            <footer className="hidden shrink-0 border-t border-[var(--border)] bg-[var(--bg-card)] px-4 py-3 lg:block">
+                {setup('bar')}
+            </footer>
+
+            <Sheet open={filtersOpen} title="فیلتر سوالات" onClose={() => setFiltersOpen(false)}>{renderFilters()}</Sheet>
+            <Sheet open={setupOpen} title="تنظیم آزمون" onClose={() => setSetupOpen(false)}>{setup('stack')}</Sheet>
         </div>
     );
 }
@@ -937,7 +964,7 @@ function FilterGroup({
         <section>
             <p className="mb-1 text-[12px] font-black text-[var(--text-primary)]">{title}</p>
             {items.length === 0 ? (
-                <p className="px-1 text-[11px] text-[var(--text-muted)]">{empty}</p>
+                <p className="px-1 text-[11px] leading-5 text-[var(--text-muted)]">{empty}</p>
             ) : (
                 <div className="space-y-0.5">{items}</div>
             )}
@@ -955,12 +982,12 @@ function EmptyState({
     text: string;
 }) {
     return (
-        <div className="flex min-h-[42vh] flex-col items-center justify-center px-6 text-center">
-            <div className="mb-4 grid h-16 w-16 place-items-center rounded-3xl bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-[var(--accent)]">
+        <div className="flex min-h-[46vh] flex-col items-center justify-center px-6 text-center">
+            <div className="mb-4 grid h-16 w-16 place-items-center rounded-3xl bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-[var(--accent)]">
                 <Icon size={28} />
             </div>
             <h3 className="text-base font-black text-[var(--text-primary)]">{title}</h3>
-            <p className="mt-1 max-w-sm text-[13px] leading-6 text-[var(--text-muted)]">{text}</p>
+            <p className="mt-1 max-w-xs text-[13px] leading-6 text-[var(--text-muted)]">{text}</p>
         </div>
     );
 }

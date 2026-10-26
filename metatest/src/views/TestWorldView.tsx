@@ -105,7 +105,7 @@ export const TestWorldView = ({
 
     return (
         <div
-            className={`${activeView === 'selector' ? 'h-full overflow-hidden' : 'h-full overflow-y-auto'} bg-[var(--bg-app)] text-[var(--text-primary)] font-sans`}
+            className={`${activeView === 'selector' ? 'flex h-full min-h-0 flex-1 flex-col overflow-hidden' : 'h-full overflow-y-auto'} bg-[var(--bg-app)] text-[var(--text-primary)] font-sans`}
             dir="rtl"
         >
             <AnimatePresence mode="wait">
