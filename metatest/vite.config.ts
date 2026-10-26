@@ -27,6 +27,12 @@ function exposeReplyQualityEsm(): Plugin {
   }
 }
 
+function cleanFlag(value: string | undefined) {
+  if (value == null) return undefined
+  const cleaned = value.trim().replace(/^['"]|['"]$/g, '')
+  return cleaned === '' ? undefined : cleaned
+}
+
 function isLocalhost(value: string | undefined) {
   if (value == null || value.trim() === '') return true
   return !['false', '0', 'no', 'off'].includes(value.trim().toLowerCase())
@@ -34,7 +40,14 @@ function isLocalhost(value: string | undefined) {
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, __dirname, '')
-  const localhost = isLocalhost(env.LOCALHOST ?? env.VITE_LOCALHOST)
+  // Shell wins over the env file, so `LOCALHOST=false npm run build` is the cPanel build
+  // even when metatest/.env is still the local copy.
+  const localhost = isLocalhost(
+    cleanFlag(process.env.LOCALHOST)
+    ?? cleanFlag(process.env.VITE_LOCALHOST)
+    ?? cleanFlag(env.LOCALHOST)
+    ?? cleanFlag(env.VITE_LOCALHOST),
+  )
   return {
     plugins: [
       exposeReplyQualityEsm(),

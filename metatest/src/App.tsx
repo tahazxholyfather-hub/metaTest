@@ -27,6 +27,7 @@ import {
     getLiveHistory,
     recordForward,
     sameEntry,
+    toAppPath,
 } from "./lib/appHistory.js";
 
 
@@ -500,7 +501,7 @@ function MainApp() {
     }, []);
 
     const handleBack = useCallback(() => {
-        if (window.location.pathname.startsWith('/quiz')) return;
+        if (toAppPath(window.location.pathname).startsWith('/quiz')) return;
         if (canGoBack()) {
             navigate(-1);
             return;
@@ -515,14 +516,14 @@ function MainApp() {
     }, [navigate, bumpHistory]);
 
     useEffect(() => {
-        bootstrapHistory(entryForPath(window.location.pathname));
+        bootstrapHistory(entryForPath(toAppPath(window.location.pathname)));
         return bindAppHistory({
             onPracticeBack: () => window.dispatchEvent(new CustomEvent('trigger-practice-back')),
             onTestScreen: (screen: string) => window.dispatchEvent(new CustomEvent('testworld-screen', { detail: screen })),
             onTrap: (notice: string) => toast(notice, { id: 'leave-app', duration: EXIT_WINDOW_MS }),
             onChange: bumpHistory,
             onCustomNavigate: ({ replace, kind, step, screen }) => {
-                navigate(`${window.location.pathname}${window.location.search}${window.location.hash}`, {
+                navigate(`${toAppPath(window.location.pathname)}${window.location.search}${window.location.hash}`, {
                     replace,
                     state: {
                         mt: true,

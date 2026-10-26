@@ -23,7 +23,8 @@ export function bindAppHistory(handlers: {
 }): () => void;
 export function bootstrapHistory(root: HistoryEntry): unknown;
 export function canGoBack(): boolean;
-export function entryForPath(pathname: string): HistoryEntry;
+export function toAppPath(pathname: string, base?: string): string;
+export function entryForPath(pathname: string, base?: string): HistoryEntry;
 export function getLiveHistory(): { stack: HistoryEntry[]; guardOnTop: boolean; armedUntil: number } | null;
 export function recordForward(entry: HistoryEntry, replaceGuard?: boolean): unknown;
 export function sameEntry(a?: HistoryEntry | null, b?: HistoryEntry | null): boolean;

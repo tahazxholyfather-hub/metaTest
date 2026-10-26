@@ -1,6 +1,22 @@
 export const EXIT_WINDOW_MS = 2000;
 export const EXIT_NOTICE = 'برای خروج، یک بار دیگر بازگشت را بزنید';
 
+function configuredBase() {
+    const env = import.meta.env;
+    const raw = env && env.BASE_URL ? String(env.BASE_URL) : '/';
+    if (!raw || raw === '/' || raw === '.' || raw === './') return '';
+    return raw.replace(/\/$/, '');
+}
+
+/** Drop the public prefix so /app/dashboard and /dashboard name the same screen. */
+export function toAppPath(pathname, base = configuredBase()) {
+    const path = pathname || '/';
+    if (!base) return path;
+    if (path === base || path === `${base}/`) return '/';
+    if (path.startsWith(`${base}/`)) return path.slice(base.length) || '/';
+    return path;
+}
+
 export function sameEntry(a, b) {
     if (!a || !b || a.kind !== b.kind) return false;
     if (a.kind === 'view') return a.view === b.view;
@@ -121,7 +137,8 @@ export function resetLiveHistory() {
     skipNote = false;
 }
 
-export function entryForPath(pathname) {
+export function entryForPath(pathname, base) {
+    pathname = toAppPath(pathname, base);
     if (
         pathname.startsWith('/lobby/')
         || pathname.startsWith('/quiz/')
@@ -237,7 +254,7 @@ export function bindAppHistory(handlers) {
         }, 0);
     };
     const onPop = () => {
-        if (window.location.pathname.startsWith('/quiz')) return;
+        if (toAppPath(window.location.pathname).startsWith('/quiz')) return;
         const result = applyPop(Date.now());
         if (result.action === 'pop') {
             if (result.popped?.kind === 'practice') handlers.onPracticeBack?.();

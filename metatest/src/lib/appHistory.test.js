@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createHistory, pushEntry, back, noteRouter, sameEntry, EXIT_NOTICE } from './appHistory.js';
+import { createHistory, pushEntry, back, noteRouter, sameEntry, entryForPath, toAppPath, EXIT_NOTICE } from './appHistory.js';
 
 const dash = { kind: 'view', view: 'dashboard' };
 const practice = { kind: 'view', view: 'practice' };
@@ -52,5 +52,13 @@ assert.equal(noteRouter(replaced, dash, 'POP').stack.length, 2);
 
 s = pushEntry(pushEntry(createHistory(dash), practice), step3);
 assert.equal(back(s, 0).popped.step, 3);
+
+assert.equal(toAppPath('/app/dashboard', '/app'), '/dashboard');
+assert.equal(toAppPath('/app', '/app'), '/');
+assert.equal(toAppPath('/dashboard', '/app'), '/dashboard');
+assert.equal(toAppPath('/dashboard', ''), '/dashboard');
+assert.equal(sameEntry(entryForPath('/app/quiz/4', '/app'), { kind: 'route', path: '/quiz/4' }), true);
+assert.equal(sameEntry(entryForPath('/app/practice', '/app'), { kind: 'view', view: 'practice' }), true);
+assert.equal(toAppPath('/app/quiz/4', '/app').startsWith('/quiz'), true);
 
 console.log('appHistory.test.js ok');
