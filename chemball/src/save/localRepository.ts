@@ -1,4 +1,4 @@
-import { buildLeaderboard } from "./leaderboard";
+import { fetchLeaderboard, submitLeaderboard } from "./leaderboardClient";
 import {
   createDefaultProfile,
   type LeaderboardEntry,
@@ -6,6 +6,7 @@ import {
   type RunRecord,
 } from "./models";
 import type { PlayerRepository } from "./repository";
+import type { ScoreSubmission } from "./scoreProof";
 
 interface SaveBlob {
   profile: PlayerProfile;
@@ -31,11 +32,17 @@ export class LocalPlayerRepository implements PlayerRepository {
     });
   }
 
-  async saveRun(run: RunRecord): Promise<void> {
+  async saveRun(run: RunRecord, proof?: ScoreSubmission): Promise<void> {
     await this.transact((blob) => {
       blob.runs.push(structuredClone(run));
       blob.runs = blob.runs.slice(-40);
     });
+    if (!proof) return;
+    try {
+      await submitLeaderboard(proof);
+    } catch {
+      /* The page surfaces a failed load. The score is not copied into a fake local board. */
+    }
   }
 
   async getRuns(): Promise<RunRecord[]> {
@@ -49,7 +56,7 @@ export class LocalPlayerRepository implements PlayerRepository {
   }
 
   async getLeaderboard(player: PlayerProfile): Promise<LeaderboardEntry[]> {
-    return buildLeaderboard(player);
+    return fetchLeaderboard(player.id);
   }
 
   private async transact(mutate: (blob: SaveBlob) => void): Promise<void> {

@@ -10,6 +10,7 @@ import { findLoose, resolveAll } from "../game/sim";
 import { createInitialBoard, generateRow, shiftDown } from "../game/spawn";
 import type { RunSummary } from "../game/types";
 import { MemoryPlayerRepository } from "../save/memoryRepository";
+import { scoreFromEvents, submissionScore } from "../save/scoreProof";
 
 beforeEach(() => {
   resetIds();
@@ -183,6 +184,26 @@ describe("engine", () => {
     expect(repo.profile.totalRuns).toBe(1);
     expect(repo.runs).toHaveLength(1);
     expect(repo.profile.bestScore).toBe(summary?.score ?? -1);
+    if ((summary?.score ?? 0) > 0) {
+      expect(repo.proofs).toHaveLength(1);
+      expect(scoreFromEvents(repo.proofs[0]!.events)).toBe(summary?.score);
+      expect(submissionScore(repo.proofs[0]!)).toBe(summary?.score);
+    } else {
+      expect(repo.proofs).toHaveLength(0);
+    }
+  });
+
+  it("keeps chain snapshots responsive while particles stay bounded", async () => {
+    const engine = new GameEngine(new MemoryPlayerRepository(), createSilentSfx(), 7);
+    await engine.init();
+    engine.animScale = 1;
+    engine.attachAt(3, 5, "H");
+    const started = performance.now();
+    for (let frame = 0; frame < 180; frame += 1) {
+      engine.update(1 / 60);
+      expect(engine.snapshot().particles.length).toBeLessThanOrEqual(160);
+    }
+    expect(performance.now() - started).toBeLessThan(500);
   });
 
   it("rewards a straight-up opening shot", async () => {
