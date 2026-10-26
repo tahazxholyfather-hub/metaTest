@@ -71,6 +71,7 @@ export const PracticeView = ({ onStartQuiz, onStateChange }: PracticeViewProps) 
     const [dataLoading, setDataLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [step, setStep] = useState(1);
+    const lastPushedStep = useRef(1);
     const [history, setHistory] = useState<HistoryItem[]>([]);
     const [gridItems, setGridItems] = useState<any[]>([]);
     const [pageTitle, setPageTitle] = useState('انتخاب درس');
@@ -351,6 +352,15 @@ export const PracticeView = ({ onStartQuiz, onStateChange }: PracticeViewProps) 
         return () => window.removeEventListener('trigger-practice-back', handleExternalBack);
     }, [handleBack]);
 
+    useEffect(() => {
+        if (step > lastPushedStep.current) {
+            window.dispatchEvent(new CustomEvent('app-history-push', { detail: { kind: 'practice', step } }));
+            lastPushedStep.current = step;
+        } else if (step < lastPushedStep.current) {
+            lastPushedStep.current = step;
+        }
+    }, [step]);
+
     const handleCardClick = (item: any) => {
         if (item.locked) return;
 
@@ -528,7 +538,7 @@ export const PracticeView = ({ onStartQuiz, onStateChange }: PracticeViewProps) 
 
                             {step > 1 ? (
                                 <button
-                                    onClick={handleBack}
+                                    onClick={() => window.dispatchEvent(new CustomEvent('app-request-back'))}
                                     className="flex items-center gap-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-1 md:bg-black/5 dark:md:bg-white/5 md:px-4 md:py-2 md:rounded-xl"
                                     aria-label="بازگشت"
                                 >

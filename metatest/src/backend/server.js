@@ -17,6 +17,7 @@ const quizController = require('./controllers/quizController');
 const userController = require('./controllers/userController');
 const adminController = require('./controllers/adminController');
 const quizWorldController = require('./controllers/quizWorldController');
+const bankSelection = require('./controllers/bankSelection');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const aiTeacherRoutes = require('./ai-teacher/routes');
@@ -327,6 +328,15 @@ app.post('/api/flow', requireToken, async (req, res) => {
                 break;
             case 'get_bank_question_answer':
                 await quizWorldController.handleGetBankQuestionAnswer(req, res);
+                break;
+            case 'save_bank_selection':
+                await bankSelection.handleSaveBankSelection(req, res);
+                break;
+            case 'get_bank_selection':
+                await bankSelection.handleGetBankSelection(req, res);
+                break;
+            case 'list_bank_selections':
+                await bankSelection.handleListBankSelections(req, res);
                 break;
             case 'generate_code':
                 await quizWorldController.generateCode(req, res);

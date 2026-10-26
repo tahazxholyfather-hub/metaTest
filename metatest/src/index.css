@@ -567,6 +567,14 @@
         font-weight: inherit;
         line-height: inherit;
     }
+
+    .bank-shell button {
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        font-weight: inherit;
+        line-height: inherit;
+    }
 }
 
 /* ---------------------------

@@ -2679,9 +2679,11 @@ async function getQuizResultById(connection, {
             r.summary_json,
             r.result_data_json,
             r.created_at,
-            q.title AS quiz_title
+            q.title AS quiz_title,
+            u.avatar_url
         FROM quiz_results r
         LEFT JOIN quizzes q ON q.id = r.quiz_id
+        LEFT JOIN tam24_users u ON u.id = r.user_id
         WHERE r.id = ?
           AND r.user_id = ?
         LIMIT 1
@@ -2700,6 +2702,7 @@ async function getQuizResultById(connection, {
         id: row.id,
         quizId: row.quiz_id,
         quizName: row.quiz_title || null,
+        avatarUrl: row.avatar_url || null,
         userId: row.user_id,
         correctCount: row.correct_count,
         incorrectCount: row.incorrect_count,
@@ -2826,6 +2829,7 @@ async function handleGetQuizResult(req, res) {
             id: encodeResultId(result.id),
             quizId: encodeQuizId(result.quizId),
             quizName: result.quizName || null,
+            avatarUrl: result.avatarUrl || null,
             is_public: is_public,
             userId: result.userId,
             success: result.success,
@@ -2912,7 +2916,7 @@ const handleGetQuizMembers = async (req, res) => {
         const members = sorted.map((m, index) => ({
             id: m.id,
             userId: m.id,
-            fullName: m.first_name + '' + m.last_name || "کاربر ناشناس",
+            fullName: `${m.first_name || ''} ${m.last_name || ''}`.trim() || "کاربر ناشناس",
             avatar: m.avatar_url || null,
             role: m.role,
             score: m.score,
@@ -2951,21 +2955,23 @@ const handleGetQuizResultByUserAndQuiz = async (req, res) => {
         // Retrieve quiz result record by quiz and user
         const [rows] = await connection.query(`
             SELECT
-                id,
-                quiz_id,
-                user_id,
-                correct_count,
-                incorrect_count,
-                unanswered_count,
-                accuracy_rate,
-                total_score,
-                total_time_spent,
-                summary_json,
-                result_data_json,
-                created_at
-            FROM quiz_results
-            WHERE quiz_id = ?
-              AND user_id = ?
+                r.id,
+                r.quiz_id,
+                r.user_id,
+                r.correct_count,
+                r.incorrect_count,
+                r.unanswered_count,
+                r.accuracy_rate,
+                r.total_score,
+                r.total_time_spent,
+                r.summary_json,
+                r.result_data_json,
+                r.created_at,
+                u.avatar_url
+            FROM quiz_results r
+            LEFT JOIN tam24_users u ON u.id = r.user_id
+            WHERE r.quiz_id = ?
+              AND r.user_id = ?
             LIMIT 1
         `, [decodedQuizId, targetUserId]);
 
@@ -2978,6 +2984,7 @@ const handleGetQuizResultByUserAndQuiz = async (req, res) => {
             id: row.id,
             quizId: row.quiz_id,
             userId: row.user_id,
+            avatarUrl: row.avatar_url || null,
             correctCount: row.correct_count,
             incorrectCount: row.incorrect_count,
             unansweredCount: row.unanswered_count,
@@ -3079,6 +3086,7 @@ const handleGetQuizResultByUserAndQuiz = async (req, res) => {
             id: encodeResultId(result.id),
             quizId: encodeQuizId(result.quizId),
             userId: result.userId,
+            avatarUrl: result.avatarUrl || null,
             correctCount: result.correctCount,
             incorrectCount: result.incorrectCount,
             unansweredCount: result.unansweredCount || 0,

@@ -28,6 +28,7 @@ import { QuestionCounter } from '../components/QuestionCounter';
 import QuestionStatsDisplay, { type StatItem } from '../components/QuestionStatsDisplay';
 import { QuizCountdown } from '../components/QuizCountdown';
 import { MathRenderer } from '../components/ui/MathRenderer';
+import { QuestionTextClamp } from '../components/QuestionTextClamp';
 import {GameRewardToast} from '../components/GameRewardToast';
 import { Met } from '../components/met';
 import { QuizMetPanel } from './met/QuizMetPanel';
@@ -1327,12 +1328,13 @@ export function QuizView({
                                         <div className="absolute top-0 right-0 w-1.5 md:w-1.5 h-full bg-gradient-to-b from-[var(--accent)] to-[var(--accent)]/40"></div>
                                         <div className="absolute -top-4 -left-4 w-24 h-24 bg-[var(--accent)]/5 rounded-full blur-2xl md:hidden pointer-events-none"></div>
 
-                                        <p
-                                            dir="rtl"
+                                        <QuestionTextClamp
+                                            resetKey={question.id}
+                                            text={question.text}
+                                            subject={question.subject_id}
+                                            inline
                                             className="text-[16px] md:text-[19px] whitespace-pre-wrap font-semibold tracking-[-0.01em] leading-8 md:leading-10 text-right text-[var(--text-primary)] select-text"
-                                        >
-                                            <MathRenderer text={question.text} inline={true} subject={question.subject_id} />
-                                        </p>
+                                        />
                                     </div>
 
                                     {/* Images */}

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, Check, AlertCircle, Loader2 } from 'lucide-react';
 import { MathRenderer } from '../../components/ui/MathRenderer';
+import { QuestionTextClamp } from '../../components/QuestionTextClamp';
 import { QuestionCounter } from '../../components/QuestionCounter';
 import { CountdownTimer } from '../../components/QuizTimerCountDown';
 import { ResponsiveModal } from '../../components/ResponsiveModal';
@@ -1330,7 +1331,12 @@ export default function QuizPage({ quizData: initialQuizData, onExit }: QuizPage
                                                         {String(index + 1).padStart(2, '0')}
                                                     </div>
                                                     <div className="mt-1 flex-1 w-full min-w-0">
-                                                        <MathRenderer text={decodeHtmlEntities(q.text)} subject={q.subject_id} />
+                                                        <QuestionTextClamp
+                                                            resetKey={q.id}
+                                                            text={decodeHtmlEntities(q.text)}
+                                                            subject={q.subject_id}
+                                                            className="text-lg md:text-xl font-bold leading-relaxed text-zinc-900 dark:text-zinc-100"
+                                                        />
                                                     </div>
                                                 </div>
                                             </div>

@@ -39,9 +39,10 @@ export const TestWorldView = ({
         (viewId: string, pushState = true) => {
             setActiveView(viewId);
 
-            if (pushState) {
-                const currentPath = window.location.pathname;
-                window.history.pushState({ testWorldView: viewId }, '', currentPath);
+            if (pushState && viewId !== 'main') {
+                window.dispatchEvent(new CustomEvent('app-history-push', {
+                    detail: { kind: 'tests', screen: viewId },
+                }));
             }
 
             onStateChange?.({ view: viewId });
@@ -50,7 +51,7 @@ export const TestWorldView = ({
     );
 
     const handleBack = useCallback(() => {
-        window.history.back();
+        window.dispatchEvent(new CustomEvent('app-request-back'));
     }, []);
 
     const handleStartNeeds = useCallback(async (viewId: 'needs' | 'selector' = 'needs') => {
@@ -69,16 +70,14 @@ export const TestWorldView = ({
     }, [navigateTo]);
 
     useEffect(() => {
-        const handlePopState = (event: PopStateEvent) => {
-            if (event.state?.testWorldView) {
-                setActiveView(event.state.testWorldView);
-            } else {
-                setActiveView('main');
+        const handleScreen = (event: Event) => {
+            const screen = (event as CustomEvent<string>).detail;
+            if (screen === 'main' || screen === 'needs' || screen === 'selector') {
+                setActiveView(screen);
             }
         };
-
-        window.addEventListener('popstate', handlePopState);
-        return () => window.removeEventListener('popstate', handlePopState);
+        window.addEventListener('testworld-screen', handleScreen);
+        return () => window.removeEventListener('testworld-screen', handleScreen);
     }, []);
 
     useEffect(() => {
@@ -106,7 +105,7 @@ export const TestWorldView = ({
 
     return (
         <div
-            className="min-h-screen bg-[var(--bg-app)] text-[var(--text-primary)] font-sans"
+            className={`${activeView === 'selector' ? 'h-full overflow-hidden' : 'h-full overflow-y-auto'} bg-[var(--bg-app)] text-[var(--text-primary)] font-sans`}
             dir="rtl"
         >
             <AnimatePresence mode="wait">
