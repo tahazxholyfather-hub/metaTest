@@ -13,7 +13,7 @@ import { LocalPlayerRepository } from "../save/localRepository";
 import { Chem } from "./Chem";
 import { Coach, type CoachStep } from "./Coach";
 import { TIPS, type TipId } from "./copy";
-import { GadgetButton, GadgetPicker } from "./GadgetButton";
+import { GadgetDock } from "./GadgetButton";
 import { GuidePage, LeaderboardPage, PauseSheet, SettingsPage } from "./pages";
 
 const homeArt = new URL("./home-art.svg", import.meta.url).href;
@@ -63,8 +63,8 @@ export function App({ onExit }: { onExit?: () => void }) {
   const [mode, setMode] = useState<Mode>("home");
   const [page, setPage] = useState<Page>(null);
   const [paused, setPaused] = useState(false);
-  const [picking, setPicking] = useState(false);
   const [leaders, setLeaders] = useState<LeaderboardEntry[]>([]);
+  const [leaderError, setLeaderError] = useState(false);
   const [pop, setPop] = useState(0);
   const [tip, setTip] = useState<{ id: TipId; key: number } | null>(null);
   const tipQueue = useRef<TipId[]>([]);
@@ -128,17 +128,19 @@ export function App({ onExit }: { onExit?: () => void }) {
     engine.onSummary = (next) => {
       setSummary(next);
       setPaused(false);
-      setPicking(false);
     };
 
     let frame = 0;
     let last = performance.now();
+    let ctx: CanvasRenderingContext2D | null = null;
     const loop = (now: number) => {
       const dt = Math.min(0.034, (now - last) / 1000);
       last = now;
-      engine.update(dt);
-      const ctx = canvas.getContext("2d");
-      if (ctx) renderFrame(ctx, engine.snapshot(), Math.min(2, window.devicePixelRatio || 1));
+      if (modeRef.current !== "home") {
+        engine.update(dt);
+        ctx ??= canvas.getContext("2d");
+        if (ctx) renderFrame(ctx, engine.snapshot(), Math.min(2, window.devicePixelRatio || 1));
+      }
       frame = requestAnimationFrame(loop);
     };
 
@@ -168,15 +170,15 @@ export function App({ onExit }: { onExit?: () => void }) {
     };
   }, []);
 
-  const live = mode === "play" && !summary && !paused && !picking && !page && !coach;
+  const live = mode === "play" && !summary && !paused && !page && !coach;
 
   useEffect(() => {
     musicRef.current?.setScene(mode === "home" ? "home" : "game");
   }, [mode]);
 
   useEffect(() => {
-    musicRef.current?.setDucked(Boolean(page) || (mode === "play" && (paused || picking || coach || Boolean(summary))));
-  }, [mode, page, paused, picking, coach, summary]);
+    musicRef.current?.setDucked(Boolean(page) || (mode === "play" && (paused || coach || Boolean(summary))));
+  }, [mode, page, paused, coach, summary]);
 
   useEffect(() => {
     if (mode === "play" && hud.discovered.length > 0 && !hud.hint) showTip("match");
@@ -196,7 +198,6 @@ export function App({ onExit }: { onExit?: () => void }) {
   const resume = () => {
     engineRef.current?.pause(false);
     setPaused(false);
-    setPicking(false);
   };
 
   const begin = () => {
@@ -220,7 +221,6 @@ export function App({ onExit }: { onExit?: () => void }) {
     modeRef.current = "home";
     setSummary(null);
     setPaused(false);
-    setPicking(false);
     setPage(null);
     setTip(null);
     setCoach(false);
@@ -229,12 +229,25 @@ export function App({ onExit }: { onExit?: () => void }) {
 
   const openLeaders = async () => {
     const engine = engineRef.current;
-    if (engine) setLeaders(await engine.leaderboard());
+    if (!engine) return;
+    try {
+      setLeaderError(false);
+      setLeaders(await engine.leaderboard());
+    } catch {
+      setLeaderError(true);
+      setLeaders([]);
+    }
     setPage("leaders");
   };
 
-  const nextX = Math.max(46, layout.drawRadius + 28);
-  const dockStyle = { left: layout.width - nextX - 34, top: layout.launcherY + 10 - 34 };
+  const gadgetSize = 40;
+  const gadgetGap = 6;
+  const gadgetWidth = gadgetSize * 3 + gadgetGap * 2;
+  const gadgetTop = layout.height - gadgetSize - 8;
+  const dockStyle = {
+    left: Math.max(layout.launcherX + layout.drawRadius + 10, layout.width - 8 - gadgetWidth),
+    width: gadgetWidth,
+  };
   const finishCoach = () => {
     localStorage.setItem(COACH_KEY, "1");
     setCoach(false);
@@ -250,9 +263,9 @@ export function App({ onExit }: { onExit?: () => void }) {
     },
     {
       id: "gadget",
-      title: "ابزار",
-      text: "یک ضربه استفاده، نگه داشتن انتخاب.",
-      target: { x: Math.min(layout.width - nextX - 40, layout.width - 84), y: layout.launcherY + 10 - 40, w: 80, h: 100, radius: 40 },
+      title: "ابزارها",
+      text: "هر سه ابزار همین‌جا هستند. روی هر کدام بزن تا کار کند.",
+      target: { x: dockStyle.left - 6, y: gadgetTop - 6, w: gadgetWidth + 12, h: gadgetSize + 12, radius: 22 },
     },
     {
       id: "danger",
@@ -261,8 +274,6 @@ export function App({ onExit }: { onExit?: () => void }) {
       target: { x: 8, y: layout.dangerY - 16, w: layout.width - 16, h: 32, radius: 16 },
     },
   ];
-  const pickerStyle = { right: 12, bottom: layout.height - (layout.launcherY + 10 - 46) };
-
   return (
     <div className="stage" dir="rtl" onPointerDownCapture={() => musicRef.current?.unlock()}>
       <div className="phone" ref={phoneRef}>
@@ -283,6 +294,8 @@ export function App({ onExit }: { onExit?: () => void }) {
         {mode === "home" && (
           <div className="home">
             <img className="home-art" src={homeArt} alt="" />
+            <div className="home-fade home-fade-top" />
+            <div className="home-fade home-fade-bottom" />
             <header className="home-bar" dir="ltr">
               <div className="home-tools">
                 {onExit && (
@@ -342,18 +355,12 @@ export function App({ onExit }: { onExit?: () => void }) {
               )}
             </header>
             {!summary && (
-              <GadgetButton
+              <GadgetDock
                 hud={hud.gadget}
                 style={dockStyle}
-                picking={picking}
-                onUse={() => {
+                onUse={(id) => {
                   if (!live) return;
-                  if (!engineRef.current?.useGadget()) showTip("charging", false);
-                }}
-                onHold={() => {
-                  if (summary) return;
-                  engineRef.current?.pause(true);
-                  setPicking(true);
+                  if (!engineRef.current?.useGadget(id)) showTip("charging", false);
                 }}
               />
             )}
@@ -377,18 +384,6 @@ export function App({ onExit }: { onExit?: () => void }) {
             )}
             <strong>{discovery.product}</strong>
           </div>
-        )}
-
-        {picking && (
-          <GadgetPicker
-            hud={hud.gadget}
-            style={pickerStyle}
-            onPick={(id) => {
-              engineRef.current?.selectGadget(id);
-              resume();
-            }}
-            onClose={resume}
-          />
         )}
 
         {coach && mode === "play" && !summary && <Coach steps={coachSteps} height={layout.height} onDone={finishCoach} />}
@@ -453,7 +448,7 @@ export function App({ onExit }: { onExit?: () => void }) {
           />
         )}
         {page === "guide" && <GuidePage discovered={hud.discovered} onBack={() => setPage(null)} />}
-        {page === "leaders" && <LeaderboardPage entries={leaders} onBack={() => setPage(null)} />}
+        {page === "leaders" && <LeaderboardPage entries={leaders} error={leaderError} onBack={() => setPage(null)} />}
       </div>
     </div>
   );
