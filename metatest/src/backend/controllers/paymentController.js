@@ -277,6 +277,7 @@ exports.getSubscriptionPlans = async (req, res) => {
             popular: Boolean(row.popular),
         }));
 
+        res.set('Cache-Control', 'no-store');
         return res.json({ success: true, data: plans });
     } catch (error) {
         console.error('getSubscriptionPlans error:', error);

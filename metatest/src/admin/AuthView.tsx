@@ -8,6 +8,8 @@ export interface User {
     id: number;
     username: string;
     role: string;
+    isSuper?: boolean;
+    sections?: Record<string, boolean>;
 }
 
 interface AuthViewProps {

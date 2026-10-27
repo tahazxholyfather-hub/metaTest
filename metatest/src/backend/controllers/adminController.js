@@ -1,5 +1,6 @@
 const pool = require('../db');
 const cookie = require('cookie');
+const { withSections } = require('../admin/access');
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
@@ -308,8 +309,10 @@ const handleAdminLogin = async (req, res) => {
                 const user = {
                     id: adminId,
                     username: `admin${adminId}`,
-                    role: 'admin' // The role is static in this case
+                    role: 'admin',
+                    isSuper: adminId === 1,
                 };
+                await withSections(user);
 
                 // Create a token (can be a JWT for more security, but this is simple)
                 const token = `ADMIN-${user.id}-${Date.now()}`;
@@ -348,8 +351,10 @@ const handleAdminVerify = async (req, res) => {
         const user = {
             id: adminId,
             username: `admin${adminId}`,
-            role: 'admin'
+            role: 'admin',
+            isSuper: adminId === 1,
         };
+        await withSections(user);
         return res.json({ success: true, user });
     }
 

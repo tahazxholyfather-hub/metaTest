@@ -1,6 +1,8 @@
 import React from 'react';
-import { LayoutDashboard, Layers, LogOut, Hexagon, ChevronLeft, ListTree, FileText, FilePlus2 } from 'lucide-react';
+import { LayoutDashboard, Layers, LogOut, Hexagon, ListTree, FileText, FilePlus2, CreditCard, Newspaper, KeyRound } from 'lucide-react';
 import type { User } from './AuthView';
+import { ADMIN_NAV, canAccessSection } from './access';
+import type { LucideIcon } from 'lucide-react';
 
 interface SidebarProps {
     activeTab: string;
@@ -11,14 +13,22 @@ interface SidebarProps {
     onLogout: () => void;
 }
 
+const ICONS: Record<string, LucideIcon> = {
+    dashboard: LayoutDashboard,
+    'edit-questions': Layers,
+    'insert-questions': FilePlus2,
+    curriculum: ListTree,
+    'pdf-library': FileText,
+    'subscription-plans': CreditCard,
+    blog: Newspaper,
+    access: KeyRound,
+};
+
 const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpen, setIsOpen, user, onLogout }) => {
-    const navItems = [
-        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-        { id: 'edit-questions', label: 'Edit Questions', icon: Layers },
-        { id: 'insert-questions', label: 'Insert Questions', icon: FilePlus2 },
-        { id: 'curriculum', label: 'Curriculum', icon: ListTree },
-        { id: 'pdf-library', label: 'PDF Library', icon: FileText },
-    ];
+    const navItems = ADMIN_NAV.filter((item) => canAccessSection(user, item.id)).map((item) => ({
+        ...item,
+        icon: ICONS[item.id] || LayoutDashboard,
+    }));
 
     return (
         <>

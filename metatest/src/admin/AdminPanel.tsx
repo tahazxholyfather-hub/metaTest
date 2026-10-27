@@ -6,9 +6,13 @@ import EditQuestions from './EditQuestions';
 import InsertQuestions from './InsertQuestions';
 import CurriculumManager from './CurriculumManager';
 import PdfLibraryManager from './PdfLibraryManager';
+import PlansManager from './PlansManager';
+import BlogManager from './BlogManager';
+import AccessManager from './AccessManager';
 import AuthView, { type User } from './AuthView'; // Importing User interface from AuthView
 import Spinner from './Spinner';
 import { flowApi } from '../lib/authApi';
+import { ADMIN_NAV, canAccessSection, sectionTitle } from './access';
 
 export default function AdminPanel() {
     const [user, setUser] = useState<User | null>(null);
@@ -46,6 +50,13 @@ export default function AdminPanel() {
         verifySession();
     }, []);
 
+    useEffect(() => {
+        if (!user) return;
+        if (canAccessSection(user, activeTab)) return;
+        const next = ADMIN_NAV.find((item) => canAccessSection(user, item.id));
+        if (next) setActiveTab(next.id);
+    }, [user, activeTab]);
+
     // Theme Management
     useEffect(() => {
         const theme = isDarkMode ? 'dark' : 'light';
@@ -58,7 +69,8 @@ export default function AdminPanel() {
     }, [isDarkMode]);
 
     const handleTabChange = (tab: string) => {
-        if (tab === activeTab) return;
+        if (!user || tab === activeTab) return;
+        if (!canAccessSection(user, tab)) return;
         setIsLoadingView(true);
         setActiveTab(tab);
         setTimeout(() => setIsLoadingView(false), 400);
@@ -112,13 +124,7 @@ export default function AdminPanel() {
                     toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
                     isDarkMode={isDarkMode}
                     toggleDarkMode={() => setIsDarkMode(!isDarkMode)}
-                    title={
-                        activeTab === 'dashboard' ? 'Overview'
-                            : activeTab === 'insert-questions' ? 'Insert Questions'
-                                : activeTab === 'curriculum' ? 'Curriculum'
-                                    : activeTab === 'pdf-library' ? 'PDF Library'
-                                        : 'Repository'
-                    }
+                    title={activeTab === 'dashboard' ? 'Overview' : sectionTitle(activeTab)}
                 />
 
                 <main className="flex-1 overflow-y-auto relative scrollbar-hide">
@@ -132,11 +138,14 @@ export default function AdminPanel() {
                             </div>
                         ) : (
                             <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
-                                {activeTab === 'dashboard' && <Dashboard />}
-                                {activeTab === 'edit-questions' && <EditQuestions />}
-                                {activeTab === 'insert-questions' && <InsertQuestions />}
-                                {activeTab === 'curriculum' && <CurriculumManager user={user} />}
-                                {activeTab === 'pdf-library' && <PdfLibraryManager user={user} />}
+                                {activeTab === 'dashboard' && canAccessSection(user, 'dashboard') && <Dashboard />}
+                                {activeTab === 'edit-questions' && canAccessSection(user, 'edit-questions') && <EditQuestions />}
+                                {activeTab === 'insert-questions' && canAccessSection(user, 'insert-questions') && <InsertQuestions />}
+                                {activeTab === 'curriculum' && canAccessSection(user, 'curriculum') && <CurriculumManager user={user} />}
+                                {activeTab === 'pdf-library' && canAccessSection(user, 'pdf-library') && <PdfLibraryManager user={user} />}
+                                {activeTab === 'subscription-plans' && canAccessSection(user, 'subscription-plans') && <PlansManager />}
+                                {activeTab === 'blog' && canAccessSection(user, 'blog') && <BlogManager />}
+                                {activeTab === 'access' && canAccessSection(user, 'access') && <AccessManager />}
                             </div>
                         )}
                     </div>

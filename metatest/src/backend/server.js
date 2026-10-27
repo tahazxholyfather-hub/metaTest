@@ -16,6 +16,17 @@ const quizWorldController = require('./controllers/quizWorldController');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const aiTeacherRoutes = require('./ai-teacher/routes');
+const blogRoutes = require('./routes/blogRoutes');
+const blogController = require('./controllers/blogController');
+const planAdmin = require('./controllers/planAdminController');
+const {
+    attachAdmin,
+    sectionAllowed,
+    sectionsForAction,
+    listAccess,
+    saveSections,
+    readAdminId,
+} = require('./admin/access');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -95,6 +106,7 @@ app.use(express.static('public'));
 
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/blog', blogRoutes);
 // AI Private Teacher module (bootstrap, teachers, chat stream, wallet, settings, …)
 app.use('/api/ai-teacher', aiTeacherRoutes);
 
@@ -158,6 +170,14 @@ app.post('/api/flow', requireToken, async (req, res) => {
     const action = req.body.action || '';
 
     try {
+        const needed = sectionsForAction(action);
+        if (needed) {
+            const admin = await attachAdmin(req);
+            if (!sectionAllowed(admin, needed)) {
+                return res.status(403).json({ success: false, message: 'به این بخش دسترسی نداری.' });
+            }
+            req.admin = admin;
+        }
         switch (action) {
             case 'update_profile':
                 await userController.handleUpdateProfile(req, res);
@@ -395,6 +415,39 @@ app.post('/api/flow', requireToken, async (req, res) => {
                 await adminController.handleAdminInsertQuestions(req, res);
                 break;
 
+            case 'Admin_list_subscription_plans':
+                await planAdmin.handleList(req, res);
+                break;
+            case 'Admin_save_subscription_plan':
+                await planAdmin.handleSave(req, res);
+                break;
+
+            case 'Admin_list_blog_posts':
+                await blogController.handleAdminList(req, res);
+                break;
+            case 'Admin_save_blog_post':
+                await blogController.handleAdminSave(req, res);
+                break;
+            case 'Admin_delete_blog_post':
+                await blogController.handleAdminDelete(req, res);
+                break;
+
+            case 'Admin_list_access': {
+                if (readAdminId(req) !== 1) {
+                    return res.status(403).json({ success: false, message: 'به این بخش دسترسی نداری.' });
+                }
+                const data = await listAccess();
+                return res.json({ success: true, data });
+            }
+            case 'Admin_save_access': {
+                if (readAdminId(req) !== 1) {
+                    return res.status(403).json({ success: false, message: 'به این بخش دسترسی نداری.' });
+                }
+                const saved = await saveSections(req.body?.adminId, req.body?.sections, 1);
+                if (!saved.ok) return res.json({ success: false, message: saved.message });
+                return res.json({ success: true, data: { sections: saved.sections }, message: 'دسترسی ذخیره شد.' });
+            }
+
             // =========================================================
 
             default:
@@ -406,6 +459,16 @@ app.post('/api/flow', requireToken, async (req, res) => {
         res.status(500).json({ success: false, message: 'Internal Server Error' });
     }
 });
+
+// Public landing lives at the repo root (production copies it to public_html).
+// Serving it here lets `node server.js` show the same page locally.
+const siteRoot = path.resolve(__dirname, '../../..');
+function sendSite(file) {
+    return (_req, res) => res.sendFile(path.join(siteRoot, file));
+}
+app.get(['/', '/index.html', '/landing.html'], sendSite('landing.html'));
+app.get(['/blog', '/blog/', '/blog/index.html'], sendSite(path.join('blog', 'index.html')));
+app.get(['/blog/post', '/blog/post.html'], sendSite(path.join('blog', 'post.html')));
 
 // Start the server
 app.listen(PORT, () => {
