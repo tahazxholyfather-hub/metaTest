@@ -8,6 +8,7 @@ const ai = require('../controllers/adminAiController');
 const ops = require('../controllers/adminOpsController');
 const subscriptions = require('../controllers/adminSubscriptionController');
 const announcements = require('../controllers/announcementController');
+const pushService = require('../push/pushService');
 const coins = require('../controllers/coinAdminController');
 const { requireSection, withSections } = require('../admin/access');
 const {
@@ -71,6 +72,19 @@ router.get('/words', requireSection('word-stats'), wrap(ops.handleWordStats));
 
 router.get('/announcements', requireSection('announcements'), wrap(announcements.handleList));
 router.post('/announcements', requireSection('announcements'), wrap(announcements.handleSend));
+
+router.get('/push', requireSection('push'), wrap(async (_req, res) => {
+    res.json(await pushService.adminOverview());
+}));
+router.put('/push/rules/:key', requireSection('push'), wrap(async (req, res) => {
+    res.json(await pushService.saveRule(req.params.key, req.body || {}));
+}));
+router.post('/push/test', requireSection('push'), wrap(async (req, res) => {
+    res.json(await pushService.handleTest(req.body || {}));
+}));
+router.post('/push/broadcast', requireSection('push'), wrap(async (req, res) => {
+    res.json(await pushService.handleBroadcast(req.body || {}));
+}));
 
 router.get('/coins', requireSection('coins'), wrap(coins.handleGetCoins));
 router.put('/coins/packages', requireSection('coins'), wrap(coins.handleSavePackages));

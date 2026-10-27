@@ -983,6 +983,15 @@ const handleCheckAnswer = async (req, res) => {
         console.error("❌ solution access in handleCheckAnswer:", solutionError);
     }
 
+    if (checked?.rewardData?.leveled_up && checked.userId) {
+        try {
+            const { notifyLevelUp } = require('../push/pushService');
+            void notifyLevelUp(checked.userId, checked.rewardData.current_level);
+        } catch (pushError) {
+            console.error('[push] level', pushError.message);
+        }
+    }
+
     return res.json({
         success: true,
         is_correct: checked.isCorrect,
@@ -1020,6 +1029,13 @@ const handleFinishQuiz = async (req, res) => {
              VALUES (?, CURDATE(), ?, ?, ?)`,
             [userId, practiceSeconds, questionsAnswered, correctAnswers]
         );
+
+        try {
+            const { notifyPracticeFinished } = require('../push/pushService');
+            void notifyPracticeFinished(userId);
+        } catch (pushError) {
+            console.error('[push] achievement', pushError.message);
+        }
 
         res.json({ success: true, message: "Quiz activity saved successfully" });
     } catch (error) {

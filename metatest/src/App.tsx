@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Toaster, toast } from "sonner";
+import { PushPrompt } from "./components/PushPrompt";
 import type { View } from "./types";
 import { getCookie, setCookie, removeCookie } from "./lib/cookies";
 import { useUser } from './context/UserContext';
@@ -737,6 +738,7 @@ function MainApp() {
                 </div>
             </ResponsiveModal>
 
+            <PushPrompt />
             <Toaster
                 theme={theme}
                 position={isMobile ? "bottom-center" : "bottom-right"}

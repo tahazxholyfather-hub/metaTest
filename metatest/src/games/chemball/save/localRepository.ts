@@ -1,3 +1,4 @@
+import { flowApi } from "../../../lib/authApi";
 import { buildLeaderboard } from "./leaderboard";
 import {
   createDefaultProfile,
@@ -36,6 +37,12 @@ export class LocalPlayerRepository implements PlayerRepository {
       blob.runs.push(structuredClone(run));
       blob.runs = blob.runs.slice(-40);
     });
+    if (run.score <= 0) return;
+    const blob = await this.read();
+    void flowApi.dispatch("save_chemball_score", {
+      score: run.score,
+      name: blob.profile.name,
+    }).catch(() => undefined);
   }
 
   async getRuns(): Promise<RunRecord[]> {
@@ -49,6 +56,29 @@ export class LocalPlayerRepository implements PlayerRepository {
   }
 
   async getLeaderboard(player: PlayerProfile): Promise<LeaderboardEntry[]> {
+    try {
+      const res = await flowApi.dispatch("get_chemball_leaderboard") as {
+        success?: boolean;
+        leaders?: { id?: string; name?: string; score?: number; createdAt?: string; you?: boolean }[];
+      };
+      if (res?.success && Array.isArray(res.leaders)) {
+        const leaders = res.leaders.map(toEntry);
+        if (!leaders.some((entry) => entry.you) && player.bestScore > 0) {
+          leaders.push({
+            id: player.id,
+            name: player.name,
+            score: player.bestScore,
+            createdAt: player.createdAt,
+            seasonId: null,
+            you: true,
+          });
+          leaders.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, "fa"));
+        }
+        return leaders;
+      }
+    } catch {
+      /* offline or signed out: keep the local board */
+    }
     return buildLeaderboard(player);
   }
 
@@ -85,6 +115,17 @@ export class LocalPlayerRepository implements PlayerRepository {
       /* localStorage already holds the blob */
     }
   }
+}
+
+function toEntry(row: { id?: string; name?: string; score?: number; createdAt?: string; you?: boolean }): LeaderboardEntry {
+  return {
+    id: String(row.id ?? ""),
+    name: String(row.name || "بازیکن"),
+    score: Number(row.score) || 0,
+    createdAt: row.createdAt ? new Date(row.createdAt).toISOString() : new Date().toISOString(),
+    seasonId: null,
+    you: Boolean(row.you),
+  };
 }
 
 function readLocal(): SaveBlob | null {

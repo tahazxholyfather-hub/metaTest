@@ -21,6 +21,7 @@ interface TourContextType {
     endTour: () => void;
     checkTour: (tourKey: string) => Promise<boolean>;
     submitTour: (tourKey: string) => Promise<boolean>;
+    tourActive: boolean;
 }
 
 const TourContext = createContext<TourContextType>({
@@ -28,6 +29,7 @@ const TourContext = createContext<TourContextType>({
     endTour: () => {},
     checkTour: async () => false,
     submitTour: async () => false,
+    tourActive: false,
 });
 
 export const useTour = () => useContext(TourContext);
@@ -360,6 +362,7 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
                 endTour,
                 checkTour,
                 submitTour,
+                tourActive: active,
             }}
         >
             {children}

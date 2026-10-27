@@ -13,6 +13,7 @@ import AdminsManager from './AdminsManager';
 import AiManager from './AiManager';
 import WordStats from './WordStats';
 import AnnouncementsManager from './AnnouncementsManager';
+import PushManager from './PushManager';
 import CoinManager from './CoinManager';
 import ReportsManager from './ReportsManager';
 import AccessManager from './AccessManager';
@@ -176,6 +177,7 @@ export default function AdminPanel() {
                                 {activeTab === 'withdrawals' && canAccessSection(user, 'withdrawals') && <WithdrawalRequests user={user} />}
                                 {activeTab === 'word-stats' && canAccessSection(user, 'word-stats') && <WordStats />}
                                 {activeTab === 'announcements' && canAccessSection(user, 'announcements') && <AnnouncementsManager />}
+                                {activeTab === 'push' && canAccessSection(user, 'push') && <PushManager />}
                                 {activeTab === 'coins' && canAccessSection(user, 'coins') && <CoinManager isSuper={Boolean(user.isSuper || user.id === 1)} />}
                                 {activeTab === 'reports' && canAccessSection(user, 'reports') && <ReportsManager />}
                                 {activeTab === 'ai-manager' && canAccessSection(user, 'ai-manager') && <AiManager />}

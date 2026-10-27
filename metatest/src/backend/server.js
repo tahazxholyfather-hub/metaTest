@@ -23,6 +23,8 @@ const paymentRoutes = require('./routes/paymentRoutes');
 const aiTeacherRoutes = require('./ai-teacher/routes');
 const walletController = require('./controllers/walletController');
 const adminRoutes = require('./routes/adminRoutes');
+const chemballController = require('./controllers/chemballController');
+const pushService = require('./push/pushService');
 const { ensureAdminSchema } = require('./middleware/adminAuth');
 const { loadRuntimeOverlayFromDb } = require('./controllers/adminAiController');
 const { ensureDiamondPlanActive } = require('./controllers/paymentController');
@@ -111,6 +113,8 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/ai-teacher', aiTeacherRoutes);
 // Admin panel — independent session (admin_token cookie), not the student JWT
 app.use('/api/admin', adminRoutes);
+app.get('/api/chemball/leaderboard', chemballController.handleGetLeaderboard);
+app.post('/api/chemball/score', requireToken, chemballController.handleSaveScore);
 
 // 3. Route updated to just use the fixed multer upload
 app.post(
@@ -469,6 +473,21 @@ app.post('/api/flow', requireToken, async (req, res) => {
             case 'Admin_update_withdrawal_status':
                 await adminController.handleAdminUpdateWithdrawalStatus(req, res);
                 break;
+            case 'get_chemball_leaderboard':
+                await chemballController.handleGetLeaderboard(req, res);
+                break;
+            case 'save_chemball_score':
+                await chemballController.handleSaveScore(req, res);
+                break;
+            case 'get_push_config':
+                await pushService.handleGetConfig(req, res);
+                break;
+            case 'save_push_subscription':
+                await pushService.handleSaveSubscription(req, res);
+                break;
+            case 'delete_push_subscription':
+                await pushService.handleDeleteSubscription(req, res);
+                break;
 
             // =========================================================
 
@@ -507,6 +526,12 @@ app.listen(PORT, () => {
     ensureAdminSchema()
         .then(() => loadRuntimeOverlayFromDb())
         .then(() => ensureDiamondPlanActive())
+        .then(() => pushService.ensureSchema())
         .then(() => console.log('[admin] schema ready, AI runtime overlay loaded'))
         .catch((err) => console.error('[admin] bootstrap failed:', err.message));
+    try {
+        pushService.startPushScheduler();
+    } catch (err) {
+        console.error('[push] scheduler failed to start:', err.message);
+    }
 });

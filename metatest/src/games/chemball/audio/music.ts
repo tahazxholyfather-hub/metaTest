@@ -4,9 +4,15 @@ export type MusicScene = "home" | "game";
  * Candidate files per scene, tried in order. Drop tracks into `public/music/`.
  * Missing files are skipped silently, so the game runs fine with no music at all.
  */
+const musicBase = `${import.meta.env.BASE_URL || "/"}music/`;
+
+function musicUrl(file: string) {
+  return `${musicBase}${file}`;
+}
+
 export const MUSIC_TRACKS: Record<MusicScene, string[]> = {
-  home: ["/music/home.mp3", "/music/home.ogg", "/music/home.wav"],
-  game: ["/music/game.mp3", "/music/game.ogg", "/music/game.wav", "/music/home.mp3", "/music/home.ogg", "/music/home.wav"],
+  home: [musicUrl("home.mp3"), musicUrl("home.ogg"), musicUrl("home.wav")],
+  game: [musicUrl("game.mp3"), musicUrl("game.ogg"), musicUrl("game.wav"), musicUrl("home.mp3"), musicUrl("home.ogg"), musicUrl("home.wav")],
 };
 
 export interface MusicSettings {
@@ -110,6 +116,11 @@ export class MusicPlayer {
   }
 
   private async resolve(scene: MusicScene): Promise<void> {
+    // Probing missing files shows a 404 for every track. Opt in when public/music exists.
+    if (import.meta.env.VITE_CHEMBALL_MUSIC !== "true") {
+      this.resolved[scene] = null;
+      return;
+    }
     for (const url of this.tracks[scene]) {
       if (await isAudio(url)) {
         this.resolved[scene] = url;

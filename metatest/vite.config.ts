@@ -2,6 +2,7 @@ import { defineConfig, loadEnv, type Plugin } from 'vite'
 import path from "path"
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { VitePWA } from 'vite-plugin-pwa'
 
 /**
  * replyQuality.js lives in the CommonJS backend package so Node require()
@@ -53,6 +54,39 @@ export default defineConfig(({ mode }) => {
       exposeReplyQualityEsm(),
       react(),
       tailwindcss(),
+      VitePWA({
+        strategies: 'injectManifest',
+        srcDir: 'src/pwa',
+        filename: 'sw.js',
+        injectRegister: false,
+        manifest: {
+          name: 'متاتست',
+          short_name: 'متاتست',
+          description: 'تمرین، آزمون و معلم هوشمند',
+          lang: 'fa',
+          dir: 'rtl',
+          display: 'standalone',
+          theme_color: '#1C4070',
+          background_color: '#0f1115',
+          start_url: localhost ? '/' : '/app/',
+          scope: localhost ? '/' : '/app/',
+          icons: [
+            { src: 'favicon-192x192.png', sizes: '192x192', type: 'image/png' },
+            { src: 'favicon-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+          ],
+        },
+        injectManifest: {
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,woff2}'],
+          globIgnores: [
+            '**/mathjax/**',
+            '**/mathjax-newcm-font/**',
+            '**/uploads/**',
+            '**/images/questions/**',
+          ],
+          maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+        },
+        devOptions: { enabled: false },
+      }),
     ],
     base: localhost ? '/' : '/app/',
     define: {

@@ -40,7 +40,14 @@ import React from 'react';
 // --- Configuration & Constants ---
 // --- API CONFIG ---
 const API_URL = import.meta.env.API_URL;
-const IMAGE_BASE = 'images/questions/';
+const IMAGE_BASE = '/images/questions/';
+
+function questionImageSrcs(images: string[] | undefined) {
+    return (images || []).filter(Boolean).map((img) => {
+        if (img.startsWith('http') || img.startsWith('/')) return img;
+        return `${IMAGE_BASE}${img}`;
+    });
+}
 const APP_TOKEN = import.meta.env.APP_TOKEN;
 const MIN_LOAD_DURATION = 500;
 
@@ -1333,20 +1340,10 @@ export function QuizView({
                                             text={question.text}
                                             subject={question.subject_id}
                                             inline
+                                            images={question.has_image ? questionImageSrcs(question.images) : undefined}
                                             className="text-[16px] md:text-[19px] whitespace-pre-wrap font-semibold tracking-[-0.01em] leading-8 md:leading-10 text-right text-[var(--text-primary)] select-text"
                                         />
                                     </div>
-
-                                    {/* Images */}
-                                    {question.has_image && question.images?.length > 0 && (
-                                        <div className="mb-6 grid gap-4">
-                                            {question.images.map((img, idx) => (
-                                                <div key={idx} className="relative rounded-2xl overflow-hidden border border-[var(--border)] shadow-sm bg-white/5">
-                                                    <img src={`${IMAGE_BASE}${img}`} alt="Question" className="w-full h-auto object-contain max-h-[300px]" loading="lazy" />
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
 
                                     {/* Options */}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

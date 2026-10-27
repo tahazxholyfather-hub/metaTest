@@ -12,6 +12,7 @@ const ASSIGNABLE_SECTIONS = [
     { key: 'pdf-library', label: 'کتابخانه PDF', defaultAllowed: true },
     { key: 'word-stats', label: 'فعالیت واژه‌ها', defaultAllowed: true },
     { key: 'announcements', label: 'اعلان‌ها', defaultAllowed: false },
+    { key: 'push', label: 'اعلان پوش', defaultAllowed: false },
     { key: 'coins', label: 'مدیریت سکه‌ها', defaultAllowed: false },
     { key: 'reports', label: 'گزارش‌ها', defaultAllowed: true },
     { key: 'ai-manager', label: 'مدیریت هوش مصنوعی', defaultAllowed: false },

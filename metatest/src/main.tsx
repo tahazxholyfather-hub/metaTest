@@ -6,6 +6,9 @@ import { UserProvider } from './context/UserContext';
 import { SocketProvider } from './socket/SocketProvider';
 import './utils/mathjax';
 import { TourProvider } from './context/TourContext';
+import { registerAppServiceWorker } from './pwa/register';
+
+registerAppServiceWorker();
 
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
