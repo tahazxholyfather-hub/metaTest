@@ -619,7 +619,7 @@ export default function ResultDashboard() {
 
     if (error && !loading) {
         return (
-            <div className="min-h-screen bg-[var(--bg-app)] flex flex-col items-center justify-center p-6" dir="rtl">
+            <div className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain scrollbar-hide bg-[var(--bg-app)] flex flex-col items-center justify-center p-6" dir="rtl">
                 <div className="max-w-md w-full bg-[var(--bg-card)] border border-[var(--border)] rounded-3xl p-8 text-center flex flex-col items-center gap-6 shadow-lg">
                     <div className="w-20 h-20 bg-[color:rgba(185,28,28,0.1)] rounded-full flex items-center justify-center text-[var(--error)]">
                         <AlertCircle className="w-10 h-10" />
@@ -644,7 +644,7 @@ export default function ResultDashboard() {
     const showMemberError = memberError && memberError.memberId === activeMemberId;
 
     return (
-        <div className="bg-[var(--bg-app)]" dir="rtl" style={{ overflowAnchor: 'none' }}>
+        <div className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain scrollbar-hide bg-[var(--bg-app)]" dir="rtl" style={{ overflowAnchor: 'none' }}>
             <div className="bg-[var(--bg-app)] text-[var(--text-primary)] transition-colors duration-300">
 
                 <div className="mx-auto max-w-[1550px] p-0 sm:p-3 md:p-6 lg:p-8">
