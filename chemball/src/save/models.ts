@@ -48,6 +48,7 @@ export interface LeaderboardEntry {
   createdAt: string;
   seasonId: string | null;
   you: boolean;
+  mode: string;
 }
 
 export interface UserRecord {

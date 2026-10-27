@@ -1,13 +1,17 @@
 export type MusicScene = "home" | "game";
 
 /**
- * Candidate files per scene, tried in order. Drop tracks into `public/music/`.
- * Missing files are skipped silently, so the game runs fine with no music at all.
+ * Optional tracks live in `src/audio/tracks` and are bundled only when the file exists.
+ * A missing upload is never requested.
  */
-export const MUSIC_TRACKS: Record<MusicScene, string[]> = {
-  home: ["/music/home.mp3", "/music/home.ogg", "/music/home.wav"],
-  game: ["/music/game.mp3", "/music/game.ogg", "/music/game.wav", "/music/home.mp3", "/music/home.ogg", "/music/home.wav"],
-};
+const TRACK_FILES = import.meta.glob("./tracks/*.{mp3,ogg,wav}", {
+  eager: true,
+  import: "default",
+  query: "?url",
+}) as Record<string, string>;
+
+const HOME_NAMES = ["home.mp3", "home.ogg", "home.wav"];
+const GAME_NAMES = ["game.mp3", "game.ogg", "game.wav", ...HOME_NAMES];
 
 export interface MusicSettings {
   enabled: boolean;
@@ -17,6 +21,25 @@ export interface MusicSettings {
 const STORAGE_KEY = "chemball-music-v1";
 const FADE_MS = 900;
 const DUCK = 0.35;
+
+export function trackCatalog(files: Record<string, string> = TRACK_FILES): Map<string, string> {
+  const catalog = new Map<string, string>();
+  for (const [path, url] of Object.entries(files)) {
+    const name = path.split("/").pop();
+    if (name && url) catalog.set(name, url);
+  }
+  return catalog;
+}
+
+/** The single bundled URL for a scene, or null when no optional file is present. */
+export function resolveSceneTrack(scene: MusicScene, catalog = trackCatalog()): string | null {
+  const names = scene === "home" ? HOME_NAMES : GAME_NAMES;
+  for (const name of names) {
+    const url = catalog.get(name);
+    if (url) return url;
+  }
+  return null;
+}
 
 function loadSettings(): MusicSettings {
   try {
@@ -30,16 +53,7 @@ function loadSettings(): MusicSettings {
   }
 }
 
-async function isAudio(url: string): Promise<boolean> {
-  try {
-    const res = await fetch(url, { method: "HEAD" });
-    return res.ok && (res.headers.get("content-type") ?? "").startsWith("audio");
-  } catch {
-    return false;
-  }
-}
-
-/** Looping background music with per-scene tracks, crossfades, ducking and persisted settings. */
+/** Looping background music. Only files discovered at build time are loaded. */
 export class MusicPlayer {
   settings: MusicSettings = loadSettings();
   onChange: ((settings: MusicSettings) => void) | null = null;
@@ -47,17 +61,21 @@ export class MusicPlayer {
   private unlocked = false;
   private ducked = false;
   private hidden = typeof document !== "undefined" && document.hidden;
-  private resolved: Partial<Record<MusicScene, string | null>> = {};
+  private readonly resolved: Record<MusicScene, string | null>;
   private elements = new Map<string, HTMLAudioElement>();
   private fades = new Map<HTMLAudioElement, number>();
+  private failed = new Set<string>();
   private readonly onVisibility = () => {
     this.hidden = document.hidden;
     this.sync();
   };
 
-  constructor(private readonly tracks: Record<MusicScene, string[]> = MUSIC_TRACKS) {
-    document.addEventListener("visibilitychange", this.onVisibility);
-    for (const scene of Object.keys(tracks) as MusicScene[]) void this.resolve(scene);
+  constructor(catalog = trackCatalog()) {
+    this.resolved = {
+      home: resolveSceneTrack("home", catalog),
+      game: resolveSceneTrack("game", catalog),
+    };
+    if (typeof document !== "undefined") document.addEventListener("visibilitychange", this.onVisibility);
   }
 
   /** Call from a user gesture so browsers allow playback. */
@@ -87,17 +105,18 @@ export class MusicPlayer {
     this.update({ ...this.settings, volume: Math.min(1, Math.max(0, volume)) });
   }
 
-  /** True once at least one track file was found. */
+  /** True once at least one bundled track exists. */
   get hasTracks(): boolean {
-    return Object.values(this.resolved).some(Boolean);
+    return Boolean(this.resolved.home || this.resolved.game);
   }
 
   dispose(): void {
-    document.removeEventListener("visibilitychange", this.onVisibility);
+    if (typeof document !== "undefined") document.removeEventListener("visibilitychange", this.onVisibility);
     for (const frame of this.fades.values()) cancelAnimationFrame(frame);
     for (const el of this.elements.values()) {
       el.pause();
-      el.src = "";
+      el.removeAttribute("src");
+      el.load();
     }
     this.elements.clear();
   }
@@ -109,17 +128,6 @@ export class MusicPlayer {
     this.sync();
   }
 
-  private async resolve(scene: MusicScene): Promise<void> {
-    for (const url of this.tracks[scene]) {
-      if (await isAudio(url)) {
-        this.resolved[scene] = url;
-        this.sync();
-        return;
-      }
-    }
-    this.resolved[scene] = null;
-  }
-
   private target(): number {
     if (!this.settings.enabled || !this.unlocked || this.hidden) return 0;
     return this.settings.volume * (this.ducked ? DUCK : 1);
@@ -128,10 +136,16 @@ export class MusicPlayer {
   private element(url: string): HTMLAudioElement {
     let el = this.elements.get(url);
     if (!el) {
-      el = new Audio(url);
+      el = new Audio();
       el.loop = true;
       el.preload = "auto";
       el.volume = 0;
+      el.src = url;
+      el.addEventListener("error", () => {
+        this.failed.add(url);
+        el?.pause();
+        el?.removeAttribute("src");
+      }, { once: true });
       this.elements.set(url, el);
     }
     return el;
@@ -139,15 +153,16 @@ export class MusicPlayer {
 
   private sync(): void {
     const active = this.scene ? this.resolved[this.scene] : null;
-    for (const [url, el] of this.elements) if (url !== active) this.fade(el, 0);
-    if (active) this.fade(this.element(active), this.target());
+    const playable = active && !this.failed.has(active) ? active : null;
+    for (const [url, el] of this.elements) if (url !== playable) this.fade(el, 0);
+    if (playable) this.fade(this.element(playable), this.target());
   }
 
   private fade(el: HTMLAudioElement, to: number): void {
     const running = this.fades.get(el);
     if (running) cancelAnimationFrame(running);
     this.fades.delete(el);
-    if (document.hidden) {
+    if (typeof document !== "undefined" && document.hidden) {
       el.volume = to;
       if (to === 0) el.pause();
       return;

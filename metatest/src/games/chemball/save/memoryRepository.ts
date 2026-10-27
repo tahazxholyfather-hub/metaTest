@@ -1,10 +1,11 @@
-import { buildLeaderboard } from "./leaderboard";
 import { createDefaultProfile, type LeaderboardEntry, type PlayerProfile, type RunRecord } from "./models";
 import type { PlayerRepository } from "./repository";
+import type { ScoreSubmission } from "./scoreProof";
 
 export class MemoryPlayerRepository implements PlayerRepository {
   profile: PlayerProfile = createDefaultProfile();
   runs: RunRecord[] = [];
+  proofs: ScoreSubmission[] = [];
 
   async getPlayer(): Promise<PlayerProfile> {
     return structuredClone(this.profile);
@@ -14,8 +15,9 @@ export class MemoryPlayerRepository implements PlayerRepository {
     this.profile = structuredClone(player);
   }
 
-  async saveRun(run: RunRecord): Promise<void> {
+  async saveRun(run: RunRecord, proof?: ScoreSubmission): Promise<void> {
     this.runs.push(structuredClone(run));
+    if (proof) this.proofs.push(structuredClone(proof));
   }
 
   async getRuns(): Promise<RunRecord[]> {
@@ -27,6 +29,7 @@ export class MemoryPlayerRepository implements PlayerRepository {
   }
 
   async getLeaderboard(player: PlayerProfile): Promise<LeaderboardEntry[]> {
-    return buildLeaderboard(player);
+    void player.id;
+    return [];
   }
 }

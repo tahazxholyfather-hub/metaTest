@@ -4,6 +4,7 @@ import { getReaction } from "../data/reactions";
 import type { Sfx } from "../audio/sfx";
 import type { PlayerProfile, RunRecord } from "../save/models";
 import type { PlayerRepository } from "../save/repository";
+import type { ScoreEvent, ScoreSubmission } from "../save/scoreProof";
 import { Board, createBall } from "./board";
 import { difficultyFactor, fallSpeed } from "./difficulty";
 import { reactionProductName, reactionTex } from "./formula";
@@ -105,7 +106,14 @@ export class GameEngine {
   private bestAtStart = 0;
   private stats: RunStats = emptyStats();
   private particles: Particle[] = [];
+  private spareParticles: Particle[] = [];
   private floats: FloatText[] = [];
+  private viewBalls: ViewBall[] = [];
+  private scoreEvents: ScoreEvent[] = [];
+  private aimKey = "";
+  private aimPoints: Array<{ x: number; y: number }> = [];
+  private aimGhost: { x: number; y: number } | null = null;
+  private readonly looks = new Map<string, Look>();
   private shake = 0;
   private flash = 0;
   private banner = "";
@@ -175,9 +183,13 @@ export class GameEngine {
     this.emit();
   }
 
-  /** Uses the selected gadget. Returns false while it is cooling down. */
-  useGadget(): boolean {
+  /** Uses a gadget. Passing an id selects that gadget first. Returns false while it is cooling down. */
+  useGadget(gadgetId?: string): boolean {
     if (!this.ready || this.ending || this.paused || this.status !== "playing") return false;
+    if (gadgetId && isGadget(gadgetId) && gadgetId !== this.selected) {
+      this.burnerArmed = false;
+      this.selected = gadgetId;
+    }
     const id = this.selected;
     if (id === "burner" && this.burnerArmed) {
       this.burnerArmed = false;
@@ -268,7 +280,10 @@ export class GameEngine {
     this.descent = 0;
     this.driftTimer = 0;
     this.particles = [];
+    this.spareParticles = [];
     this.floats = [];
+    this.scoreEvents = [];
+    this.aimKey = "";
     this.shake = 0;
     this.flash = 0;
     this.banner = "";
@@ -300,8 +315,8 @@ export class GameEngine {
     this.tickGadgets(step);
     if (this.phase) {
       this.phase.elapsed += step;
-      if (this.phase.elapsed >= this.phase.duration) this.commit();
-      return;
+      if (this.phase.elapsed < this.phase.duration) return;
+      this.commit();
     }
     if (this.chainLive || this.queue.length) {
       if (this.chainSteps >= 12 && this.queue.length === 0) {
@@ -331,11 +346,12 @@ export class GameEngine {
     const next = this.ready
       ? this.makeViewBall(this.nextId, "element", Math.max(46, layout.drawRadius + 28), layout.launcherY + 10, 0.78)
       : null;
-    const balls: ViewBall[] = [];
+    const balls = this.viewBalls;
+    let count = 0;
     const t = this.phase ? clamp(this.phase.elapsed / Math.max(0.0001, this.phase.duration), 0, 1) : 0;
     const eased = ease(t);
     if (this.ready) {
-      for (const ball of this.board.all()) {
+      for (const ball of this.board.balls.values()) {
         const point = cellCenter(ball.col, ball.row, layout, this.descent);
         let x = point.x;
         let y = point.y;
@@ -359,7 +375,7 @@ export class GameEngine {
           }
         }
         if (morph && morph.primaryId === ball.id) {
-          style = mixStyle(morph.from, morph.to, eased);
+          style = eased > 0.5 ? morph.to : morph.from;
           scale *= 1 + Math.sin(eased * Math.PI) * 0.14;
           if (eased > 0.5) {
             glyph = morph.glyph;
@@ -379,21 +395,35 @@ export class GameEngine {
           alpha = 1 - eased;
         }
         if (this.phase?.pulseIds.includes(ball.id)) scale *= 1 + Math.sin(eased * Math.PI) * 0.1;
-        balls.push({
-          x,
-          y,
-          r: layout.drawRadius,
-          scale,
-          alpha,
-          kind,
-          icon: kind === "material" ? iconFor(ball, icon) : "",
-          glyph,
-          formula,
+        const view = balls[count] ?? {
+          x: 0,
+          y: 0,
+          r: 0,
+          scale: 1,
+          alpha: 1,
+          kind: "element" as const,
+          icon: "",
+          glyph: "",
+          formula: "",
           style,
-          frost: ball.frozenShifts > 0 || this.chill > 0,
-        });
+          frost: false,
+        };
+        view.x = x;
+        view.y = y;
+        view.r = layout.drawRadius;
+        view.scale = scale;
+        view.alpha = alpha;
+        view.kind = kind;
+        view.icon = kind === "material" ? iconFor(ball, icon) : "";
+        view.glyph = glyph;
+        view.formula = formula;
+        view.style = style;
+        view.frost = ball.frozenShifts > 0 || this.chill > 0;
+        balls[count] = view;
+        count += 1;
       }
     }
+    balls.length = count;
     const traced = this.ready && !this.shot && !this.phase && !this.chainLive ? this.traceAim() : { points: [], ghost: null };
     const splash = this.splashView(eased);
     const bolts = this.boltView(eased);
@@ -408,8 +438,8 @@ export class GameEngine {
       shot,
       trajectory: traced.points,
       ghost: traced.ghost,
-      particles: this.particles.map((particle) => ({ ...particle })),
-      floats: this.floats.map((float) => ({ ...float })),
+      particles: this.particles,
+      floats: this.floats,
       dangerY: layout.dangerY,
       launcherX: layout.launcherX,
       launcherY: layout.launcherY,
@@ -540,6 +570,7 @@ export class GameEngine {
       const used = this.combo;
       const boosted = this.chainBoost;
       const points = Math.round(base * used * boosted);
+      this.scoreEvents.push({ type: "step", scoreBase: base, combo: used, boost: boosted });
       this.score += points;
       this.stats.score = this.score;
       const point = this.effectPoint(result);
@@ -583,6 +614,7 @@ export class GameEngine {
     this.stats.highestChain = Math.max(this.stats.highestChain, this.chainSteps);
     const bonus = chainBonus(this.chainSteps, this.combo);
     if (bonus > 0) {
+      this.scoreEvents.push({ type: "chain", steps: this.chainSteps, combo: this.combo });
       this.score += bonus;
       this.stats.score = this.score;
       this.banner = `زنجیرهٔ ${faDigits(this.chainSteps)}تایی`;
@@ -820,7 +852,16 @@ export class GameEngine {
       objectsDestroyed: this.stats.objectsDestroyed,
     };
     this.audio.play("over");
-    void this.repo.savePlayer(this.profile).then(() => this.repo.saveRun(run));
+    const proof: ScoreSubmission | undefined = this.score > 0
+      ? {
+          id: run.id,
+          name: this.profile.name,
+          playerId: this.profile.id,
+          mode: "standard",
+          events: this.scoreEvents.map((event) => ({ ...event })),
+        }
+      : undefined;
+    void this.repo.savePlayer(this.profile).then(() => this.repo.saveRun(run, proof));
     this.status = "gameover";
     this.onSummary(summary);
     this.emit();
@@ -857,13 +898,22 @@ export class GameEngine {
       this.blast.t += dt / 0.55;
       if (this.blast.t >= 1) this.blast = null;
     }
-    this.particles = this.particles.filter((particle) => {
+    let alive = 0;
+    for (let i = 0; i < this.particles.length; i += 1) {
+      const particle = this.particles[i]!;
       particle.life -= dt;
+      if (particle.life <= 0) {
+        this.spareParticles.push(particle);
+        continue;
+      }
       particle.x += particle.vx * dt;
       particle.y += particle.vy * dt;
       particle.vy += 18 * dt;
-      return particle.life > 0;
-    });
+      this.particles[alive] = particle;
+      alive += 1;
+    }
+    this.particles.length = alive;
+    if (this.spareParticles.length > 180) this.spareParticles.length = 180;
     this.floats = this.floats.filter((float) => {
       float.life -= dt;
       float.y -= 28 * dt;
@@ -875,22 +925,39 @@ export class GameEngine {
     for (let i = 0; i < count; i += 1) {
       const angle = Math.random() * Math.PI * 2;
       const speed = 30 + Math.random() * 110;
-      this.particles.push({
-        x,
-        y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        life: 0.35 + Math.random() * 0.35,
-        max: 0.7,
-        color,
-        size: 1.5 + Math.random() * 2.4,
-      });
+      const particle = this.spareParticles.pop() ?? {
+        x: 0,
+        y: 0,
+        vx: 0,
+        vy: 0,
+        life: 0,
+        max: 0,
+        color: "",
+        size: 0,
+      };
+      particle.x = x;
+      particle.y = y;
+      particle.vx = Math.cos(angle) * speed;
+      particle.vy = Math.sin(angle) * speed;
+      particle.life = 0.35 + Math.random() * 0.35;
+      particle.max = 0.7;
+      particle.color = color;
+      particle.size = 1.5 + Math.random() * 2.4;
+      this.particles.push(particle);
     }
-    if (this.particles.length > 160) this.particles.splice(0, this.particles.length - 160);
+    if (this.particles.length > 160) {
+      const dropped = this.particles.splice(0, this.particles.length - 160);
+      this.spareParticles.push(...dropped);
+    }
   }
 
   private traceAim(): { points: Array<{ x: number; y: number }>; ghost: { x: number; y: number } | null } {
-    const points: Array<{ x: number; y: number }> = [];
+    const key = `${this.aimAngle.toFixed(4)}|${this.descent.toFixed(2)}|${this.layout.width}|${this.layout.height}|${this.boardSignature()}`;
+    if (key === this.aimKey) {
+      return { points: this.aimPoints, ghost: this.aimGhost ? { x: this.aimGhost.x, y: this.aimGhost.y } : null };
+    }
+    const points = this.aimPoints;
+    points.length = 0;
     let x = this.layout.launcherX;
     let y = this.layout.launcherY - this.layout.drawRadius * 0.2;
     let vx = Math.cos(this.aimAngle);
@@ -907,11 +974,31 @@ export class GameEngine {
         x = this.layout.width - this.layout.drawRadius;
         vx = -Math.abs(vx);
       }
-      if (y <= this.layout.topLimit) return { points, ghost: this.ghostPixel(x, y) };
+      if (y <= this.layout.topLimit) return this.storeAim(key, points, this.ghostPixel(x, y));
       const hit = this.findHit(x, y);
-      if (hit) return { points, ghost: this.ghostPixel(x, y, hit) };
+      if (hit) return this.storeAim(key, points, this.ghostPixel(x, y, hit));
     }
-    return { points, ghost: null };
+    return this.storeAim(key, points, null);
+  }
+
+  private storeAim(
+    key: string,
+    points: Array<{ x: number; y: number }>,
+    ghost: { x: number; y: number } | null,
+  ): { points: Array<{ x: number; y: number }>; ghost: { x: number; y: number } | null } {
+    this.aimKey = key;
+    this.aimGhost = ghost;
+    return { points, ghost: ghost ? { x: ghost.x, y: ghost.y } : null };
+  }
+
+  private boardSignature(): number {
+    let sig = this.board.balls.size;
+    for (const ball of this.board.balls.values()) {
+      const label = ball.elementId ?? ball.materialId ?? "";
+      sig = (Math.imul(sig, 33) + ball.col + Math.imul(ball.row, 131)) | 0;
+      for (let i = 0; i < label.length; i += 1) sig = (Math.imul(sig, 33) + label.charCodeAt(i)) | 0;
+    }
+    return sig;
   }
 
   private ghostPixel(x: number, y: number, hit?: Ball): { x: number; y: number } | null {
@@ -926,7 +1013,7 @@ export class GameEngine {
     const limitSq = limit * limit;
     let best: Ball | null = null;
     let bestD = limitSq;
-    for (const ball of this.board.all()) {
+    for (const ball of this.board.balls.values()) {
       const point = cellCenter(ball.col, ball.row, this.layout, this.descent);
       const d = (point.x - x) ** 2 + (point.y - y) ** 2;
       if (d <= bestD) {
@@ -1047,18 +1134,25 @@ export class GameEngine {
   }
 
   private look(ball: Ball): Look {
+    const key = ball.kind === "element" ? `e:${ball.elementId ?? ""}` : `m:${ball.materialId ?? ""}`;
+    const cached = this.looks.get(key);
+    if (cached) return cached;
+    let look: Look;
     if (ball.kind === "element" && ball.elementId) {
       const element = getElement(ball.elementId);
-      return { kind: "element", icon: "", glyph: element.symbol, formula: element.name, style: element.visualStyle };
+      look = { kind: "element", icon: "", glyph: element.symbol, formula: element.name, style: element.visualStyle };
+    } else {
+      const material = getMaterial(ball.materialId ?? "water");
+      look = {
+        kind: "material",
+        icon: material.id,
+        glyph: materialTex(material.id),
+        formula: materialName(material.id),
+        style: material.visual,
+      };
     }
-    const material = getMaterial(ball.materialId ?? "water");
-    return {
-      kind: "material",
-      icon: material.id,
-      glyph: materialTex(material.id),
-      formula: materialName(material.id),
-      style: material.visual,
-    };
+    this.looks.set(key, look);
+    return look;
   }
 
   private makeViewBall(id: string, kind: "element" | "material", x: number, y: number, scale: number): ViewBall {
@@ -1188,24 +1282,3 @@ function ease(t: number): number {
   return u * u * (3 - 2 * u);
 }
 
-function mixStyle(a: VisualStyle, b: VisualStyle, t: number): VisualStyle {
-  return {
-    base: mixHex(a.base, b.base, t),
-    glow: mixHex(a.glow, b.glow, t),
-    rim: mixHex(a.rim, b.rim, t),
-    ink: mixHex(a.ink, b.ink, t),
-  };
-}
-
-function mixHex(a: string, b: string, t: number): string {
-  const pa = parseHex(a);
-  const pb = parseHex(b);
-  const u = clamp(t, 0, 1);
-  const mixed = pa.map((channel, index) => Math.round(channel + (pb[index]! - channel) * u));
-  return `#${mixed.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
-}
-
-function parseHex(hex: string): [number, number, number] {
-  const value = hex.replace("#", "");
-  return [parseInt(value.slice(0, 2), 16), parseInt(value.slice(2, 4), 16), parseInt(value.slice(4, 6), 16)];
-}

@@ -11,6 +11,9 @@ node_modules
 dist
 dist-ssr
 *.local
+src/backend/chemball/data/*.json
+src/backend/chemball/data/*.tmp
+src/backend/chemball/data/*.unreadable
 .env
 .env.*
 !.env.example

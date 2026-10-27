@@ -48,6 +48,7 @@ export function chemSvg(source: string, weight = 0): ChemSvg {
 /** Canvas image of a formula in a fixed color. Returns null until the image has decoded. */
 export function chemImage(source: string, color: string, weight = 0): { image: HTMLImageElement; width: number; height: number } | null {
   const svg = chemSvg(source, weight);
+  if (typeof Image === "undefined") return null;
   const key = `${source}|${color}|${weight}`;
   let image = imageCache.get(key);
   if (!image) {
@@ -58,6 +59,10 @@ export function chemImage(source: string, color: string, weight = 0): { image: H
   }
   if (!image.complete || image.naturalWidth === 0) return null;
   return { image, width: svg.width, height: svg.height };
+}
+
+export function formulaCacheSize(): number {
+  return svgCache.size + imageCache.size;
 }
 
 function exToPx(value: string | undefined): number {

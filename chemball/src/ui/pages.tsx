@@ -147,9 +147,14 @@ export function SettingsPage(props: {
   );
 }
 
-export function LeaderboardPage(props: { entries: LeaderboardEntry[]; onBack: () => void }) {
+export function LeaderboardPage(props: { entries: LeaderboardEntry[]; error?: boolean; onBack: () => void }) {
   return (
     <Page title="رتبه‌بندی" onBack={props.onBack}>
+      {props.error ? (
+        <p className="section-lead">رتبه‌بندی الان در دسترس نیست. اتصال سرور را بررسی کن و دوباره باز کن.</p>
+      ) : props.entries.length === 0 ? (
+        <p className="section-lead">هنوز امتیازی ثبت نشده است.</p>
+      ) : (
       <ol className="ranks">
         {props.entries.map((entry, index) => (
           <li key={entry.id} className={`${entry.you ? "you" : ""} ${index < 3 ? `top top-${index + 1}` : ""}`}>
@@ -163,6 +168,7 @@ export function LeaderboardPage(props: { entries: LeaderboardEntry[]; onBack: ()
           </li>
         ))}
       </ol>
+      )}
     </Page>
   );
 }
@@ -220,7 +226,7 @@ export function GuidePage(props: { discovered: string[]; onBack: () => void }) {
       </section>
       <section>
         <h2 className="section-title">ابزارها</h2>
-        <p className="section-lead">دکمهٔ ابزار را بزن تا استفاده شود؛ نگه دار تا ابزار دیگری برداری.</p>
+        <p className="section-lead">هر سه ابزار روی صفحه است. روی هر کدام بزن تا استفاده شود.</p>
         <div className="tools">
           {GADGET_COPY.map((gadget) => {
             const Icon = GADGET_ICONS[gadget.id] ?? Sparkles;
