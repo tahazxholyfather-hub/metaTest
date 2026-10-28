@@ -9,7 +9,7 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root { --bg:#05050A; --accent:#8B5CF6; --accent2:#A78BFA; --text:#F8F7FF; --text-mid:#C4BCE8; --text-dim:#8B87AA; --hdr:88px; }
-    html, body { background: var(--bg); color: var(--text); font-family: 'alibaba', sans-serif; }
+    html, body { background: var(--bg); color: var(--text); font-family: 'Alibaba', 'alibaba', system-ui, sans-serif; }
     header { height: var(--hdr); display: flex; align-items: center; justify-content: space-between; padding: 0 56px; }
     .logo-img { width: 52px; height: 52px; }
     .header-btn { text-decoration: none; color: var(--text-mid); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 10px 14px; font-size: 13.5px; }
@@ -61,24 +61,32 @@
     const params = new URLSearchParams(location.search);
     const slug = params.get('slug') || '';
     const article = document.getElementById('article');
+    const SAMPLES = {
+      'weekly-chapter-plan': { title: 'چطور یک فصل را در یک هفته جمع کنیم', body: 'روز اول فقط عنوان‌ها و نمودار فصل را بخوان.\nروز دوم و سوم تست آموزشی بزن و غلط‌ها را علامت بزن.\nروز چهارم همان غلط‌ها را بدون نگاه به پاسخ حل کن.', publishedAt: '2026-10-20' },
+      'after-mock-exam': { title: 'بعد از آزمون آزمایشی چه کار کنیم', body: 'اول درصد هر درس را جدا بنویس.\nبعد سؤال‌هایی را که شک داشتی از سؤال‌هایی که بلد نبودی جدا کن.', publishedAt: '2026-10-18' },
+      'busy-school-days': { title: 'برنامه‌ی روزهای شلوغ مدرسه', body: 'هر روز فقط یک بلوک چهل‌ دقیقه‌ای برای تست بگذار.\nاگر خسته‌ای، تعداد تست را کم کن ولی زمان را حذف نکن.', publishedAt: '2026-10-15' },
+      'ask-the-ai-teacher': { title: 'چطور از معلم هوشمند متاتست سؤال بپرسیم', body: 'به‌جای «این فصل را توضیح بده» بپرس «این تست را تا کجا خودم درست رفتم؟».\nبعد از پاسخ، یک تست مشابه حل کن.', publishedAt: '2026-10-12' }
+    };
+    function show(post) {
+      document.title = post.title + ' — متاتست';
+      const cover = post.coverUrl ? '<img class="cover" alt="" src="' + esc(post.coverUrl) + '">' : '';
+      const date = post.publishedAt ? new Date(post.publishedAt).toLocaleDateString('fa-IR') : '';
+      article.innerHTML = '<h1>' + esc(post.title) + '</h1><p class="meta">' + esc(date) + '</p>' + cover + '<div class="body">' + esc(post.body) + '</div>';
+    }
     if (!slug) {
       article.innerHTML = '<p class="status">مطلبی انتخاب نشده است.</p>';
     } else {
       fetch('/api/blog/posts/' + encodeURIComponent(slug))
         .then((res) => res.json().then((payload) => ({ ok: res.ok, payload })))
         .then(({ ok, payload }) => {
-          if (!ok || !payload || !payload.success || !payload.data) throw new Error('missing');
-          const post = payload.data;
-          document.title = post.title + ' — متاتست';
-          const cover = post.coverUrl ? '<img class="cover" alt="" src="' + esc(post.coverUrl) + '">' : '';
-          const date = post.publishedAt ? new Date(post.publishedAt).toLocaleDateString('fa-IR') : '';
-          article.innerHTML =
-            '<h1>' + esc(post.title) + '</h1>' +
-            '<p class="meta">' + esc(date) + '</p>' +
-            cover +
-            '<div class="body">' + esc(post.body) + '</div>';
+          if (ok && payload && payload.success && payload.data) return show(payload.data);
+          if (SAMPLES[slug]) return show(SAMPLES[slug]);
+          throw new Error('missing');
         })
-        .catch(() => { article.innerHTML = '<p class="status">این مطلب پیدا نشد.</p>'; });
+        .catch(() => {
+          if (SAMPLES[slug]) show(SAMPLES[slug]);
+          else article.innerHTML = '<p class="status">این مطلب پیدا نشد.</p>';
+        });
     }
   </script>
 </body>

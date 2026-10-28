@@ -5,9 +5,37 @@ const { slugify, cleanText, cleanCoverUrl } = require('../blog/text');
 
 let schemaReady = null;
 
+const SAMPLE_POSTS = [
+    {
+        title: 'چطور یک فصل را در یک هفته جمع کنیم',
+        slug: 'weekly-chapter-plan',
+        excerpt: 'یک برنامه‌ی هفت‌روزه برای مرور فصل، بدون انباشته شدن جزوه.',
+        body: 'روز اول فقط عنوان‌ها و نمودار فصل را بخوان.\nروز دوم و سوم تست آموزشی بزن و غلط‌ها را علامت بزن.\nروز چهارم همان غلط‌ها را بدون نگاه به پاسخ حل کن.\nروز پنجم یک آزمون کوتاه زمان‌دار بگیر.\nروز ششم نقاط ضعف را با معلم هوشمند مرور کن.\nروز هفتم فقط جمع‌بندی یک صفحه‌ای بنویس.',
+    },
+    {
+        title: 'بعد از آزمون آزمایشی چه کار کنیم',
+        slug: 'after-mock-exam',
+        excerpt: 'درصد خام مهم است، ولی الگوی غلط‌ها مسیر هفته‌ی بعد را مشخص می‌کند.',
+        body: 'اول درصد هر درس را جدا بنویس.\nبعد سؤال‌هایی را که شک داشتی از سؤال‌هایی که بلد نبودی جدا کن.\nبرای هر درس فقط دو مبحث تکراری را انتخاب کن و همان‌ها را سه روز تمرین کن.\nتحلیل را همان روز آزمون بنویس، نه آخر هفته.',
+    },
+    {
+        title: 'برنامه‌ی روزهای شلوغ مدرسه',
+        slug: 'busy-school-days',
+        excerpt: 'وقتی کلاس و تکلیف وقت را می‌گیرد، جلسه‌های کوتاه بهتر از برنامه‌ی سنگین است.',
+        body: 'هر روز فقط یک بلوک چهل‌ دقیقه‌ای برای تست بگذار.\nاگر خسته‌ای، تعداد تست را کم کن ولی زمان را حذف نکن.\nجمعه را برای جبران نگذار؛ همان روز یک مرور ده‌دقیقه‌ای کافی است.\nهدف، ادامه‌دار بودن تمرین است نه حجم زیاد.',
+    },
+    {
+        title: 'چطور از معلم هوشمند متاتست سؤال بپرسیم',
+        slug: 'ask-the-ai-teacher',
+        excerpt: 'سؤال دقیق، پاسخ دقیق‌تری از معلم خصوصی می‌گیرد.',
+        body: 'به‌جای «این فصل را توضیح بده» بپرس «این تست را تا کجا خودم درست رفتم؟».\nگزینه‌ای که بین دو جواب مردد بودی را بنویس.\nاگر فرمول یا شکل داری، همان را در سؤال بیاور.\nبعد از پاسخ، یک تست مشابه حل کن تا مطلب بنشیند.',
+    },
+];
+
 function ensureBlogSchema() {
     if (!schemaReady) {
-        schemaReady = pool.query(`
+        schemaReady = (async () => {
+            await pool.query(`
             CREATE TABLE IF NOT EXISTS blog_posts (
                 id INT NOT NULL AUTO_INCREMENT,
                 title VARCHAR(200) NOT NULL,
@@ -24,7 +52,18 @@ function ensureBlogSchema() {
                 UNIQUE KEY uq_blog_slug (slug),
                 KEY idx_blog_published (published, published_at)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
-        `).catch((err) => {
+        `);
+            const [countRows] = await pool.query(`SELECT COUNT(*) AS n FROM blog_posts`);
+            if (Number(countRows[0].n) === 0) {
+                for (const post of SAMPLE_POSTS) {
+                    await pool.query(
+                        `INSERT INTO blog_posts (title, slug, excerpt, body, published, published_at)
+                         VALUES (?, ?, ?, ?, 1, NOW())`,
+                        [post.title, post.slug, post.excerpt, post.body]
+                    );
+                }
+            }
+        })().catch((err) => {
             schemaReady = null;
             throw err;
         });

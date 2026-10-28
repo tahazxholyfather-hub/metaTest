@@ -102,6 +102,9 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 app.use(express.static('public'));
+// Landing assets (lordicons, team logo) and the same Alibaba font the app panels use.
+app.use(express.static(path.resolve(__dirname, '../../../landing-static')));
+app.use('/app', express.static(path.resolve(__dirname, '../../public')));
 
 
 app.use('/api/dashboard', dashboardRoutes);
