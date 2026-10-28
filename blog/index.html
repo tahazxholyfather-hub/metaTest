@@ -4,91 +4,119 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>بلاگ آموزشی — متاتست</title>
-  <meta name="description" content="یادداشت‌های آموزشی متاتست" />
   <link rel="icon" type="image/png" href="/app/favicon-32x32.png">
   <link href="/app/assets/font.css" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root { --bg:#05050A; --accent:#8B5CF6; --accent2:#A78BFA; --text:#F8F7FF; --text-mid:#C4BCE8; --text-dim:#8B87AA; --hdr:88px; }
+    html { scrollbar-gutter: stable; }
     html, body { background: var(--bg); color: var(--text); font-family: 'Alibaba', 'alibaba', system-ui, sans-serif; min-height: 100%; }
     body { overflow-x: clip; }
     a { color: inherit; }
-    header { height: var(--hdr); display: flex; align-items: center; justify-content: space-between; padding: 0 56px; gap: 16px; }
-    .logo-img { width: 52px; height: 52px; }
-    .header-nav, .header-actions { display: flex; align-items: center; gap: 10px; }
-    .header-btn, .soon-card button { font-family: inherit; text-decoration: none; color: var(--text-mid); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 8px 14px; font-size: 13.5px; background: rgba(255,255,255,0.02); cursor: pointer; }
-    .header-btn.active { color: var(--text); border-color: rgba(139,92,246,0.45); background: rgba(139,92,246,0.12); }
-    .soon-modal { position: fixed; inset: 0; z-index: 50; display: none; align-items: center; justify-content: center; background: rgba(5,5,10,0.72); padding: 24px; }
+    header { height: var(--hdr); display: flex; align-items: center; justify-content: space-between; padding: 0 56px; gap: 24px; }
+    .header-brand { display: flex; align-items: center; gap: 28px; min-width: 0; }
+    .logo-img { width: 60px; height: 60px; object-fit: contain; }
+    .header-nav { display: flex; align-items: center; gap: 22px; }
+    .nav-link { position: relative; padding: 8px 2px 10px; color: var(--text-mid); font-size: 15px; font-weight: 600; text-decoration: none; }
+    .nav-link::after { content: ''; position: absolute; right: 0; bottom: 2px; height: 2px; width: 0; background: #8B5CF6; transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1); }
+    .nav-link:hover, .nav-link.active { color: var(--text); }
+    .nav-link:hover::after, .nav-link.active::after { width: 100%; }
+    .header-actions { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; }
+    .header-btn, .soon-card button { font-family: inherit; }
+    .header-btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      height: 40px; padding: 0 18px; border-radius: 10px; flex: 0 0 auto; white-space: nowrap;
+      background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+      color: var(--text-mid); font-size: 13.5px; font-weight: 500; text-decoration: none; cursor: pointer;
+    }
+    .header-btn svg { width: 16px; height: 16px; flex: 0 0 16px; }
+    .soon-modal { position: fixed; inset: 0; z-index: 80; display: none; align-items: center; justify-content: center; background: rgba(5,5,10,0.72); padding: 24px; }
     .soon-modal.open { display: flex; }
     .soon-card { width: min(420px, 100%); text-align: center; padding: 32px 24px; border-radius: 24px; background: #100d1c; border: 1px solid rgba(139,92,246,0.35); }
     .soon-card h3 { color: var(--accent2); font-size: 28px; margin-bottom: 8px; }
     .soon-card p { color: var(--text-dim); line-height: 2; margin-bottom: 18px; }
-    .soon-card button { color: #fff; border: 0; background: linear-gradient(90deg, #7C3AED, #8B5CF6); border-radius: 999px; }
-    main { max-width: 1120px; margin: 0 auto; padding: 24px 56px 80px; position: relative; z-index: 2; }
-    .sec-eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 7px 16px; border-radius: 100px; background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.25); color: var(--accent2); font-size: 12.5px; font-weight: 600; margin-bottom: 18px; }
-    h1 { font-size: clamp(30px, 4vw, 44px); font-weight: 800; margin-bottom: 12px; color: var(--accent2); }
-    .lead { color: var(--text-dim); line-height: 2; margin-bottom: 36px; }
-    .list { display: grid; gap: 18px; }
-    .card { display: block; text-decoration: none; padding: 26px; border-radius: 20px; background: linear-gradient(165deg, rgba(255,255,255,0.06), rgba(8,8,16,0.62)); border: 1px solid rgba(255,255,255,0.08); }
-    .card:hover { border-color: rgba(139,92,246,0.4); }
-    .card h2 { font-size: 22px; margin-bottom: 8px; }
-    .card p { color: var(--text-mid); line-height: 2; }
-    .card time { display: block; margin-top: 12px; color: var(--text-dim); font-size: 12.5px; }
+    .soon-card button { color: #fff; border: 0; background: linear-gradient(90deg, #7C3AED, #8B5CF6); border-radius: 999px; padding: 10px 22px; cursor: pointer; }
+    main { max-width: 1120px; margin: 0 auto; padding: 12px 56px 80px; }
+    .eyebrow { color: var(--accent2); font-size: 12.5px; font-weight: 700; }
+    h1 { font-size: clamp(30px, 4vw, 44px); font-weight: 800; margin: 10px 0 12px; }
+    .lead { color: var(--text-dim); line-height: 2; margin-bottom: 28px; max-width: 680px; }
+    .blog-search { position: relative; margin-bottom: 18px; }
+    .blog-search input { width: 100%; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); color: var(--text); border-radius: 14px; padding: 14px 16px; font-family: inherit; font-size: 14.5px; }
+    .blog-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 28px; }
+    .blog-tabs button { font-family: inherit; background: transparent; color: var(--text-dim); border: 0; border-bottom: 2px solid transparent; padding: 8px 2px; cursor: pointer; font-weight: 700; }
+    .blog-tabs button.active { color: var(--text); border-bottom-color: #8B5CF6; }
+    .blog-featured { display: grid; grid-template-columns: 1.1fr 1.4fr; gap: 0; text-decoration: none; border-radius: 22px; overflow: hidden; border: 1px solid rgba(255,255,255,0.08); margin-bottom: 28px; background: rgba(255,255,255,0.03); }
+    .blog-featured:hover { border-color: rgba(139,92,246,0.45); }
+    .blog-featured-thumb { min-height: 240px; background: radial-gradient(circle at 30% 20%, rgba(139,92,246,0.5), #120e22 68%); }
+    .blog-featured-body { padding: 32px 28px; display: flex; flex-direction: column; gap: 12px; }
+    .blog-featured-body h2 { font-size: 28px; line-height: 1.6; }
+    .blog-featured-body p { color: var(--text-mid); line-height: 2; }
+    .blog-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+    .blog-card { display: flex; flex-direction: column; text-decoration: none; border-radius: 18px; overflow: hidden; border: 1px solid rgba(255,255,255,0.07); background: rgba(255,255,255,0.025); min-height: 100%; }
+    .blog-card:hover { border-color: rgba(139,92,246,0.45); transform: translateY(-3px); }
+    .blog-card-thumb { height: 140px; background: radial-gradient(circle at 70% 30%, rgba(167,139,250,0.35), #100e1c 70%); position: relative; }
+    .blog-card-cat, .feat-cat { position: absolute; top: 12px; right: 12px; background: rgba(12,10,24,0.78); color: var(--accent2); border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 700; }
+    .blog-card-body { padding: 16px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+    .blog-card-body h3 { font-size: 17px; line-height: 1.7; }
+    .blog-card-body p { color: var(--text-dim); font-size: 13.5px; line-height: 1.9; }
+    .blog-card-meta { margin-top: auto; display: flex; gap: 14px; color: var(--text-dim); font-size: 12px; }
     .status { color: var(--text-dim); }
-    .modern-footer { position: relative; padding: 0 56px 40px; margin-top: 20px; }
+    .modern-footer { padding: 0 56px 40px; }
     .footer-glow-line { height: 1px; max-width: 1120px; margin: 0 auto; background: linear-gradient(90deg, transparent, rgba(139,92,246,0.6), transparent); }
-    .footer-inner { max-width: 1120px; margin: 48px auto 0; display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 40px; }
-    .footer-title { margin-bottom: 16px; font-size: 14.5px; }
-    .footer-links { list-style: none; display: flex; flex-direction: column; gap: 12px; }
-    .footer-links a { color: var(--text-dim); text-decoration: none; font-size: 14px; }
-    .footer-links a:hover { color: var(--accent2); }
-    .footer-desc, .footer-contact { color: var(--text-dim); font-size: 13.5px; line-height: 2; }
-    .footer-bottom { max-width: 1120px; margin: 40px auto 0; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.06); color: var(--text-dim); font-size: 13px; }
+    .footer-inner { max-width: 1120px; margin: 40px auto 0; display: flex; justify-content: space-between; gap: 24px; }
+    .footer-links { list-style: none; display: flex; gap: 18px; }
+    .footer-links a { color: var(--text-dim); text-decoration: none; }
+    .footer-bottom { max-width: 1120px; margin: 28px auto 0; color: var(--text-dim); font-size: 13px; }
     @media (max-width: 900px) {
-      header, main, .modern-footer { padding-left: 24px; padding-right: 24px; }
-      .header-btn span { display: none; }
-      .footer-inner { grid-template-columns: 1fr; text-align: center; }
+      header, main, .modern-footer { padding-left: 20px; padding-right: 20px; }
+      .header-brand { gap: 14px; }
+      .header-actions .header-btn span { display: none; }
+      .header-actions .header-btn { width: 42px; height: 42px; padding: 0; }
+      .blog-featured, .blog-grid, .footer-inner { grid-template-columns: 1fr; display: grid; }
+      .footer-inner { display: flex; flex-direction: column; }
     }
   </style>
 </head>
 <body>
   <header>
-    <a href="/" aria-label="متاتست"><img src="https://metatest.app/logo.png" class="logo-img" alt="Metatest"></a>
-    <nav class="header-nav">
-      <a class="header-btn" href="/">صفحه اصلی</a>
-      <a class="header-btn active" href="/blog/">وبلاگ</a>
-    </nav>
+    <div class="header-brand">
+      <a href="/" class="logo" aria-label="متاتست"><img src="https://metatest.app/logo.png" class="logo-img" alt="Metatest"></a>
+      <nav class="header-nav" aria-label="ناوبری">
+        <a class="nav-link" href="/">صفحه اصلی</a>
+        <a class="nav-link active" href="/blog/">وبلاگ</a>
+      </nav>
+    </div>
     <div class="header-actions">
-      <button type="button" class="header-btn js-soon">دانلود اپلیکیشن</button>
-      <a class="header-btn js-app" href="/">ورود / ثبت‌نام</a>
+      <button type="button" class="header-btn js-soon" aria-label="دانلود اپلیکیشن">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span>دانلود اپلیکیشن</span>
+      </button>
+      <a class="header-btn js-app" href="/" aria-label="ورود / ثبت‌نام">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span>ورود / ثبت‌نام</span>
+      </a>
     </div>
   </header>
   <main>
-    <div class="sec-eyebrow">یادداشت‌ها</div>
+    <div class="eyebrow">مجله متاتست</div>
     <h1>بلاگ آموزشی</h1>
-    <p class="lead">مطالبی که تیم متاتست منتشر می‌کند. هر یادداشت تازه، بعد از انتشار در پنل ادمین، همین‌جا دیده می‌شود.</p>
-    <div class="list" id="list"></div>
+    <p class="lead">راهنمای مطالعه، تحلیل آزمون و کار با معلم هوشمند. مطالب تازه را از پنل ادمین منتشر کنید؛ همین صفحه به‌روز می‌شود.</p>
+    <div class="blog-search">
+      <input id="q" type="search" placeholder="جستجو در مطالب… (مثلاً: آزمون، برنامه‌ریزی)" aria-label="جستجو در مطالب" />
+    </div>
+    <div class="blog-tabs" id="tabs"></div>
+    <div id="featured"></div>
+    <div class="blog-grid" id="grid"></div>
     <p class="status" id="status">در حال دریافت مطالب…</p>
   </main>
   <footer class="modern-footer">
     <div class="footer-glow-line"></div>
     <div class="footer-inner">
-      <div>
-        <img src="https://metatest.app/logo.png" class="logo-img" alt="">
-        <p class="footer-desc">متاتست نسل جدید یادگیری و ارزیابی است.</p>
-      </div>
-      <div>
-        <h2 class="footer-title">لینک‌های سریع</h2>
-        <ul class="footer-links">
-          <li><a href="/#plans">پلن‌ها و تعرفه‌ها</a></li>
-          <li><a href="/blog/">بلاگ آموزشی</a></li>
-        </ul>
-      </div>
-      <div>
-        <h2 class="footer-title">ارتباط با ما</h2>
-        <p class="footer-contact" dir="ltr">metatestinfo@gmail.com</p>
-        <p class="footer-contact">مشهد، بلوار سجاد، امین غربی ۴، پلاک ۶، ساختمان A10</p>
-      </div>
+      <strong>متاتست</strong>
+      <ul class="footer-links">
+        <li><a href="/#plans">پلن‌ها و تعرفه‌ها</a></li>
+        <li><a href="/#home-blog">بلاگ آموزشی</a></li>
+      </ul>
     </div>
     <div class="footer-bottom">تمامی حقوق برای متاتست محفوظ است © ۲۰۲۶</div>
   </footer>
@@ -105,40 +133,64 @@
     const soonModal = document.getElementById('soon-modal');
     document.querySelectorAll('.js-soon').forEach((el) => el.addEventListener('click', (event) => { event.preventDefault(); soonModal.classList.add('open'); }));
     document.getElementById('soon-close').addEventListener('click', () => soonModal.classList.remove('open'));
-    const SAMPLES = [
-      { title: 'چطور یک فصل را در یک هفته جمع کنیم', slug: 'weekly-chapter-plan', excerpt: 'یک برنامه‌ی هفت‌روزه برای مرور فصل، بدون انباشته شدن جزوه.', publishedAt: '2026-10-20' },
-      { title: 'بعد از آزمون آزمایشی چه کار کنیم', slug: 'after-mock-exam', excerpt: 'درصد خام مهم است، ولی الگوی غلط‌ها مسیر هفته‌ی بعد را مشخص می‌کند.', publishedAt: '2026-10-18' },
-      { title: 'برنامه‌ی روزهای شلوغ مدرسه', slug: 'busy-school-days', excerpt: 'وقتی کلاس و تکلیف وقت را می‌گیرد، جلسه‌های کوتاه بهتر از برنامه‌ی سنگین است.', publishedAt: '2026-10-15' },
-      { title: 'چطور از معلم هوشمند متاتست سؤال بپرسیم', slug: 'ask-the-ai-teacher', excerpt: 'سؤال دقیق، پاسخ دقیق‌تری از معلم خصوصی می‌گیرد.', publishedAt: '2026-10-12' }
+    const CATS = [
+      { slug: 'all', name: 'همه مطالب' },
+      { slug: 'study', name: 'روش مطالعه' },
+      { slug: 'exam', name: 'آزمون' },
+      { slug: 'planning', name: 'برنامه‌ریزی' },
+      { slug: 'ai', name: 'معلم هوشمند' }
     ];
+    const SAMPLES = [
+      { title: 'چطور یک فصل را در یک هفته جمع کنیم', slug: 'weekly-chapter-plan', excerpt: 'یک برنامه‌ی هفت‌روزه برای مرور فصل، بدون انباشته شدن جزوه.', category: 'study', categoryName: 'روش مطالعه', readTime: '۲ دقیقه', publishedAt: '2026-10-20', featured: true },
+      { title: 'بعد از آزمون آزمایشی چه کار کنیم', slug: 'after-mock-exam', excerpt: 'درصد خام مهم است، ولی الگوی غلط‌ها مسیر هفته‌ی بعد را مشخص می‌کند.', category: 'exam', categoryName: 'آزمون', readTime: '۲ دقیقه', publishedAt: '2026-10-18', featured: false },
+      { title: 'برنامه‌ی روزهای شلوغ مدرسه', slug: 'busy-school-days', excerpt: 'وقتی کلاس و تکلیف وقت را می‌گیرد، جلسه‌های کوتاه بهتر از برنامه‌ی سنگین است.', category: 'planning', categoryName: 'برنامه‌ریزی', readTime: '۲ دقیقه', publishedAt: '2026-10-15', featured: false },
+      { title: 'چطور از معلم هوشمند متاتست سؤال بپرسیم', slug: 'ask-the-ai-teacher', excerpt: 'سؤال دقیق، پاسخ دقیق‌تری از معلم خصوصی می‌گیرد.', category: 'ai', categoryName: 'معلم هوشمند', readTime: '۲ دقیقه', publishedAt: '2026-10-12', featured: false }
+    ];
+    let posts = SAMPLES.slice();
+    let active = 'all';
     function esc(value) {
       return String(value ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
     }
     function when(value) {
       if (!value) return '';
       const date = new Date(value);
-      if (Number.isNaN(date.getTime())) return '';
-      return date.toLocaleDateString('fa-IR');
+      return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('fa-IR');
     }
-    const list = document.getElementById('list');
-    const status = document.getElementById('status');
-    function draw(posts) {
-      status.textContent = '';
-      list.innerHTML = posts.map((post) => (
-          '<a class="card" href="/blog/post.html?slug=' + encodeURIComponent(post.slug) + '">' +
-            '<h2>' + esc(post.title) + '</h2>' +
-            '<p>' + esc(post.excerpt) + '</p>' +
-            '<time>' + esc(when(post.publishedAt)) + '</time>' +
-          '</a>'
-        )).join('');
+    function card(post) {
+      return '<a class="blog-card" href="/blog/post.html?slug=' + encodeURIComponent(post.slug) + '">' +
+        '<div class="blog-card-thumb"><span class="blog-card-cat">' + esc(post.categoryName || 'آموزش') + '</span></div>' +
+        '<div class="blog-card-body"><h3>' + esc(post.title) + '</h3><p>' + esc(post.excerpt || '') + '</p>' +
+        '<div class="blog-card-meta"><span>' + esc(when(post.publishedAt)) + '</span><span>' + esc(post.readTime || '') + '</span></div></div></a>';
     }
-    fetch('/api/blog/posts')
-      .then((res) => res.json())
-      .then((payload) => {
-        const posts = payload && payload.success && Array.isArray(payload.data) && payload.data.length ? payload.data : SAMPLES;
-        draw(posts);
-      })
-      .catch(() => draw(SAMPLES));
+    function draw() {
+      const q = document.getElementById('q').value.trim();
+      const filtered = posts.filter((post) => {
+        const cat = post.category || post.categorySlug || 'study';
+        const hit = !q || (post.title + ' ' + (post.excerpt || '')).includes(q);
+        return hit && (active === 'all' || cat === active);
+      });
+      const featured = !q && active === 'all' ? (filtered.find((post) => post.featured) || filtered[0]) : null;
+      const rest = featured ? filtered.filter((post) => post.slug !== featured.slug) : filtered;
+      const featuredEl = document.getElementById('featured');
+      featuredEl.innerHTML = featured
+        ? '<a class="blog-featured" href="/blog/post.html?slug=' + encodeURIComponent(featured.slug) + '"><div class="blog-featured-thumb"></div><div class="blog-featured-body"><span class="eyebrow">مطلب ویژه · ' + esc(featured.categoryName || '') + '</span><h2>' + esc(featured.title) + '</h2><p>' + esc(featured.excerpt || '') + '</p><div class="blog-card-meta"><span>' + esc(when(featured.publishedAt)) + '</span><span>' + esc(featured.readTime || '') + '</span></div></div></a>'
+        : '';
+      document.getElementById('grid').innerHTML = rest.map(card).join('');
+      document.getElementById('status').textContent = filtered.length ? '' : 'مطلبی با این جستجو پیدا نشد.';
+    }
+    document.getElementById('tabs').innerHTML = CATS.map((cat) => '<button type="button" data-cat="' + cat.slug + '"' + (cat.slug === 'all' ? ' class="active"' : '') + '>' + cat.name + '</button>').join('');
+    document.getElementById('tabs').addEventListener('click', (event) => {
+      const button = event.target.closest('button');
+      if (!button) return;
+      active = button.dataset.cat;
+      document.querySelectorAll('#tabs button').forEach((item) => item.classList.toggle('active', item === button));
+      draw();
+    });
+    document.getElementById('q').addEventListener('input', draw);
+    fetch('/api/blog/posts').then((res) => res.json()).then((payload) => {
+      if (payload && payload.success && Array.isArray(payload.data) && payload.data.length) posts = payload.data;
+      draw();
+    }).catch(draw);
   </script>
 </body>
 </html>

@@ -5,28 +5,43 @@ const { slugify, cleanText, cleanCoverUrl } = require('../blog/text');
 
 let schemaReady = null;
 
+const CATEGORIES = {
+    study: 'روش مطالعه',
+    exam: 'آزمون',
+    planning: 'برنامه‌ریزی',
+    ai: 'معلم هوشمند',
+};
+
 const SAMPLE_POSTS = [
     {
         title: 'چطور یک فصل را در یک هفته جمع کنیم',
         slug: 'weekly-chapter-plan',
+        category: 'study',
+        featured: 1,
         excerpt: 'یک برنامه‌ی هفت‌روزه برای مرور فصل، بدون انباشته شدن جزوه.',
         body: 'روز اول فقط عنوان‌ها و نمودار فصل را بخوان.\nروز دوم و سوم تست آموزشی بزن و غلط‌ها را علامت بزن.\nروز چهارم همان غلط‌ها را بدون نگاه به پاسخ حل کن.\nروز پنجم یک آزمون کوتاه زمان‌دار بگیر.\nروز ششم نقاط ضعف را با معلم هوشمند مرور کن.\nروز هفتم فقط جمع‌بندی یک صفحه‌ای بنویس.',
     },
     {
         title: 'بعد از آزمون آزمایشی چه کار کنیم',
         slug: 'after-mock-exam',
+        category: 'exam',
+        featured: 0,
         excerpt: 'درصد خام مهم است، ولی الگوی غلط‌ها مسیر هفته‌ی بعد را مشخص می‌کند.',
         body: 'اول درصد هر درس را جدا بنویس.\nبعد سؤال‌هایی را که شک داشتی از سؤال‌هایی که بلد نبودی جدا کن.\nبرای هر درس فقط دو مبحث تکراری را انتخاب کن و همان‌ها را سه روز تمرین کن.\nتحلیل را همان روز آزمون بنویس، نه آخر هفته.',
     },
     {
         title: 'برنامه‌ی روزهای شلوغ مدرسه',
         slug: 'busy-school-days',
+        category: 'planning',
+        featured: 0,
         excerpt: 'وقتی کلاس و تکلیف وقت را می‌گیرد، جلسه‌های کوتاه بهتر از برنامه‌ی سنگین است.',
         body: 'هر روز فقط یک بلوک چهل‌ دقیقه‌ای برای تست بگذار.\nاگر خسته‌ای، تعداد تست را کم کن ولی زمان را حذف نکن.\nجمعه را برای جبران نگذار؛ همان روز یک مرور ده‌دقیقه‌ای کافی است.\nهدف، ادامه‌دار بودن تمرین است نه حجم زیاد.',
     },
     {
         title: 'چطور از معلم هوشمند متاتست سؤال بپرسیم',
         slug: 'ask-the-ai-teacher',
+        category: 'ai',
+        featured: 0,
         excerpt: 'سؤال دقیق، پاسخ دقیق‌تری از معلم خصوصی می‌گیرد.',
         body: 'به‌جای «این فصل را توضیح بده» بپرس «این تست را تا کجا خودم درست رفتم؟».\nگزینه‌ای که بین دو جواب مردد بودی را بنویس.\nاگر فرمول یا شکل داری، همان را در سؤال بیاور.\nبعد از پاسخ، یک تست مشابه حل کن تا مطلب بنشیند.',
     },
@@ -53,13 +68,28 @@ function ensureBlogSchema() {
                 KEY idx_blog_published (published, published_at)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
         `);
+            const [categoryCol] = await pool.query(`SHOW COLUMNS FROM blog_posts LIKE 'category'`);
+            if (!categoryCol.length) {
+                await pool.query(`ALTER TABLE blog_posts ADD COLUMN category VARCHAR(40) NOT NULL DEFAULT 'study'`);
+            }
+            const [featuredCol] = await pool.query(`SHOW COLUMNS FROM blog_posts LIKE 'featured'`);
+            if (!featuredCol.length) {
+                await pool.query(`ALTER TABLE blog_posts ADD COLUMN featured TINYINT(1) NOT NULL DEFAULT 0`);
+            }
             const [countRows] = await pool.query(`SELECT COUNT(*) AS n FROM blog_posts`);
             if (Number(countRows[0].n) === 0) {
                 for (const post of SAMPLE_POSTS) {
                     await pool.query(
-                        `INSERT INTO blog_posts (title, slug, excerpt, body, published, published_at)
-                         VALUES (?, ?, ?, ?, 1, NOW())`,
-                        [post.title, post.slug, post.excerpt, post.body]
+                        `INSERT INTO blog_posts (title, slug, excerpt, body, category, featured, published, published_at)
+                         VALUES (?, ?, ?, ?, ?, ?, 1, NOW())`,
+                        [post.title, post.slug, post.excerpt, post.body, post.category, post.featured]
+                    );
+                }
+            } else {
+                for (const post of SAMPLE_POSTS) {
+                    await pool.query(
+                        `UPDATE blog_posts SET category = ?, featured = ? WHERE slug = ?`,
+                        [post.category, post.featured, post.slug]
                     );
                 }
             }
@@ -71,7 +101,14 @@ function ensureBlogSchema() {
     return schemaReady;
 }
 
+function readMinutes(body) {
+    const words = String(body || '').trim().split(/\s+/).filter(Boolean).length;
+    return Math.max(1, Math.round(words / 40) || 1);
+}
+
 function mapPost(row) {
+    const category = row.category || 'study';
+    const minutes = readMinutes(row.body);
     return {
         id: Number(row.id),
         title: row.title,
@@ -79,9 +116,15 @@ function mapPost(row) {
         excerpt: row.excerpt || '',
         body: row.body || '',
         coverUrl: row.cover_url || null,
+        coverImage: row.cover_url || null,
         published: Number(row.published) === 1,
         publishedAt: row.published_at || null,
         updatedAt: row.updated_at || null,
+        category,
+        categorySlug: category,
+        categoryName: CATEGORIES[category] || 'آموزش',
+        featured: Number(row.featured) === 1,
+        readTime: `${minutes.toLocaleString('fa-IR')} دقیقه`,
     };
 }
 
@@ -110,7 +153,7 @@ async function uniqueSlug(connection, base, ignoreId) {
 async function handlePublicList(_req, res) {
     await ensureBlogSchema();
     const [rows] = await pool.query(
-        `SELECT id, title, slug, excerpt, body, cover_url, published, published_at, updated_at
+        `SELECT id, title, slug, excerpt, body, cover_url, category, featured, published, published_at, updated_at
          FROM blog_posts
          WHERE published = 1
          ORDER BY published_at DESC, id DESC`
@@ -132,7 +175,7 @@ async function handlePublicOne(req, res) {
     const slug = slugify(req.params.slug);
     if (!slug) return res.status(404).json({ success: false, message: 'مطلب پیدا نشد.' });
     const [rows] = await pool.query(
-        `SELECT id, title, slug, excerpt, body, cover_url, published, published_at, updated_at
+        `SELECT id, title, slug, excerpt, body, cover_url, category, featured, published, published_at, updated_at
          FROM blog_posts
          WHERE slug = ? AND published = 1
          LIMIT 1`,

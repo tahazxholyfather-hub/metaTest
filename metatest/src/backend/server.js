@@ -6,6 +6,8 @@ const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const net = require('net');
+const { spawn } = require('child_process');
 const cookieParser = require('cookie-parser');
 // const jwt = require('jsonwebtoken');
 const { requireToken } = require('./middleware/auth');
@@ -473,7 +475,41 @@ app.get(['/', '/index.html', '/landing.html'], sendSite('landing.html'));
 app.get(['/blog', '/blog/', '/blog/index.html'], sendSite(path.join('blog', 'index.html')));
 app.get(['/blog/post', '/blog/post.html'], sendSite(path.join('blog', 'post.html')));
 
+function portOpen(port) {
+    return new Promise((resolve) => {
+        const socket = net.connect({ port, host: '127.0.0.1' });
+        const done = (open) => {
+            socket.removeAllListeners();
+            socket.destroy();
+            resolve(open);
+        };
+        socket.once('connect', () => done(true));
+        socket.once('error', () => done(false));
+    });
+}
+
+// The landing "شروع کنید" button opens this Vite app. Start it with the API
+// when it is not already running, so login is on http://localhost:5173/.
+async function ensureLocalApp() {
+    if (await portOpen(5173)) {
+        console.log('Local app is already on http://localhost:5173/');
+        return;
+    }
+    const appDir = path.resolve(__dirname, '../..');
+    console.log('Starting the local app on http://localhost:5173/');
+    const child = spawn('npm', ['run', 'dev', '--', '--host', '127.0.0.1', '--port', '5173', '--strictPort'], {
+        cwd: appDir,
+        stdio: 'inherit',
+        shell: true,
+    });
+    child.on('error', (err) => {
+        console.error('Could not start the local app. From metatest run: npm install && npm run dev');
+        console.error(err.message);
+    });
+}
+
 // Start the server
 app.listen(PORT, () => {
     console.log(`Backend server is running on http://localhost:${PORT}`);
+    ensureLocalApp().catch((err) => console.error(err.message));
 });
