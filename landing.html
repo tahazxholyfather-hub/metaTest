@@ -349,10 +349,22 @@
     .plan-compare { color: var(--text-dim); font-size: 13px; text-decoration: line-through; }
     .plan-meta { color: var(--text-dim); font-size: 13px; }
     .plan-cta {
-      margin-top: 14px; text-decoration: none; color: #fff; font-size: 13.5px; font-weight: 700;
+      margin-top: auto; text-decoration: none; color: #fff; font-size: 13.5px; font-weight: 700;
       padding: 10px 18px; border-radius: 999px;
       background: linear-gradient(90deg, #7C3AED, #8B5CF6);
       box-shadow: 0 12px 24px -14px rgba(139,92,246,0.8);
+    }
+    .plan-icon { width: 84px; height: 84px; margin: 4px auto 2px; }
+    .plan-icon lord-icon { width: 84px; height: 84px; }
+    .plan-perks { list-style: none; width: 100%; margin-top: 8px; text-align: right; }
+    .plan-perks li { color: var(--text-mid); font-size: 12.5px; line-height: 1.9; }
+    .plan-perks li::before { content: '✓ '; color: #34d399; font-weight: 800; }
+    .plan-card.locked { filter: grayscale(0.35); }
+    .plan-card.locked .plan-cta,
+    .plan-cta.disabled {
+      pointer-events: none; cursor: default;
+      background: rgba(255,255,255,0.08); color: var(--text-dim);
+      box-shadow: none;
     }
     .plans-status { text-align: center; color: var(--text-dim); font-size: 14.5px; padding: 12px 0 8px; }
 
@@ -1389,6 +1401,19 @@ const SYMBOLS = [
     return String(value ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
   }
 
+  function planIconSrc(plan) {
+    const key = String(plan.iconKey || '').toLowerCase();
+    const id = String(plan.id || '').toLowerCase();
+    const name = String(plan.name || '');
+    const known = { ribbon: 1, coin: 1, gem: 1, stars: 1, lab: 1, sphere: 1 };
+    if (known[key]) return '/plan-icons/' + key + '.json';
+    if (id.indexOf('diamond') >= 0 || id === 'epic' || name.indexOf('الماس') >= 0) return '/plan-icons/gem.json';
+    if (id.indexOf('gold') >= 0 || name.indexOf('طلا') >= 0) return '/plan-icons/coin.json';
+    if (id.indexOf('silver') >= 0 || name.indexOf('نقر') >= 0) return '/plan-icons/stars.json';
+    if (id.indexOf('bronze') >= 0 || name.indexOf('برنز') >= 0) return '/plan-icons/ribbon.json';
+    return '/plan-icons/lab.json';
+  }
+
   function renderPlans(plans) {
     const grid = document.getElementById('plans-grid');
     const status = document.getElementById('plans-status');
@@ -1403,19 +1428,36 @@ const SYMBOLS = [
       const price = Number(plan.price || 0);
       const discount = Number(plan.planDiscountPercent || 0);
       const finalPrice = discount > 0 ? price - Math.round((price * discount) / 100) : price;
-      const days = plan.days == null ? 'نامحدود' : faNum(plan.days) + ' روزه';
-      const compare = discount > 0 ? '<div class="plan-compare">' + faNum(price) + ' تومان</div>' : '';
+      const days = plan.unlimited || plan.days == null ? 'نامحدود' : faNum(plan.days) + ' روزه';
+      const listed = Number(plan.comparePrice || 0);
+      const compare = listed > finalPrice
+        ? '<div class="plan-compare">' + faNum(listed) + ' تومان</div>'
+        : (discount > 0 ? '<div class="plan-compare">' + faNum(price) + ' تومان</div>' : '');
       const badge = plan.popular ? '<div class="plan-badge">پیشنهادی</div>' : '';
-      return '<article class="plan-card' + (plan.popular ? ' popular' : '') + '">' +
+      const locked = plan.purchasable === false;
+      const primary = (plan.iconColors && plan.iconColors.primary) || '#F8F7FF';
+      const secondary = (plan.iconColors && plan.iconColors.secondary) || '#8b5cf6';
+      const perks = Array.isArray(plan.attributes) && plan.attributes.length
+        ? '<ul class="plan-perks">' + plan.attributes.map((line) => '<li>' + esc(line) + '</li>').join('') + '</ul>'
+        : '';
+      const action = locked
+        ? '<span class="plan-cta disabled">فعلاً غیرفعال</span>'
+        : '<a class="plan-cta js-app" href="/">ارتقا پلن</a>';
+      return '<article class="plan-card' + (plan.popular ? ' popular' : '') + (locked ? ' locked' : '') + '">' +
         badge +
+        '<div class="plan-icon"><lord-icon src="' + planIconSrc(plan) + '" trigger="loop" colors="primary:' + esc(primary) + ',secondary:' + esc(secondary) + '"></lord-icon></div>' +
         '<h3 class="plan-name">' + esc(plan.name) + '</h3>' +
         compare +
         '<div class="plan-price">' + faNum(finalPrice) + ' تومان</div>' +
         '<div class="plan-meta">' + days + (discount > 0 ? ' · ' + faNum(discount) + '٪ تخفیف' : '') + '</div>' +
-        '<a class="plan-cta js-app" href="/">ارتقا پلن</a>' +
+        perks +
+        action +
       '</article>';
     }).join('');
     bindAppLinks(grid);
+    grid.querySelectorAll('lord-icon').forEach((icon) => {
+      if (typeof playLordIcon === 'function') playLordIcon(icon);
+    });
   }
 
   const BLOG_SAMPLES = [
