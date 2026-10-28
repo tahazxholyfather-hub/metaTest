@@ -11,6 +11,11 @@
     :root { --bg:#05050A; --accent:#8B5CF6; --accent2:#A78BFA; --text:#F8F7FF; --text-mid:#C4BCE8; --text-dim:#8B87AA; --hdr:88px; }
     html { scrollbar-gutter: stable; }
     html, body { background: var(--bg); color: var(--text); font-family: 'Alibaba', 'alibaba', system-ui, sans-serif; }
+    body { overflow-x: clip; }
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
     header { height: var(--hdr); display: flex; align-items: center; justify-content: space-between; padding: 0 56px; gap: 24px; }
     .header-brand { display: flex; align-items: center; gap: 28px; }
     .logo-img { width: 60px; height: 60px; object-fit: contain; }
@@ -27,7 +32,12 @@
     h1 { font-size: clamp(28px, 4vw, 42px); font-weight: 800; margin: 18px 0 10px; line-height: 1.45; }
     .meta { color: var(--text-dim); font-size: 13px; margin-bottom: 22px; }
     .cover { width: 100%; border-radius: 20px; margin-bottom: 22px; border: 1px solid rgba(255,255,255,0.08); }
-    .body { color: var(--text-mid); font-size: 16.5px; line-height: 2.15; white-space: pre-wrap; }
+    .body, .article-html { color: var(--text-mid); font-size: 16.5px; line-height: 2.15; }
+    .body { white-space: pre-wrap; }
+    .article-block { margin: 0 0 16px; }
+    .article-block h2, .article-block h3 { color: var(--text); margin: 18px 0 8px; }
+    .article-block ul { padding-right: 18px; }
+    .article-block img, .article-block video { width: 100%; border-radius: 16px; margin-top: 8px; }
     .status { color: var(--text-dim); }
     .modern-footer { padding: 0 56px 40px; }
     .footer-glow-line { height: 1px; max-width: 1120px; margin: 0 auto; background: linear-gradient(90deg, transparent, rgba(139,92,246,0.6), transparent); }
@@ -87,12 +97,41 @@
       'busy-school-days': { title: 'برنامه‌ی روزهای شلوغ مدرسه', body: 'هر روز فقط یک بلوک چهل‌ دقیقه‌ای برای تست بگذار.\nاگر خسته‌ای، تعداد تست را کم کن ولی زمان را حذف نکن.', publishedAt: '2026-10-15' },
       'ask-the-ai-teacher': { title: 'چطور از معلم هوشمند متاتست سؤال بپرسیم', body: 'به‌جای «این فصل را توضیح بده» بپرس «این تست را تا کجا خودم درست رفتم؟».\nبعد از پاسخ، یک تست مشابه حل کن.', publishedAt: '2026-10-12' }
     };
-    function show(post) {
+    function safeHtml(html) {
+      const holder = document.createElement('template');
+      holder.innerHTML = String(html || '');
+      holder.content.querySelectorAll('script,style,iframe,object').forEach((node) => node.remove());
+      holder.content.querySelectorAll('*').forEach((el) => {
+        [...el.attributes].forEach((attr) => {
+          if (attr.name.startsWith('on') || (attr.name === 'href' && /^\s*javascript:/i.test(attr.value))) el.removeAttribute(attr.name);
+        });
+      });
+      return holder.innerHTML;
+    }
+    function renderPost(post) {
       document.title = post.title + ' — متاتست';
       const cover = post.coverUrl ? '<img class="cover" alt="" src="' + esc(post.coverUrl) + '">' : '';
       const date = post.publishedAt ? new Date(post.publishedAt).toLocaleDateString('fa-IR') : '';
-      article.innerHTML = '<h1>' + esc(post.title) + '</h1><p class="meta">' + esc(date) + '</p>' + cover + '<div class="body">' + esc(post.body) + '</div>';
+      const blocks = Array.isArray(post.content) ? post.content : [];
+      const articleHtml = blocks.length ? blocks.map((block) => {
+        if (block.type === 'heading') {
+          const tag = Number(block.level) === 3 ? 'h3' : 'h2';
+          return '<div class="article-block"><' + tag + '>' + esc(block.text) + '</' + tag + '></div>';
+        }
+        if (block.type === 'list') {
+          return '<div class="article-block"><ul>' + (block.items || []).map((item) => '<li>' + esc(item) + '</li>').join('') + '</ul></div>';
+        }
+        if (block.type === 'image' && block.url) {
+          return '<figure class="article-block"><img alt="' + esc(block.alt || '') + '" src="' + esc(block.url) + '">' + (block.caption ? '<figcaption class="meta">' + esc(block.caption) + '</figcaption>' : '') + '</figure>';
+        }
+        if (block.type === 'video' && block.url) {
+          return '<figure class="article-block"><video controls src="' + esc(block.url) + '"></video></figure>';
+        }
+        return '<div class="article-block article-html">' + safeHtml(block.text || '') + '</div>';
+      }).join('') : '<div class="body">' + esc(post.body || '') + '</div>';
+      article.innerHTML = '<h1>' + esc(post.title) + '</h1><p class="meta">' + esc(date) + (post.readTime ? ' · ' + esc(post.readTime) : '') + '</p>' + cover + articleHtml;
     }
+    function show(post) { renderPost(post); }
     if (!slug) {
       article.innerHTML = '<p class="status">مطلبی انتخاب نشده است.</p>';
     } else {

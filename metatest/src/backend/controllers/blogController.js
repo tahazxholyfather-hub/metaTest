@@ -70,6 +70,14 @@ function ensureBlogSchema() {
                     KEY idx_blog_published (published, published_at)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
             `);
+            for (const [column, definition] of [
+                ['content', 'content LONGTEXT NULL'],
+                ['author', 'author VARCHAR(120) NULL'],
+                ['read_time', 'read_time VARCHAR(40) NULL'],
+            ]) {
+                const [cols] = await pool.query(`SHOW COLUMNS FROM blog_posts LIKE ?`, [column]);
+                if (!cols.length) await pool.query(`ALTER TABLE blog_posts ADD COLUMN ${definition}`);
+            }
             const [countRows] = await pool.query(`SELECT COUNT(*) AS n FROM blog_posts`);
             if (Number(countRows[0].n) === 0) {
                 for (const post of SAMPLE_POSTS) {
@@ -93,27 +101,52 @@ function readMinutes(body) {
     return Math.max(1, Math.round(words / 40) || 1);
 }
 
+function parseContent(value) {
+    if (!value) return [];
+    if (Array.isArray(value)) return value;
+    try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        return [];
+    }
+}
+
+function plainFromContent(content) {
+    return (content || []).map((block) => {
+        if (block.type === 'list') return (block.items || []).join('\n');
+        if (block.type === 'paragraph' || block.type === 'heading') {
+            return String(block.text || '').replace(/<[^>]+>/g, ' ');
+        }
+        return block.caption || block.alt || '';
+    }).join('\n').replace(/\s+/g, ' ').trim();
+}
+
 function mapPost(row, { includeBody = true } = {}) {
     const category = row.category || 'study';
+    const content = parseContent(row.content);
+    const plain = plainFromContent(content) || row.body || '';
     return {
         id: Number(row.id),
         title: row.title,
         slug: row.slug,
-        excerpt: row.excerpt || cleanText(row.body, 180),
-        body: includeBody ? (row.body || '') : '',
+        excerpt: row.excerpt || cleanText(plain, 180),
+        body: includeBody ? (row.body || plain) : '',
+        content: includeBody ? content : undefined,
         coverUrl: row.cover_url || null,
         coverImage: row.cover_url || null,
+        author: row.author || 'تیم متاتست',
         published: Number(row.published) === 1,
         publishedAt: row.published_at || null,
         category,
         categorySlug: category,
         categoryName: CATEGORIES[category] || 'آموزش',
         featured: Number(row.featured) === 1,
-        readTime: `${readMinutes(row.body).toLocaleString('fa-IR')} دقیقه`,
+        readTime: row.read_time || `${readMinutes(plain).toLocaleString('fa-IR')} دقیقه`,
     };
 }
 
-const PUBLIC_COLUMNS = `id, title, slug, excerpt, body, cover_url, category, featured, published, published_at`;
+const PUBLIC_COLUMNS = `id, title, slug, excerpt, body, content, cover_url, category, featured, author, read_time, published, published_at`;
 
 async function handlePublicList(_req, res) {
     await ensureBlogSchema();
@@ -164,19 +197,24 @@ async function uniqueSlug(connection, base, ignoreId) {
 async function handleAdminSave(req, res) {
     await ensureBlogSchema();
     const title = cleanText(req.body?.title, 200);
-    const body = cleanText(req.body?.body, 50000);
+    const content = Array.isArray(req.body?.content) ? req.body.content.slice(0, 80) : [];
+    const plain = plainFromContent(content);
+    const body = cleanText(req.body?.body, 50000) || cleanText(plain, 50000);
     if (!title) return res.status(400).json({ success: false, message: 'عنوان را وارد کنید.' });
-    if (!body) return res.status(400).json({ success: false, message: 'متن مطلب را وارد کنید.' });
+    if (!body && !content.length) return res.status(400).json({ success: false, message: 'متن مطلب را وارد کنید.' });
     const requested = slugify(req.body?.slug || title);
     if (!requested) return res.status(400).json({ success: false, message: 'نامک مطلب نامعتبر است.' });
     const category = CATEGORIES[req.body?.category] ? req.body.category : 'study';
-    const excerpt = cleanText(req.body?.excerpt, 500) || cleanText(body, 180);
-    const coverUrl = cleanCoverUrl(req.body?.coverUrl);
+    const excerpt = cleanText(req.body?.excerpt, 500) || cleanText(plain || body, 180);
+    const coverUrl = cleanCoverUrl(req.body?.coverUrl || req.body?.coverImage);
     if (coverUrl === undefined) return res.status(400).json({ success: false, message: 'آدرس تصویر باید با http یا https شروع شود.' });
+    const author = cleanText(req.body?.author, 120) || 'تیم متاتست';
+    const readTime = cleanText(req.body?.readTime, 40) || null;
     const published = req.body?.published === true || req.body?.published === 1 || req.body?.published === '1' || req.body?.published === 'true';
     const featured = req.body?.featured === true || req.body?.featured === 1 || req.body?.featured === '1';
     const id = Number(req.body?.id || req.params?.id);
     const hasId = Number.isInteger(id) && id > 0;
+    const contentJson = JSON.stringify(content);
 
     const connection = await pool.getConnection();
     try {
@@ -186,15 +224,15 @@ async function handleAdminSave(req, res) {
             if (!existing.length) return res.status(404).json({ success: false, message: 'مطلب پیدا نشد.' });
             await connection.query(
                 `UPDATE blog_posts
-                 SET title = ?, slug = ?, excerpt = ?, body = ?, cover_url = ?, category = ?, featured = ?, published = ?, published_at = ?
+                 SET title = ?, slug = ?, excerpt = ?, body = ?, content = ?, cover_url = ?, category = ?, featured = ?, author = ?, read_time = ?, published = ?, published_at = ?
                  WHERE id = ?`,
-                [title, slug, excerpt, body, coverUrl, category, featured ? 1 : 0, published ? 1 : 0, published ? (existing[0].published_at || new Date()) : null, id]
+                [title, slug, excerpt, body, contentJson, coverUrl, category, featured ? 1 : 0, author, readTime, published ? 1 : 0, published ? (existing[0].published_at || new Date()) : null, id]
             );
         } else {
             await connection.query(
-                `INSERT INTO blog_posts (title, slug, excerpt, body, cover_url, category, featured, published, published_at, author_admin_id)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                [title, slug, excerpt, body, coverUrl, category, featured ? 1 : 0, published ? 1 : 0, published ? new Date() : null, req.admin?.id || null]
+                `INSERT INTO blog_posts (title, slug, excerpt, body, content, cover_url, category, featured, author, read_time, published, published_at, author_admin_id)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [title, slug, excerpt, body, contentJson, coverUrl, category, featured ? 1 : 0, author, readTime, published ? 1 : 0, published ? new Date() : null, req.admin?.id || null]
             );
         }
         return res.json({ success: true, message: published ? 'مطلب منتشر شد.' : 'پیش‌نویس ذخیره شد.' });
