@@ -30,6 +30,8 @@ type Props = {
     onStop: () => void;
     onListening: (level: number | null) => void;
     onLowCoins?: () => void;
+    /** Practice / quiz: text chat only — no image, PDF, or mic. */
+    textOnly?: boolean;
     ref?: React.Ref<ComposerHandle>;
     className?: string;
 };
@@ -50,6 +52,7 @@ export function Composer({
     onStop,
     onListening,
     onLowCoins,
+    textOnly = false,
     ref,
     className = '',
 }: Props) {
@@ -71,11 +74,32 @@ export function Composer({
     const resize = useCallback(() => {
         const el = textareaRef.current;
         if (!el) return;
-        el.style.height = '0px';
-        el.style.height = `${Math.min(el.scrollHeight, isMobile ? 140 : 220)}px`;
+        const max = isMobile ? 140 : 220;
+        const min = 40;
+        // Never measure from height:0 — on mobile Safari/Chrome a flex-grown
+        // empty textarea then reports the leftover viewport as scrollHeight
+        // and becomes a giant blank rectangle.
+        el.style.height = 'auto';
+        if (!el.value) {
+            el.style.height = `${min}px`;
+            return;
+        }
+        el.style.height = `${Math.min(Math.max(el.scrollHeight, min), max)}px`;
     }, [isMobile]);
 
     useEffect(resize, [text, resize]);
+
+    useEffect(() => {
+        const onViewport = () => {
+            if (!textareaRef.current?.value) resize();
+        };
+        window.visualViewport?.addEventListener('resize', onViewport);
+        window.addEventListener('resize', onViewport);
+        return () => {
+            window.visualViewport?.removeEventListener('resize', onViewport);
+            window.removeEventListener('resize', onViewport);
+        };
+    }, [resize]);
 
     useImperativeHandle(ref, () => ({
         focus: () => textareaRef.current?.focus(),
@@ -136,14 +160,14 @@ export function Composer({
         });
 
     const onPaste = (e: React.ClipboardEvent) => {
-        if (!features.vision) return;
+        if (textOnly || !features.vision) return;
         const files = Array.from(e.clipboardData?.files || []).filter((f) => f.type.startsWith('image/'));
         if (files.length) { e.preventDefault(); void addImages(files); }
     };
 
     const onDrop = (e: React.DragEvent) => {
         e.preventDefault();
-        if (!features.vision || disabled) return;
+        if (textOnly || !features.vision || disabled) return;
         if (e.dataTransfer?.files?.length) void addImages(e.dataTransfer.files);
     };
 
@@ -175,15 +199,23 @@ export function Composer({
     };
 
     const recording = recorder.state === 'recording' || recorder.state === 'requesting';
-    const showMic = features.stt && recorder.supported;
-    const showImage = features.vision;
-    const showPdf = features.pdfReferences;
-    const placeholder = disabled ? disabledReason || 'مِت فعلاً در دسترس نیست' : busy ? 'مِت در حال پاسخ دادن است…' : 'از مِت بپرس…';
+    const showMic = !textOnly && features.stt && recorder.supported;
+    const showImage = !textOnly && features.vision;
+    const showPdf = !textOnly && features.pdfReferences;
+    const placeholder = disabled
+        ? disabledReason || 'مِت فعلاً در دسترس نیست'
+        : busy
+            ? 'در حال نوشتن…'
+            : textOnly
+                ? 'پیام خود را بنویس…'
+                : 'از مِت بپرس…';
 
     return (
         <div className={`relative ${className}`} onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
             <div
-                className={`ai-composer-shell rounded-[24px] border transition-colors duration-200 bg-[color-mix(in_srgb,var(--bg-card)_88%,transparent)] ${
+                className={`ai-composer-shell border transition-colors duration-200 bg-[color-mix(in_srgb,var(--bg-card)_88%,transparent)] ${
+                    textOnly ? 'rounded-[20px]' : 'rounded-[24px]'
+                } ${
                     disabled ? 'border-[var(--border)]/50 opacity-70' : 'border-[var(--border)]/80 focus-within:border-[color-mix(in_srgb,var(--color-primary-500)_45%,var(--border))] focus-within:shadow-[0_0_0_4px_color-mix(in_srgb,var(--color-primary-500)_10%,transparent)]'
                 }`}
             >
@@ -255,9 +287,9 @@ export function Composer({
                     )}
                 </AnimatePresence>
 
-                <div className="flex items-end gap-1.5 px-2 py-2">
+                <div className={`flex items-end ${textOnly ? 'gap-2 px-2.5 py-1.5' : 'gap-1.5 px-2 py-2'}`}>
                     {/* Right side (RTL start): tools */}
-                    <div className="flex items-center gap-0.5 shrink-0 pb-0.5">
+                    <div className={`flex items-center shrink-0 pb-0.5 ${textOnly || (!showImage && !showPdf) ? 'hidden' : 'gap-0.5'}`}>
                         {showImage && (
                             <>
                                 <input
@@ -313,12 +345,12 @@ export function Composer({
                         disabled={disabled || recording}
                         placeholder={placeholder}
                         aria-label="پیام به مِت"
-                        className="flex-1 min-w-0 resize-none bg-transparent border-0 outline-none ring-0 shadow-none focus:outline-none focus:ring-0 text-[14.5px] leading-[1.6] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] py-2 px-1.5 max-h-[220px] chat-scrollbar disabled:cursor-not-allowed"
+                        className="flex-1 self-end min-w-0 min-h-10 h-10 resize-none overflow-y-auto bg-transparent border-0 outline-none ring-0 shadow-none focus:outline-none focus:ring-0 text-[14.5px] leading-[1.6] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] py-2 px-1.5 chat-scrollbar disabled:cursor-not-allowed"
                         dir="auto"
                     />
 
                     {/* Left side (RTL end): mic + send/stop */}
-                    <div className="flex items-center gap-0.5 shrink-0 pb-0.5">
+                    <div className={`flex items-center shrink-0 pb-0.5 ${textOnly ? 'gap-1' : 'gap-0.5'}`}>
                         {recording ? (
                             <>
                                 <IconButton label="لغو ضبط" size={36} tone="danger" onClick={recorder.cancel}>
@@ -372,16 +404,20 @@ export function Composer({
                 </div>
             </div>
 
-            <div className="flex items-center justify-between px-3 mt-1.5 min-h-[14px]">
-                <span className="text-[10px] text-[var(--text-muted)] truncate">
-                    {!disabled && (subjectKey === 'general' ? 'گفتگوی آزاد · پاسخ‌ها ممکن است اشتباه داشته باشند؛ بررسی کن.' : 'مِت فقط در همین درس پاسخ می‌دهد.')}
-                </span>
-                {nearLimit && (
-                    <span className={`text-[10px] tabular-nums ${text.length >= maxChars ? 'text-rose-400' : 'text-[var(--text-muted)]'}`} dir="ltr">
-                        {faNum(text.length)} / {faNum(maxChars)}
+            {(nearLimit || (!textOnly && !disabled && subjectKey === 'general')) && (
+                <div className="flex items-center justify-between px-3 mt-1.5 min-h-[14px]">
+                    <span className="text-[10px] text-[var(--text-muted)] truncate">
+                        {!textOnly && !disabled && subjectKey === 'general'
+                            ? 'گفتگوی آزاد · پاسخ‌ها ممکن است اشتباه داشته باشند؛ بررسی کن.'
+                            : ''}
                     </span>
-                )}
-            </div>
+                    {nearLimit && (
+                        <span className={`text-[10px] tabular-nums ${text.length >= maxChars ? 'text-rose-400' : 'text-[var(--text-muted)]'}`} dir="ltr">
+                            {faNum(text.length)} / {faNum(maxChars)}
+                        </span>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

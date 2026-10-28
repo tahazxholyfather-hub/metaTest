@@ -1,12 +1,13 @@
 // src/components/TopHeader.tsx
 import React, { useRef, useState, useEffect } from "react";
-import { Menu, Bell, Check, CheckCircle2 } from "lucide-react";
+import { Menu, Bell, Check, CheckCircle2, Moon, Sun } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { CoinBadge } from "./CoinBadge";
 import { XpBadge } from "./XpBadge";
 import { MobileMenu } from "./MobileMenu";
 import { useUser } from '../context/UserContext';
 import { flowApi } from "../lib/authApi";
+import { avatarSrc } from "../lib/asset";
 
 type TopHeaderProps = {
     title: string;
@@ -51,8 +52,21 @@ const NotificationBell = () => {
     const hasUnread = notifications.some(n => n.isRead === 0);
 
     const markAllAsRead = () => {
+        const previous = notifications;
         setNotifications(notifications.map(n => ({ ...n, isRead: 1 })));
-        // Optional: Trigger a background api request to mark notifications as read if built in later
+        flowApi.markNotificationsRead({ all: true }).catch((error) => {
+            console.error("Failed to mark notifications read:", error);
+            setNotifications(previous);
+        });
+    };
+
+    const markOneAsRead = (id: number) => {
+        const target = notifications.find((n) => n.id === id);
+        if (!target || target.isRead !== 0) return;
+        setNotifications(notifications.map(n => n.id === id ? { ...n, isRead: 1 } : n));
+        flowApi.markNotificationsRead({ ids: [id] }).catch((error) => {
+            console.error("Failed to mark notification read:", error);
+        });
     };
 
     return (
@@ -113,6 +127,7 @@ const NotificationBell = () => {
                                     {notifications.map((notif) => (
                                         <div
                                             key={`notif-item-${notif.id}`}
+                                            onClick={() => markOneAsRead(notif.id)}
                                             className={`p-4 border-b last:border-b-0 border-[var(--border)] hover:bg-[var(--hover-overlay)] transition-colors cursor-pointer flex gap-3 ${notif.isRead === 0 ? 'bg-[var(--color-primary-500)]/5' : ''}`}
                                         >
                                             <div className={`mt-1 flex-shrink-0 ${notif.isRead === 0 ? 'text-[#FF4D6D]' : 'text-[var(--text-muted)]'}`}>
@@ -231,6 +246,28 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                             <div className="header-tour-bell">
                                 <NotificationBell />
                             </div>
+
+                            <button
+                                type="button"
+                                onClick={onToggleTheme}
+                                aria-label={theme === 'dark' ? 'پوسته روشن' : 'پوسته تاریک'}
+                                className="inline-flex h-10 w-10 items-center justify-center rounded-full border-0 bg-transparent p-0 text-[var(--text-secondary)] hover:bg-[var(--hover-overlay)] hover:text-[var(--text-primary)]"
+                            >
+                                {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => onNavigate('profile')}
+                                className="rounded-full border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                                aria-label="پروفایل"
+                            >
+                                <img
+                                    src={avatarSrc(user?.avatar_url)}
+                                    alt=""
+                                    className="h-10 w-10 rounded-full border-2 border-[var(--border)] object-cover"
+                                />
+                            </button>
                         </div>
                     </div>
 
@@ -238,11 +275,18 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                     <div className="md:hidden h-full flex items-center justify-between">
                         {/* Left: avatar then ONLY coin counter */}
                         <div className="flex items-center gap-3">
-                            <img
-                                src={user?.avatar_url ? `${user.avatar_url}` : "/avatars/user_default.png"}
-                                alt="آواتار"
-                                className="w-10 h-10 rounded-full border-2 border-[var(--border)] object-cover"
-                            />
+                            <button
+                                type="button"
+                                onClick={() => onNavigate('profile')}
+                                className="rounded-full border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                                aria-label="پروفایل"
+                            >
+                                <img
+                                    src={avatarSrc(user?.avatar_url)}
+                                    alt=""
+                                    className="h-10 w-10 rounded-full border-2 border-[var(--border)] object-cover"
+                                />
+                            </button>
                             <div ref={scoreTagRef} className="header-tour-coins-mobile" aria-label={`سکه‌ها ${coinCount}`} role="status">
                                 <CoinBadge count={coinCount} />
                             </div>

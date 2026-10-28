@@ -10,15 +10,17 @@ function wrap(handler) {
         try {
             await handler(req, res, next);
         } catch (err) {
-            console.error('[blog]', err.message);
-            if (!res.headersSent) {
-                res.status(500).json({ success: false, message: 'خطا در دریافت مطالب' });
-            }
+            next(err);
         }
     };
 }
 
 router.get('/posts', wrap(blog.handlePublicList));
 router.get('/posts/:slug', wrap(blog.handlePublicOne));
+
+router.use((err, _req, res, _next) => {
+    console.error('[blog]', err.message);
+    if (!res.headersSent) res.status(500).json({ success: false, message: 'خطا در دریافت مطالب' });
+});
 
 module.exports = router;

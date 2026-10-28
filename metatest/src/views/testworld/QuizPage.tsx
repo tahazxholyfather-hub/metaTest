@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, Check, AlertCircle, Loader2 } from 'lucide-react';
 import { MathRenderer } from '../../components/ui/MathRenderer';
+import { QuestionTextClamp } from '../../components/QuestionTextClamp';
 import { QuestionCounter } from '../../components/QuestionCounter';
 import { CountdownTimer } from '../../components/QuizTimerCountDown';
 import { ResponsiveModal } from '../../components/ResponsiveModal';
@@ -12,7 +13,6 @@ import { useSocket } from '../../socket/useSocket';
 import { useLobbyEvents } from '../../socket/useLobbyEvents';
 import {
     joinLobby,
-    leaveLobby,
     rejoinLobby,
     submitQuiz,
     updateMemberProgress,
@@ -398,8 +398,10 @@ export default function QuizPage({ quizData: initialQuizData, onExit }: QuizPage
     const [joinedLobby, setJoinedLobby] = useState(false);
 
     const baseImageUrl = '/images/questions/';
+    const scrollRootRef = useRef<HTMLDivElement>(null);
     const scrollYRef = useRef(0);
     const restoredScrollRef = useRef<number | null>(null);
+    const quizScrollClass = 'flex-1 min-h-0 w-full overflow-y-auto overscroll-contain scrollbar-hide bg-[var(--bg-app)]';
 
     useEffect(() => { joinedLobbyRef.current = joinedLobby; }, [joinedLobby]);
 
@@ -520,44 +522,50 @@ export default function QuizPage({ quizData: initialQuizData, onExit }: QuizPage
         });
     }, [answers, activeFilter, questions]);
 
-    // ─── Scroll tracking ──────────────────────────────────────────────────────
+    // ─── Scroll tracking (the page itself scrolls; the app shell does not) ──
     useEffect(() => {
-        if (!storageKey || !isSessionReady || isLoading) return;
-        let throttleTimeout: any = null;
+        const root = scrollRootRef.current;
+        if (!root || !storageKey || !isSessionReady || isLoading) return;
+        let throttleTimeout: ReturnType<typeof setTimeout> | null = null;
         const throttledScroll = () => {
-            if (!throttleTimeout) {
-                throttleTimeout = setTimeout(() => {
-                    scrollYRef.current = window.scrollY;
-                    try {
-                        const raw = localStorage.getItem(storageKey);
-                        if (raw) {
-                            const parsed = JSON.parse(raw);
-                            parsed.scrollPosition = window.scrollY;
-                            localStorage.setItem(storageKey, JSON.stringify(parsed));
-                        }
-                    } catch {}
-                    throttleTimeout = null;
-                }, 200);
-            }
+            if (throttleTimeout) return;
+            throttleTimeout = setTimeout(() => {
+                const top = root.scrollTop;
+                scrollYRef.current = top;
+                try {
+                    const raw = localStorage.getItem(storageKey);
+                    if (raw) {
+                        const parsed = JSON.parse(raw);
+                        parsed.scrollPosition = top;
+                        localStorage.setItem(storageKey, JSON.stringify(parsed));
+                    }
+                } catch { /* ignore a bad stored session */ }
+                throttleTimeout = null;
+            }, 200);
         };
-        window.addEventListener('scroll', throttledScroll, { passive: true });
+        root.addEventListener('scroll', throttledScroll, { passive: true });
         return () => {
-            window.removeEventListener('scroll', throttledScroll);
+            root.removeEventListener('scroll', throttledScroll);
             if (throttleTimeout) clearTimeout(throttleTimeout);
         };
     }, [storageKey, isSessionReady, isLoading]);
 
     // ─── Scroll restoration ───────────────────────────────────────────────────
     useEffect(() => {
-        if (isSessionReady && restoredScrollRef.current !== null && questions.length > 0) {
-            const scrollTarget = restoredScrollRef.current;
-            window.scrollTo(0, scrollTarget);
-            const timer = setTimeout(() => {
-                window.scrollTo({ top: scrollTarget, behavior: 'auto' });
-                restoredScrollRef.current = null;
-            }, 150);
-            return () => clearTimeout(timer);
-        }
+        const root = scrollRootRef.current;
+        if (!root || !isSessionReady || restoredScrollRef.current === null || questions.length === 0) return;
+        const scrollTarget = restoredScrollRef.current;
+        const apply = () => { root.scrollTop = scrollTarget; };
+        apply();
+        const frame = requestAnimationFrame(apply);
+        const timer = setTimeout(() => {
+            apply();
+            restoredScrollRef.current = null;
+        }, 150);
+        return () => {
+            cancelAnimationFrame(frame);
+            clearTimeout(timer);
+        };
     }, [isSessionReady, questions]);
 
     // ─── Persist filter changes ───────────────────────────────────────────────
@@ -992,21 +1000,7 @@ export default function QuizPage({ quizData: initialQuizData, onExit }: QuizPage
         saveSession(answers);
     }, [answers, saveSession, storageKey, hashedQuizId, isSessionReady, isLoading, clearStoredSession]);
 
-    // ─── Lobby leave on unmount ───────────────────────────────────────────────
-    useEffect(() => {
-        return () => {
-            if (
-                socket &&
-                joinedLobbyRef.current &&
-                lobbyCodeRef.current &&
-                currentUserId &&
-                !isPrivatePreviewRef.current &&
-                !hasSubmittedSuccessfullyRef.current
-            ) {
-                leaveLobby(socket, { code: lobbyCodeRef.current, userId: String(currentUserId) } as any).catch(() => {});
-            }
-        };
-    }, [socket, currentUserId]);
+    // ─── Lobby presence is kept across quiz navigation; leave is explicit. ──
 
     // ─── Submit ───────────────────────────────────────────────────────────────
 
@@ -1055,23 +1049,15 @@ export default function QuizPage({ quizData: initialQuizData, onExit }: QuizPage
 
             clearStoredSession();
 
-            // FIX 2: Explicitly exit the lobby before initiating client-side redirect
-            if (!isPrivatePreviewRef.current && socket && lobbyCodeRef.current && joinedLobby) {
-                try {
-                    await leaveLobby(socket, { code: lobbyCodeRef.current, userId: String(currentUserId) } as any);
-                    setJoinedLobby(false);
-                } catch (leaveErr) {
-                    console.warn('Lobby exit request encountered an error on submission:', leaveErr);
-                }
-            }
-            else{
-                await flowApi.dispatch('finishing_quiz', { quizId })
+            if (isPrivatePreviewRef.current) {
+                await flowApi.dispatch('finishing_quiz', { quizId });
             }
 
             const resultId =
                 response?.result_id ?? response?.resultId ??
                 response?.data?.result_id ?? response?.data?.resultId ??
-                response?.summary?.result_id ?? response?.summary?.resultId;
+                response?.summary?.result_id ?? response?.summary?.resultId ??
+                response?.id ?? response?.result?.resultId ?? response?.result?.id;
 
             const responseData = response?.data ?? {};
             const resultQuestions = questions.map((q) => {
@@ -1117,7 +1103,8 @@ export default function QuizPage({ quizData: initialQuizData, onExit }: QuizPage
         currentFocusDurationRef.current = 0;
 
         setAnswers((prev) => {
-            if (prev[questionId] !== optionId) {
+            const already = prev[questionId] === optionId;
+            if (!already) {
                 selectionLogRef.current.push({
                     questionId,
                     optionId,
@@ -1126,7 +1113,9 @@ export default function QuizPage({ quizData: initialQuizData, onExit }: QuizPage
                 });
             }
 
-            const nextAnswers = { ...prev, [questionId]: optionId };
+            const nextAnswers = { ...prev };
+            if (already) delete nextAnswers[questionId];
+            else nextAnswers[questionId] = optionId;
 
             if (!isPrivatePreviewRef.current && socket && joinedLobbyRef.current && currentUserId && hashedQuizId && lobbyCodeRef.current) {
                 updateMemberProgress(socket, {
@@ -1135,7 +1124,7 @@ export default function QuizPage({ quizData: initialQuizData, onExit }: QuizPage
                     userId: String(currentUserId),
                     answeredCount: Object.keys(nextAnswers).length,
                     totalQuestions: questions.length,
-                } as any).catch(() => {});
+                } as any);
             }
             return nextAnswers;
         });
@@ -1187,7 +1176,7 @@ export default function QuizPage({ quizData: initialQuizData, onExit }: QuizPage
     // ─── Error full-screen ────────────────────────────────────────────────────
     if (visibleError && !isLoading && questions.length === 0) {
         return (
-            <div className="min-h-screen bg-[var(--bg-app)] text-[var(--text-primary)] flex items-center justify-center px-4" dir="rtl">
+            <div ref={scrollRootRef} className={`${quizScrollClass} text-[var(--text-primary)] flex items-center justify-center px-4`} dir="rtl">
                 <div className="w-full max-w-md text-center space-y-5">
                     <div className="mx-auto w-16 h-16 rounded-full bg-rose-100 dark:bg-rose-900/30 text-rose-500 flex items-center justify-center">
                         <AlertCircle size={30} />
@@ -1207,7 +1196,7 @@ export default function QuizPage({ quizData: initialQuizData, onExit }: QuizPage
     // ─── Loading skeleton ─────────────────────────────────────────────────────
     if (isLoading) {
         return (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="w-full min-h-screen bg-[var(--bg-app)] pb-20" dir="rtl">
+            <motion.div ref={scrollRootRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className={`${quizScrollClass} pb-20`} dir="rtl">
                 <header className="sticky top-0 z-50 w-full bg-[var(--bg-app)]/90 backdrop-blur-xl border-b border-black/10 dark:border-white/10 h-16 md:h-20 flex items-center px-4 md:px-8 justify-between">
                     <div className="flex gap-2">
                         <Skeleton className="w-16 h-8 rounded-full" />
@@ -1240,7 +1229,7 @@ export default function QuizPage({ quizData: initialQuizData, onExit }: QuizPage
 
     // ─── Main render ──────────────────────────────────────────────────────────
     return (
-        <div className={`w-full min-h-screen bg-[var(--bg-app)] text-zinc-900 dark:text-[#fafafa] pb-28 ${showSidebar ? 'lg:pr-[76px]' : ''}`} dir="rtl">
+        <div ref={scrollRootRef} className={`${quizScrollClass} text-zinc-900 dark:text-[#fafafa] pb-28 ${showSidebar ? 'lg:pr-[76px]' : ''}`} dir="rtl">
 
             {/* ── Fixed Header ── */}
             <header className={`fixed top-0 z-50 w-full bg-[var(--bg-app)]/90 backdrop-blur-xl border-b border-black/10 dark:border-white/10 h-16 md:h-20 ${showSidebar ? 'lg:pl-[76px]' : ''}`}>
@@ -1350,7 +1339,12 @@ export default function QuizPage({ quizData: initialQuizData, onExit }: QuizPage
                                                         {String(index + 1).padStart(2, '0')}
                                                     </div>
                                                     <div className="mt-1 flex-1 w-full min-w-0">
-                                                        <MathRenderer text={decodeHtmlEntities(q.text)} subject={q.subject_id} />
+                                                        <QuestionTextClamp
+                                                            resetKey={q.id}
+                                                            text={decodeHtmlEntities(q.text)}
+                                                            subject={q.subject_id}
+                                                            className="text-lg md:text-xl font-bold leading-relaxed text-zinc-900 dark:text-zinc-100"
+                                                        />
                                                     </div>
                                                 </div>
                                             </div>

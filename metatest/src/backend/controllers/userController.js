@@ -8,6 +8,42 @@ const jwt = require('jsonwebtoken');
 
 const { sendOtpSms } = require('../utils/sms');
 const { encodeResultId } = require('../utils/hash');
+const walletController = require('./walletController');
+const policy = require('../subscription/policy');
+const { reportError } = require('../reportError');
+
+function readSocialLinks(value) {
+    if (value == null || value === '') return {};
+    if (typeof value === 'object') return value;
+    try {
+        const parsed = JSON.parse(value);
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (_) {
+        return {};
+    }
+}
+
+async function loadUserRow(userId) {
+    const shared = `id, password_hash, username, email, phone, first_name, last_name, avatar_url, bio,
+                        social_links, xp_level, xp_points, trophies, current_plan, plan_expires_at,
+                        role, status, created_at, last_login, last_login_ip`;
+    try {
+        const [rows] = await db.query(
+            `SELECT ${shared}, referral_code FROM tam24_users WHERE id = ?`,
+            [userId]
+        );
+        return rows;
+    } catch (error) {
+        if (error && error.code === 'ER_BAD_FIELD_ERROR' && /referral_code/i.test(error.sqlMessage || '')) {
+            const [rows] = await db.query(
+                `SELECT ${shared} FROM tam24_users WHERE id = ?`,
+                [userId]
+            );
+            return rows.map((row) => ({ ...row, referral_code: null }));
+        }
+        throw error;
+    }
+}
 
 // ===================== Native Crypto Password Helpers =====================
 const hashPassword = (password) => {
@@ -88,16 +124,13 @@ const handleGetUserInfo = async (req, res) => {
 
     try {
         const userId = req.user.id;
+        try {
+            await policy.promoteDueReservations(userId);
+        } catch (err) {
+            reportError('get_user_info promote', err);
+        }
 
-        const [rows] = await db.query(`
-                    SELECT
-                        id, password_hash, username, email, phone, first_name, last_name, avatar_url, bio,
-                        social_links, xp_level, xp_points, trophies, current_plan, plan_expires_at,
-                        role, status, created_at, last_login, last_login_ip
-                    FROM tam24_users
-                    WHERE id = ?`,
-            [userId]
-        );
+        const rows = await loadUserRow(userId);
 
         if (rows.length === 0) {
             return res.json({ success: false, message: 'User not found' });
@@ -105,33 +138,80 @@ const handleGetUserInfo = async (req, res) => {
 
         const user = rows[0];
 
+        const planActive = policy.planIsActive(user.current_plan, user.plan_expires_at);
+        const planUnlimited = policy.isUnlimitedActive(user.current_plan, user.plan_expires_at);
+        const storedPlanKey = policy.normalizePlanKey(user.current_plan);
         let daysRemaining = 0;
-        if (user.plan_expires_at) {
-            const now = new Date();
-            const expires = new Date(user.plan_expires_at);
-            const diffMs = expires - now;
+        if (planActive && user.plan_expires_at) {
+            const diffMs = new Date(user.plan_expires_at) - new Date();
             daysRemaining = diffMs > 0 ? Math.ceil(diffMs / (1000 * 60 * 60 * 24)) : 0;
         }
 
-        const socialLinks = typeof user.social_links === 'string'
-            ? JSON.parse(user.social_links)
-            : (user.social_links || {});
+        let planName = null;
+        let planDays = null;
+        let planIconKey = null;
+        let planIconPrimary = null;
+        let planIconSecondary = null;
+        if (planActive && user.current_plan) {
+            try {
+                await policy.ensureSubscriptionCatalog();
+                const [planRows] = await db.query(
+                    `SELECT name, days, icon_key, icon_primary, icon_secondary
+                     FROM subscription_plans WHERE id = ? LIMIT 1`,
+                    [user.current_plan]
+                );
+                planName = planRows[0]?.name || null;
+                planDays = planRows[0]?.days == null ? null : Number(planRows[0].days);
+                planIconKey = planRows[0]?.icon_key || policy.defaultIconKey(user.current_plan, planName);
+                planIconPrimary = planRows[0]?.icon_primary || null;
+                planIconSecondary = planRows[0]?.icon_secondary || null;
+            } catch (err) {
+                reportError('get_user_info plan name', err);
+            }
+        }
+
+        const socialLinks = readSocialLinks(user.social_links);
+
+        let tomanBalance = 0;
+        try {
+            const [walletRows] = await db.query('SELECT balance FROM tam24_toman_wallets WHERE user_id = ?', [userId]);
+            tomanBalance = Number(walletRows[0]?.balance || 0);
+        } catch (err) {
+            console.error('toman wallet fetch warning:', err.message);
+        }
 
         res.json({
             success: true,
             data: {
                 ...user,
                 social_links: socialLinks,
-                days_remaining: daysRemaining,
+                current_plan: planActive ? user.current_plan : 'free',
+                previous_plan: !planActive && storedPlanKey !== 'free' ? user.current_plan : null,
+                days_remaining: planUnlimited ? null : daysRemaining,
+                plan_unlimited: planUnlimited,
+                plan_name: planName,
+                plan_days: planDays,
+                plan_icon_key: planIconKey,
+                plan_icon_primary: planIconPrimary,
+                plan_icon_secondary: planIconSecondary,
                 password_set: !!user.password_hash,
                 password_hash: undefined,
-                plan_expires_at: undefined
+                plan_expires_at: undefined,
+                referral_code: user.referral_code || null,
+                toman_balance: tomanBalance
             }
         });
 
     } catch (error) {
-        console.error('Error in get_user_info:', error);
-        res.status(500).json({ success: false, message: 'Internal Server Error' });
+        const detail = reportError('get_user_info', error);
+        if (!res.headersSent) {
+            res.status(500).json({
+                success: false,
+                message: 'Internal Server Error',
+                code: detail.code || undefined,
+                detail: detail.message,
+            });
+        }
     }
 };
 
@@ -314,7 +394,7 @@ const handleSendOtp = async (req, res) => {
 };
 
 const handleVerifyOtp = async (req, res) => {
-    const { phone, code, password} = req.body;
+    const { phone, code, password, referral_code } = req.body;
 
     try {
         const [otps] = await db.query(
@@ -342,6 +422,21 @@ const handleVerifyOtp = async (req, res) => {
                 [phone, `user_${phone}`, firstName, lastName, hashedPassword, ip]
             );
             userId = insertResult.insertId;
+
+            // Attribute invite-link referral at registration (one-time).
+            // Store the code from the link itself so the first paid purchase
+            // can resolve the inviter and pay 30% into their Toman wallet.
+            if (referral_code) {
+                const submittedCode = String(referral_code).trim();
+                const inviter = submittedCode ? await walletController.resolveInviter(db, submittedCode) : null;
+                if (inviter && Number(inviter.id) !== Number(userId)) {
+                    await db.query(
+                        'UPDATE tam24_users SET referrer_code_submitted = ? WHERE id = ? AND (referrer_code_submitted IS NULL OR referrer_code_submitted = \'\')',
+                        [submittedCode, userId]
+                    );
+                }
+            }
+            await walletController.ensureReferralCode(db, userId);
         } else {
             userId = users[0].id;
             role = users[0].role;
@@ -813,7 +908,7 @@ const handleUploadAvatar = async (req, res) => {
 const handleResetAvatar = async (req, res) => {
     try {
         const userId = req.user.id;
-        const defaultAvatarUrl = '/user_default.png';
+        const defaultAvatarUrl = '/avatars/user_default.png';
 
         // 1. Get the user's current avatar from the database
         const [users] = await db.query(
@@ -831,7 +926,7 @@ const handleResetAvatar = async (req, res) => {
         if (currentAvatarUrl && currentAvatarUrl !== defaultAvatarUrl) {
             // Extract the filename and construct the absolute path to the file
             // Note: Adjust the '../public' path if your folder structure requires it
-            const filePath = path.join(__dirname, '../../public', currentAvatarUrl);
+            const filePath = path.join(require('../runtimeMode').profile.avatarDir, path.basename(currentAvatarUrl));
 
             // Check if file exists, then delete
             if (fs.existsSync(filePath)) {
@@ -885,28 +980,35 @@ const saveUserActivity = async (req, res) => {
 
 // --- Track Page Views / Visitors ---
 const trackViewCount = async (req, res) => {
-    // Get the page name/path from the client
     const { view } = req.body;
-
-    // Extract IP address and User Agent from the request headers
-    const ip_address = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-    const user_agent = req.headers['user-agent'] || 'Unknown';
+    const forwarded = req.headers['x-forwarded-for'];
+    const rawIp = Array.isArray(forwarded) ? forwarded[0] : (forwarded || req.socket?.remoteAddress || '');
+    const ip_address = String(rawIp).split(',')[0].trim().slice(0, 45) || null;
+    const user_agent = String(req.headers['user-agent'] || 'Unknown').slice(0, 2000);
 
     if (!view) {
         return res.status(400).json({ success: false, message: "page_view is required" });
     }
 
+    const insertView = () => db.execute(
+        `INSERT INTO tam24_visitor_counts (page_view, ip_address, user_agent) VALUES (?, ?, ?)`,
+        [view, ip_address, user_agent]
+    );
+
     try {
-        // Insert a new record for every visit/page view
-        const query = `
-            INSERT INTO tam24_visitor_counts (page_view, ip_address, user_agent)
-            VALUES (?, ?, ?)
-        `;
-
-        await db.execute(query, [view, ip_address, user_agent]);
-
+        await insertView();
         return res.json({ success: true, message: "View tracked successfully" });
     } catch (error) {
+        if (error && error.code === 'ER_DUP_ENTRY') {
+            try {
+                await require('../visitorCounts').ensureVisitorCountIds();
+                await insertView();
+                return res.json({ success: true, message: "View tracked successfully" });
+            } catch (again) {
+                console.error("Error tracking view count:", again);
+                return res.status(500).json({ success: false, message: "Database error" });
+            }
+        }
         console.error("Error tracking view count:", error);
         return res.status(500).json({ success: false, message: "Database error" });
     }
@@ -1040,31 +1142,13 @@ const handleGetPaymentHistory = async (req, res) => {
             ORDER BY p.created_at DESC
         `, [userId]);
 
-        // Current plan snapshot for the subscription tab
-        const [userRows] = await db.query(
-            'SELECT current_plan, plan_expires_at FROM tam24_users WHERE id = ?',
-            [userId]
-        );
-
-        let currentPlan = 'free';
-        let planExpiresAt = null;
-        let daysRemaining = 0;
-
-        if (userRows.length > 0) {
-            const u = userRows[0];
-            const isActive = u.plan_expires_at && new Date(u.plan_expires_at).getTime() > Date.now();
-            if (isActive) {
-                currentPlan = u.current_plan || 'free';
-                planExpiresAt = u.plan_expires_at;
-                daysRemaining = Math.ceil((new Date(u.plan_expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-            }
-        }
+        const subscription = await policy.subscriptionSnapshot(userId);
 
         return res.json({
             success: true,
             data: {
                 payments: rows,
-                subscription: { currentPlan, planExpiresAt, daysRemaining }
+                subscription,
             }
         });
     } catch (error) {
@@ -1079,28 +1163,25 @@ const handleGetMyInvites = async (req, res) => {
     try {
         const userId = req.user.id;
 
-        const [userRows] = await db.query(
-            'SELECT phone, username FROM tam24_users WHERE id = ?',
-            [userId]
-        );
-
-        if (userRows.length === 0) {
-            return res.json({ success: false, message: 'کاربر یافت نشد.' });
+        const keys = await walletController.listInviterKeys(db, userId);
+        if (!keys.length) {
+            return res.json({ success: true, data: { list: [], totalInvited: 0, activeInvites: 0 } });
         }
 
-        const { phone, username } = userRows[0];
-
+        const where = keys.map(() => 'u.referrer_code_submitted = ?').join(' OR ');
         const [invites] = await db.query(`
             SELECT
-                id,
-                CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, '')) AS name,
-                phone      AS invited_phone,
-                status,
-                created_at AS createdAt
-            FROM tam24_users
-            WHERE referrer_code_submitted = ? OR referrer_code_submitted = ?
-            ORDER BY created_at DESC
-        `, [phone || '', username || '']);
+                u.id,
+                CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, '')) AS name,
+                u.phone      AS invited_phone,
+                u.status,
+                u.created_at AS createdAt,
+                (SELECT COUNT(*) FROM payments p WHERE p.user_id = u.id AND p.status = 'paid' AND p.final_price > 0) AS purchases_count,
+                COALESCE((SELECT SUM(r.reward_amount) FROM tam24_referral_rewards r WHERE r.inviter_id = ? AND r.invitee_id = u.id AND r.reward_type <> 'token'), 0) AS commission_earned
+            FROM tam24_users u
+            WHERE ${where}
+            ORDER BY u.created_at DESC
+        `, [userId, ...keys]);
 
         return res.json({
             success: true,

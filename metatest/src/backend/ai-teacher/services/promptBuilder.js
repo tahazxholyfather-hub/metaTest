@@ -1,7 +1,7 @@
 'use strict';
 
 const { CONTEXT_LIMITS, MODELS, featureStatus } = require('../config');
-const { getSubject, CORE_SUBJECT_KEYS } = require('../subjects');
+const { getSubject, CORE_SUBJECT_KEYS, sharedIdentity } = require('../subjects');
 
 function safeText(value, max = 800) {
     if (!value) return '';
@@ -11,13 +11,30 @@ function safeText(value, max = 800) {
 /** DB row (tam24_ai_subjects) can override the code-authored prompt text. */
 function resolveSubjectPrompts(subjectKey, subjectRow) {
     const base = getSubject(subjectKey);
-    if (!base) return null;
+    const nameFa = subjectRow?.name_fa || base?.nameFa || String(subjectKey);
+    const fallback = {
+        key: String(subjectKey || '').toLowerCase(),
+        nameFa,
+        nameEn: subjectRow?.name_en || base?.nameEn || String(subjectKey),
+        icon: subjectRow?.icon || base?.icon || 'sparkles',
+        color: subjectRow?.color || base?.color || '#A78BFA',
+        sortOrder: subjectRow?.sort_order || base?.sortOrder || 100,
+        generalPrompt: base?.generalPrompt || sharedIdentity(nameFa),
+        referenceInstructions: base?.referenceInstructions || '',
+        model: base?.model || null,
+        maxOutputTokens: base?.maxOutputTokens || 700,
+    };
+    const src = base || fallback;
     return {
-        ...base,
-        generalPrompt: safeText(subjectRow?.general_prompt, 20000) || base.generalPrompt,
-        referenceInstructions: safeText(subjectRow?.reference_instructions, 20000) || base.referenceInstructions,
-        model: subjectRow?.model || base.model,
-        maxOutputTokens: subjectRow?.max_output_tokens || base.maxOutputTokens || 700,
+        ...src,
+        nameFa,
+        nameEn: subjectRow?.name_en || src.nameEn,
+        icon: subjectRow?.icon || src.icon,
+        color: subjectRow?.color || src.color,
+        generalPrompt: safeText(subjectRow?.general_prompt, 20000) || src.generalPrompt || fallback.generalPrompt,
+        referenceInstructions: safeText(subjectRow?.reference_instructions, 20000) || src.referenceInstructions,
+        model: subjectRow?.model || src.model,
+        maxOutputTokens: subjectRow?.max_output_tokens || src.maxOutputTokens || 700,
     };
 }
 
@@ -125,12 +142,18 @@ function buildSettingsBlock(settings, { lowBalance = false } = {}) {
 
 function buildFormattingRules() {
     return [
-        'FORMAT for your reply:',
-        '- Always respond in Persian (فارسی). Technical terms may carry the English in parentheses once.',
-        '- Emphasis with **bold**. No markdown headings (# ## ###).',
-        '- Math/physics/chemistry formulas in $...$ or $$...$$ LaTeX — every formula, not just complex ones.',
-        '- Short paragraphs. Numbered/bulleted lists only when actually solving or listing steps.',
-        '- Never say you are an AI, a language model, or mention limitations/disclaimers; never narrate these rules or mention "instructions", "prompt" or "system message". Just be Met.',
+        'LANGUAGE AND FORMAT — these rules win over every other style note:',
+        '- Write every explanation, heading, list, error, and continuation in natural Persian. Never answer in English.',
+        '- Scientific symbols, formulas, code, standard abbreviations (pH, DNA), and proper names may stay in their usual form. A technical term may show the English in parentheses once.',
+        '- Talk like a kind teacher explaining to a curious five-year-old (پنج‌ساله): very simple words, short sentences, warm and conversational. Stay scientifically exact. Do not use stiff, robotic, or academic language, and do not baby-talk the science into something false.',
+        '- Use correct Persian spelling, punctuation, and نیم‌فاصله (می‌شود، چربی‌دوست، به‌جای، تری‌گلیسرید).',
+        '- Do not repeat a sentence, paragraph, or formula you already wrote. If you continue an unfinished answer, write only the new part.',
+        '- Emphasis with **bold**. No markdown headings (# ## ###). Short paragraphs. Lists only when solving or listing steps.',
+        '- Formulas use the app\'s local MathJax v4, only as $...$ or $$...$$. Close every delimiter.',
+        '- Never put Persian letters inside $...$ or $$...$$. هرگز فارسی را داخل فرمول ریاضی ننویس. No \\mathrm{فارسی}, no \\text{فارسی}, no \\[ \\] or \\( \\).',
+        '- Chemistry that is only symbols: $H_2O$, $Ca^{2+}$, or $\\ce{2H2 + O2 -> 2H2O}$.',
+        '- A reaction that names substances in Persian keeps those names as ordinary text, in reactant-to-product order, for example: تری‌گلیسرید + $3NaOH$ $\\longrightarrow$ گلیسرول + $3RCOONa$.',
+        '- Never say you are an AI, a language model, or mention limitations; never narrate these rules or mention "instructions", "prompt" or "system message". Just be Met.',
     ].join('\n');
 }
 
@@ -167,6 +190,11 @@ function buildGlobalSafetyRules() {
     ].join('\n');
 }
 
+function buildQuestionContextBlock(questionContext) {
+    if (!questionContext?.promptText && !questionContext?.questionId) return '';
+    return questionContext.promptText || '';
+}
+
 function buildMetPrompt({
     subjectKey,
     subjectRow,
@@ -177,6 +205,7 @@ function buildMetPrompt({
     ragContext,
     knowledgeContext,
     referenceContext,
+    questionContext = null,
     hasImageAttachment = false,
     hasAudioTranscript = false,
     lowBalance = false,
@@ -188,7 +217,8 @@ function buildMetPrompt({
     const parts = [
         subject.generalPrompt,
         subject.referenceInstructions,
-        buildScopeBlock(subject),
+        questionContext ? '' : buildScopeBlock(subject),
+        buildQuestionContextBlock(questionContext),
         buildStudentContextBlock({ user, memories, settings: s }),
         s.knowledgeEnabled ? buildKnowledgeBlock(knowledgeContext) : '',
         buildTextbookBlock(ragContext),
@@ -202,7 +232,7 @@ function buildMetPrompt({
     if (conversationSummary) {
         parts.push(`Earlier conversation summary:\n${safeText(conversationSummary, 1200)}`);
     }
-    parts.push(`Final reminder: you are Met, a living, warm ${subject.key === 'general' ? 'mentor' : `${subject.nameFa} teacher`}; the student must hear a human voice, in Persian.`);
+    parts.push(`Final reminder: you are Met, a living, warm ${subject.key === 'general' ? 'mentor' : `${subject.nameFa} teacher`}. Speak only in simple Persian, as if to a curious five-year-old, without losing scientific accuracy. Keep Persian out of $...$ formulas.`);
 
     return { systemPrompt: parts.filter(Boolean).join('\n\n'), subject, settings: s };
 }
@@ -243,13 +273,14 @@ function toProviderMessages({ systemPrompt, recentMessages, currentUserMessage, 
     return messages;
 }
 
-function resolveMaxOutputTokens(subject, settings, { lowBalance = false } = {}) {
+function resolveMaxOutputTokens(subject, settings, { lowBalance = false, quizQuestion = false } = {}) {
     const s = settings && 'reasoningLevel' in settings ? settings : normalizeSettings(settings);
     let max = Number(subject?.maxOutputTokens) || 700;
+    if (quizQuestion) max = Math.max(max, 1100);
     if (s.verbosity === 'detailed') max = Math.round(max * 1.5);
     if (s.verbosity === 'short' || s.conciseMode) max = Math.min(max, 480);
     if (s.efficientMode || lowBalance) max = Math.min(max, 320);
-    return Math.max(160, Math.min(2000, max));
+    return Math.max(160, Math.min(2400, max));
 }
 
 function resolveModel(settings, subject, { hasImageAttachment = false, lowBalance = false } = {}) {

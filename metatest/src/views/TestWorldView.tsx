@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 
 import MainTestSelector from './testworld/MainTestSelector';
 import { NeedsView } from './testworld/NeedsView';
+import { QuestionSelectorView } from './testworld/QuestionSelectorView';
 import { NotFoundView } from './testworld/NotFoundView';
 import { useUser } from '../context/UserContext';
 import { useSocket } from '../socket/useSocket';
@@ -17,7 +18,7 @@ export interface TestWorldProps {
     theme: string;
 }
 
-const VALID_VIEWS = ['main', 'needs'];
+const VALID_VIEWS = ['main', 'needs', 'selector'];
 
 
 export const TestWorldView = ({
@@ -38,9 +39,10 @@ export const TestWorldView = ({
         (viewId: string, pushState = true) => {
             setActiveView(viewId);
 
-            if (pushState) {
-                const currentPath = window.location.pathname;
-                window.history.pushState({ testWorldView: viewId }, '', currentPath);
+            if (pushState && viewId !== 'main') {
+                window.dispatchEvent(new CustomEvent('app-history-push', {
+                    detail: { kind: 'tests', screen: viewId },
+                }));
             }
 
             onStateChange?.({ view: viewId });
@@ -49,10 +51,10 @@ export const TestWorldView = ({
     );
 
     const handleBack = useCallback(() => {
-        window.history.back();
+        window.dispatchEvent(new CustomEvent('app-request-back'));
     }, []);
 
-    const handleStartNeeds = useCallback(async () => {
+    const handleStartNeeds = useCallback(async (viewId: 'needs' | 'selector' = 'needs') => {
         try {
             const response = await flowApi.dispatch('generate_code');
 
@@ -61,23 +63,21 @@ export const TestWorldView = ({
             }
 
             setShareCode(response.data.code);
-            navigateTo('needs');
+            navigateTo(viewId);
         } catch (error) {
             console.error('Error requesting share code:', error);
         }
     }, [navigateTo]);
 
     useEffect(() => {
-        const handlePopState = (event: PopStateEvent) => {
-            if (event.state?.testWorldView) {
-                setActiveView(event.state.testWorldView);
-            } else {
-                setActiveView('main');
+        const handleScreen = (event: Event) => {
+            const screen = (event as CustomEvent<string>).detail;
+            if (screen === 'main' || screen === 'needs' || screen === 'selector') {
+                setActiveView(screen);
             }
         };
-
-        window.addEventListener('popstate', handlePopState);
-        return () => window.removeEventListener('popstate', handlePopState);
+        window.addEventListener('testworld-screen', handleScreen);
+        return () => window.removeEventListener('testworld-screen', handleScreen);
     }, []);
 
     useEffect(() => {
@@ -105,7 +105,7 @@ export const TestWorldView = ({
 
     return (
         <div
-            className="min-h-screen bg-[var(--bg-app)] text-[var(--text-primary)] font-sans"
+            className={`${activeView === 'selector' ? 'flex h-full min-h-0 flex-1 flex-col overflow-hidden' : 'h-full overflow-y-auto'} bg-[var(--bg-app)] text-[var(--text-primary)] font-sans`}
             dir="rtl"
         >
             <AnimatePresence mode="wait">
@@ -114,8 +114,8 @@ export const TestWorldView = ({
                         key="main"
                         theme={theme}
                         onStart={(id) => {
-                            if (id === 'needs') {
-                                handleStartNeeds();
+                            if (id === 'needs' || id === 'selector') {
+                                handleStartNeeds(id);
                             } else {
                                 navigateTo(id);
                             }
@@ -128,6 +128,14 @@ export const TestWorldView = ({
                             setShareCode(code);
                             navigate(`/lobby/${code}`);
                         }}
+                    />
+                )}
+
+                {activeView === 'selector' && (
+                    <QuestionSelectorView
+                        key="selector"
+                        shareCode={shareCode}
+                        onBack={handleBack}
                     />
                 )}
 

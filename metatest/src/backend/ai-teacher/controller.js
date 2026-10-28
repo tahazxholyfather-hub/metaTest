@@ -21,6 +21,8 @@ const fileStorage = require('./services/fileStorage');
 const suggestionsService = require('./services/suggestionsService');
 const referencesService = require('./services/referencesService');
 const { logUsage } = require('./services/usageLogger');
+const questionContext = require('./services/questionContext');
+const { normalizeSettings } = require('./services/promptBuilder');
 
 const fail = (res, status, code, message) => res.status(status).json({ success: false, code, message: message || userMessageForError(code) });
 const idParam = (v) => { const n = Number(v); return Number.isInteger(n) && n > 0 ? n : null; };
@@ -33,10 +35,19 @@ const getBootstrap = async (req, res) => {
         if (!user) return fail(res, 404, 'NOT_FOUND', 'کاربر یافت نشد.');
 
         const [wallet, subjectRows, settings, latestConversation] = await Promise.all([
-            walletSnapshot(userId, user.current_plan),
+            walletSnapshot(userId, user.current_plan, user.plan_expires_at).catch((err) => {
+                console.error('[met] walletSnapshot', err);
+                return { daily: 0, purchased: 0, total: 0, balance: 0, dailyQuota: 0, grantedToday: false, grantAmount: 0, nextResetAt: null };
+            }),
             listSubjectsFromDb(),
-            ensureSettings(userId),
-            conversationService.getLatestConversation(db, userId),
+            ensureSettings(userId).catch((err) => {
+                console.error('[met] ensureSettings', err);
+                return normalizeSettings(null);
+            }),
+            conversationService.getLatestConversation(db, userId).catch((err) => {
+                console.error('[met] getLatestConversation', err);
+                return null;
+            }),
         ]);
         pricing.loadPricingTable(db).catch(() => {});
 
@@ -53,7 +64,7 @@ const getBootstrap = async (req, res) => {
             },
         });
     } catch (err) {
-        console.error('[met] getBootstrap', err);
+        console.error('[met] getBootstrap', err && err.code, err && (err.sqlMessage || err.message));
         return fail(res, 500, 'SERVER_ERROR', 'خطا در بارگذاری مِت.');
     }
 };
@@ -92,7 +103,7 @@ const openSession = async (req, res) => {
         const userId = req.user.id;
         const user = await loadUserRow(userId);
         if (!user) return fail(res, 404, 'NOT_FOUND', 'کاربر یافت نشد.');
-        const wallet = await walletSnapshot(userId, user.current_plan);
+        const wallet = await walletSnapshot(userId, user.current_plan, user.plan_expires_at);
         const conversation = await conversationService.getLatestConversation(db, userId);
         if (!conversation) return res.json({ success: true, data: { conversation: null, messages: [], hasMore: false, wallet } });
         const messages = await conversationService.getMessages(db, conversation.id, { limit: 50 });
@@ -181,7 +192,7 @@ const deleteConversation = async (req, res) => {
 const getWallet = async (req, res) => {
     try {
         const user = await loadUserRow(req.user.id);
-        const wallet = await walletSnapshot(req.user.id, user?.current_plan);
+        const wallet = await walletSnapshot(req.user.id, user?.current_plan, user?.plan_expires_at);
         return res.json({ success: true, data: wallet });
     } catch (err) {
         console.error('[met] getWallet', err);
@@ -364,9 +375,9 @@ const voiceTranscribe = async (req, res) => {
     try {
         if (!req.file?.buffer?.length) return fail(res, 400, 'NO_FILE', 'فایل صوتی دریافت نشد.');
         const user = await loadUserRow(userId);
-        const wallet = await walletSnapshot(userId, user?.current_plan);
+        const wallet = await walletSnapshot(userId, user?.current_plan, user?.plan_expires_at);
         const cost = pricing.flatCoinCost('stt', MODELS.stt);
-        if (wallet.total < cost) return res.status(402).json({ success: false, code: 'INSUFFICIENT_COINS', message: userMessageForError('INSUFFICIENT_COINS'), wallet });
+        if (!wallet.unlimited && wallet.total < cost) return res.status(402).json({ success: false, code: 'INSUFFICIENT_COINS', message: userMessageForError('INSUFFICIENT_COINS'), wallet });
 
         const durationSeconds = Math.max(0, Math.min(600, Number(req.body?.durationSeconds) || 0)) || null;
         const conversationId = idParam(req.body?.conversationId);
@@ -439,9 +450,9 @@ const voiceSpeak = async (req, res) => {
         if (existing) return res.json({ success: true, data: { url: existing.url, charged: 0, cached: true } });
 
         const user = await loadUserRow(userId);
-        const wallet = await walletSnapshot(userId, user?.current_plan);
+        const wallet = await walletSnapshot(userId, user?.current_plan, user?.plan_expires_at);
         const cost = pricing.flatCoinCost('tts', MODELS.tts);
-        if (wallet.total < cost) return res.status(402).json({ success: false, code: 'INSUFFICIENT_COINS', message: userMessageForError('INSUFFICIENT_COINS'), wallet });
+        if (!wallet.unlimited && wallet.total < cost) return res.status(402).json({ success: false, code: 'INSUFFICIENT_COINS', message: userMessageForError('INSUFFICIENT_COINS'), wallet });
 
         const speech = sanitizeForSpeech(row.content);
         if (!speech) return fail(res, 422, 'NO_TEXT', 'متنی برای خواندن وجود ندارد.');
@@ -478,6 +489,43 @@ const voiceSpeak = async (req, res) => {
     }
 };
 
+const getQuestionSession = async (req, res) => {
+    try {
+        const questionId = idParam(req.params.questionId);
+        if (!questionId) return fail(res, 400, 'INVALID_QUESTION', 'شناسه سوال نامعتبر است.');
+        const userId = req.user.id;
+
+        const ctx = await questionContext.loadQuestionContext(db, { userId, questionId });
+        if (!ctx) return fail(res, 403, 'QUESTION_NOT_ANSWERED');
+
+        const conversation = await conversationService.getOrCreateQuizConversation(db, {
+            userId,
+            questionId,
+            subjectKey: ctx.subjectKey || 'general',
+            title: questionContext.conversationTitle(ctx),
+            snapshot: questionContext.publicContext(ctx),
+        });
+        const messages = await conversationService.getMessages(db, conversation.id, { limit: 80 });
+        const user = await loadUserRow(userId);
+        const wallet = await walletSnapshot(userId, user?.current_plan, user?.plan_expires_at);
+
+        return res.json({
+            success: true,
+            data: {
+                conversation: publicConversation(conversation),
+                messages: messages.map(publicMessage),
+                hasMore: messages.hasMore,
+                context: questionContext.publicContext(ctx),
+                intents: Object.entries(questionContext.QUICK_INTENTS).map(([key, v]) => ({ key, label: v.label })),
+                wallet,
+            },
+        });
+    } catch (err) {
+        console.error('[met] getQuestionSession', err);
+        return fail(res, 500, 'SERVER_ERROR', 'خطا در باز کردن گفتگوی سوال.');
+    }
+};
+
 module.exports = {
     getBootstrap,
     listSubjects,
@@ -503,4 +551,5 @@ module.exports = {
     voiceTranscribe,
     voiceSpeak,
     sanitizeForSpeech,
+    getQuestionSession,
 };

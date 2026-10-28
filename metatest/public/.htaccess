@@ -1,0 +1,18 @@
+# Upload this file inside the cPanel /app folder (next to index.html).
+# Apache / LiteSpeed then serves the SPA for /app/dashboard and other client routes.
+# Real files (assets, icons, images) are left alone. /api is outside this folder.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /app/
+  RewriteRule ^index\.html$ - [L]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule . index.html [L]
+</IfModule>
+
+<IfModule mod_headers.c>
+  <Files "sw.js">
+    Header set Service-Worker-Allowed "/"
+    Header set Cache-Control "no-cache"
+  </Files>
+</IfModule>

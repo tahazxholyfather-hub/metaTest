@@ -198,10 +198,10 @@ export function joinLobby(
 export function startLobby(
     socket: Socket | null,
     payload: StartLobbyPayload,
-): Promise<LobbyState> {
+): Promise<{ ok: boolean; reason?: string }> {
     ensureSocketReady(socket);
 
-    return emitWithAck<LobbyState, StartLobbyPayload>(
+    return emitWithAck<{ ok: boolean; reason?: string }, StartLobbyPayload>(
         socket,
         LOBBY_EVENTS.START,
         {
@@ -212,14 +212,18 @@ export function startLobby(
 }
 
 export const rejoinLobby = (
-    socket: Socket,
-    payload: { code: string }
+    socket: Socket | null,
+    payload: { code: string },
 ): Promise<{ ok: boolean; reason?: string; state?: LobbyState }> => {
-    return new Promise((resolve) => {
-        socket.emit('rejoin_lobby', payload, (response: any) => {
-            resolve(response);
-        });
-    });
+    ensureSocketReady(socket);
+
+    return emitWithAck<{ ok: boolean; reason?: string; state?: LobbyState }, { code: string }>(
+        socket,
+        LOBBY_EVENTS.REJOIN,
+        {
+            code: payload.code.trim(),
+        },
+    );
 };
 
 export function leaveLobby(
@@ -250,6 +254,8 @@ export function kickMember(
         {
             ...payload,
             code: payload.code.trim(),
+            targetUserId: payload.targetUserId || payload.userId || '',
+            userId: payload.userId || payload.targetUserId,
         },
     );
 }
@@ -273,12 +279,24 @@ export function destroyLobby(
 export function updateMemberProgress(
     socket: Socket | null,
     payload: UpdateProgressPayload,
+): void {
+    if (!socket?.connected) return;
+
+    socket.emit(LOBBY_EVENTS.MEMBER_PROGRESS, {
+        ...payload,
+        code: payload.code.trim(),
+    });
+}
+
+export function setReady(
+    socket: Socket | null,
+    payload: { code: string; isReady: boolean },
 ): Promise<LobbyState> {
     ensureSocketReady(socket);
 
-    return emitWithAck<LobbyState, UpdateProgressPayload>(
+    return emitWithAck<LobbyState, { code: string; isReady: boolean }>(
         socket,
-        LOBBY_EVENTS.MEMBER_PROGRESS,
+        LOBBY_EVENTS.SET_READY,
         {
             ...payload,
             code: payload.code.trim(),

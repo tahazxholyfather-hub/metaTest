@@ -5,18 +5,19 @@
 const SUPER_ADMIN_ID = 1;
 
 const ASSIGNABLE_SECTIONS = [
-    { key: 'dashboard', label: 'Dashboard', defaultAllowed: true },
-    { key: 'edit-questions', label: 'Edit Questions', defaultAllowed: true },
-    { key: 'insert-questions', label: 'Insert Questions', defaultAllowed: true },
-    { key: 'curriculum', label: 'Curriculum', defaultAllowed: true },
-    { key: 'pdf-library', label: 'PDF Library', defaultAllowed: true },
-    { key: 'subscription-plans', label: 'پلن‌ها و تعرفه‌ها', defaultAllowed: true },
+    { key: 'dashboard', label: 'داشبورد', defaultAllowed: true },
+    { key: 'edit-questions', label: 'ویرایش سوال‌ها', defaultAllowed: true },
+    { key: 'insert-questions', label: 'افزودن سوال', defaultAllowed: true },
+    { key: 'curriculum', label: 'سرفصل‌ها', defaultAllowed: true },
+    { key: 'pdf-library', label: 'کتابخانه PDF', defaultAllowed: true },
+    { key: 'word-stats', label: 'فعالیت واژه‌ها', defaultAllowed: true },
+    { key: 'announcements', label: 'اعلان‌ها', defaultAllowed: false },
+    { key: 'push', label: 'اعلان پوش', defaultAllowed: false },
+    { key: 'coins', label: 'مدیریت سکه‌ها', defaultAllowed: false },
+    { key: 'reports', label: 'گزارش‌ها', defaultAllowed: true },
+    { key: 'ai-manager', label: 'مدیریت هوش مصنوعی', defaultAllowed: false },
+    { key: 'admins', label: 'ادمین‌ها', defaultAllowed: false },
     { key: 'blog', label: 'بلاگ آموزشی', defaultAllowed: false },
-    { key: 'word-stats', label: 'Word Activity', defaultAllowed: true },
-    { key: 'discounts', label: 'Discount Codes', defaultAllowed: true },
-    { key: 'reports', label: 'Reports', defaultAllowed: true },
-    { key: 'ai-manager', label: 'AI Manager', defaultAllowed: false },
-    { key: 'admins', label: 'Admins', defaultAllowed: false },
 ];
 
 const ASSIGNABLE_KEYS = new Set(ASSIGNABLE_SECTIONS.map((section) => section.key));
@@ -36,15 +37,18 @@ const ACTION_SECTIONS = {
     Admin_get_pdfs: ['pdf-library'],
     Admin_save_pdf: ['pdf-library'],
     Admin_delete_pdf: ['pdf-library'],
+    Admin_get_discount_codes: ['discount-codes'],
+    Admin_save_discount_code: ['discount-codes'],
+    Admin_toggle_discount_code: ['discount-codes'],
+    Admin_delete_discount_code: ['discount-codes'],
+    Admin_get_referral_settings: ['referral-settings'],
+    Admin_update_referral_settings: ['referral-settings'],
+    Admin_get_withdrawal_requests: ['withdrawals'],
+    Admin_update_withdrawal_status: ['withdrawals'],
     Admin_get_subjects: ['edit-questions', 'insert-questions', 'curriculum', 'reports'],
     Admin_get_grades_by_subject: ['edit-questions', 'insert-questions', 'curriculum', 'reports'],
     Admin_get_chapters_by_subject: ['edit-questions', 'insert-questions', 'curriculum', 'reports'],
     Admin_get_mabahes_by_chapter: ['edit-questions', 'insert-questions', 'curriculum', 'reports'],
-    Admin_list_subscription_plans: ['subscription-plans'],
-    Admin_save_subscription_plan: ['subscription-plans'],
-    Admin_list_blog_posts: ['blog'],
-    Admin_save_blog_post: ['blog'],
-    Admin_delete_blog_post: ['blog'],
 };
 
 function isSuperAdminId(admin) {

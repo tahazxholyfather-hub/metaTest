@@ -25,6 +25,7 @@ export interface SendInput {
     text: string;
     attachments?: PendingAttachment[];
     inputMode?: 'text' | 'voice';
+    intent?: string | null;
 }
 
 type Options = {
@@ -34,19 +35,21 @@ type Options = {
     onStatus?: (s: ChatStatus) => void;
     /** Called when the server bounces a turn for lack of coins. */
     onInsufficientCoins?: (info: { needed?: number; balance?: number }) => void;
+    /** When set, every turn is bound to this practice question. */
+    questionId?: number | null;
 };
 
 const TOOL_LABELS: Record<string, string> = {
-    search_questions: 'جستجو در بانک سؤال…',
-    get_user_learning_profile: 'بررسی پروفایل یادگیری…',
-    get_recent_quiz_activity: 'مرور آزمون‌های اخیر…',
-    generate_image: 'ساخت تصویر…',
+    search_questions: 'در حال جستجو در بانک سؤال',
+    get_user_learning_profile: 'در حال بررسی پروفایل یادگیری',
+    get_recent_quiz_activity: 'در حال مرور آزمون‌های اخیر',
+    generate_image: 'در حال ساخت تصویر',
 };
 
 let tempSeq = 0;
 const tempId = (prefix: string) => `${prefix}-${Date.now()}-${++tempSeq}`;
 
-export function useMetChat({ subjectKey, onWallet, onConversationChange, onStatus, onInsufficientCoins }: Options) {
+export function useMetChat({ subjectKey, onWallet, onConversationChange, onStatus, onInsufficientCoins, questionId = null }: Options) {
     const [conversation, setConversation] = useState<MetConversation | null>(null);
     const [messages, setMessages] = useState<MetMessage[]>([]);
     const [references, setReferences] = useState<MetReference[]>([]);
@@ -58,7 +61,8 @@ export function useMetChat({ subjectKey, onWallet, onConversationChange, onStatu
     const [draftRestore, setDraftRestore] = useState<string | null>(null);
 
     const abortRef = useRef<AbortController | null>(null);
-    const streamingIdRef = useRef<string | null>(null);
+    const streamingIdRef = useRef<string | number | null>(null);
+    const continueTargetRef = useRef<number | null>(null);
     const successTimer = useRef<number | null>(null);
     const conversationRef = useRef<MetConversation | null>(null);
     conversationRef.current = conversation;
@@ -194,20 +198,41 @@ export function useMetChat({ subjectKey, onWallet, onConversationChange, onStatu
                         }
                         break;
                     case 'assistant_start': {
-                        const id = tempId('a');
-                        streamingIdRef.current = id;
-                        setMessages((prev) => [
-                            ...prev,
-                            { id, role: 'assistant', content: '', attachments: [], status: 'streaming', streaming: true, createdAt: new Date().toISOString() },
-                        ]);
+                        // Wait for the first delta so we never flash an empty bubble
+                        // next to the typing indicator. A continuation keeps the same bubble.
+                        streamingIdRef.current = continueTargetRef.current;
                         setStatusSafe('generating');
                         break;
                     }
-                    case 'delta':
-                        patchStreaming((m) => ({ ...m, content: m.content + ev.data.text }));
+                    case 'revise': {
+                        const text = ev.data.text;
+                        if (!streamingIdRef.current) {
+                            const id = continueTargetRef.current ?? tempId('a');
+                            streamingIdRef.current = id;
+                            setMessages((prev) => {
+                                if (prev.some((m) => m.id === id)) return prev.map((m) => (m.id === id ? { ...m, content: text, streaming: true } : m));
+                                return [...prev, { id, role: 'assistant', content: text, attachments: [], status: 'streaming', streaming: true, createdAt: new Date().toISOString() }];
+                            });
+                        } else {
+                            patchStreaming((m) => ({ ...m, content: text, streaming: true }));
+                        }
                         break;
+                    }
+                    case 'delta': {
+                        if (!streamingIdRef.current) {
+                            const id = tempId('a');
+                            streamingIdRef.current = id;
+                            setMessages((prev) => [
+                                ...prev,
+                                { id, role: 'assistant', content: ev.data.text, attachments: [], status: 'streaming', streaming: true, createdAt: new Date().toISOString() },
+                            ]);
+                        } else {
+                            patchStreaming((m) => ({ ...m, content: m.content + ev.data.text }));
+                        }
+                        break;
+                    }
                     case 'tool':
-                        setToolLabel(ev.data.status === 'running' ? TOOL_LABELS[ev.data.name] || 'در حال بررسی…' : null);
+                        setToolLabel(ev.data.status === 'running' ? TOOL_LABELS[ev.data.name] || 'در حال بررسی' : null);
                         break;
                     case 'attachment':
                         patchStreaming((m) => ({ ...m, attachments: [...m.attachments, ev.data as MetAttachment] }));
@@ -219,11 +244,14 @@ export function useMetChat({ subjectKey, onWallet, onConversationChange, onStatu
                         streamingIdRef.current = null;
                         setMessages((prev) => {
                             const withoutStreaming = prev.filter((m) => m.id !== sid);
-                            return [...withoutStreaming, { ...final, streaming: false }];
+                            return [...withoutStreaming, { ...final, streaming: false, truncated: !!ev.data.truncated }];
                         });
                         onWallet(ev.data.wallet);
                         const c = conversationRef.current;
-                        if (c) setConversationBoth({ ...c, messageCount: (c.messageCount || 0) + (payload.regenerateMessageId ? 1 : 2), lastMessageAt: new Date().toISOString() });
+                        if (c) {
+                            const added = payload.continueMessageId ? 0 : payload.regenerateMessageId ? 1 : 2;
+                            setConversationBoth({ ...c, messageCount: (c.messageCount || 0) + added, lastMessageAt: new Date().toISOString() });
+                        }
                         setToolLabel(null);
                         flashSuccess();
                         break;
@@ -234,10 +262,19 @@ export function useMetChat({ subjectKey, onWallet, onConversationChange, onStatu
                         break;
                     }
                     case 'error': {
+                        if (gotDone) break;
                         const sid = streamingIdRef.current;
+                        const continuingId = continueTargetRef.current;
                         streamingIdRef.current = null;
                         setToolLabel(null);
                         if (ev.data.wallet) onWallet(ev.data.wallet);
+                        if (continuingId != null) {
+                            setMessages((prev) => prev.map((m) => (m.id === continuingId ? { ...m, streaming: false, truncated: true } : m)));
+                            toast.error(ev.data.message);
+                            setStatusSafe('error');
+                            window.setTimeout(() => setStatusSafe('ready'), 1600);
+                            break;
+                        }
 
                         const persisted = ev.data.userMessageId || userPersistedId;
                         if (ev.data.code === 'AI_STOPPED') {
@@ -272,18 +309,41 @@ export function useMetChat({ subjectKey, onWallet, onConversationChange, onStatu
                 await metApi.streamChat(payload, handle, controller.signal);
                 if (!gotDone && streamingIdRef.current) {
                     // Connection ended mid-stream without a `done` frame.
-                    patchStreaming((m) => ({ ...m, streaming: false, status: 'stopped' }));
+                    if (continueTargetRef.current != null) {
+                        const id = continueTargetRef.current;
+                        setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, streaming: false, truncated: true } : m)));
+                    } else {
+                        patchStreaming((m) => ({ ...m, streaming: false, status: 'stopped' }));
+                    }
                     streamingIdRef.current = null;
                 }
                 if (!gotDone) setStatusSafe('ready');
             } catch (err) {
+                if (gotDone) {
+                    setStatusSafe('ready');
+                    return;
+                }
                 if (controller.signal.aborted) {
                     // User stopped locally; keep whatever streamed so far.
-                    patchStreaming((m) => ({ ...m, streaming: false, status: 'stopped' }));
+                    if (continueTargetRef.current != null) {
+                        const id = continueTargetRef.current;
+                        setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, streaming: false, truncated: true } : m)));
+                    } else {
+                        patchStreaming((m) => ({ ...m, streaming: false, status: 'stopped' }));
+                    }
                     streamingIdRef.current = null;
                     setStatusSafe('ready');
                     // The server settles the partial reply after our socket closes; pick up the real balance.
                     window.setTimeout(() => metApi.wallet().then(onWallet).catch(() => {}), 1500);
+                    return;
+                }
+                if (continueTargetRef.current != null) {
+                    const id = continueTargetRef.current;
+                    setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, streaming: false, truncated: true } : m)));
+                    streamingIdRef.current = null;
+                    toast.error(err instanceof MetApiError ? err.message : errorMessage(err, 'ادامهٔ پاسخ انجام نشد.'));
+                    setStatusSafe('error');
+                    window.setTimeout(() => setStatusSafe('ready'), 1600);
                     return;
                 }
                 const apiErr = err instanceof MetApiError ? err : null;
@@ -311,7 +371,7 @@ export function useMetChat({ subjectKey, onWallet, onConversationChange, onStatu
     );
 
     const send = useCallback(
-        async ({ text, attachments = [], inputMode = 'text' }: SendInput) => {
+        async ({ text, attachments = [], inputMode = 'text', intent = null }: SendInput) => {
             const content = text.trim();
             if ((!content && !attachments.length) || busy) return;
 
@@ -336,11 +396,13 @@ export function useMetChat({ subjectKey, onWallet, onConversationChange, onStatu
                     message: content,
                     attachments: attachments.filter((a) => a.type === 'image').map((a) => ({ fileId: a.fileId })),
                     inputMode,
+                    questionId: questionId || null,
+                    intent: intent || null,
                 },
                 optimisticId
             );
         },
-        [busy, runTurn, subjectKey]
+        [busy, questionId, runTurn, subjectKey]
     );
 
     const regenerate = useCallback(
@@ -348,9 +410,30 @@ export function useMetChat({ subjectKey, onWallet, onConversationChange, onStatu
             const c = conversationRef.current;
             if (!c || busy) return;
             setMessages((prev) => prev.filter((m) => m.id !== assistantMessageId && m.status !== 'error'));
-            await runTurn({ conversationId: c.id, message: '', regenerateMessageId: assistantMessageId }, null);
+            await runTurn({ conversationId: c.id, message: '', regenerateMessageId: assistantMessageId, questionId: questionId || null }, null);
         },
-        [busy, runTurn]
+        [busy, questionId, runTurn]
+    );
+
+    const continueReply = useCallback(
+        async (assistantMessageId: number) => {
+            const c = conversationRef.current;
+            if (!c || busy || !assistantMessageId) return;
+            continueTargetRef.current = assistantMessageId;
+            streamingIdRef.current = assistantMessageId;
+            setMessages((prev) => prev.map((m) => (m.id === assistantMessageId ? { ...m, streaming: true, truncated: false } : m)));
+            try {
+                await runTurn({
+                    conversationId: c.id,
+                    message: '',
+                    continueMessageId: assistantMessageId,
+                    questionId: questionId || null,
+                }, null);
+            } finally {
+                continueTargetRef.current = null;
+            }
+        },
+        [busy, questionId, runTurn]
     );
 
     const stop = useCallback(() => {
@@ -391,6 +474,7 @@ export function useMetChat({ subjectKey, onWallet, onConversationChange, onStatu
         loadOlder,
         send,
         regenerate,
+        continueReply,
         stop,
         setConversation: setConversationBoth,
     };

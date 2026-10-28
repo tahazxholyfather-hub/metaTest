@@ -26,8 +26,13 @@ function encodeResultId(id) {
 }
 
 function decodeResultId(hash) {
-    if (!hash) return null;
-    const decoded = resultHash.decode(hash);
+    if (hash == null || hash === '') return null;
+    const raw = String(hash).trim();
+    if (/^\d+$/.test(raw)) {
+        const numeric = Number(raw);
+        return Number.isInteger(numeric) && numeric > 0 ? numeric : null;
+    }
+    const decoded = resultHash.decode(raw);
     return decoded.length ? Number(decoded[0]) : null;
 }
 

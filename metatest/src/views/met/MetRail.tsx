@@ -12,6 +12,7 @@ type Props = {
     metColor: MetColor;
     audioLevel: number | null;
     coins: number;
+    unlimited?: boolean;
     activePanel: RailPanel | null;
     onTogglePanel: (p: RailPanel) => void;
     onChat: () => void;
@@ -65,7 +66,7 @@ function RailButton({
  * Desktop: compact floating vertical rail. Sits at the chat's left edge (opposite
  * the app's main SideNav) so the transcript stays centred and uncluttered.
  */
-export function MetRail({ status, metColor, audioLevel, coins, activePanel, onTogglePanel, onChat, onNewChat, onGames, busy }: Props) {
+export function MetRail({ status, metColor, audioLevel, coins, unlimited = false, activePanel, onTogglePanel, onChat, onNewChat, onGames, busy }: Props) {
     const chatActive = activePanel === null;
     return (
         <motion.nav
@@ -109,15 +110,15 @@ export function MetRail({ status, metColor, audioLevel, coins, activePanel, onTo
             <button
                 type="button"
                 onClick={() => onTogglePanel('coins')}
-                aria-label={`سکه: ${faNum(coins)}`}
-                title="سکه‌ها"
+                aria-label={unlimited ? 'سکه: بی‌نهایت' : `سکه: ${faNum(coins)}`}
+                title={unlimited ? 'سکه بی‌نهایت' : 'سکه‌ها'}
                 className={`w-11 py-2 rounded-[14px] flex flex-col items-center gap-0.5 transition-colors ${
                     activePanel === 'coins' ? 'bg-[var(--color-primary-500)]/14 border border-[var(--color-primary-500)]/30' : 'hover:bg-[var(--hover-overlay)]'
                 }`}
             >
-                <Coins size={16} className={coins <= 0 ? 'text-rose-400' : 'text-amber-400'} strokeWidth={2.2} />
-                <motion.span key={coins} initial={{ opacity: 0.4, y: -2 }} animate={{ opacity: 1, y: 0 }} className={`text-[10.5px] font-extrabold tabular-nums ${coins <= 0 ? 'text-rose-400' : 'text-[var(--text-primary)]'}`}>
-                    {faNum(coins)}
+                <Coins size={16} className={!unlimited && coins <= 0 ? 'text-rose-400' : 'text-[var(--coin)]'} strokeWidth={2.2} />
+                <motion.span key={unlimited ? 'inf' : coins} initial={{ opacity: 0.4, y: -2 }} animate={{ opacity: 1, y: 0 }} className={`text-[10.5px] font-extrabold tabular-nums ${!unlimited && coins <= 0 ? 'text-rose-400' : 'text-[var(--text-primary)]'}`}>
+                    {unlimited ? '∞' : faNum(coins)}
                 </motion.span>
             </button>
         </motion.nav>

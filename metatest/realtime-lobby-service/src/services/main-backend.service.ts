@@ -60,8 +60,8 @@ export interface QuizGradeResult {
     total: number;
     correctCount: number;
     wrongCount: number;
-    resultId?: number;
-    id?: number;
+    resultId?: number | string;
+    id?: number | string;
 }
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -76,6 +76,40 @@ interface MainBackendEnvelope<T> {
     message?: string;
 }
 
+function describeFetchFailure(err: unknown): string {
+    const parts: string[] = [];
+    const seen = new Set<unknown>();
+    let current: unknown = err;
+    for (let depth = 0; current && depth < 4; depth += 1) {
+        if (typeof current !== 'object' || seen.has(current)) break;
+        seen.add(current);
+        const error = current as {
+            code?: unknown;
+            message?: unknown;
+            cause?: unknown;
+            address?: unknown;
+            port?: unknown;
+            syscall?: unknown;
+        };
+        const code = typeof error.code === 'string' ? error.code : '';
+        const syscall = typeof error.syscall === 'string' ? error.syscall : '';
+        const address = typeof error.address === 'string' ? error.address : '';
+        const port =
+            typeof error.port === 'number' || typeof error.port === 'string'
+                ? String(error.port)
+                : '';
+        const where = [syscall, address && port ? `${address}:${port}` : address || port]
+            .filter(Boolean)
+            .join(' ');
+        const message = typeof error.message === 'string' ? error.message : '';
+        const generic = message === 'fetch failed' || message === 'The operation was aborted';
+        const bit = [code, where].filter(Boolean).join(' ') || (generic ? '' : message);
+        if (bit && !parts.includes(bit)) parts.push(bit);
+        current = error.cause;
+    }
+    return parts.join(' | ').slice(0, 300);
+}
+
 export class MainBackendService {
     private readonly baseUrl: string;
 
@@ -88,7 +122,7 @@ export class MainBackendService {
     private readonly internalKey?: string;
 
     constructor() {
-        this.baseUrl = env.MAIN_BACKEND_URL.replace(/\/$/, '');
+        this.baseUrl = env.MAIN_BACKEND_INTERNAL_BASE_URL;
 
         /**
          * Preferred env name:
@@ -127,7 +161,7 @@ export class MainBackendService {
          *   }
          * }
          */
-        const url = `${this.baseUrl}/internal/quizzes/${encodeURIComponent(
+        const url = `${this.baseUrl}/quizzes/${encodeURIComponent(
             quizId,
         )}/metadata`;
 
@@ -197,7 +231,7 @@ export class MainBackendService {
          *   role: 'creator' | 'member'
          * }
          */
-        const url = `${this.baseUrl}/internal/quizzes/${encodeURIComponent(
+        const url = `${this.baseUrl}/quizzes/${encodeURIComponent(
             params.quizId,
         )}/members`;
 
@@ -228,7 +262,7 @@ export class MainBackendService {
          *   payload: {}
          * }
          */
-        const url = `${this.baseUrl}/api/flow`;
+        const url = env.MAIN_BACKEND_FLOW_URL;
 
         const response = await this.request(url, {
             method: 'POST',
@@ -320,7 +354,7 @@ export class MainBackendService {
          *   selectionLog
          * }
          */
-        const url = `${this.baseUrl}/internal/quizzes/${encodeURIComponent(
+        const url = `${this.baseUrl}/quizzes/${encodeURIComponent(
             params.quizId,
         )}/grade`;
 
@@ -371,13 +405,13 @@ export class MainBackendService {
         lobbyCode: string;
         result: QuizGradeResult;
         accessToken?: string;
-    }): Promise<{ success: boolean; resultId?: number | string, note?: string } | undefined> {
+    }): Promise<{ success: boolean; resultId?: number | string; id?: number | string; note?: string; error?: string } | undefined> {
         /**
          * Optional main backend endpoint:
          *
          * POST /internal/results
          */
-        const url = `${this.baseUrl}/internal/results`;
+        const url = `${this.baseUrl}/results`;
 
         try {
             const response = await this.request(url, {
@@ -391,15 +425,24 @@ export class MainBackendService {
                 },
             });
 
-            // Return the response data so LobbyService can extract the resultId
-            return response as { success: boolean; resultId?: number | string; note?: string };
+            const envelope = response as {
+                success?: boolean;
+                resultId?: number | string;
+                id?: number | string;
+                data?: { resultId?: number | string; id?: number | string };
+                note?: string;
+                error?: string;
+            };
+
+            return {
+                success: envelope.success !== false,
+                resultId: envelope.resultId ?? envelope.data?.resultId,
+                id: envelope.id ?? envelope.data?.id,
+                note: envelope.note,
+                error: typeof envelope.error === 'string' ? envelope.error : undefined,
+            };
 
         } catch (err) {
-            /**
-             * Saving result may be optional depending on your main backend.
-             *
-             * If saving is mandatory, remove this catch and let the error bubble.
-             */
             logger.warn(
                 {
                     err,
@@ -409,7 +452,8 @@ export class MainBackendService {
                 },
                 'Failed to save result to main backend',
             );
-            return { success: false };
+            const message = err instanceof CustomError ? err.message : 'Failed to save result';
+            return { success: false, error: message };
         }
     }
 
@@ -423,7 +467,7 @@ export class MainBackendService {
          *
          * Body: {} (empty — the action is implicit in the endpoint)
          */
-        const url = `${this.baseUrl}/internal/quizzes/${encodeURIComponent(quizId)}/finish`;
+        const url = `${this.baseUrl}/quizzes/${encodeURIComponent(quizId)}/finish`;
 
         try {
             await this.request(url, {
@@ -501,7 +545,7 @@ export class MainBackendService {
             if (!response.ok) {
                 const message = this.extractErrorMessage(
                     responseBody,
-                    'Main backend request failed',
+                    `Main backend request failed (HTTP ${response.status})`,
                 );
 
                 logger.warn(
@@ -509,7 +553,10 @@ export class MainBackendService {
                         url,
                         method: options.method,
                         status: response.status,
-                        responseBody,
+                        responseBody:
+                            typeof responseBody === 'string'
+                                ? responseBody.slice(0, 300)
+                                : responseBody,
                     },
                     'Main backend request failed',
                 );
@@ -518,7 +565,9 @@ export class MainBackendService {
                     message,
                     response.status >= 500 ? 502 : response.status,
                     'MAIN_BACKEND_REQUEST_FAILED',
-                    responseBody,
+                    {
+                        status: response.status,
+                    },
                 );
             }
 
@@ -530,6 +579,7 @@ export class MainBackendService {
 
             const isAbortError =
                 err instanceof Error && err.name === 'AbortError';
+            const cause = describeFetchFailure(err);
 
             logger.error(
                 {
@@ -537,6 +587,7 @@ export class MainBackendService {
                     url,
                     method: options.method,
                     timeout: isAbortError,
+                    cause,
                 },
                 isAbortError
                     ? 'Main backend request timed out'
@@ -545,12 +596,16 @@ export class MainBackendService {
 
             throw new CustomError(
                 isAbortError
-                    ? 'Main backend request timed out'
-                    : 'Main backend unavailable',
+                    ? `Main backend request timed out (${url})`
+                    : `Main backend unavailable (${url}${cause ? `: ${cause}` : ''})`,
                 502,
                 isAbortError
                     ? 'MAIN_BACKEND_TIMEOUT'
                     : 'MAIN_BACKEND_UNAVAILABLE',
+                {
+                    url,
+                    cause: cause || null,
+                },
             );
         } finally {
             clearTimeout(timeout);
@@ -686,9 +741,11 @@ export class MainBackendService {
         }
 
         if (typeof responseBody === 'string') {
-            /**
-             * Avoid sending huge HTML pages to the frontend.
-             */
+            const cannotMatch = responseBody.match(/Cannot (GET|POST|PUT|PATCH|DELETE) ([^<]+)/i);
+            if (cannotMatch) {
+                return `Main backend route not found: ${cannotMatch[1]} ${cannotMatch[2].trim()}`;
+            }
+
             if (responseBody.includes('<!DOCTYPE html>')) {
                 return fallback;
             }

@@ -1,7 +1,7 @@
 'use strict';
 
 function slugify(value) {
-    const slug = String(value || '')
+    return String(value || '')
         .trim()
         .toLowerCase()
         .replace(/\s+/g, '-')
@@ -9,25 +9,18 @@ function slugify(value) {
         .replace(/-+/g, '-')
         .replace(/^-|-$/g, '')
         .slice(0, 160);
-    return slug;
 }
 
 function cleanText(value, max) {
     const text = String(value || '').replace(/\r\n/g, '\n').trim();
-    if (!text) return '';
-    return text.slice(0, max);
+    return text ? text.slice(0, max) : '';
 }
 
 function cleanCoverUrl(value) {
     const raw = String(value || '').trim();
     if (!raw) return null;
-    if (raw.length > 500) return undefined;
-    if (!/^https?:\/\/[^\s]+$/i.test(raw)) return undefined;
+    if (raw.length > 500 || !/^https?:\/\/[^\s]+$/i.test(raw)) return undefined;
     return raw;
 }
 
-module.exports = {
-    slugify,
-    cleanText,
-    cleanCoverUrl,
-};
+module.exports = { slugify, cleanText, cleanCoverUrl };

@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { MathRenderer } from '../../components/ui/MathRenderer';
+import { normalizeAssistantText } from '../../backend/ai-teacher/services/replyQuality.js';
 
 /**
  * Lightweight markdown renderer for Met replies: headings → bold, **bold**,
@@ -127,7 +128,7 @@ export function RichText({
     /** Node appended after the last block (e.g. a typing caret). */
     trailing?: React.ReactNode;
 }) {
-    const blocks = useMemo(() => parseBlocks(text, streaming), [text, streaming]);
+    const blocks = useMemo(() => parseBlocks(normalizeAssistantText(text), streaming), [text, streaming]);
     const lastIdx = blocks.length - 1;
     return (
         <div className={`met-rich text-[14.5px] leading-[1.75] text-[var(--text-primary)] break-words ${className}`} dir="auto">

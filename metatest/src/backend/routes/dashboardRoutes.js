@@ -8,7 +8,8 @@ const {
     handleSubmitReferrerCode,
     handleGetTourStatus,
     handleMarkTourAsViewed,
-    handleUpdateTaskProgress
+    handleUpdateTaskProgress,
+    handleMarkMessagesRead,
 } = require('../handlers/dashboardHandler');
 
 /**
@@ -17,6 +18,9 @@ const {
 
 /** GET  /api/dashboard/data — full dashboard payload */
 router.get('/data', requireToken, handleGetDashboardData);
+
+/** POST /api/dashboard/messages/read — mark in-app notices read. Body: { all?: true, ids?: number[] } */
+router.post('/messages/read', requireToken, handleMarkMessagesRead);
 
 /** POST /api/dashboard/claim-reward — claim XP reward for a completed task. Body: { taskId } */
 router.post('/claim-reward', requireToken, handleClaimTaskReward);

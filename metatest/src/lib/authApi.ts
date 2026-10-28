@@ -69,15 +69,16 @@ export function clearAuthCookie() {
 
 async function request<T = any>(
     url: string,
-    options: RequestInit & { params?: Record<string, any> } = {}
+    options: RequestInit & { params?: Record<string, any>; authKind?: 'user' | 'admin' | 'none' } = {}
 ): Promise<T> {
-    const token = getCookie("auth_token");
+    const { params, authKind = 'user', ...fetchOptions } = options;
+    const token = authKind === 'user' ? getCookie("auth_token") : null;
 
     const headers: Record<string, string> = {
-        ...((options.headers as Record<string, string>) || {}),
+        ...((fetchOptions.headers as Record<string, string>) || {}),
     };
 
-    if (!(options.body instanceof FormData) && !headers["Content-Type"]) {
+    if (!(fetchOptions.body instanceof FormData) && !headers["Content-Type"]) {
         headers["Content-Type"] = "application/json";
     }
 
@@ -86,9 +87,9 @@ async function request<T = any>(
     }
 
     let finalUrl = url;
-    if (options.params) {
+    if (params) {
         const qs = new URLSearchParams(
-            Object.entries(options.params)
+            Object.entries(params)
                 .filter(([, v]) => v !== undefined && v !== null)
                 .map(([k, v]) => [k, String(v)])
         ).toString();
@@ -96,9 +97,9 @@ async function request<T = any>(
     }
 
     const res = await fetch(finalUrl, {
-        method: options.method || "POST",
+        method: fetchOptions.method || "POST",
         headers,
-        body: options.body,
+        body: fetchOptions.body,
         credentials: "include",
     });
 
@@ -108,16 +109,21 @@ async function request<T = any>(
         : await res.text();
 
     if (!res.ok) {
-        if (res.status === 401) clearAuthCookie();
+        if (res.status === 401 && authKind === 'user') clearAuthCookie();
 
         const message =
             (data && typeof data === "object" && (data.message || data.error)) ||
             `خطای سرور (${res.status})`;
+        const detail =
+            data && typeof data === "object" && typeof data.detail === "string"
+                ? data.detail
+                : "";
 
-        throw new Error(message);
+        throw new Error(detail ? `${message}: ${detail}` : message);
     }
 
     if (
+        authKind === 'user' &&
         data &&
         typeof data === "object" &&
         "token" in data &&
@@ -191,6 +197,7 @@ export const flowApi = {
     dispatch: (action: string, payload: any = {}) => {
         let body: any;
         const headers: Record<string, string> = {};
+        const authKind = /^admin_/i.test(action) ? 'admin' as const : 'user' as const;
 
         const hasFile =
             payload instanceof FormData ||
@@ -229,7 +236,7 @@ export const flowApi = {
             data?: any;
             message?: string;
             token?: string;
-        }>(`${API_BASE}/flow`, { method: "POST", headers, body });
+        }>(`${API_BASE}/flow`, { method: "POST", headers, body, authKind });
     },
 
     // ===================== Subscription / Payments =====================
@@ -252,6 +259,7 @@ export const flowApi = {
     createSubscriptionPayment: (payload: {
         planId: string;
         discountCode?: string;
+        paymentMethod?: string;
         metadata?: {
             userId?: string;
             mobile?: string;
@@ -274,11 +282,35 @@ export const flowApi = {
             { method: "GET" }
         ),
 
+    getEntitlements: () =>
+        request<{ success: boolean; data?: any; message?: string }>(
+            `${API_BASE}/payments/entitlements`,
+            { method: "GET" }
+        ),
+
+    getCoinPackages: () =>
+        request<{ success: boolean; data?: { packages: any[]; canPurchase: boolean; isPaid: boolean }; message?: string; code?: string }>(
+            `${API_BASE}/payments/coin-packages`,
+            { method: "GET" }
+        ),
+
+    createCoinPayment: (payload: { packageId: string }) =>
+        request<{ success: boolean; data?: { purchaseId: number; paymentUrl: string }; message?: string; code?: string }>(
+            `${API_BASE}/payments/coins/create`,
+            { method: "POST", body: JSON.stringify(payload) }
+        ),
+
 
 
     // Dashboard (uses /api/dashboard routes, not /api/flow)
     getDashboardData: () =>
         request<Json>(`${API_BASE}/dashboard/data`, { method: "GET" }),
+
+    markNotificationsRead: (payload: { all?: boolean; ids?: number[] } = { all: true }) =>
+        request<Json>(`${API_BASE}/dashboard/messages/read`, {
+            method: "POST",
+            body: JSON.stringify(payload),
+        }),
 
     claimTaskReward: (taskId: number) =>
         request<Json>(`${API_BASE}/dashboard/claim-reward`, {
@@ -302,6 +334,14 @@ export const flowApi = {
         request<Json>(`${API_BASE}/dashboard/referrer-code`, {
             body: JSON.stringify({ referrerCode }),
         }),
+
+    // Toman wallet & referral
+    getMyReferralCode: () => flowApi.dispatch("get_my_referral_code"),
+
+    getMyWallet: () => flowApi.dispatch("get_my_wallet"),
+
+    requestWithdrawal: (amount: number) =>
+        flowApi.dispatch("request_withdrawal", { amount }),
 
 
     updateTaskProgress: (taskId: number, progressIncrement = 1) =>
@@ -402,6 +442,9 @@ export const flowApi = {
 
     getMabahesByChaptersMulti: (chapterIds: number[]) =>
         flowApi.dispatch("get_mabahes_by_chapters_multi", { chapterIds }),
+
+    searchBankQuestions: (payload: Json) =>
+        flowApi.dispatch("search_bank_questions", payload),
 
     generateCode: () => flowApi.dispatch("generate_code"),
 

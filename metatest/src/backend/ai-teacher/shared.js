@@ -2,14 +2,19 @@
 
 const db = require('../db');
 const { dailyCoinsForPlan, featureStatus, unavailableReason, FILE_LIMITS, CONTEXT_LIMITS } = require('./config');
+const { isPaidPlan } = require('../subscription/limits');
 const { SUBJECT_LIST } = require('./subjects');
 const coinWallet = require('./services/coinWallet');
 const conversationService = require('./services/conversationService');
 const promptBuilder = require('./services/promptBuilder');
+const replyQuality = require('./services/replyQuality');
 
 /** Shared shaping + loaders used by both controllers. */
 
 function publicMessage(row) {
+    const raw = conversationService.parseAttachments(row.attachments);
+    const carrier = raw.find((item) => item && item.type === 'ui_actions');
+    const attachments = raw.filter((item) => item && item.type !== 'ui_actions');
     return {
         id: row.id,
         conversationId: row.conversation_id,
@@ -20,8 +25,11 @@ function publicMessage(row) {
         totalTokens: row.total_tokens || 0,
         coinCost: row.coin_cost || 0,
         model: row.model || null,
-        attachments: conversationService.parseAttachments(row.attachments),
+        attachments,
+        actions: Array.isArray(carrier?.actions) ? carrier.actions : [],
         status: row.status || 'complete',
+        finishReason: row.finish_reason || null,
+        truncated: replyQuality.isContinuableFinish(row.finish_reason, row.content, row.status),
         latencyMs: row.latency_ms ?? null,
         regeneratedFrom: row.regenerated_from ?? null,
         createdAt: row.created_at,
@@ -37,6 +45,8 @@ function publicConversation(row) {
         lastMessageAt: row.last_message_at ?? null,
         createdAt: row.created_at ?? null,
         titleGenerated: !!row.title_generated,
+        sourceType: row.source_type || 'chat',
+        questionId: row.question_id ?? null,
     };
 }
 
@@ -78,11 +88,16 @@ function publicFeatures() {
 }
 
 async function loadUserRow(userId) {
-    const [[user]] = await db.query(
-        `SELECT id, first_name, last_name, current_plan, plan_expires_at, ai_last_subject FROM tam24_users WHERE id = ?`,
-        [userId]
-    );
-    return user || null;
+    const full = `SELECT id, first_name, last_name, current_plan, plan_expires_at, ai_last_subject FROM tam24_users WHERE id = ?`;
+    const basic = `SELECT id, first_name, last_name, current_plan, plan_expires_at FROM tam24_users WHERE id = ?`;
+    try {
+        const [[user]] = await db.query(full, [userId]);
+        return user || null;
+    } catch (err) {
+        if (!err || err.code !== 'ER_BAD_FIELD_ERROR') throw err;
+        const [[user]] = await db.query(basic, [userId]);
+        return user ? { ...user, ai_last_subject: null } : null;
+    }
 }
 
 async function ensureSettings(userId) {
@@ -97,26 +112,62 @@ function nextResetAtIso() {
     return next.toISOString();
 }
 
-/** Apply the idempotent daily grant and return the wallet as the UI sees it. */
-async function walletSnapshot(userId, planKey) {
-    const grant = await coinWallet.applyDailyGrant(db, userId, planKey);
-    const w = grant.wallet;
+/** Expired or empty plans use the free coin budget. Named and numeric paid plans do not. */
+function coinPlanKey(planKey, expiresAt) {
+    if (expiresAt === undefined) return planKey || 'free';
+    return isPaidPlan(planKey, expiresAt) ? (planKey || 'free') : 'free';
+}
+
+function emptyWallet(planKey) {
     return {
-        daily: w.daily,
-        purchased: w.purchased,
-        total: w.total,
-        balance: w.total,
+        daily: 0, purchased: 0, total: 0, balance: 0, unlimited: false,
         dailyQuota: dailyCoinsForPlan(planKey),
-        grantedToday: grant.granted,
-        grantAmount: grant.amount,
-        nextResetAt: nextResetAtIso(),
+        grantedToday: false, grantAmount: 0, nextResetAt: nextResetAtIso(),
     };
 }
 
-function walletFromBuckets(w, planKey) {
+/** Apply the idempotent daily grant and return the wallet as the UI sees it. */
+async function walletSnapshot(userId, planKey, expiresAt) {
+    const key = coinPlanKey(planKey, expiresAt);
+    try {
+        const grant = await coinWallet.applyDailyGrant(db, userId, key);
+        const w = grant.wallet;
+        return {
+            daily: w.daily,
+            purchased: w.purchased,
+            total: w.total,
+            balance: w.total,
+            unlimited: Boolean(w.unlimited),
+            dailyQuota: dailyCoinsForPlan(key),
+            grantedToday: grant.granted,
+            grantAmount: grant.amount,
+            nextResetAt: nextResetAtIso(),
+        };
+    } catch (err) {
+        // A ledger/schema failure must not take the whole tutor offline.
+        // Show the coins already on the row; the page can still open.
+        console.error('[met] walletSnapshot', err && err.code, err && err.sqlMessage ? err.sqlMessage : err && err.message);
+        try {
+            const w = await coinWallet.getWallet(db, userId);
+            return {
+                daily: w.daily, purchased: w.purchased, total: w.total, balance: w.total,
+                unlimited: Boolean(w.unlimited),
+                dailyQuota: dailyCoinsForPlan(key),
+                grantedToday: false, grantAmount: 0, nextResetAt: nextResetAtIso(),
+            };
+        } catch (readErr) {
+            console.error('[met] wallet read', readErr && readErr.code, readErr && readErr.message);
+            return emptyWallet(key);
+        }
+    }
+}
+
+function walletFromBuckets(w, planKey, expiresAt) {
+    const key = coinPlanKey(planKey, expiresAt);
     return {
         daily: w.daily, purchased: w.purchased, total: w.total, balance: w.total,
-        dailyQuota: dailyCoinsForPlan(planKey), nextResetAt: nextResetAtIso(),
+        unlimited: Boolean(w.unlimited),
+        dailyQuota: dailyCoinsForPlan(key), nextResetAt: nextResetAtIso(),
     };
 }
 
@@ -171,6 +222,10 @@ function userMessageForError(code, fallback = 'در پردازش درخواست 
         case 'REFERENCE_LIMIT': return 'حداکثر تعداد منبع برای این گفتگو پر شده است.';
         case 'PDF_NO_TEXT': return 'متنی از این PDF استخراج نشد (احتمالاً اسکن تصویری است).';
         case 'NOT_FOUND': return 'موردی یافت نشد.';
+        case 'QUESTION_NOT_ANSWERED': return 'اول پاسخ این سوال را ثبت کن، بعد از مِت بپرس.';
+        case 'NOT_TRUNCATED': return 'این پاسخ کامل است و ادامه‌ای ندارد.';
+        case 'NOT_LAST_MESSAGE': return 'فقط آخرین پاسخ را می‌شود ادامه داد.';
+        case 'MESSAGE_NOT_FOUND': return 'این پیام پیدا نشد.';
         default: return fallback;
     }
 }

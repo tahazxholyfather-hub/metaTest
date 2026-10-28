@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
     Save, Maximize2, Minimize2, Edit2, ChevronLeft, ChevronRight,
     Filter, CheckCircle2, Circle, X, ChevronDown, Search, Loader2, Image as ImageIcon, AlertCircle
 } from 'lucide-react';
 import { flowApi } from '../lib/authApi';
+import { topicMatchesGrades } from './chapterGrades';
 
 
 // Re-exported so existing imports of MathRenderer from this file keep working.
@@ -11,34 +12,44 @@ import { flowApi } from '../lib/authApi';
 import { MathRenderer } from '../components/ui/MathRenderer';
 
 
-// --- CUSTOM DROPDOWN COMPONENT (FIXED) ---
-// This component now dynamically renders its dropdown above or below to avoid viewport overflow.
+// --- CUSTOM DROPDOWN COMPONENT ---
+// Renders above or below to avoid viewport overflow. Includes a live search
+// bar that filters the option list (used for subjects, chapters, mabahes, …).
 export interface SelectOption { id: number | string; title: string; }
 
-export const CustomSelect = ({ label, value, options, onChange, placeholder = "Select...", disabled = false }: {
-    label?: string, value: number | string | null, options: SelectOption[], onChange: (id: number | string | null) => void, placeholder?: string, disabled?: boolean
+export const CustomSelect = ({ label, value, options, onChange, placeholder = "انتخاب...", disabled = false, searchable = true }: {
+    label?: string, value: number | string | null, options: SelectOption[], onChange: (id: number | string | null) => void, placeholder?: string, disabled?: boolean, searchable?: boolean
 }) => {
     const [isOpen, setIsOpen] = useState(false);
-    const [positionUp, setPositionUp] = useState(false); // State to control dropdown position
+    const [positionUp, setPositionUp] = useState(false);
+    const [query, setQuery] = useState('');
     const selectRef = useRef<HTMLDivElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const searchRef = useRef<HTMLInputElement>(null);
 
-    // FIX: Check position and render dropdown above if it would overflow
+    const filtered = useMemo(() => {
+        const q = query.trim().toLowerCase();
+        if (!q) return options;
+        return options.filter((opt) => {
+            const title = String(opt.title || '').toLowerCase();
+            const id = String(opt.id).toLowerCase();
+            return title.includes(q) || id.includes(q);
+        });
+    }, [options, query]);
+
     useEffect(() => {
         if (isOpen && selectRef.current && dropdownRef.current) {
             const selectRect = selectRef.current.getBoundingClientRect();
             const dropdownHeight = dropdownRef.current.offsetHeight;
             const spaceBelow = window.innerHeight - selectRect.bottom;
-            // If there's not enough space below, render it above
             if (spaceBelow < dropdownHeight && selectRect.top > dropdownHeight) {
                 setPositionUp(true);
             } else {
                 setPositionUp(false);
             }
         }
-    }, [isOpen, options]); // re-check when options change as height might change
+    }, [isOpen, filtered.length, query]);
 
-    // Close dropdown on click outside
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (selectRef.current && !selectRef.current.contains(event.target as Node)) setIsOpen(false);
@@ -47,7 +58,20 @@ export const CustomSelect = ({ label, value, options, onChange, placeholder = "S
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    useEffect(() => {
+        if (isOpen) {
+            setQuery('');
+            requestAnimationFrame(() => searchRef.current?.focus());
+        }
+    }, [isOpen]);
+
     const selectedTitle = options.find(o => o.id === value)?.title || placeholder;
+
+    const pick = (id: number | string | null) => {
+        onChange(id);
+        setIsOpen(false);
+        setQuery('');
+    };
 
     return (
         <div className="space-y-1.5 relative w-full" ref={selectRef}>
@@ -55,7 +79,7 @@ export const CustomSelect = ({ label, value, options, onChange, placeholder = "S
                 <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider px-1 flex justify-between">
                     <span>{label}</span>
                     {value !== null && !disabled && (
-                        <button onClick={(e) => { e.stopPropagation(); onChange(null); }} className="text-red-500 hover:underline">Clear</button>
+                        <button type="button" onClick={(e) => { e.stopPropagation(); onChange(null); }} className="text-red-500 hover:underline">پاک کردن</button>
                     )}
                 </label>
             )}
@@ -72,17 +96,41 @@ export const CustomSelect = ({ label, value, options, onChange, placeholder = "S
             {isOpen && !disabled && (
                 <div
                     ref={dropdownRef}
-                    className={`absolute left-0 right-0 bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-xl shadow-xl z-[9999] animate-in fade-in zoom-in-95 duration-100
+                    className={`absolute left-0 right-0 bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-xl shadow-xl z-[9999] animate-in fade-in zoom-in-95 duration-100 overflow-hidden
                     ${positionUp ? 'bottom-[calc(100%+4px)]' : 'top-[calc(100%+4px)]'}`}
                 >
+                    {searchable && (
+                        <div className="p-2 border-b border-[#dadce0] dark:border-[#333537]">
+                            <div className="relative">
+                                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#86868b] pointer-events-none" />
+                                <input
+                                    ref={searchRef}
+                                    type="text"
+                                    value={query}
+                                    onChange={(e) => setQuery(e.target.value)}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    autoComplete="off"
+                                    onKeyDown={(e) => {
+                                        e.stopPropagation();
+                                        if (e.key === 'Escape') setIsOpen(false);
+                                        if (e.key === 'Enter' && filtered[0]) pick(filtered[0].id);
+                                    }}
+                                    placeholder="جستجو..."
+                                    className="w-full bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-lg pl-9 pr-3 py-2 text-xs outline-none focus:border-[#1a73e8]"
+                                    dir="auto"
+                                />
+                            </div>
+                        </div>
+                    )}
                     <div className="max-h-60 overflow-y-auto custom-scrollbar py-1">
-                        <div onClick={() => { onChange(null); setIsOpen(false); }} className="px-4 py-3 text-xs cursor-pointer text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 border-b border-gray-100 dark:border-gray-800">
+                        <div onClick={() => pick(null)} className="px-4 py-3 text-xs cursor-pointer text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 border-b border-gray-100 dark:border-gray-800">
                             Clear selection
                         </div>
-                        {options.map(opt => (
+                        {filtered.map(opt => (
                             <div
                                 key={opt.id}
-                                onClick={() => { onChange(opt.id); setIsOpen(false); }}
+                                onClick={() => pick(opt.id)}
                                 className={`px-4 py-3 text-xs cursor-pointer hover:bg-[#f8f9fa] dark:hover:bg-[#2b2d2f] transition-colors ${
                                     value === opt.id ? 'bg-[#e8f0fe] text-[#1a73e8] font-bold dark:bg-[#1a73e8]/10' : 'text-gray-700 dark:text-gray-300'
                                 }`}
@@ -90,8 +138,126 @@ export const CustomSelect = ({ label, value, options, onChange, placeholder = "S
                                 {opt.title}
                             </div>
                         ))}
+                        {filtered.length === 0 && (
+                            <div className="px-4 py-3 text-xs text-gray-400 text-center">
+                                {options.length === 0 ? 'موردی نیست' : 'موردی پیدا نشد'}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+
+export const CustomMultiSelect = ({ label, values, options, onChange, placeholder = "انتخاب...", disabled = false }: {
+    label?: string;
+    values: Array<number | string>;
+    options: SelectOption[];
+    onChange: (ids: Array<number | string>) => void;
+    placeholder?: string;
+    disabled?: boolean;
+}) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [positionUp, setPositionUp] = useState(false);
+    const selectRef = useRef<HTMLDivElement>(null);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const selected = values.map(String);
+
+    useEffect(() => {
+        if (isOpen && selectRef.current && dropdownRef.current) {
+            const selectRect = selectRef.current.getBoundingClientRect();
+            const dropdownHeight = dropdownRef.current.offsetHeight;
+            const spaceBelow = window.innerHeight - selectRect.bottom;
+            if (spaceBelow < dropdownHeight && selectRect.top > dropdownHeight) {
+                setPositionUp(true);
+            } else {
+                setPositionUp(false);
+            }
+        }
+    }, [isOpen, options, values]);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (selectRef.current && !selectRef.current.contains(event.target as Node)) setIsOpen(false);
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const toggle = (id: number | string) => {
+        const key = String(id);
+        if (selected.includes(key)) onChange(values.filter((v) => String(v) !== key));
+        else onChange([...values, id]);
+    };
+
+    const selectedOptions = options.filter((o) => selected.includes(String(o.id)));
+
+    return (
+        <div className="space-y-1.5 relative w-full" ref={selectRef}>
+            {label && (
+                <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider px-1 flex justify-between">
+                    <span>{label}</span>
+                    {values.length > 0 && !disabled && (
+                        <button type="button" onClick={(e) => { e.stopPropagation(); onChange([]); }} className="text-red-500 hover:underline">پاک کردن</button>
+                    )}
+                </label>
+            )}
+            <div
+                onClick={() => !disabled && setIsOpen(!isOpen)}
+                className={`w-full min-h-[46px] flex items-center justify-between bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-xl px-4 py-2 text-xs font-medium transition-all ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:border-[#1a73e8]'}`}
+            >
+                <div className="flex flex-wrap gap-1.5 pr-4 flex-1 min-w-0">
+                    {selectedOptions.length === 0 ? (
+                        <span className="text-gray-400 py-1">{placeholder}</span>
+                    ) : selectedOptions.map((opt) => (
+                        <span
+                            key={String(opt.id)}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[#e8f0fe] text-[#1a73e8] dark:bg-[#1a73e8]/10 font-bold max-w-full"
+                            dir="auto"
+                        >
+                            <span className="truncate">{opt.title}</span>
+                            {!disabled && (
+                                <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); toggle(opt.id); }}
+                                    className="hover:text-red-500"
+                                >
+                                    <X size={10} />
+                                </button>
+                            )}
+                        </span>
+                    ))}
+                </div>
+                <ChevronDown size={14} className={`text-gray-400 shrink-0 transition-transform duration-300 ${isOpen ? 'rotate-180 text-[#1a73e8]' : ''}`} />
+            </div>
+
+            {isOpen && !disabled && (
+                <div
+                    ref={dropdownRef}
+                    className={`absolute left-0 right-0 bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-xl shadow-xl z-[9999] animate-in fade-in zoom-in-95 duration-100
+                    ${positionUp ? 'bottom-[calc(100%+4px)]' : 'top-[calc(100%+4px)]'}`}
+                >
+                    <div className="max-h-60 overflow-y-auto custom-scrollbar py-1">
+                        {options.map((opt) => {
+                            const active = selected.includes(String(opt.id));
+                            return (
+                                <div
+                                    key={opt.id}
+                                    onClick={() => toggle(opt.id)}
+                                    className={`px-4 py-3 text-xs cursor-pointer hover:bg-[#f8f9fa] dark:hover:bg-[#2b2d2f] transition-colors flex items-center justify-between gap-2 ${
+                                        active ? 'bg-[#e8f0fe] text-[#1a73e8] font-bold dark:bg-[#1a73e8]/10' : 'text-gray-700 dark:text-gray-300'
+                                    }`}
+                                    dir="auto"
+                                >
+                                    <span className="truncate">{opt.title}</span>
+                                    {active ? <CheckCircle2 size={14} className="shrink-0" /> : <Circle size={14} className="shrink-0 text-gray-300" />}
+                                </div>
+                            );
+                        })}
                         {options.length === 0 && (
-                            <div className="px-4 py-3 text-xs text-gray-400 text-center">No items available</div>
+                            <div className="px-4 py-3 text-xs text-gray-400 text-center">موردی نیست</div>
                         )}
                     </div>
                 </div>
@@ -140,12 +306,23 @@ interface QuestionData {
     grade: number | null; grade_title: string;
     chapter: number | null; chapter_title: string;
     mabhas: number | null; mabhas_title: string;
+    grade_ids: number[]; grade_titles: string[];
+    chapter_ids: number[]; chapter_titles: string[];
+    mabhas_ids: number[]; mabhas_titles: string[];
     level: string; status: string;
 }
 
 
 // --- MAIN COMPONENT ---
-export default function EditQuestions() {
+export default function EditQuestions({
+    focusQuestionId = null,
+    embedded = false,
+    startEditing = false,
+}: {
+    focusQuestionId?: number | null;
+    embedded?: boolean;
+    startEditing?: boolean;
+} = {}) {
     const [question, setQuestion] = useState<QuestionData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -162,6 +339,12 @@ export default function EditQuestions() {
         search_text: string;
     }>({ subject_id: null, grade_id: null, topic_id: null, chapter_id: null, status: null, has_image: null, search_text: '' });
     const [lists, setLists] = useState<{ subjects: SelectOption[], grades: SelectOption[], chapters: SelectOption[], mabahes: SelectOption[] }>({ subjects: [], grades: [], chapters: [], mabahes: [] });
+    const [curriculum, setCurriculum] = useState<{
+        subjects: { id: number; title: string }[];
+        grades: { id: number; title: string }[];
+        topics: { id: number; subject_id: number; title: string }[];
+        chapters: { id: number; topic_id: number; title: string }[];
+    }>({ subjects: [], grades: [], topics: [], chapters: [] });
 
     // Navigation History
     const [history, setHistory] = useState<number[]>([]);
@@ -187,14 +370,14 @@ export default function EditQuestions() {
         { id: 'آرشیو', title: 'آرشیو' },
     ];
     const statusSwitchOptions = [
-        { id: null, title: 'All' },
+        { id: null, title: 'همه' },
         { id: 'فعال', title: 'فعال' },
         { id: 'غیرفعال', title: 'غیرفعال' },
     ];
     const imageSwitchOptions = [
-        { id: null, title: 'All' },
-        { id: 'with', title: 'With Image' },
-        { id: 'without', title: 'No Image' },
+        { id: null, title: 'همه' },
+        { id: 'with', title: 'با تصویر' },
+        { id: 'without', title: 'بدون تصویر' },
     ];
 
     // --- HELPER & LIFECYCLE HOOKS ---
@@ -248,8 +431,45 @@ export default function EditQuestions() {
     };
 
     useEffect(() => { fetchSubjects(); }, []);
+    useEffect(() => {
+        (async () => {
+            try {
+                const response: any = await flowApi.dispatch('Admin_get_curriculum');
+                const res = response.data || response;
+                if (res.success) {
+                    setCurriculum({
+                        subjects: res.subjects || [],
+                        grades: res.grades || [],
+                        topics: res.topics || [],
+                        chapters: res.chapters || [],
+                    });
+                }
+            } catch (e) { console.error('Failed to fetch curriculum', e); }
+        })();
+    }, []);
     useEffect(() => { fetchGradesAndChapters(filters.subject_id, filters.grade_id); }, [filters.subject_id, filters.grade_id]);
     useEffect(() => { fetchMabahes(filters.topic_id); }, [filters.topic_id]);
+
+    const editTopicOptions: SelectOption[] = useMemo(
+        () => {
+            const gradeIds = (question?.grade_ids || []).map(Number);
+            const selected = new Set((question?.chapter_ids || []).map(String));
+            return curriculum.topics
+                .filter((t) => !question?.subject || Number(t.subject_id) === Number(question.subject))
+                .filter((t) => selected.has(String(t.id)) || topicMatchesGrades(t.title, gradeIds))
+                .map((t) => ({ id: t.id, title: t.title }));
+        },
+        [curriculum.topics, question?.subject, question?.grade_ids, question?.chapter_ids]
+    );
+    const editMabhasOptions: SelectOption[] = useMemo(() => {
+        const topicIds = (question?.chapter_ids?.length
+            ? question.chapter_ids
+            : curriculum.topics.filter((t) => Number(t.subject_id) === Number(question?.subject)).map((t) => t.id));
+        const allowed = new Set(topicIds.map(String));
+        return curriculum.chapters
+            .filter((c) => allowed.has(String(c.topic_id)))
+            .map((c) => ({ id: c.id, title: c.title }));
+    }, [curriculum.chapters, curriculum.topics, question?.chapter_ids, question?.subject]);
 
     // Fetch lists needed when editing a specific question's metadata
     useEffect(() => {
@@ -264,8 +484,6 @@ export default function EditQuestions() {
         setFilters(prev => {
             const newFilters = { ...prev, [key]: value };
             if (key === 'subject_id') { newFilters.grade_id = null; newFilters.topic_id = null; newFilters.chapter_id = null; }
-            if (key === 'grade_id') { newFilters.topic_id = null; newFilters.chapter_id = null; }
-            if (key === 'topic_id') { newFilters.chapter_id = null; }
             return newFilters;
         });
     };
@@ -274,11 +492,44 @@ export default function EditQuestions() {
         if (!question) return;
         let updatedQuestion: Partial<QuestionData> = { ...question, [field]: value };
         if (field === 'subject') {
-            updatedQuestion = { ...updatedQuestion, grade: null, grade_title: '----', chapter: null, chapter_title: '----', mabhas: null, mabhas_title: '----' };
-        } else if (field === 'grade') {
-            updatedQuestion = { ...updatedQuestion, chapter: null, chapter_title: '----', mabhas: null, mabhas_title: '----' };
-        } else if (field === 'chapter') {
-            updatedQuestion = { ...updatedQuestion, mabhas: null, mabhas_title: '----' };
+            updatedQuestion = {
+                ...updatedQuestion,
+                chapter: null, chapter_title: '----', chapter_ids: [], chapter_titles: [],
+                mabhas: null, mabhas_title: '----', mabhas_ids: [], mabhas_titles: [],
+            };
+        } else if (field === 'chapter_ids') {
+            const allowed = new Set((value || []).map(String));
+            const nextMabhas = (question.mabhas_ids || []).filter((id) => {
+                const ch = curriculum.chapters.find((c) => String(c.id) === String(id));
+                return ch && (allowed.size === 0 || allowed.has(String(ch.topic_id)));
+            });
+            updatedQuestion = {
+                ...updatedQuestion,
+                chapter: value?.[0] ?? null,
+                mabhas_ids: nextMabhas,
+                mabhas: nextMabhas[0] ?? null,
+            };
+        } else if (field === 'grade_ids') {
+            const gradeIds = (value || []).map(Number);
+            const chapter_ids = (question.chapter_ids || []).filter((id) => {
+                const topic = curriculum.topics.find((item) => Number(item.id) === Number(id));
+                return topic && topicMatchesGrades(topic.title, gradeIds);
+            });
+            const allowed = new Set(chapter_ids.map(String));
+            const mabhas_ids = (question.mabhas_ids || []).filter((id) => {
+                const chapter = curriculum.chapters.find((item) => String(item.id) === String(id));
+                return chapter && (allowed.size === 0 || allowed.has(String(chapter.topic_id)));
+            });
+            updatedQuestion = {
+                ...updatedQuestion,
+                grade: value?.[0] ?? null,
+                chapter_ids,
+                chapter: chapter_ids[0] ?? null,
+                mabhas_ids,
+                mabhas: mabhas_ids[0] ?? null,
+            };
+        } else if (field === 'mabhas_ids') {
+            updatedQuestion = { ...updatedQuestion, mabhas: value?.[0] ?? null };
         }
         setQuestion(updatedQuestion as QuestionData);
     };
@@ -292,12 +543,18 @@ export default function EditQuestions() {
         images: q.images || [],
         subject: q.subject || q.subject_id || null,
         subject_title: q.subject_title || '----',
-        grade: q.grade || q.grade_id || null,
-        grade_title: q.grade_title || '----',
-        chapter: q.chapter || q.topic_id || null, // UI "Chapter" is DB "topic_id"
-        chapter_title: q.chapter_title || '----',
-        mabhas: q.mabhas || q.chapter_id || null, // UI "Mabhas" is DB "chapter_id"
-        mabhas_title: q.mabhas_title || '----',
+        grade: q.grade || q.grade_id || (q.grade_ids?.[0] ?? null),
+        grade_title: q.grade_title || q.grade_titles?.[0] || '----',
+        chapter: q.chapter || q.topic_id || (q.chapter_ids?.[0] ?? null),
+        chapter_title: q.chapter_title || q.chapter_titles?.[0] || '----',
+        mabhas: q.mabhas || q.chapter_id || (q.mabhas_ids?.[0] ?? null),
+        mabhas_title: q.mabhas_title || q.mabhas_titles?.[0] || '----',
+        grade_ids: (q.grade_ids || (q.grade || q.grade_id ? [q.grade || q.grade_id] : [])).map(Number).filter((n: number) => n > 0),
+        grade_titles: q.grade_titles || (q.grade_title ? [q.grade_title] : []),
+        chapter_ids: (q.chapter_ids || (q.chapter || q.topic_id ? [q.chapter || q.topic_id] : [])).map(Number).filter((n: number) => n > 0),
+        chapter_titles: q.chapter_titles || (q.chapter_title ? [q.chapter_title] : []),
+        mabhas_ids: (q.mabhas_ids || (q.mabhas || q.chapter_id ? [q.mabhas || q.chapter_id] : [])).map(Number).filter((n: number) => n > 0),
+        mabhas_titles: q.mabhas_titles || (q.mabhas_title ? [q.mabhas_title] : []),
         level: q.level || 'متوسط',
         status: q.status || 'غیرفعال'
     });
@@ -321,6 +578,7 @@ export default function EditQuestions() {
             if (responseData.success && responseData.question) {
                 const mappedQuestion = mapQuestionData(responseData.question);
                 setQuestion(mappedQuestion);
+                if (embedded && startEditing) setIsEditing(true);
 
                 // --- History Management ---
                 const newId = mappedQuestion.id;
@@ -343,13 +601,13 @@ export default function EditQuestions() {
                 return newId;
             } else {
                 setQuestion(null);
-                setErrorMessage(responseData.message || "No question found matching the criteria.");
+                setErrorMessage(responseData.message || "سوالی با این مشخصات پیدا نشد.");
                 return null;
             }
         } catch (error) {
             console.error("Fetch question error:", error);
             setQuestion(null);
-            setErrorMessage("An error occurred while communicating with the server.");
+            setErrorMessage("ارتباط با سرور برقرار نشد.");
             return null;
         } finally {
             setIsLoading(false);
@@ -358,8 +616,14 @@ export default function EditQuestions() {
 
     // --- INITIAL LOAD ---
     useEffect(() => {
-        getQuestion({ resetHistory: true });
-    }, []);
+        if (focusQuestionId) {
+            getQuestion({ question_id: focusQuestionId, resetHistory: true });
+            return;
+        }
+        if (!embedded) getQuestion({ resetHistory: true });
+        // Reload only when the requested question id changes.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [focusQuestionId]);
 
     // --- NAVIGATION & ACTION HANDLERS ---
     const handleNext = async () => {
@@ -442,9 +706,13 @@ export default function EditQuestions() {
                 correct_option_id: question.correctOptionId,
                 options: question.options.map(o => ({ id: o.id, text: o.text })),
                 subject_id: question.subject,
-                grade_id: question.grade,
-                topic_id: question.chapter, // UI Chapter -> DB topic
-                chapter_id: question.mabhas,  // UI Mabhas -> DB chapter
+                grade_id: question.grade_ids[0] ?? question.grade,
+                topic_id: question.chapter_ids[0] ?? question.chapter,
+                chapter_id: question.mabhas_ids[0] ?? question.mabhas,
+                grade_ids: question.grade_ids,
+                topic_ids: question.chapter_ids,
+                chapter_ids: question.mabhas_ids,
+                mabhas_ids: question.mabhas_ids,
                 level: question.level,
                 status: question.status
             };
@@ -454,11 +722,11 @@ export default function EditQuestions() {
             if (responseData.success) {
                 setIsEditing(false);
             } else {
-                setErrorMessage(responseData.message || "Failed to update the question.");
+                setErrorMessage(responseData.message || "به‌روزرسانی سوال ناموفق بود.");
             }
         } catch (error) {
             console.error("Save error:", error);
-            setErrorMessage("An error occurred while saving the question.");
+            setErrorMessage("ذخیره سوال ناموفق بود.");
         } finally {
             setIsSaving(false);
         }
@@ -470,90 +738,96 @@ export default function EditQuestions() {
             <div className="flex flex-wrap items-center justify-between gap-4 bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl p-3 shadow-sm lg:sticky top-0 z-[40]">
                 {/* Navigation & Search */}
                 <div className="flex items-center gap-2 bg-[#f8f9fa] dark:bg-[#131314] rounded-xl px-2 py-1.5 border border-[#dadce0] dark:border-[#444746] flex-1 md:flex-none justify-between md:justify-start">
+                    {!embedded && (
                     <button onClick={handlePrev} disabled={isLoading || isEditing || (historyIndex === 0 && history.length === 1)} className="p-1.5 hover:bg-gray-200 dark:hover:bg-[#2d3748] rounded-lg transition-colors shrink-0 disabled:opacity-50">
                         <ChevronLeft size={18} />
                     </button>
+                    )}
 
                     <div className="flex-1 flex justify-center items-center min-w-[120px]">
                         {isSearching ? (
                             <div className="flex items-center gap-2 animate-in fade-in zoom-in-95 w-full px-2">
-                                <input autoFocus type="text" placeholder="ID or question text..." className="w-full bg-transparent outline-none text-xs font-bold text-center disabled:opacity-50" value={searchId} onChange={(e) => setSearchId(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearch()} disabled={isEditing} />
+                                <input autoFocus type="text" placeholder="شناسه یا متن سوال..." className="w-full bg-transparent outline-none text-xs font-bold text-center disabled:opacity-50" value={searchId} onChange={(e) => setSearchId(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearch()} disabled={isEditing} />
                                 <button onClick={() => setIsSearching(false)} className="shrink-0 hover:text-red-500 transition-colors"><X size={14} className="text-gray-400" /></button>
                             </div>
                         ) : (
-                            <div onClick={() => !isEditing && setIsSearching(true)} className={`flex items-center gap-2 cursor-pointer group px-2 py-1 rounded-lg transition-all ${isEditing ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-200 dark:hover:bg-[#2d3748]'}`}>
+                            <div onClick={() => !embedded && !isEditing && setIsSearching(true)} className={`flex items-center gap-2 group px-2 py-1 rounded-lg transition-all ${embedded || isEditing ? 'cursor-default' : 'cursor-pointer hover:bg-gray-200 dark:hover:bg-[#2d3748]'} ${isEditing ? 'opacity-50 cursor-not-allowed' : ''}`}>
                                 <Search size={14} className="text-gray-400 group-hover:text-[#1a73e8] transition-colors" />
-                                <span className="text-xs font-semibold tracking-tighter truncate">ID: {question?.id || '---'}</span>
+                                <span className="text-xs font-semibold tracking-tighter truncate">شناسه: {question?.id || '---'}</span>
                             </div>
                         )}
                     </div>
 
+                    {!embedded && (
                     <button onClick={handleNext} disabled={isLoading || isEditing} className="p-1.5 hover:bg-gray-200 dark:hover:bg-[#2d3748] rounded-lg transition-colors shrink-0 disabled:opacity-50">
                         <ChevronRight size={18} />
                     </button>
+                    )}
                 </div>
 
                 {/* Actions */}
                 <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-between md:justify-end">
                     <div className="flex items-center gap-3">
-                        <div className="relative">
+                        {!embedded && <div className="relative">
                             <button disabled={isEditing} onClick={() => setShowFilters(!showFilters)} className={`flex items-center gap-2 px-3 py-2.5 md:px-4 rounded-xl text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed ${showFilters ? 'bg-[#e8f0fe] text-[#1a73e8] dark:bg-[#1a73e8]/20' : 'bg-[#f8f9fa] dark:bg-[#131314] text-[#86868b] border border-[#dadce0] dark:border-[#444746] hover:text-gray-700 dark:hover:text-gray-200'}`}>
-                                <Filter size={14} /> <span className="hidden sm:inline">Filters</span>
+                                <Filter size={14} /> <span className="hidden sm:inline">فیلترها</span>
                             </button>
 
                             {showFilters && !isEditing && (
                                 <div className="absolute top-[calc(100%+12px)] right-0 md:left-0 md:right-auto w-[280px] md:w-[320px] bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-[2rem] p-6 shadow-2xl z-[100] animate-in slide-in-from-top-2">
                                     <div className="flex justify-between items-center mb-6">
-                                        <span className="text-[11px] font-bold text-[#86868b] uppercase tracking-wider">Search Filters</span>
+                                        <span className="text-[11px] font-bold text-[#86868b] uppercase tracking-wider">فیلتر جستجو</span>
                                         <button onClick={() => setShowFilters(false)} className="p-1.5 bg-gray-100 dark:bg-[#2d3748] rounded-full hover:text-red-500 transition-colors"><X size={14}/></button>
                                     </div>
                                     <div className="flex flex-col gap-4 mb-4">
-                                        <CustomSelect label="Subject" value={filters.subject_id} options={lists.subjects} onChange={(v) => handleFilterChange('subject_id', v)} placeholder="Select Subject..." />
-                                        <CustomSelect label="Grade" value={filters.grade_id} options={lists.grades} onChange={(v) => handleFilterChange('grade_id', v)} placeholder="Select Grade..." disabled={!filters.subject_id} />
-                                        <CustomSelect label="Chapter (Topic)" value={filters.topic_id} options={lists.chapters} onChange={(v) => handleFilterChange('topic_id', v)} placeholder="Select Chapter..." disabled={!filters.subject_id} />
-                                        <CustomSelect label="Mabhas (Chapter)" value={filters.chapter_id} options={lists.mabahes} onChange={(v) => handleFilterChange('chapter_id', v)} placeholder="Select Mabhas..." disabled={!filters.topic_id} />
+                                        <CustomSelect label="درس" value={filters.subject_id} options={lists.subjects} onChange={(v) => handleFilterChange('subject_id', v)} placeholder="انتخاب درس..." />
+                                        <CustomSelect label="پایه" value={filters.grade_id} options={lists.grades} onChange={(v) => handleFilterChange('grade_id', v)} placeholder="انتخاب پایه..." disabled={!filters.subject_id} />
+                                        <CustomSelect label="فصل" value={filters.topic_id} options={lists.chapters} onChange={(v) => handleFilterChange('topic_id', v)} placeholder="انتخاب فصل..." disabled={!filters.subject_id} />
+                                        <CustomSelect label="مبحث" value={filters.chapter_id} options={lists.mabahes} onChange={(v) => handleFilterChange('chapter_id', v)} placeholder="انتخاب مبحث..." disabled={!filters.topic_id} />
                                     </div>
                                     <button onClick={handleApplyFilters} className="w-full bg-[#1a73e8] hover:bg-[#1557b0] text-white py-2.5 rounded-xl text-xs font-bold transition-all">
-                                        Apply & Fetch
+                                        اعمال و دریافت
                                     </button>
                                 </div>
                             )}
-                        </div>
+                        </div>}
 
-                        <div className="h-6 w-px bg-[#dadce0] dark:bg-[#444746]" />
+                        {!embedded && <div className="h-6 w-px bg-[#dadce0] dark:bg-[#444746]" />}
 
                         <button onClick={() => setIsEditing(!isEditing)} disabled={!question} className={`flex items-center gap-2 px-3 py-2.5 md:px-4 rounded-xl text-xs font-bold transition-all disabled:opacity-50 ${isEditing ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400' : 'text-[#86868b] hover:bg-gray-100 dark:hover:bg-[#2b2d2f]'}`}>
-                            <Edit2 size={14} /> <span className="hidden sm:inline">{isEditing ? 'Editing Mode' : 'Read Mode'}</span>
-                            <span className="sm:hidden">{isEditing ? 'Edit' : 'Read'}</span>
+                            <Edit2 size={14} /> <span className="hidden sm:inline">{isEditing ? 'حالت ویرایش' : 'حالت مشاهده'}</span>
+                            <span className="sm:hidden">{isEditing ? 'ویرایش' : 'مشاهده'}</span>
                         </button>
                     </div>
 
                     <div className="flex items-center gap-3">
+                        {!embedded && (
                         <button onClick={toggleFullscreen} className="p-2.5 text-[#86868b] hover:bg-gray-100 dark:hover:bg-[#2b2d2f] rounded-xl transition-all">
                             {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
                         </button>
+                        )}
 
                         <button disabled={!isEditing || isSaving || !question} onClick={handleSave} className={`flex items-center gap-2 px-4 md:px-6 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md ${isEditing ? 'bg-[#1a73e8] hover:bg-[#1557b0] text-white cursor-pointer' : 'bg-gray-100 dark:bg-[#2b2d2f] text-gray-400 dark:text-gray-500 cursor-not-allowed shadow-none border border-[#dadce0] dark:border-[#333537]'}`}>
                             {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                            <span className="hidden sm:inline">{isSaving ? 'Saving...' : 'Save Changes'}</span>
-                            <span className="sm:hidden">Save</span>
+                            <span className="hidden sm:inline">{isSaving ? 'در حال ذخیره...' : 'ذخیره تغییرات'}</span>
+                            <span className="sm:hidden">ذخیره</span>
                         </button>
                     </div>
                 </div>
             </div>
 
             {/* QUICK FILTERS BAR (Status / Images switches + text search) */}
-            <div className={`flex flex-wrap items-center justify-between gap-4 bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl px-4 py-3 shadow-sm ${isEditing ? 'opacity-50 pointer-events-none' : ''}`}>
+            {!embedded && <div className={`flex flex-wrap items-center justify-between gap-4 bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl px-4 py-3 shadow-sm ${isEditing ? 'opacity-50 pointer-events-none' : ''}`}>
                 <div className="flex flex-wrap items-center gap-4 md:gap-6">
                     <FilterSwitch
-                        label="Status"
+                        label="وضعیت"
                         value={filters.status}
                         options={statusSwitchOptions}
                         onChange={(v) => handleQuickFilterChange('status', v)}
                         disabled={isLoading}
                     />
                     <FilterSwitch
-                        label="Images"
+                        label="تصویر"
                         value={filters.has_image}
                         options={imageSwitchOptions}
                         onChange={(v) => handleQuickFilterChange('has_image', v)}
@@ -568,7 +842,7 @@ export default function EditQuestions() {
                             value={filters.search_text}
                             onChange={(e) => handleFilterChange('search_text', e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handleTextSearchApply()}
-                            placeholder="Search in question text..."
+                            placeholder="جستجو در متن سوال..."
                             className="w-full bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-xl pr-4 pl-9 py-2.5 text-xs font-medium outline-none focus:border-[#1a73e8] transition-all"
                             dir="auto"
                         />
@@ -589,7 +863,7 @@ export default function EditQuestions() {
                         <Search size={14} />
                     </button>
                 </div>
-            </div>
+            </div>}
 
             {/* ERROR / MESSAGE DISPLAY */}
             {errorMessage && (
@@ -614,7 +888,7 @@ export default function EditQuestions() {
                         <div className="lg:col-span-2 flex flex-col gap-6">
                             {/* Question Text */}
                             <div className="bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl p-6">
-                                <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider mb-3 block">Question Text</label>
+                                <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider mb-3 block">متن سوال</label>
                                 {isEditing ? (
                                     <textarea value={question.text} onChange={(e) => handleUpdate('text', e.target.value)} className="w-full h-40 bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-xl p-4 text-sm font-medium leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-[#1a73e8] custom-scrollbar" />
                                 ) : (
@@ -626,7 +900,7 @@ export default function EditQuestions() {
 
                             {/* Options */}
                             <div className="bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl p-6">
-                                <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider mb-3 block">Options</label>
+                                <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider mb-3 block">گزینه‌ها</label>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {question.options.map((option) => (
                                         <div key={option.id} className="flex items-start gap-3">
@@ -649,7 +923,7 @@ export default function EditQuestions() {
 
                             {/* Descriptive Answer */}
                             <div className="bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl p-6">
-                                <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider mb-3 block">Descriptive Answer</label>
+                                <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider mb-3 block">پاسخ تشریحی</label>
                                 {isEditing ? (
                                     <textarea value={question.descriptiveAnswer} onChange={(e) => handleUpdate('descriptiveAnswer', e.target.value)} className="w-full h-32 bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-xl p-4 text-sm font-medium leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-[#1a73e8] custom-scrollbar" />
                                 ) : (
@@ -669,23 +943,49 @@ export default function EditQuestions() {
                                 </label>
                                 {isEditing ? (
                                     <div className="flex flex-col gap-4">
-                                        <CustomSelect label="Subject" value={question.subject} options={lists.subjects} onChange={(v) => handleMetaChange('subject', v)} placeholder="Select Subject..." />
-                                        <CustomSelect label="Grade" value={question.grade} options={lists.grades} onChange={(v) => handleMetaChange('grade', v)} placeholder="Select Grade..." disabled={!question.subject} />
-                                        <CustomSelect label="Chapter (Topic)" value={question.chapter} options={lists.chapters} onChange={(v) => handleMetaChange('chapter', v)} placeholder="Select Chapter..." disabled={!question.grade} />
-                                        <CustomSelect label="Mabhas (Chapter)" value={question.mabhas} options={lists.mabahes} onChange={(v) => handleMetaChange('mabhas', v)} placeholder="Select Mabhas..." disabled={!question.chapter} />
-                                        <CustomSelect label="Level" value={question.level} options={levelOptions} onChange={(v) => handleUpdate('level', v)} placeholder="Select Level..." />
-                                        <CustomSelect label="Status" value={question.status} options={statusOptions} onChange={(v) => handleUpdate('status', v)} placeholder="Select Status..." />
+                                        <CustomSelect label="درس" value={question.subject} options={curriculum.subjects.length ? curriculum.subjects : lists.subjects} onChange={(v) => handleMetaChange('subject', v)} placeholder="انتخاب درس..." />
+                                        <CustomMultiSelect
+                                            label="پایه‌ها"
+                                            values={question.grade_ids}
+                                            options={curriculum.grades.length ? curriculum.grades : lists.grades}
+                                            onChange={(ids) => handleMetaChange('grade_ids', ids.map(Number))}
+                                            placeholder="یک یا چند پایه..."
+                                        />
+                                        <CustomMultiSelect
+                                            label="فصل‌ها"
+                                            values={question.chapter_ids}
+                                            options={editTopicOptions}
+                                            onChange={(ids) => handleMetaChange('chapter_ids', ids.map(Number))}
+                                            placeholder="یک یا چند فصل..."
+                                            disabled={!question.subject}
+                                        />
+                                        <CustomMultiSelect
+                                            label="مباحث"
+                                            values={question.mabhas_ids}
+                                            options={editMabhasOptions}
+                                            onChange={(ids) => handleMetaChange('mabhas_ids', ids.map(Number))}
+                                            placeholder="یک یا چند مبحث..."
+                                            disabled={!question.subject}
+                                        />
+                                        <CustomSelect label="سطح" value={question.level} options={levelOptions} onChange={(v) => handleUpdate('level', v)} placeholder="انتخاب سطح..." />
+                                        <CustomSelect label="وضعیت" value={question.status} options={statusOptions} onChange={(v) => handleUpdate('status', v)} placeholder="انتخاب وضعیت..." />
+                                        <p className="text-[10px] text-[#86868b] leading-relaxed">
+                                            A question can belong to several grades, chapters, and mabhas. Subject stays single.
+                                        </p>
                                     </div>
                                 ) : (
                                     <div className="space-y-3 text-xs font-medium">
                                         {[
-                                            { label: 'Subject', value: question.subject_title }, { label: 'Grade', value: question.grade_title },
-                                            { label: 'Chapter', value: question.chapter_title }, { label: 'Mabhas', value: question.mabhas_title },
-                                            { label: 'Level', value: question.level }, { label: 'Status', value: question.status }
+                                            { label: 'درس', value: question.subject_title },
+                                            { label: 'پایه‌ها', value: (question.grade_titles.length ? question.grade_titles : [question.grade_title]).filter(Boolean).join('، ') },
+                                            { label: 'فصل‌ها', value: (question.chapter_titles.length ? question.chapter_titles : [question.chapter_title]).filter(Boolean).join('، ') },
+                                            { label: 'مباحث', value: (question.mabhas_titles.length ? question.mabhas_titles : [question.mabhas_title]).filter(Boolean).join('، ') },
+                                            { label: 'سطح', value: question.level },
+                                            { label: 'وضعیت', value: question.status }
                                         ].map(item => (
-                                            <div key={item.label} className="flex justify-between items-center bg-[#f8f9fa] dark:bg-[#131314] p-3 rounded-lg">
-                                                <span className="text-gray-500 dark:text-gray-400">{item.label}:</span>
-                                                <span className="font-semibold text-gray-800 dark:text-gray-200">{item.value || '----'}</span>
+                                            <div key={item.label} className="flex justify-between items-start gap-3 bg-[#f8f9fa] dark:bg-[#131314] p-3 rounded-lg">
+                                                <span className="text-gray-500 dark:text-gray-400 shrink-0">{item.label}:</span>
+                                                <span className="font-semibold text-gray-800 dark:text-gray-200 text-start" dir="auto">{item.value || '----'}</span>
                                             </div>
                                         ))}
                                     </div>

@@ -28,13 +28,22 @@ const isSessionReplaced = async (decoded) => {
     }
 };
 
+const { isAdminAction, requireAdminSession } = require('./adminAuth');
+
 const requireToken = async (req, res, next) => {
     const action = req.body?.action;
 
-    // 1. PUBLIC ACTIONS BYPASS
-    const publicActions = ['send_otp', 'verify_otp', 'password_login', 'admin_login'];
+    // 1. PUBLIC ACTIONS BYPASS (student auth + admin login/logout)
+    const publicActions = ['send_otp', 'verify_otp', 'password_login', 'admin_login', 'admin_logout', 'admin_verify'];
     if (publicActions.includes(action)) {
         return next();
+    }
+
+    // 1b. ADMIN PANEL ACTIONS — independent of the student JWT.
+    // Admin login/logout are public above; every other admin_* / Admin_* action
+    // needs the admin_token cookie (not the main app's auth_token).
+    if (isAdminAction(action)) {
+        return requireAdminSession(req, res, next);
     }
 
     // 2. DEVELOPER MODE BYPASS
@@ -110,4 +119,18 @@ const requireToken = async (req, res, next) => {
     }
 };
 
-module.exports = { requireToken };
+async function attachUserIfPresent(req, _res, next) {
+    try {
+        let token = req.headers['authorization'] || req.headers['x-app-token'];
+        if (!token || process.env.DEV_MODE === 'true') return next();
+        if (String(token).startsWith('Bearer ')) token = String(token).slice(7).trim();
+        if (!token || !process.env.JWT_SECRET) return next();
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        if (!(await isSessionReplaced(decoded))) req.user = decoded;
+    } catch (_) {
+        // Shop listing stays public when the token is missing or stale.
+    }
+    return next();
+}
+
+module.exports = { requireToken, attachUserIfPresent };

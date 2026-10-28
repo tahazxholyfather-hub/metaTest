@@ -1,8 +1,54 @@
 const crypto = require('crypto');
 const pool = require('../db');
 const zarinpal = require('../utils/zarinpal');
+const walletController = require('./walletController');
+const { findCoinPackage, listCoinPackages } = require('../coinCatalog');
+const notifications = require('../notifications');
+const entitlements = require('../subscription/entitlements');
+const usage = require('../subscription/usage');
+const coinWallet = require('../ai-teacher/services/coinWallet');
+const policy = require('../subscription/policy');
+const { dailyCoinsForPlan } = require('../ai-teacher/config');
+const { profile } = require('../runtimeMode');
+const sandboxCheckout = require('../utils/sandboxCheckout');
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
+
+function looksLikeLocalUrl(value) {
+    return !value || /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?(?:\/.*)?$/i.test(value);
+}
+
+/** Hosted payments must call back https://metatest.app, even if BASE_URL is still the dev address. */
+function publicSiteOrigin() {
+    const raw = String(process.env.FRONTEND_URL || process.env.BASE_URL || '').trim().replace(/\/+$/, '');
+    if (!profile.localhost && looksLikeLocalUrl(raw)) return 'https://metatest.app';
+    return raw || (profile.localhost ? 'http://localhost:5173' : 'https://metatest.app');
+}
+
+function callbackOrigin() {
+    const raw = String(process.env.BASE_URL || '').trim().replace(/\/+$/, '');
+    if (!profile.localhost && looksLikeLocalUrl(raw)) return 'https://metatest.app';
+    return raw || (profile.localhost ? 'http://localhost:3000' : 'https://metatest.app');
+}
+
+function appUrl(pathAndQuery) {
+    let origin = publicSiteOrigin();
+    if (!profile.localhost && !/\/app$/i.test(origin)) origin += '/app';
+    return `${origin}${pathAndQuery.startsWith('/') ? pathAndQuery : `/${pathAndQuery}`}`;
+}
+
+function resultPageUrl(token) {
+    return appUrl(`/payment/result/${token}`);
+}
+
+function gatewayErrorMessage(error, fallback) {
+    const body = error && error.response && error.response.data;
+    const remote = body && body.errors && body.errors.message ? body.errors.message : body && body.message;
+    if (typeof remote === 'string' && remote.trim()) {
+        return `${fallback}: ${remote.trim().slice(0, 160)}`;
+    }
+    return fallback;
+}
 
 function getClientIp(req) {
     return (
@@ -30,34 +76,40 @@ function toRial(toman) {
     return Math.round(Number(toman) * 10);
 }
 
-function calculatePricing(plan, coupon) {
-    const basePrice = Number(plan.price); // Toman
-    const planDiscountPercent = Number(plan.plan_discount_percent || 0);
-    const planDiscountAmount = Math.round((basePrice * planDiscountPercent) / 100);
-    const priceAfterPlanDiscount = Math.max(0, basePrice - planDiscountAmount);
+async function notifyPlanPurchase(userId, plan, paymentId, queued) {
+    const name = plan?.name || 'اشتراک';
+    await notifications.notifyUser(userId, {
+        title: queued ? 'اشتراک در صف فعال‌سازی است' : 'اشتراک فعال شد',
+        body: queued
+            ? `خرید «${name}» ثبت شد و بعد از پایان اشتراک فعلی فعال می‌شود.`
+            : `اشتراک «${name}» فعال شد.`,
+        kind: 'plan',
+        dedupeKey: paymentId ? `payment:${paymentId}` : null,
+    });
+}
 
-    const couponPercent = coupon ? Number(coupon.percent || 0) : 0;
-    const couponDiscountAmount = Math.round((priceAfterPlanDiscount * couponPercent) / 100);
-    const finalPrice = Math.max(0, priceAfterPlanDiscount - couponDiscountAmount);
+function calculatePricing(plan, coupon, loyaltyPercent = 0) {
+    return policy.calculatePricing(plan, coupon, loyaltyPercent);
+}
 
+function rejectUnbuyablePlan(plan) {
+    if (!plan || Number(plan.is_active) !== 1) return 'پلن معتبر نیست';
+    if (Number(plan.purchasable) === 0) return 'این اشتراک فعلاً قابل خرید نیست';
+    return null;
+}
+
+function describePurchase(plan, pricing, suffix) {
+    const loyalty = Number(pricing.loyaltyPercent) > 0 ? ` - تخفیف وفاداری ${pricing.loyaltyPercent}٪` : '';
+    return `اشتراک ${plan.name}${suffix || ''}${loyalty}`;
+}
+
+function loyaltyPayload(pricing, loyalty) {
     return {
-        basePrice,
-        planDiscountPercent,
-        planDiscountAmount,
-        priceAfterPlanDiscount,
-        couponPercent,
-        couponDiscountAmount,
-        finalPrice,
+        loyaltyPercent: pricing.loyaltyPercent || 0,
+        loyaltyDiscountAmount: pricing.loyaltyDiscountAmount || 0,
+        loyaltyFromPlan: loyalty?.fromPlanId || null,
     };
 }
-
-function calculateNewPlanExpiry(planDays) {
-    const now = new Date();
-    const newExpireDate = new Date(now);
-    newExpireDate.setDate(newExpireDate.getDate() + Number(planDays));
-    return { startDate: now, newExpireDate };
-}
-
 
 function getPaymentResultSecret() {
     return process.env.PAYMENT_RESULT_SECRET || process.env.JWT_SECRET || 'change-me-payment-result-secret';
@@ -139,16 +191,16 @@ function verifyPaymentResultToken(token) {
 
 async function fetchActivePlan(connection, planId) {
     const [rows] = await connection.execute(
-        `SELECT id, name, days, price, plan_discount_percent
+        `SELECT id, name, days, price, compare_price, plan_discount_percent, is_active, purchasable
          FROM subscription_plans
-         WHERE id = ? AND is_active = 1
+         WHERE id = ?
          LIMIT 1`,
         [planId]
     );
     return rows[0] || null;
 }
 
-async function fetchCoupon(connection, code) {
+async function fetchCoupon(connection, code, { forUpdate = false } = {}) {
     const normalizedCode = String(code || '').trim();
     if (!normalizedCode) return null;
 
@@ -156,7 +208,8 @@ async function fetchCoupon(connection, code) {
         `SELECT id, code, percent, active, expires_at, max_uses, used_count, allowed_plan_ids
          FROM discount_codes
          WHERE UPPER(code) = UPPER(?)
-         LIMIT 1`,
+         LIMIT 1
+         ${forUpdate ? 'FOR UPDATE' : ''}`,
         [normalizedCode]
     );
     return rows[0] || null;
@@ -181,12 +234,25 @@ function validateCouponForPlan(coupon, planId) {
 
     const allowedPlanIds = safeJsonParse(coupon.allowed_plan_ids, null);
     if (Array.isArray(allowedPlanIds) && allowedPlanIds.length > 0) {
-        if (!allowedPlanIds.includes(planId)) {
+        const planKey = String(planId);
+        const matches = allowedPlanIds.map(String).includes(planKey);
+        if (!matches) {
             return { valid: false, message: 'این کد برای پلن انتخابی قابل استفاده نیست' };
         }
     }
 
     return { valid: true };
+}
+
+async function userAlreadyUsedCoupon(connection, userId, couponId) {
+    if (!userId || !couponId) return false;
+    const [rows] = await connection.execute(
+        `SELECT id FROM payments
+         WHERE user_id = ? AND discount_code_id = ? AND status = 'paid'
+         LIMIT 1`,
+        [userId, couponId]
+    );
+    return rows.length > 0;
 }
 
 async function lockUser(connection, userId) {
@@ -247,13 +313,23 @@ async function createPaidPaymentRecord(connection, payload) {
 
 // ─── Controllers ─────────────────────────────────────────────────────────────
 
+/** Visible shop rows, purchasable flag, queue and loyalty settings. Runs once per process. */
+exports.ensureDiamondPlanActive = () => policy.ensureSubscriptionCatalog();
+
 exports.getSubscriptionPlans = async (req, res) => {
     const connection = await pool.getConnection();
 
     try {
+        await policy.ensureSubscriptionCatalog();
+        if (req.user?.id) {
+            try { await policy.promoteDueReservations(req.user.id); } catch (err) {
+                console.error('[plans] promote', err.message);
+            }
+        }
         const [rows] = await connection.execute(
             `SELECT
-                 id, name, days, price, plan_discount_percent,
+                 id, name, days, price, compare_price, attributes, icon_key,
+                 plan_discount_percent, purchasable,
                  icon_primary, icon_secondary, shimmer_class,
                  active_shadow, active_border, popular
              FROM subscription_plans
@@ -261,24 +337,37 @@ exports.getSubscriptionPlans = async (req, res) => {
              ORDER BY sort_order ASC, price ASC`
         );
 
-        const plans = rows.map((row) => ({
-            id: row.id,
-            name: row.name,
-            days: Number(row.days),
-            price: Number(row.price),
-            planDiscountPercent: Number(row.plan_discount_percent || 0),
-            iconColors: {
-                primary: row.icon_primary,
-                secondary: row.icon_secondary,
-            },
-            shimmerClass: row.shimmer_class,
-            activeShadow: row.active_shadow,
-            activeBorder: row.active_border,
-            popular: Boolean(row.popular),
+        const loyalty = req.user?.id
+            ? await policy.loyaltyContext(connection, req.user.id)
+            : { open: false, queueEnabled: (await policy.loadSettings(connection)).queueEnabled, rules: {}, hoursLeft: null, fromPlanName: null, enabled: false, windowHours: 72 };
+        const mapped = rows.map((row) => ({
+            ...policy.publicPlan(row, loyalty.rules?.[row.id]),
+            dailyCoins: dailyCoinsForPlan(row.id),
         }));
+        const reference = mapped
+            .filter((plan) => plan.purchasable !== false && plan.days && plan.price > 0)
+            .sort((a, b) => a.days - b.days || a.price - b.price)[0];
+        const plans = mapped.map((plan) => {
+            let savings = null;
+            if (reference && plan.id !== reference.id && plan.days && reference.days) {
+                const equivalent = Math.round((reference.price / reference.days) * plan.days);
+                const amount = equivalent - plan.price;
+                if (amount > 0) savings = { amount, versusName: reference.name };
+            }
+            return { ...plan, savings };
+        });
 
-        res.set('Cache-Control', 'no-store');
-        return res.json({ success: true, data: plans });
+        return res.json({
+            success: true,
+            data: plans,
+            meta: {
+                queueEnabled: loyalty.queueEnabled !== false,
+                loyaltyOpen: Boolean(loyalty.open),
+                loyaltyFromPlanName: loyalty.fromPlanName || null,
+                loyaltyHoursLeft: loyalty.hoursLeft,
+                loyaltyWindowHours: loyalty.windowHours,
+            },
+        });
     } catch (error) {
         console.error('getSubscriptionPlans error:', error);
         return res.status(500).json({ success: false, message: 'خطا در دریافت پلن‌ها' });
@@ -298,8 +387,9 @@ exports.validateDiscountCode = async (req, res) => {
         }
 
         const plan = await fetchActivePlan(connection, planId);
-        if (!plan) {
-            return res.status(400).json({ success: false, message: 'پلن معتبر نیست' });
+        const block = rejectUnbuyablePlan(plan);
+        if (block) {
+            return res.status(400).json({ success: false, message: block });
         }
 
         const coupon = await fetchCoupon(connection, code);
@@ -312,7 +402,12 @@ exports.validateDiscountCode = async (req, res) => {
             return res.status(400).json({ success: false, message: validation.message });
         }
 
-        const pricing = calculatePricing(plan, coupon);
+        if (req.user?.id && await userAlreadyUsedCoupon(connection, req.user.id, coupon.id)) {
+            return res.status(400).json({ success: false, message: 'شما قبلاً از این کد تخفیف استفاده کرده‌اید' });
+        }
+
+        const loyalty = req.user?.id ? await policy.loyaltyContext(connection, req.user.id) : { rules: {} };
+        const pricing = calculatePricing(plan, coupon, loyalty.rules?.[plan.id]);
 
         return res.json({
             success: true,
@@ -346,27 +441,122 @@ exports.createSubscriptionPayment = async (req, res) => {
         }
 
         const plan = await fetchActivePlan(connection, planId);
-        if (!plan) {
-            return res.status(400).json({ success: false, message: 'پلن معتبر نیست' });
+        const block = rejectUnbuyablePlan(plan);
+        if (block) {
+            return res.status(400).json({ success: false, message: block });
+        }
+
+        await connection.beginTransaction();
+
+        const gate = await policy.assertCanPurchase(connection, userId);
+        if (!gate.ok) {
+            await connection.rollback();
+            return res.status(gate.status || 400).json({ success: false, message: gate.message });
         }
 
         let coupon = null;
         if (discountCode && String(discountCode).trim()) {
-            coupon = await fetchCoupon(connection, discountCode);
+            coupon = await fetchCoupon(connection, discountCode, { forUpdate: true });
 
             if (!coupon) {
+                await connection.rollback();
                 return res.status(400).json({ success: false, message: 'کد تخفیف معتبر نیست' });
             }
 
             const validation = validateCouponForPlan(coupon, planId);
             if (!validation.valid) {
+                await connection.rollback();
                 return res.status(400).json({ success: false, message: validation.message });
+            }
+
+            if (await userAlreadyUsedCoupon(connection, userId, coupon.id)) {
+                await connection.rollback();
+                return res.status(400).json({ success: false, message: 'شما قبلاً از این کد تخفیف استفاده کرده‌اید' });
             }
         }
 
-        const pricing = calculatePricing(plan, coupon);
+        const loyalty = await policy.loyaltyContext(connection, userId);
+        const pricing = calculatePricing(plan, coupon, loyalty.rules?.[plan.id]);
 
-        await connection.beginTransaction();
+        // ---- Pay with Toman wallet (no ZarinPal redirect) ----
+        if (req.body.paymentMethod === 'wallet') {
+            if (pricing.finalPrice <= 0) {
+                await connection.rollback();
+                return res.status(400).json({ success: false, message: 'این پلن رایگان است و نیازی به پرداخت ندارد.' });
+            }
+
+            try {
+                await walletController.debitTomanWallet(connection, userId, pricing.finalPrice, {
+                    type: 'purchase',
+                    description: `خرید اشتراک ${plan.name} از کیف پول`,
+                    referenceType: 'payment',
+                });
+            } catch (err) {
+                await connection.rollback();
+                if (err && err.code === 'INSUFFICIENT_BALANCE') {
+                    return res.status(400).json({ success: false, message: err.message });
+                }
+                throw err;
+            }
+
+            const walletPaymentId = await createPaidPaymentRecord(connection, {
+                userId,
+                planId: plan.id,
+                discountCodeId: coupon ? coupon.id : null,
+                ...pricing,
+                currency: 'IRR',
+                status: 'paid',
+                gateway: 'wallet',
+                description: describePurchase(plan, pricing, ' - پرداخت با کیف پول'),
+                requestPayload: { planId, discountCode: discountCode || null, metadata: metadata || null, paymentMethod: 'wallet', ...loyaltyPayload(pricing, loyalty) },
+                clientIp: getClientIp(req),
+                userAgent: req.headers['user-agent'] || null,
+            });
+
+            const walletAssignment = await policy.applyPaidPlan(connection, {
+                userId,
+                plan,
+                paymentId: walletPaymentId,
+            });
+
+            if (coupon) {
+                await connection.execute(
+                    `UPDATE discount_codes SET used_count = used_count + 1, updated_at = NOW() WHERE id = ? AND (max_uses IS NULL OR used_count < max_uses)`,
+                    [coupon.id]
+                );
+            }
+
+            await connection.execute(
+                `UPDATE payments SET paid_at = NOW(), verified_at = NOW(), updated_at = NOW() WHERE id = ?`,
+                [walletPaymentId]
+            );
+
+            await connection.commit();
+
+            // Referral reward for the inviter (first purchase only) — post-commit.
+            await walletController.awardReferralRewardForPayment(walletPaymentId);
+            await notifyPlanPurchase(userId, plan, walletPaymentId, walletAssignment.queued);
+
+            const walletResultToken = createPaymentResultToken(walletPaymentId);
+            return res.json({
+                success: true,
+                message: walletAssignment.queued
+                    ? 'پلن در صف رزرو ثبت شد و پس از پایان اشتراک فعلی فعال می‌شود.'
+                    : 'پلن با موفقیت با کیف پول فعال شد',
+                data: {
+                    directActivated: true,
+                    queued: walletAssignment.queued,
+                    walletPaid: true,
+                    paymentId: walletPaymentId,
+                    resultToken: walletResultToken,
+                    resultUrl: `/payment/result/${walletResultToken}`,
+                    plan: { id: plan.id, name: plan.name, days: plan.days, unlimited: plan.days == null },
+                    pricing,
+                    startsAt: walletAssignment.startsAt,
+                    expiresAt: walletAssignment.queued ? walletAssignment.endsAt : walletAssignment.expiresAt,
+                },
+            });
+        }
 
         if (pricing.finalPrice <= 0) {
             const user = await lockUser(connection, userId);
@@ -374,8 +564,6 @@ exports.createSubscriptionPayment = async (req, res) => {
                 await connection.rollback();
                 return res.status(404).json({ success: false, message: 'کاربر یافت نشد' });
             }
-
-            const { newExpireDate } = calculateNewPlanExpiry(plan.days);
 
             const paymentId = await createPaidPaymentRecord(connection, {
                 userId,
@@ -385,31 +573,35 @@ exports.createSubscriptionPayment = async (req, res) => {
                 currency: 'IRR',
                 status: 'paid',
                 gateway: 'zarinpal',
-                description: `اشتراک ${plan.name} - direct activation`,
+                description: describePurchase(plan, pricing, ' - فعال‌سازی مستقیم'),
                 requestPayload: {
                     planId,
                     discountCode: discountCode || null,
                     metadata: metadata || null,
                     directActivation: true,
+                    ...loyaltyPayload(pricing, loyalty),
                 },
                 clientIp: getClientIp(req),
                 userAgent: req.headers['user-agent'] || null,
             });
 
-            await connection.execute(
-                `UPDATE tam24_users
-                 SET current_plan = ?, plan_expires_at = ?, updated_at = NOW()
-                 WHERE id = ?`,
-                [plan.id, newExpireDate, userId]
-            );
+            const directAssignment = await policy.applyPaidPlan(connection, {
+                userId,
+                plan,
+                paymentId,
+            });
 
             if (coupon) {
-                await connection.execute(
+                const [usedResult] = await connection.execute(
                     `UPDATE discount_codes
                      SET used_count = used_count + 1, updated_at = NOW()
-                     WHERE id = ?`,
+                     WHERE id = ? AND (max_uses IS NULL OR used_count < max_uses)`,
                     [coupon.id]
                 );
+                if (!usedResult.affectedRows) {
+                    await connection.rollback();
+                    return res.status(400).json({ success: false, message: 'ظرفیت استفاده از این کد تکمیل شده است' });
+                }
             }
 
             await connection.execute(
@@ -420,20 +612,25 @@ exports.createSubscriptionPayment = async (req, res) => {
             );
 
             await connection.commit();
+            await notifyPlanPurchase(userId, plan, paymentId, directAssignment.queued);
 
             const resultToken = createPaymentResultToken(paymentId);
 
             return res.json({
                 success: true,
-                message: 'پلن با موفقیت فعال شد',
+                message: directAssignment.queued
+                    ? 'پلن در صف رزرو ثبت شد و پس از پایان اشتراک فعلی فعال می‌شود.'
+                    : 'پلن با موفقیت فعال شد',
                 data: {
                     directActivated: true,
+                    queued: directAssignment.queued,
                     paymentId,
                     resultToken,
                     resultUrl: `/payment/result/${resultToken}`,
-                    plan: { id: plan.id, name: plan.name, days: plan.days },
+                    plan: { id: plan.id, name: plan.name, days: plan.days, unlimited: plan.days == null },
                     pricing,
-                    expiresAt: newExpireDate,
+                    startsAt: directAssignment.startsAt,
+                    expiresAt: directAssignment.queued ? directAssignment.endsAt : directAssignment.expiresAt,
                 },
             });
         }
@@ -446,25 +643,25 @@ exports.createSubscriptionPayment = async (req, res) => {
             currency: 'IRR',
             status: 'pending',
             gateway: 'zarinpal',
-            description: `اشتراک ${plan.name}`,
+            description: describePurchase(plan, pricing),
             requestPayload: {
                 planId,
                 discountCode: discountCode || null,
                 metadata: metadata || null,
+                ...loyaltyPayload(pricing, loyalty),
             },
             clientIp: getClientIp(req),
             userAgent: req.headers['user-agent'] || null,
         });
 
-        const baseUrl = String(process.env.BASE_URL || '').replace(/\/+$/, '');
-        const callbackUrl = `${baseUrl}/api/payments/zarinpal/callback?paymentId=${paymentId}`;
+        const callbackUrl = `${callbackOrigin()}/api/payments/zarinpal/callback?paymentId=${paymentId}`;
 
         const mobile = metadata?.mobile || req.user.phone;
         const email = metadata?.email || req.user.email;
 
         const amountInRial = toRial(pricing.finalPrice);
 
-        const paymentRequest = await zarinpal.payments.create({
+        const opened = await zarinpal.createPayableUrl({
             amount: amountInRial,
             currency: 'IRR',
             callback_url: callbackUrl,
@@ -472,21 +669,16 @@ exports.createSubscriptionPayment = async (req, res) => {
             ...(mobile ? { mobile } : {}),
             ...(email ? { email } : {}),
         });
-
-        const requestData = paymentRequest?.data;
-        const requestCode = requestData?.code;
-        const authority = requestData?.authority || null;
-
-        if (requestCode !== 100 || !authority) {
-            throw new Error(
-                `Unexpected Zarinpal payment request response: ${JSON.stringify(paymentRequest)}`
-            );
-        }
-
-        const paymentUrl = await zarinpal.payments.getRedirectUrl(authority);
-        if (!paymentUrl) {
-            throw new Error(`Zarinpal did not return a redirect URL for authority: ${authority}`);
-        }
+        const { authority, paymentRequest } = opened;
+        const paymentUrl = opened.sandbox
+            ? sandboxCheckout.checkoutPath({
+                kind: 'plan',
+                id: paymentId,
+                authority,
+                amountToman: pricing.finalPrice,
+                title: `اشتراک ${plan.name}`,
+            })
+            : opened.paymentUrl;
 
         await connection.execute(
             `UPDATE payments
@@ -509,7 +701,10 @@ exports.createSubscriptionPayment = async (req, res) => {
             },
         });
     } catch (error) {
-        await connection.rollback();
+        try { await connection.rollback(); } catch (_) { /* no open transaction */ }
+        if (error && error.expose) {
+            return res.status(error.status || 400).json({ success: false, message: error.message });
+        }
         console.error('createSubscriptionPayment error:', error);
 
         if (error.response) {
@@ -518,19 +713,24 @@ exports.createSubscriptionPayment = async (req, res) => {
             console.error('ZarinPal Response Body:', JSON.stringify(error.response.data, null, 2));
         }
 
-        return res.status(500).json({ success: false, message: 'خطا در ایجاد پرداخت' });
+        return res.status(500).json({ success: false, message: gatewayErrorMessage(error, 'خطا در ایجاد پرداخت') });
     } finally {
         connection.release();
     }
 };
 
+exports.showSandboxCheckout = sandboxCheckout.showSandboxCheckout;
+exports.completeSandboxCheckout = sandboxCheckout.completeSandboxCheckout;
+
 exports.handleZarinpalCallback = async (req, res) => {
+    if (req.query.coinPurchaseId) {
+        return handleCoinPurchaseCallback(req, res);
+    }
     const connection = await pool.getConnection();
 
-    const frontendBase = String(process.env.FRONTEND_URL || process.env.BASE_URL || '').replace(/\/+$/, '');
     const redirectToResult = (paymentId) => {
         const token = createPaymentResultToken(paymentId);
-        return res.redirect(`${frontendBase}/payment/result/${token}`);
+        return res.redirect(resultPageUrl(token));
     };
 
     try {
@@ -567,16 +767,31 @@ exports.handleZarinpalCallback = async (req, res) => {
         }
 
         const amountInRial = toRial(Number(payment.final_price));
+        const sandboxApproval = sandboxCheckout.readSandboxApproval(req.query);
+        const sandboxPaid = Boolean(
+            sandboxApproval
+            && sandboxApproval.kind === 'plan'
+            && Number(sandboxApproval.id) === paymentId
+            && sandboxApproval.authority === payment.authority
+        );
 
-        const verifyResult = await zarinpal.verifications.verify({
-            amount: amountInRial,
-            authority: authorityFromCb || payment.authority,
-        });
-
-        const verifyData = verifyResult?.data;
-        const verifyCode = verifyData?.code ?? null;
-        const refId = verifyData?.ref_id ?? null;
-        const verifySuccess = verifyCode === 100 || verifyCode === 101;
+        let verifyResult;
+        let verifyCode;
+        let refId;
+        if (sandboxPaid) {
+            refId = Number(String(Date.now()).slice(-9));
+            verifyCode = 100;
+            verifyResult = { data: { code: 100, ref_id: refId, sandbox: true } };
+        } else {
+            verifyResult = await zarinpal.verifications.verify({
+                amount: amountInRial,
+                authority: authorityFromCb || payment.authority,
+            });
+            const verifyData = verifyResult?.data;
+            verifyCode = verifyData?.code ?? null;
+            refId = verifyData?.ref_id ?? null;
+        }
+        const verifySuccess = sandboxPaid || verifyCode === 100 || verifyCode === 101;
 
         if (!verifySuccess) {
             await connection.execute(
@@ -620,26 +835,17 @@ exports.handleZarinpalCallback = async (req, res) => {
             return res.status(500).send('Plan not found');
         }
 
-        const user = await lockUser(connection, lockedPayment.user_id);
-        if (!user) {
-            await connection.rollback();
-            return res.status(500).send('User not found');
-        }
-
-        const { newExpireDate } = calculateNewPlanExpiry(plan.days);
-
-        await connection.execute(
-            `UPDATE tam24_users
-             SET current_plan = ?, plan_expires_at = ?, updated_at = NOW()
-             WHERE id = ?`,
-            [plan.id, newExpireDate, user.id]
-        );
+        const paidAssignment = await policy.applyPaidPlan(connection, {
+            userId: lockedPayment.user_id,
+            plan,
+            paymentId,
+        });
 
         if (lockedPayment.discount_code_id) {
             await connection.execute(
                 `UPDATE discount_codes
                  SET used_count = used_count + 1, updated_at = NOW()
-                 WHERE id = ?`,
+                 WHERE id = ? AND (max_uses IS NULL OR used_count < max_uses)`,
                 [lockedPayment.discount_code_id]
             );
         }
@@ -665,6 +871,10 @@ exports.handleZarinpalCallback = async (req, res) => {
         );
 
         await connection.commit();
+
+        // Award referral reward for the inviter (first purchase only) — post-commit.
+        await walletController.awardReferralRewardForPayment(paymentId);
+        await notifyPlanPurchase(lockedPayment.user_id, plan, paymentId, paidAssignment.queued);
 
         return redirectToResult(paymentId);
     } catch (error) {
@@ -755,6 +965,17 @@ exports.getPaymentResult = async (req, res) => {
             return res.status(404).json({ success: false, message: 'پرداخت یافت نشد' });
         }
 
+        let reservation = null;
+        try {
+            const [reserved] = await connection.execute(
+                `SELECT starts_at, ends_at, status FROM subscription_reservations WHERE payment_id = ? ORDER BY id DESC LIMIT 1`,
+                [paymentId]
+            );
+            reservation = reserved[0] || null;
+        } catch (err) {
+            if (!err || err.code !== 'ER_NO_SUCH_TABLE') throw err;
+        }
+
         return res.json({
             success: true,
             data: {
@@ -788,6 +1009,10 @@ exports.getPaymentResult = async (req, res) => {
                     id: row.plan_id,
                     name: row.plan_name,
                     days: row.plan_days ? Number(row.plan_days) : null,
+                    unlimited: row.plan_days == null,
+                    queued: reservation?.status === 'queued',
+                    startsAt: reservation?.starts_at || null,
+                    endsAt: reservation?.ends_at || null,
                 },
                 user: row.user_id_ref
                     ? {
@@ -827,38 +1052,182 @@ exports.getPaymentResult = async (req, res) => {
 
 
 exports.getMySubscriptionStatus = async (req, res) => {
-    const connection = await pool.getConnection();
-
     try {
-        const userId = req.user.id;
-
-        const [rows] = await connection.execute(
-            `SELECT id, username, current_plan, plan_expires_at
-             FROM tam24_users
-             WHERE id = ?
-                 LIMIT 1`,
-            [userId]
-        );
-
-        const user = rows[0];
-        if (!user) {
-            return res.status(404).json({ success: false, message: 'کاربر یافت نشد' });
-        }
-
-        const isActive = user.plan_expires_at && new Date(user.plan_expires_at).getTime() > Date.now();
-
-        return res.json({
-            success: true,
-            data: {
-                currentPlan: isActive ? user.current_plan : 'free',
-                planExpiresAt: isActive ? user.plan_expires_at : null,
-                isActive: Boolean(isActive),
-            },
-        });
+        const data = await policy.subscriptionSnapshot(req.user.id);
+        if (!data) return res.status(404).json({ success: false, message: 'کاربر یافت نشد' });
+        return res.json({ success: true, data });
     } catch (error) {
         console.error('getMySubscriptionStatus error:', error);
         return res.status(500).json({ success: false, message: 'خطا در دریافت وضعیت اشتراک' });
+    }
+};
+
+exports.getEntitlements = async (req, res) => {
+    try {
+        const data = await entitlements.forUser(req.user.id);
+        return res.json({ success: true, data });
+    } catch (error) {
+        console.error('getEntitlements error:', error);
+        return res.status(500).json({ success: false, message: 'خطا در دریافت محدودیت‌های پلن' });
+    }
+};
+
+exports.getCoinPackages = async (req, res) => {
+    try {
+        const ent = await entitlements.forUser(req.user.id);
+        return res.json({
+            success: true,
+            data: {
+                packages: await listCoinPackages(pool, { activeOnly: true }),
+                canPurchase: ent.canPurchaseCoins,
+                isPaid: ent.isPaid,
+            },
+        });
+    } catch (error) {
+        console.error('getCoinPackages error:', error);
+        return res.status(500).json({ success: false, message: 'خطا در دریافت بسته‌های سکه' });
+    }
+};
+
+exports.createCoinPayment = async (req, res) => {
+    const connection = await pool.getConnection();
+    let purchaseId = null;
+    try {
+        const ent = await entitlements.forUser(req.user.id);
+        if (!ent.canPurchaseCoins) {
+            return res.status(403).json({
+                success: false,
+                code: 'PLAN_REQUIRED',
+                message: 'خرید سکه با اشتراک ویژه ممکن است.',
+            });
+        }
+        const pack = await findCoinPackage(pool, req.body?.packageId);
+        if (!pack) {
+            return res.status(400).json({ success: false, message: 'بسته سکه نامعتبر است.' });
+        }
+        await usage.ensureReady();
+        const [ins] = await connection.execute(
+            `INSERT INTO tam24_coin_purchases (user_id, package_id, coins, price_toman, status) VALUES (?, ?, ?, ?, 'pending')`,
+            [req.user.id, pack.id, pack.coins, pack.priceToman]
+        );
+        purchaseId = ins.insertId;
+        const callbackUrl = `${callbackOrigin()}/api/payments/zarinpal/callback?coinPurchaseId=${purchaseId}`;
+        const opened = await zarinpal.createPayableUrl({
+            amount: toRial(pack.priceToman),
+            currency: 'IRR',
+            callback_url: callbackUrl,
+            description: `خرید ${pack.coins} سکه متاتست`,
+            metadata: { mobile: req.user.phone, email: req.user.email },
+        });
+        await connection.execute(
+            `UPDATE tam24_coin_purchases SET authority = ? WHERE id = ?`,
+            [opened.authority, purchaseId]
+        );
+        return res.json({
+            success: true,
+            data: {
+                purchaseId,
+                paymentUrl: opened.sandbox
+                    ? sandboxCheckout.checkoutPath({
+                        kind: 'coins',
+                        id: purchaseId,
+                        authority: opened.authority,
+                        amountToman: pack.priceToman,
+                        title: `${Number(pack.coins).toLocaleString('fa-IR')} سکه`,
+                    })
+                    : opened.paymentUrl,
+                package: pack,
+            },
+        });
+    } catch (error) {
+        console.error('createCoinPayment error:', error);
+        if (purchaseId) {
+            try {
+                await connection.execute(
+                    `UPDATE tam24_coin_purchases SET status = 'failed' WHERE id = ? AND status = 'pending'`,
+                    [purchaseId]
+                );
+            } catch (_) { /* row may not exist */ }
+        }
+        if (error && error.expose) {
+            return res.status(error.status || 502).json({ success: false, message: error.message });
+        }
+        return res.status(500).json({ success: false, message: gatewayErrorMessage(error, 'خطا در ایجاد پرداخت سکه') });
     } finally {
         connection.release();
     }
 };
+
+async function handleCoinPurchaseCallback(req, res) {
+    const connection = await pool.getConnection();
+    const purchaseId = Number(req.query.coinPurchaseId);
+    const statusFromCb = req.query.Status || null;
+    const authorityFromCb = req.query.Authority || null;
+    const redirect = (status) => res.redirect(appUrl(`/met?coins=${encodeURIComponent(status)}`));
+    try {
+        await usage.ensureReady();
+        const [rows] = await connection.execute(
+            `SELECT * FROM tam24_coin_purchases WHERE id = ? LIMIT 1`,
+            [purchaseId]
+        );
+        const purchase = rows[0];
+        if (!purchase) return res.status(404).send('Coin purchase not found');
+        if (purchase.status === 'paid') return redirect('paid');
+        if (statusFromCb !== 'OK') {
+            await connection.execute(
+                `UPDATE tam24_coin_purchases SET status = 'cancelled' WHERE id = ? AND status = 'pending'`,
+                [purchaseId]
+            );
+            return redirect('cancelled');
+        }
+        const sandboxApproval = sandboxCheckout.readSandboxApproval(req.query);
+        const sandboxPaid = Boolean(
+            sandboxApproval
+            && sandboxApproval.kind === 'coins'
+            && Number(sandboxApproval.id) === purchaseId
+            && sandboxApproval.authority === purchase.authority
+        );
+        let verifyCode = null;
+        let refId = null;
+        if (sandboxPaid) {
+            verifyCode = 100;
+            refId = Number(String(Date.now()).slice(-9));
+        } else {
+            const verifyResult = await zarinpal.verifications.verify({
+                amount: toRial(Number(purchase.price_toman)),
+                authority: authorityFromCb || purchase.authority,
+            });
+            verifyCode = verifyResult?.data?.code ?? null;
+            refId = verifyResult?.data?.ref_id ?? null;
+        }
+        if (verifyCode !== 100 && verifyCode !== 101) {
+            await connection.execute(
+                `UPDATE tam24_coin_purchases SET status = 'failed' WHERE id = ? AND status = 'pending'`,
+                [purchaseId]
+            );
+            return redirect('failed');
+        }
+        await coinWallet.creditPurchased(pool, purchase.user_id, purchase.coins, {
+            reason: `خرید بسته ${purchase.package_id}`,
+            referenceType: 'coin_purchase',
+            referenceId: `coin-purchase:${purchase.id}`,
+            metadata: { packageId: purchase.package_id, refId },
+        });
+        await connection.execute(
+            `UPDATE tam24_coin_purchases SET status = 'paid', ref_id = ?, paid_at = NOW(), authority = ? WHERE id = ?`,
+            [refId, authorityFromCb || purchase.authority, purchaseId]
+        );
+        await notifications.notifyUser(purchase.user_id, {
+            title: 'سکه به کیف پول اضافه شد',
+            body: `${Number(purchase.coins).toLocaleString('fa-IR')} سکه خریداری‌شده به موجودی‌ات اضافه شد. سکه خریداری‌شده تاریخ انقضا ندارد.`,
+            kind: 'coins',
+            dedupeKey: `coin-purchase:${purchase.id}`,
+        });
+        return redirect('paid');
+    } catch (error) {
+        console.error('handleCoinPurchaseCallback error:', error);
+        return res.status(500).send('Callback error');
+    } finally {
+        connection.release();
+    }
+}
