@@ -1,13 +1,13 @@
-#smooth-wrapper {
-  position: relative;
-  width: 100%;
-  overflow: visible;
-  z-index: 0;
-}
-#smooth-content { position: relative; width: 100%; }
-.depth-world {
+.page-root { position: relative; }
+.page-sheet { position: relative; z-index: 1; }
+.field-clip {
   position: absolute; inset: 0;
-  z-index: 0; pointer-events: none; overflow: hidden;
+  overflow: hidden; pointer-events: none; z-index: 0;
+}
+.depth-world {
+  position: absolute; top: 0; right: 0; left: 0;
+  height: max(100%, 5200px);
+  pointer-events: none;
 }
 .symbol {
   position: absolute;
@@ -25,5 +25,3 @@
     radial-gradient(circle at 15% 10%, rgba(139,92,246,0.06) 0%, transparent 40%),
     radial-gradient(circle at 85% 85%, rgba(124,58,237,0.05) 0%, transparent 40%);
 }
-#smooth-content > :not(.depth-world):not(header) { position: relative; z-index: 1; }
-#smooth-content > header { z-index: 50; }

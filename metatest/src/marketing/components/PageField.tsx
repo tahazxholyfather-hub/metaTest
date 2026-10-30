@@ -11,13 +11,13 @@ export function PageField({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <div ref={rootRef}>
+    <div className="page-root" ref={rootRef}>
       <div className="ambient-veil" />
-      <div id="smooth-wrapper">
-        <div id="smooth-content">
-          <div className="depth-world" id="depth-world" />
-          {children}
-        </div>
+      <div className="field-clip" aria-hidden="true">
+        <div className="depth-world" id="depth-world" />
+      </div>
+      <div className="page-sheet">
+        {children}
       </div>
     </div>
   );
