@@ -16,11 +16,19 @@ function cleanText(value, max) {
     return text ? text.slice(0, max) : '';
 }
 
-function cleanCoverUrl(value) {
+function acceptedMediaUrl(value) {
     const raw = String(value || '').trim();
-    if (!raw) return null;
-    if (raw.length > 500 || !/^https?:\/\/[^\s]+$/i.test(raw)) return undefined;
-    return raw;
+    if (!raw) return '';
+    if (raw.length > 500) return null;
+    if (/^https?:\/\/[^\s]+$/i.test(raw)) return raw;
+    if (/^\/blog-media\/[A-Za-z0-9._-]+$/.test(raw)) return raw;
+    return null;
 }
 
-module.exports = { slugify, cleanText, cleanCoverUrl };
+function cleanCoverUrl(value) {
+    const cleaned = acceptedMediaUrl(value);
+    if (cleaned === null) return undefined;
+    return cleaned || null;
+}
+
+module.exports = { slugify, cleanText, cleanCoverUrl, acceptedMediaUrl };

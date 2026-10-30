@@ -163,6 +163,14 @@ export const adminApi = {
     updateReport: (id: number, payload: Json) =>
         adminRequest<Json>(`/reports/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
 
+    uploadBlogMedia: (file: File) => {
+        const body = new FormData();
+        body.append('file', file);
+        return adminRequest<{ success: boolean; url: string; message?: string }>('/blog/media', {
+            method: 'POST',
+            body,
+        });
+    },
     listBlog: () => adminRequest<Json>('/blog'),
     saveBlog: (payload: Json) => adminRequest<Json>(payload.id ? `/blog/${payload.id}` : '/blog', {
         method: payload.id ? 'PUT' : 'POST',

@@ -1,7 +1,8 @@
 'use strict';
 
 const pool = require('../db');
-const { slugify, cleanText, cleanCoverUrl } = require('../blog/text');
+const fs = require('fs');
+const { slugify, cleanText, cleanCoverUrl, acceptedMediaUrl } = require('../blog/text');
 
 const CATEGORIES = {
     study: 'روش مطالعه',
@@ -207,14 +208,23 @@ async function handleAdminSave(req, res) {
     const category = CATEGORIES[req.body?.category] ? req.body.category : 'study';
     const excerpt = cleanText(req.body?.excerpt, 500) || cleanText(plain || body, 180);
     const coverUrl = cleanCoverUrl(req.body?.coverUrl || req.body?.coverImage);
-    if (coverUrl === undefined) return res.status(400).json({ success: false, message: 'آدرس تصویر باید با http یا https شروع شود.' });
+    if (coverUrl === undefined) return res.status(400).json({ success: false, message: 'کاور باید از فایل انتخاب شود.' });
+    const mediaBlocks = content.map((block) => {
+        if (!block || (block.type !== 'image' && block.type !== 'video')) return block;
+        const url = acceptedMediaUrl(block.url);
+        if (url === null) return null;
+        return { ...block, url };
+    });
+    if (mediaBlocks.some((block) => block === null)) {
+        return res.status(400).json({ success: false, message: 'تصویر و ویدیو را با انتخاب فایل بگذار، نه با آدرس دستی.' });
+    }
     const author = cleanText(req.body?.author, 120) || 'تیم متاتست';
     const readTime = cleanText(req.body?.readTime, 40) || null;
     const published = req.body?.published === true || req.body?.published === 1 || req.body?.published === '1' || req.body?.published === 'true';
     const featured = req.body?.featured === true || req.body?.featured === 1 || req.body?.featured === '1';
     const id = Number(req.body?.id || req.params?.id);
     const hasId = Number.isInteger(id) && id > 0;
-    const contentJson = JSON.stringify(content);
+    const contentJson = JSON.stringify(mediaBlocks);
 
     const connection = await pool.getConnection();
     try {
@@ -241,6 +251,20 @@ async function handleAdminSave(req, res) {
     }
 }
 
+function handleUploadMedia(req, res) {
+    if (!req.file) return res.status(400).json({ success: false, message: 'فایلی انتخاب نشده.' });
+    const video = String(req.file.mimetype || '').startsWith('video/');
+    const max = video ? 80 * 1024 * 1024 : 12 * 1024 * 1024;
+    if (req.file.size > max) {
+        fs.unlink(req.file.path, () => undefined);
+        return res.status(400).json({
+            success: false,
+            message: video ? 'ویدیو باید کوچک‌تر از ۸۰ مگابایت باشد.' : 'تصویر باید کوچک‌تر از ۱۲ مگابایت باشد.',
+        });
+    }
+    return res.json({ success: true, url: `/blog-media/${req.file.filename}` });
+}
+
 async function handleAdminDelete(req, res) {
     await ensureBlogSchema();
     const id = Number(req.params?.id || req.body?.id);
@@ -257,4 +281,5 @@ module.exports = {
     handleAdminList,
     handleAdminSave,
     handleAdminDelete,
+    handleUploadMedia,
 };

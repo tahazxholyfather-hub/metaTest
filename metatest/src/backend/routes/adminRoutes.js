@@ -11,6 +11,7 @@ const announcements = require('../controllers/announcementController');
 const pushService = require('../push/pushService');
 const coins = require('../controllers/coinAdminController');
 const blog = require('../controllers/blogController');
+const { blogUpload, rejectUpload } = require('../blog/upload');
 const { requireSection, withSections } = require('../admin/access');
 const {
     requireAdminSession,
@@ -106,6 +107,13 @@ router.put('/subscriptions/loyalty', requireSuperAdmin, wrap(subscriptions.handl
 router.get('/access', requireSuperAdmin, wrap(ops.handleListAccess));
 router.put('/access/:id', requireSuperAdmin, wrap(ops.handleSaveAccess));
 
+function uploadBlogFile(req, res, next) {
+    blogUpload.single('file')(req, res, (err) => {
+        if (err) return rejectUpload(err, req, res, next);
+        next();
+    });
+}
+router.post('/blog/media', requireSection('blog'), uploadBlogFile, wrap(blog.handleUploadMedia));
 router.get('/blog', requireSection('blog'), wrap(blog.handleAdminList));
 router.post('/blog', requireSection('blog'), wrap(blog.handleAdminSave));
 router.put('/blog/:id', requireSection('blog'), wrap(blog.handleAdminSave));
