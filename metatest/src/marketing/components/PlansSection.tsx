@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
+import { PlanRibbonBadge, planTint } from '../../components/plan/PlanMarks';
 import { appUrl } from '../lib/appUrl';
-import { playLordIcon } from '../lib/lordicon';
-import { faNum, planIconSrc, planPricing, type PublicPlan } from '../lib/plans';
-import { LordIcon } from './LordIcon';
+import { faNum, planPricing, type PublicPlan } from '../lib/plans';
 
 export function PlansSection() {
   const [plans, setPlans] = useState<PublicPlan[] | null>(null);
@@ -24,10 +23,6 @@ export function PlansSection() {
     return () => { alive = false; };
   }, []);
 
-  useEffect(() => {
-    document.querySelectorAll('#plans-grid lord-icon').forEach((icon) => playLordIcon(icon));
-  }, [plans]);
-
   return (
     <section className="plans-section reveal-section" id="plans">
       <div className="plans-inner glass-panel">
@@ -39,14 +34,13 @@ export function PlansSection() {
         <div className="plans-grid" id="plans-grid">
           {(plans || []).map((plan) => {
             const view = planPricing(plan);
-            const primary = plan.iconColors?.primary || '#F8F7FF';
-            const secondary = plan.iconColors?.secondary || '#8b5cf6';
+            const tint = planTint(plan.id, plan.name, plan.iconColors?.primary);
             const classes = ['plan-card', plan.popular ? 'popular' : '', view.locked ? 'locked' : ''].filter(Boolean).join(' ');
             return (
               <article className={classes} key={plan.id || plan.name}>
                 {plan.popular ? <div className="plan-badge">پیشنهادی</div> : null}
                 <div className="plan-icon">
-                  <LordIcon src={planIconSrc(plan)} trigger="loop" colors={`primary:${primary},secondary:${secondary}`} />
+                  <PlanRibbonBadge planId={plan.id} name={plan.name} color={tint} size={84} playKey={plan.id || plan.name} />
                 </div>
                 <h3 className="plan-name">{plan.name}</h3>
                 {view.compare != null ? <div className="plan-compare">{faNum(view.compare)} تومان</div> : null}
