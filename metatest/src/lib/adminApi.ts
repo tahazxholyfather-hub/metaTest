@@ -171,6 +171,15 @@ export const adminApi = {
             body,
         });
     },
+    listBlogCategories: () => adminRequest<{ success: boolean; data: { slug: string; name: string }[] }>('/blog/categories'),
+    createBlogCategory: (name: string) => adminRequest<{ success: boolean; message?: string; data: { slug: string; name: string }[] }>('/blog/categories', {
+        method: 'POST',
+        body: JSON.stringify({ name }),
+    }),
+    blogCategoryImpact: (slug: string) => adminRequest<{ success: boolean; data: { name: string; onlyCount: number; sharedCount: number } }>(`/blog/categories/${encodeURIComponent(slug)}/impact`),
+    deleteBlogCategory: (slug: string) => adminRequest<{ success: boolean; message?: string; data: { slug: string; name: string }[] }>(`/blog/categories/${encodeURIComponent(slug)}`, {
+        method: 'DELETE',
+    }),
     listBlog: () => adminRequest<Json>('/blog'),
     saveBlog: (payload: Json) => adminRequest<Json>(payload.id ? `/blog/${payload.id}` : '/blog', {
         method: payload.id ? 'PUT' : 'POST',

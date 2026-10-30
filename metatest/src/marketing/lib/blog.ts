@@ -18,6 +18,7 @@ export type BlogPost = {
   category?: string;
   categorySlug?: string;
   categoryName?: string;
+  categories?: { slug: string; name: string }[];
   readTime?: string;
   publishedAt?: string | null;
   featured?: boolean;
@@ -67,6 +68,27 @@ export function safeHtml(html: string) {
     });
   });
   return holder.innerHTML;
+}
+
+export async function fetchCategories(): Promise<{ slug: string; name: string }[]> {
+  const response = await fetch('/api/blog/categories');
+  const payload = await response.json() as { success?: boolean; data?: { slug: string; name: string }[] };
+  if (payload?.success && Array.isArray(payload.data)) return payload.data;
+  return [];
+}
+
+export function postCategories(post: BlogPost) {
+  if (post.categories?.length) return post.categories.map((item) => item.slug);
+  return [post.category || post.categorySlug || 'study'];
+}
+
+export function coverStyle(url?: string | null): { backgroundImage: string; backgroundSize: string; backgroundPosition: string } | undefined {
+  if (!url) return undefined;
+  return {
+    backgroundImage: `url("${url.replace(/"/g, '')}")`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+  };
 }
 
 export async function fetchPosts(): Promise<BlogPost[] | null> {

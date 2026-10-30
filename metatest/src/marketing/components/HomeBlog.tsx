@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { fetchPosts, formatWhen, LIST_SAMPLES, postHref, type BlogPost } from '../lib/blog';
+import { coverStyle, fetchPosts, formatWhen, LIST_SAMPLES, postHref, type BlogPost } from '../lib/blog';
 
 export function HomeBlog() {
   const [posts, setPosts] = useState<BlogPost[] | null>(null);
@@ -28,7 +28,7 @@ export function HomeBlog() {
             const when = formatWhen(post.publishedAt);
             return (
               <Link className="home-blog-card" to={postHref(post.slug)} key={post.slug}>
-                <div className="home-blog-thumb" />
+                <div className="home-blog-thumb" style={coverStyle(post.coverUrl)} />
                 <div className="home-blog-body">
                   <span className="home-blog-cat">{post.categoryName || 'آموزش'}</span>
                   <h3>{post.title}</h3>

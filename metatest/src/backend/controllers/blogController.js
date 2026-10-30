@@ -89,6 +89,41 @@ function ensureBlogSchema() {
                     );
                 }
             }
+            await pool.query(`
+                CREATE TABLE IF NOT EXISTS blog_categories (
+                    id INT NOT NULL AUTO_INCREMENT,
+                    slug VARCHAR(80) NOT NULL,
+                    name VARCHAR(80) NOT NULL,
+                    sort_order INT NOT NULL DEFAULT 0,
+                    PRIMARY KEY (id),
+                    UNIQUE KEY uq_blog_cat_slug (slug)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+            `);
+            await pool.query(`
+                CREATE TABLE IF NOT EXISTS blog_post_categories (
+                    post_id INT NOT NULL,
+                    category_id INT NOT NULL,
+                    PRIMARY KEY (post_id, category_id),
+                    KEY idx_blog_post_cat (category_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+            `);
+            const [catCount] = await pool.query(`SELECT COUNT(*) AS n FROM blog_categories`);
+            if (Number(catCount[0].n) === 0) {
+                let order = 1;
+                for (const [slug, name] of Object.entries(CATEGORIES)) {
+                    await pool.query(
+                        `INSERT INTO blog_categories (slug, name, sort_order) VALUES (?, ?, ?)`,
+                        [slug, name, order]
+                    );
+                    order += 1;
+                }
+            }
+            await pool.query(`
+                INSERT IGNORE INTO blog_post_categories (post_id, category_id)
+                SELECT p.id, c.id
+                FROM blog_posts p
+                JOIN blog_categories c ON c.slug = p.category
+            `);
         })().catch((err) => {
             schemaReady = null;
             throw err;
@@ -123,10 +158,14 @@ function plainFromContent(content) {
     }).join('\n').replace(/\s+/g, ' ').trim();
 }
 
-function mapPost(row, { includeBody = true } = {}) {
-    const category = row.category || 'study';
+function mapPost(row, { includeBody = true, categories = [] } = {}) {
+    const linked = categories.length ? categories : [];
+    const category = linked[0]?.slug || row.category || 'study';
     const content = parseContent(row.content);
     const plain = plainFromContent(content) || row.body || '';
+    const names = linked.length
+        ? linked.map((item) => item.name).join(' · ')
+        : (CATEGORIES[category] || 'آموزش');
     return {
         id: Number(row.id),
         title: row.title,
@@ -141,10 +180,35 @@ function mapPost(row, { includeBody = true } = {}) {
         publishedAt: row.published_at || null,
         category,
         categorySlug: category,
-        categoryName: CATEGORIES[category] || 'آموزش',
+        categoryName: names,
+        categories: linked.length ? linked : [{ slug: category, name: CATEGORIES[category] || 'آموزش' }],
         featured: Number(row.featured) === 1,
         readTime: row.read_time || `${readMinutes(plain).toLocaleString('fa-IR')} دقیقه`,
     };
+}
+
+async function categoriesByPost(ids) {
+    const grouped = new Map();
+    if (!ids.length) return grouped;
+    const [links] = await pool.query(
+        `SELECT pc.post_id, c.slug, c.name
+         FROM blog_post_categories pc
+         JOIN blog_categories c ON c.id = pc.category_id
+         WHERE pc.post_id IN (?)
+         ORDER BY c.sort_order, c.id`,
+        [ids]
+    );
+    for (const link of links) {
+        const list = grouped.get(link.post_id) || [];
+        list.push({ slug: link.slug, name: link.name });
+        grouped.set(link.post_id, list);
+    }
+    return grouped;
+}
+
+async function presentPosts(rows, options) {
+    const grouped = await categoriesByPost(rows.map((row) => row.id));
+    return rows.map((row) => mapPost(row, { ...options, categories: grouped.get(row.id) || [] }));
 }
 
 const PUBLIC_COLUMNS = `id, title, slug, excerpt, body, content, cover_url, category, featured, author, read_time, published, published_at`;
@@ -155,7 +219,14 @@ async function handlePublicList(_req, res) {
         `SELECT ${PUBLIC_COLUMNS} FROM blog_posts WHERE published = 1 ORDER BY featured DESC, published_at DESC, id DESC`
     );
     res.set('Cache-Control', 'no-store');
-    return res.json({ success: true, data: rows.map((row) => mapPost(row, { includeBody: false })) });
+    return res.json({ success: true, data: await presentPosts(rows, { includeBody: false }) });
+}
+
+async function handlePublicCategories(_req, res) {
+    await ensureBlogSchema();
+    const [rows] = await pool.query(`SELECT slug, name FROM blog_categories ORDER BY sort_order, id`);
+    res.set('Cache-Control', 'no-store');
+    return res.json({ success: true, data: rows });
 }
 
 async function handlePublicOne(req, res) {
@@ -168,7 +239,8 @@ async function handlePublicOne(req, res) {
     );
     if (!rows.length) return res.status(404).json({ success: false, message: 'مطلب پیدا نشد.' });
     res.set('Cache-Control', 'no-store');
-    return res.json({ success: true, data: mapPost(rows[0]) });
+    const [post] = await presentPosts(rows, { includeBody: true });
+    return res.json({ success: true, data: post });
 }
 
 async function handleAdminList(_req, res) {
@@ -176,7 +248,7 @@ async function handleAdminList(_req, res) {
     const [rows] = await pool.query(
         `SELECT ${PUBLIC_COLUMNS}, updated_at FROM blog_posts ORDER BY updated_at DESC, id DESC`
     );
-    return res.json({ success: true, data: rows.map((row) => mapPost(row)) });
+    return res.json({ success: true, data: await presentPosts(rows) });
 }
 
 async function uniqueSlug(connection, base, ignoreId) {
@@ -205,7 +277,20 @@ async function handleAdminSave(req, res) {
     if (!body && !content.length) return res.status(400).json({ success: false, message: 'متن مطلب را وارد کنید.' });
     const requested = slugify(req.body?.slug || title);
     if (!requested) return res.status(400).json({ success: false, message: 'نامک مطلب نامعتبر است.' });
-    const category = CATEGORIES[req.body?.category] ? req.body.category : 'study';
+    const requestedCategories = Array.isArray(req.body?.categories) && req.body.categories.length
+        ? req.body.categories
+        : [req.body?.category].filter(Boolean);
+    const categorySlugs = [...new Set(requestedCategories.map((item) => String(item || '').trim()).filter(Boolean))];
+    if (!categorySlugs.length) return res.status(400).json({ success: false, message: 'حداقل یک دسته‌بندی انتخاب کنید.' });
+    const [knownCategories] = await pool.query(
+        `SELECT id, slug FROM blog_categories WHERE slug IN (?)`,
+        [categorySlugs]
+    );
+    if (knownCategories.length !== categorySlugs.length) {
+        return res.status(400).json({ success: false, message: 'یکی از دسته‌بندی‌ها پیدا نشد.' });
+    }
+    const orderedCategories = categorySlugs.map((slug) => knownCategories.find((item) => item.slug === slug)).filter(Boolean);
+    const category = orderedCategories[0].slug;
     const excerpt = cleanText(req.body?.excerpt, 500) || cleanText(plain || body, 180);
     const coverUrl = cleanCoverUrl(req.body?.coverUrl || req.body?.coverImage);
     if (coverUrl === undefined) return res.status(400).json({ success: false, message: 'کاور باید از فایل انتخاب شود.' });
@@ -229,6 +314,7 @@ async function handleAdminSave(req, res) {
     const connection = await pool.getConnection();
     try {
         const slug = await uniqueSlug(connection, requested, hasId ? id : 0);
+        let postId = id;
         if (hasId) {
             const [existing] = await connection.query(`SELECT id, published_at FROM blog_posts WHERE id = ? LIMIT 1`, [id]);
             if (!existing.length) return res.status(404).json({ success: false, message: 'مطلب پیدا نشد.' });
@@ -239,10 +325,18 @@ async function handleAdminSave(req, res) {
                 [title, slug, excerpt, body, contentJson, coverUrl, category, featured ? 1 : 0, author, readTime, published ? 1 : 0, published ? (existing[0].published_at || new Date()) : null, id]
             );
         } else {
-            await connection.query(
+            const [created] = await connection.query(
                 `INSERT INTO blog_posts (title, slug, excerpt, body, content, cover_url, category, featured, author, read_time, published, published_at, author_admin_id)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [title, slug, excerpt, body, contentJson, coverUrl, category, featured ? 1 : 0, author, readTime, published ? 1 : 0, published ? new Date() : null, req.admin?.id || null]
+            );
+            postId = created.insertId;
+        }
+        await connection.query(`DELETE FROM blog_post_categories WHERE post_id = ?`, [postId]);
+        for (const item of orderedCategories) {
+            await connection.query(
+                `INSERT INTO blog_post_categories (post_id, category_id) VALUES (?, ?)`,
+                [postId, item.id]
             );
         }
         return res.json({ success: true, message: published ? 'مطلب منتشر شد.' : 'پیش‌نویس ذخیره شد.' });
@@ -265,6 +359,87 @@ function handleUploadMedia(req, res) {
     return res.json({ success: true, url: `/blog-media/${req.file.filename}` });
 }
 
+async function listCategories() {
+    const [rows] = await pool.query(`SELECT id, slug, name FROM blog_categories ORDER BY sort_order, id`);
+    return rows;
+}
+
+async function handleAdminCategories(_req, res) {
+    await ensureBlogSchema();
+    return res.json({ success: true, data: await listCategories() });
+}
+
+async function handleAdminCreateCategory(req, res) {
+    await ensureBlogSchema();
+    const name = cleanText(req.body?.name, 80);
+    if (!name) return res.status(400).json({ success: false, message: 'نام دسته‌بندی را وارد کنید.' });
+    let slug = slugify(name) || `cat-${Date.now()}`;
+    const [maxRows] = await pool.query(`SELECT COALESCE(MAX(sort_order), 0) + 1 AS n FROM blog_categories`);
+    for (let n = 2; n < 40; n += 1) {
+        const [existing] = await pool.query(`SELECT id FROM blog_categories WHERE slug = ? LIMIT 1`, [slug]);
+        if (!existing.length) break;
+        slug = `${slugify(name).slice(0, 70) || 'cat'}-${n}`;
+    }
+    await pool.query(
+        `INSERT INTO blog_categories (slug, name, sort_order) VALUES (?, ?, ?)`,
+        [slug, name, Number(maxRows[0].n) || 1]
+    );
+    return res.json({ success: true, message: 'دسته‌بندی اضافه شد.', data: await listCategories() });
+}
+
+async function categoryUse(slug) {
+    const [cats] = await pool.query(`SELECT id, slug, name FROM blog_categories WHERE slug = ? LIMIT 1`, [slug]);
+    if (!cats.length) return null;
+    const cat = cats[0];
+    const [rows] = await pool.query(
+        `SELECT post_id, COUNT(*) AS total, SUM(category_id = ?) AS hit
+         FROM blog_post_categories
+         GROUP BY post_id
+         HAVING SUM(category_id = ?) > 0`,
+        [cat.id, cat.id]
+    );
+    const onlyIds = rows.filter((row) => Number(row.total) === Number(row.hit)).map((row) => row.post_id);
+    return {
+        category: cat,
+        onlyCount: onlyIds.length,
+        sharedCount: rows.length - onlyIds.length,
+        onlyIds,
+    };
+}
+
+async function handleAdminCategoryImpact(req, res) {
+    await ensureBlogSchema();
+    const impact = await categoryUse(String(req.params.slug || ''));
+    if (!impact) return res.status(404).json({ success: false, message: 'دسته‌بندی پیدا نشد.' });
+    return res.json({
+        success: true,
+        data: { name: impact.category.name, onlyCount: impact.onlyCount, sharedCount: impact.sharedCount },
+    });
+}
+
+async function handleAdminDeleteCategory(req, res) {
+    await ensureBlogSchema();
+    const impact = await categoryUse(String(req.params.slug || ''));
+    if (!impact) return res.status(404).json({ success: false, message: 'دسته‌بندی پیدا نشد.' });
+    const connection = await pool.getConnection();
+    try {
+        if (impact.onlyIds.length) {
+            await connection.query(`DELETE FROM blog_posts WHERE id IN (?)`, [impact.onlyIds]);
+        }
+        await connection.query(`DELETE FROM blog_post_categories WHERE category_id = ?`, [impact.category.id]);
+        await connection.query(`DELETE FROM blog_categories WHERE id = ?`, [impact.category.id]);
+        return res.json({
+            success: true,
+            message: impact.onlyIds.length
+                ? `دسته‌بندی حذف شد و ${impact.onlyIds.length.toLocaleString('fa-IR')} مقاله که فقط همین دسته را داشتند هم حذف شدند.`
+                : 'دسته‌بندی حذف شد.',
+            data: await listCategories(),
+        });
+    } finally {
+        connection.release();
+    }
+}
+
 async function handleAdminDelete(req, res) {
     await ensureBlogSchema();
     const id = Number(req.params?.id || req.body?.id);
@@ -277,9 +452,14 @@ async function handleAdminDelete(req, res) {
 module.exports = {
     ensureBlogSchema,
     handlePublicList,
+    handlePublicCategories,
     handlePublicOne,
     handleAdminList,
     handleAdminSave,
     handleAdminDelete,
     handleUploadMedia,
+    handleAdminCategories,
+    handleAdminCreateCategory,
+    handleAdminCategoryImpact,
+    handleAdminDeleteCategory,
 };

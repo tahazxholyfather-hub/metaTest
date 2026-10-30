@@ -15,6 +15,7 @@ function wrap(handler) {
     };
 }
 
+router.get('/categories', wrap(blog.handlePublicCategories));
 router.get('/posts', wrap(blog.handlePublicList));
 router.get('/posts/:slug', wrap(blog.handlePublicOne));
 

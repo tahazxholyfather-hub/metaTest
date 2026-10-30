@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BLOG_CATEGORIES, LIST_SAMPLES, fetchPosts, formatWhen, postHref, type BlogPost } from '../lib/blog';
+import { BLOG_CATEGORIES, LIST_SAMPLES, coverStyle, fetchCategories, fetchPosts, formatWhen, postCategories, postHref, type BlogPost } from '../lib/blog';
 import { PageField } from '../components/PageField';
 import { SiteFooter } from '../components/SiteFooter';
 import { SiteHeader } from '../components/SiteHeader';
@@ -10,6 +10,7 @@ export function BlogListPage() {
   const [drawn, setDrawn] = useState(false);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState('all');
+  const [categories, setCategories] = useState(BLOG_CATEGORIES);
 
   useEffect(() => {
     let alive = true;
@@ -17,14 +18,19 @@ export function BlogListPage() {
       .then((rows) => { if (alive && rows) setPosts(rows); })
       .catch(() => undefined)
       .finally(() => { if (alive) setDrawn(true); });
+    fetchCategories()
+      .then((rows) => {
+        if (alive && rows.length) setCategories([{ slug: 'all', name: 'همه مطالب' }, ...rows]);
+      })
+      .catch(() => undefined);
     return () => { alive = false; };
   }, []);
 
   const filtered = useMemo(() => posts.filter((post) => {
-    const cat = post.category || post.categorySlug || 'study';
+    const cats = postCategories(post);
     const q = query.trim();
     const hit = !q || `${post.title} ${post.excerpt || ''}`.includes(q);
-    return hit && (active === 'all' || cat === active);
+    return hit && (active === 'all' || cats.includes(active));
   }), [posts, query, active]);
 
   const featured = !query.trim() && active === 'all' ? (filtered.find((post) => post.featured) || filtered[0]) : null;
@@ -42,7 +48,7 @@ export function BlogListPage() {
           <input id="q" type="search" placeholder="جستجو در مطالب… (مثلاً: آزمون، برنامه‌ریزی)" aria-label="جستجو در مطالب" value={query} onChange={(event) => { setQuery(event.target.value); setDrawn(true); }} />
         </div>
         <div className="blog-tabs" id="tabs">
-          {BLOG_CATEGORIES.map((cat) => (
+          {categories.map((cat) => (
             <button
               key={cat.slug}
               type="button"
@@ -57,7 +63,7 @@ export function BlogListPage() {
         <div id="featured">
           {show && featured ? (
             <Link className="blog-featured" to={postHref(featured.slug)}>
-              <div className="blog-featured-thumb" />
+              <div className="blog-featured-thumb" style={coverStyle(featured.coverUrl)} />
               <div className="blog-featured-body">
                 <span className="eyebrow">مطلب ویژه · {featured.categoryName || ''}</span>
                 <h2>{featured.title}</h2>
@@ -73,7 +79,7 @@ export function BlogListPage() {
         <div className="blog-grid" id="grid">
           {show ? rest.map((post) => (
             <Link className="blog-card" to={postHref(post.slug)} key={post.slug}>
-              <div className="blog-card-thumb"><span className="blog-card-cat">{post.categoryName || 'آموزش'}</span></div>
+              <div className="blog-card-thumb" style={coverStyle(post.coverUrl)}><span className="blog-card-cat">{post.categoryName || 'آموزش'}</span></div>
               <div className="blog-card-body">
                 <h3>{post.title}</h3>
                 <p>{post.excerpt || ''}</p>

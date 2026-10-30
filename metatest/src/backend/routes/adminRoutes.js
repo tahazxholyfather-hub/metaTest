@@ -114,6 +114,10 @@ function uploadBlogFile(req, res, next) {
     });
 }
 router.post('/blog/media', requireSection('blog'), uploadBlogFile, wrap(blog.handleUploadMedia));
+router.get('/blog/categories', requireSection('blog'), wrap(blog.handleAdminCategories));
+router.post('/blog/categories', requireSection('blog'), wrap(blog.handleAdminCreateCategory));
+router.get('/blog/categories/:slug/impact', requireSection('blog'), wrap(blog.handleAdminCategoryImpact));
+router.delete('/blog/categories/:slug', requireSection('blog'), wrap(blog.handleAdminDeleteCategory));
 router.get('/blog', requireSection('blog'), wrap(blog.handleAdminList));
 router.post('/blog', requireSection('blog'), wrap(blog.handleAdminSave));
 router.put('/blog/:id', requireSection('blog'), wrap(blog.handleAdminSave));

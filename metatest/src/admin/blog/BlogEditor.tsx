@@ -1,9 +1,10 @@
 import { ContentBlocks } from './ContentBlocks';
 import { MediaDrop } from './MediaDrop';
-import { BLOG_CATEGORIES, fieldClass, type BlogDraft } from './types';
+import { fieldClass, type BlogDraft } from './types';
 
 export function BlogEditor({
     form,
+    categories,
     saving,
     error,
     onChange,
@@ -11,6 +12,7 @@ export function BlogEditor({
     onSave,
 }: {
     form: BlogDraft;
+    categories: { slug: string; name: string }[];
     saving: boolean;
     error: string | null;
     onChange: (form: BlogDraft) => void;
@@ -33,11 +35,29 @@ export function BlogEditor({
                     <label className="text-xs font-bold flex flex-col gap-1">نامک
                         <input value={form.slug} onChange={(event) => onChange({ ...form, slug: event.target.value })} className={fieldClass} placeholder="خالی بماند تا از عنوان ساخته شود" />
                     </label>
-                    <label className="text-xs font-bold flex flex-col gap-1">دسته‌بندی
-                        <select value={form.category} onChange={(event) => onChange({ ...form, category: event.target.value })} className={fieldClass}>
-                            {BLOG_CATEGORIES.map((cat) => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
-                        </select>
-                    </label>
+                    <div className="text-xs font-bold flex flex-col gap-2 md:col-span-2">دسته‌بندی‌ها
+                        <div className="flex flex-wrap gap-2">
+                            {categories.map((cat) => {
+                                const checked = form.categories.includes(cat.slug);
+                                return (
+                                    <label key={cat.slug} className={`flex items-center gap-2 rounded-full border px-3 py-1.5 ${checked ? 'border-[#1a73e8] text-[#1a73e8]' : 'border-[#dadce0] dark:border-[#444746]'}`}>
+                                        <input
+                                            type="checkbox"
+                                            checked={checked}
+                                            onChange={() => {
+                                                const next = checked
+                                                    ? form.categories.filter((slug) => slug !== cat.slug)
+                                                    : [...form.categories, cat.slug];
+                                                onChange({ ...form, categories: next, category: next[0] || '' });
+                                            }}
+                                        />
+                                        {cat.name}
+                                    </label>
+                                );
+                            })}
+                            {!categories.length && <span className="font-normal text-[#86868b]">اول یک دسته‌بندی بساز.</span>}
+                        </div>
+                    </div>
                     <label className="text-xs font-bold flex flex-col gap-1">نویسنده
                         <input value={form.author} onChange={(event) => onChange({ ...form, author: event.target.value })} className={fieldClass} />
                     </label>

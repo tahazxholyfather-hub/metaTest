@@ -15,6 +15,7 @@ export interface BlogPost {
     coverUrl: string | null;
     author?: string;
     category: string;
+    categories?: { slug: string; name: string }[];
     featured: boolean;
     published: boolean;
     readTime?: string;
@@ -28,6 +29,7 @@ export interface BlogDraft {
     coverUrl: string;
     author: string;
     category: string;
+    categories: string[];
     featured: boolean;
     published: boolean;
     readTime: string;
@@ -42,6 +44,7 @@ export const EMPTY_DRAFT: BlogDraft = {
     coverUrl: '',
     author: 'تیم متاتست',
     category: 'study',
+    categories: ['study'],
     featured: false,
     published: true,
     readTime: '',

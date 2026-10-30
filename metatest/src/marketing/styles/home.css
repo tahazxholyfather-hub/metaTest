@@ -437,7 +437,7 @@
     .home-blog-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
     .home-blog-card { display: flex; flex-direction: column; text-decoration: none; border-radius: 18px; overflow: hidden; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); min-height: 100%; }
     .home-blog-card:hover { border-color: rgba(139,92,246,0.45); transform: translateY(-4px); }
-    .home-blog-thumb { height: 120px; background: radial-gradient(circle at 30% 20%, rgba(139,92,246,0.45), #120e22 70%); }
+    .home-blog-thumb { height: 120px; background: radial-gradient(circle at 30% 20%, rgba(139,92,246,0.45), #120e22 70%) center / cover no-repeat; }
     .home-blog-body { padding: 16px 16px 18px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
     .home-blog-cat { color: var(--accent2); font-size: 12px; font-weight: 700; }
     .home-blog-body h3 { font-size: 16px; line-height: 1.7; }
