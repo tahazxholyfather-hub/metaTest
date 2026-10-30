@@ -522,14 +522,8 @@ process.on('uncaughtException', (error) => {
     reportError('uncaughtException', error);
 });
 
+const { installMarketing } = require('./marketingSite');
 const siteRoot = path.resolve(__dirname, '../../..');
-function sendSite(file) {
-    return (_req, res) => res.sendFile(path.join(siteRoot, file));
-}
-app.get(['/', '/index.html', '/landing.html'], sendSite('landing.html'));
-app.get(['/blog', '/blog/', '/blog/index.html'], sendSite(path.join('blog', 'index.html')));
-app.get(['/blog/post', '/blog/post.html'], sendSite(path.join('blog', 'post.html')));
-app.get(['/about', '/about/', '/about/index.html'], sendSite(path.join('about', 'index.html')));
 
 function portOpen(port) {
     return new Promise((resolve) => {
@@ -563,7 +557,8 @@ async function ensureLocalApp() {
     });
 }
 
-// Start the server
+// Start the server after the marketing routes are registered.
+function startServer() {
 app.listen(PORT, () => {
     console.log(`Backend server is running on http://localhost:${PORT}`);
     console.log(`[runtime] LOCALHOST=${profile.localhost} base=${profile.appBase} socket=${profile.socketUrl}`);
@@ -585,3 +580,11 @@ app.listen(PORT, () => {
     }
     ensureLocalApp().catch((err) => console.error(err.message));
 });
+}
+
+installMarketing(app, { siteRoot, profile })
+    .then(startServer)
+    .catch((err) => {
+        console.error('[site] marketing setup failed:', err);
+        process.exit(1);
+    });
