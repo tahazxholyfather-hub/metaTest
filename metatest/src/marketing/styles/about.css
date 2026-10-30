@@ -131,17 +131,17 @@
     .showcase-duo .showcase-copy { align-items: center; text-align: center; }
     .showcase-duo .sec-body { text-align: center; }
 
-    .phone-stage { position: relative; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; min-height: 500px; }
-    .phone-glow { position: absolute; width: 280px; height: 443px; border-radius: 50px; background: var(--accent); filter: blur(90px); opacity: 0.18; }
+    .phone-stage { position: relative; flex: 0 0 auto; width: 300px; display: flex; align-items: center; justify-content: center; }
+    .phone-glow { position: absolute; inset: 0; border-radius: 50px; background: var(--accent); filter: blur(90px); opacity: 0.18; }
     .phone-frame {
       position: relative; z-index: 5;
-      width: 280px; height: 443px;
+      width: 100%; height: auto;
       border-radius: 44px; background: #05050A; padding: 10px;
       box-shadow: inset 0 0 4px rgba(255,255,255,0.2), inset 0 0 15px rgba(0,0,0,0.9), 0 35px 70px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.06);
-      display: flex;
+      display: block;
     }
     .phone-screen {
-      position: relative; width: 100%; height: 100%;
+      position: relative; width: 100%; height: auto;
       border-radius: 34px; background: #0A0A12; overflow: hidden;
       border: 1px solid rgba(255,255,255,0.04);
     }
@@ -152,13 +152,12 @@
       box-shadow: inset 0 0 4px rgba(255,255,255,0.15);
     }
     .phone-screen-img {
-      width: 100%; height: 100%;
-      object-fit: cover; object-position: center top;
+      width: 100%; height: auto;
       display: block; user-select: none; -webkit-user-drag: none;
     }
-    .phone-stage.compact { min-height: 390px; }
-    .phone-stage.compact .phone-glow { width: 220px; height: 348px; filter: blur(70px); }
-    .phone-stage.compact .phone-frame { width: 220px; height: 348px; border-radius: 36px; padding: 8px; }
+    .phone-stage.compact { width: 248px; }
+    .phone-stage.compact .phone-glow { filter: blur(70px); }
+    .phone-stage.compact .phone-frame { border-radius: 36px; padding: 8px; }
     .phone-stage.compact .phone-screen { border-radius: 28px; }
     .phone-stage.compact .phone-notch { width: 58px; height: 14px; top: 8px; }
 
@@ -363,9 +362,8 @@
       .showcase-copy, .showcase-duo .showcase-copy { align-items: center; text-align: center; }
       .showcase-duo { display: flex; flex-direction: column; }
       .showcase-duo .showcase-copy { order: -1; }
-      .phone-stage { min-height: 0; }
-      .phone-frame, .phone-stage.compact .phone-frame { width: 236px; height: 374px; }
-      .phone-glow, .phone-stage.compact .phone-glow { width: 236px; height: 374px; }
+      .phone-stage, .phone-stage.compact { width: 260px; }
+      .phone-frame, .phone-stage.compact .phone-frame { width: 100%; height: auto; }
       .stats-grid { grid-template-columns: repeat(2, 1fr); }
       .story-inner { grid-template-columns: 1fr; gap: 40px; }
       .story-visual { height: 280px; }
