@@ -5,9 +5,9 @@ import ribbon from '../../assets/wired-gradient-3235-badge-ribbon-in-reveal.json
 import ribbonFlat from '../../assets/wired-flat-3235-badge-ribbon.json';
 import coin from '../../assets/wired-gradient-290-coin.json';
 import gem from '../../assets/wjdlpfml.json';
-import stars from '../../../public/lordicons/wired-flat-1865-shooting-stars-hover-pinch.json';
-import lab from '../../../public/lordicons/wired-flat-438-lab-bottle-round-hover-oscillate.json';
-import sphere from '../../../public/lordicons/wired-flat-1383-sphere-hover-pinch.json';
+import stars from '../../assets/plan-icons/wired-flat-1865-shooting-stars-hover-pinch.json';
+import lab from '../../assets/plan-icons/wired-flat-438-lab-bottle-round-hover-oscillate.json';
+import sphere from '../../assets/plan-icons/wired-flat-1383-sphere-hover-pinch.json';
 
 export const PLAN_ICON_OPTIONS = [
     { id: 'ribbon', label: 'روبان', data: ribbon },
