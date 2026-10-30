@@ -529,6 +529,7 @@ function sendSite(file) {
 app.get(['/', '/index.html', '/landing.html'], sendSite('landing.html'));
 app.get(['/blog', '/blog/', '/blog/index.html'], sendSite(path.join('blog', 'index.html')));
 app.get(['/blog/post', '/blog/post.html'], sendSite(path.join('blog', 'post.html')));
+app.get(['/about', '/about/', '/about/index.html'], sendSite(path.join('about', 'index.html')));
 
 function portOpen(port) {
     return new Promise((resolve) => {

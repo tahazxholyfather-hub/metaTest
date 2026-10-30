@@ -283,20 +283,32 @@
     .dot.active { background: var(--accent); width: 32px; box-shadow: 0 0 12px rgba(139,92,246,0.5); }
 
     /* Premium Phone Frame (Desktop) */
-    .hero-phone-stage { flex: 0.9; position: relative; z-index: 10; display: flex; align-items: center; justify-content: center; height: 520px; }
-    .phone-glow { position: absolute; width: 280px; height: 520px; border-radius: 50px; background: var(--accent); filter: blur(100px); opacity: 0.15; transition: all 0.3s ease; }
+    .hero-phone-stage { flex: 0.9; position: relative; z-index: 10; display: flex; align-items: center; justify-content: center; min-height: 500px; }
+    .phone-glow { position: absolute; width: 310px; height: 490px; border-radius: 50px; background: var(--accent); filter: blur(90px); opacity: 0.18; transition: all 0.3s ease; }
     .phone-frame {
-      position: relative; z-index: 5; width: 280px; height: 520px;
-      border-radius: 48px; background: #05050A; padding: 10px;
-      box-shadow: inset 0 0 4px rgba(255,255,255,0.2), inset 0 0 15px rgba(0,0,0,0.9), 0 40px 80px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.04);
+      position: relative; z-index: 5;
+      width: 310px; height: 490px;
+      border-radius: 44px; background: #05050A; padding: 10px;
+      box-shadow: inset 0 0 4px rgba(255,255,255,0.2), inset 0 0 15px rgba(0,0,0,0.9), 0 35px 70px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.06);
+      display: flex;
     }
-    .phone-screen { position: relative; width: 100%; height: 100%; border-radius: 38px; background: #0A0A12; overflow: hidden; border: 1px solid rgba(255,255,255,0.03); }
-    .phone-notch { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: 110px; height: 32px; border-radius: 20px; background: #000; z-index: 10; box-shadow: inset 0 0 4px rgba(255,255,255,0.1); }
-
-    .phone-screen-placeholder { width: 100%; height: 100%; background: radial-gradient(circle at 50% 0%, #151525 0%, #08080C 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; padding: 24px; position: relative; }
-    .phone-screen-placeholder::after { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 30%; background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, transparent 100%); }
-    .phone-screen-placeholder .mini-logo { width: 56px; height: 56px; opacity: 0.9; filter: drop-shadow(0 10px 20px rgba(139,92,246,0.3)); }
-    .phone-screen-placeholder p { font-size: 14px; color: var(--text-dim); text-align: center; line-height: 1.8; }
+    .phone-screen {
+      position: relative; width: 100%; height: 100%;
+      border-radius: 34px; background: #0A0A12; overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.04);
+    }
+    .phone-notch {
+      position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+      width: 76px; height: 18px; border-radius: 12px;
+      background: #000; z-index: 10;
+      box-shadow: inset 0 0 4px rgba(255,255,255,0.15);
+    }
+    .phone-screen-img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      object-position: center top;
+      display: block; user-select: none; -webkit-user-drag: none;
+    }
 
     /* ─── CINEMATIC FEATURES ───────────────────────── */
     .aww-section { padding: 160px 56px; display: flex; align-items: center; justify-content: center; position: relative; min-height: 70vh; z-index: 10; }
@@ -612,23 +624,39 @@
 
     /* ─── MOBILE RESPONSIVENESS ────────────────────── */
     @media (max-width: 900px) {
-      header { padding: 0 24px; height: 76px; }
-      header { padding: 0 20px; gap: 12px; }
-      .header-brand { gap: 14px; }
-      .header-nav { gap: 14px; }
-      .nav-link { font-size: 13.5px; }
+      header { padding: 0 16px; height: 68px; gap: 8px; justify-content: space-between; }
+      .header-brand { gap: 10px; min-width: 0; }
+      .logo { flex-shrink: 0; }
+      .logo-img { width: 40px; height: 40px; }
+      .header-nav { gap: 8px; }
+      .nav-link { font-size: 13px; font-weight: 600; padding: 6px 4px 8px; white-space: nowrap; }
+      .nav-link::after { bottom: 0; height: 2px; }
+      .header-actions { gap: 6px; flex-shrink: 0; }
       .header-actions .header-btn span { display: none; }
-      .header-actions .header-btn { width: 42px; height: 42px; padding: 0; border-radius: 12px; }
+      .header-actions .header-btn { width: 36px; height: 36px; padding: 0; border-radius: 10px; }
+      .header-btn svg { width: 15px; height: 15px; flex: 0 0 15px; }
 
-      .hero { padding: 20px 24px 80px; }
-      .hero-inner { flex-direction: column; gap: 30px; }
+      .hero { padding: 16px 20px 60px; }
+      .hero-inner { flex-direction: column; gap: 24px; }
 
-      /* ULTRA-MINIMAL mobile phone mockup */
-      .hero-phone-stage { order: 1; height: 380px; width: 100%; align-items: center; }
-      .phone-frame { width: 175px; height: 360px; border-radius: 28px; padding: 6px; }
-      .phone-glow { width: 175px; height: 360px; }
-      .phone-screen { border-radius: 22px; }
-      .phone-notch { width: 70px; height: 18px; top: 7px; border-radius: 12px; }
+      /* PROPORTIONATE mobile phone mockup (Exact 499:807 ratio) */
+      .hero-phone-stage { order: 1; height: auto; min-height: 380px; width: 100%; display: flex; align-items: center; justify-content: center; margin-bottom: 12px; }
+      .phone-frame { width: 236px; height: 374px; border-radius: 34px; padding: 6px; box-shadow: inset 0 0 3px rgba(255,255,255,0.2), inset 0 0 12px rgba(0,0,0,0.9), 0 25px 50px rgba(0,0,0,0.85); }
+      .phone-glow { width: 236px; height: 374px; filter: blur(60px); opacity: 0.16; }
+      .phone-screen { border-radius: 28px; }
+      .phone-notch { width: 56px; height: 14px; top: 6px; border-radius: 10px; }
+
+    @media (max-width: 420px) {
+      header { padding: 0 12px; height: 64px; }
+      .header-brand { gap: 8px; }
+      .logo-img { width: 36px; height: 36px; }
+      .header-nav { gap: 6px; }
+      .nav-link { font-size: 12.5px; padding: 5px 3px 6px; }
+      .header-actions { gap: 5px; }
+      .header-actions .header-btn { width: 34px; height: 34px; }
+      .phone-frame { width: 226px; height: 358px; }
+      .phone-glow { width: 226px; height: 358px; }
+    }
 
       /* Generous Mobile slider spacing */
       .hero-slider-wrap { order: 2; width: 100%; align-items: center; text-align: center; margin-top: 20px; }
@@ -689,6 +717,7 @@
         <nav class="header-nav" aria-label="ناوبری">
           <a href="/" class="nav-link active">صفحه اصلی</a>
           <a href="/blog/" class="nav-link">وبلاگ</a>
+          <a href="/about/" class="nav-link">درباره ما</a>
         </nav>
       </div>
       <div class="header-actions">
@@ -738,10 +767,7 @@
           <div class="phone-frame">
             <div class="phone-notch"></div>
             <div class="phone-screen">
-              <div class="phone-screen-placeholder">
-                <img src="https://metatest.app/logo.png" class="mini-logo" alt="">
-                <p>پیش‌نمایش اپلیکیشن<br>متاتست</p>
-              </div>
+              <img src="/app-preview.png" class="phone-screen-img" alt="پیش‌نمایش اپلیکیشن متاتست">
             </div>
           </div>
         </div>
@@ -1104,7 +1130,7 @@
         <div>
           <h4 class="footer-title">لینک‌های سریع</h4>
           <ul class="footer-links">
-            <li><a href="#">درباره متاتست</a></li>
+            <li><a href="/about/">درباره متاتست</a></li>
             <li><a href="#plans">پلن‌ها و تعرفه‌ها</a></li>
             <li><a href="#">سوالات متداول</a></li>
             <li><a href="/blog/">بلاگ آموزشی</a></li>
