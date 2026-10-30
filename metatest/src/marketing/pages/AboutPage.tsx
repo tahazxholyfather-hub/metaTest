@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { appUrl } from '../lib/appUrl';
 import { BoltIcon, BookIcon } from '../components/icons';
+import { AboutShowcases } from '../components/AboutShowcases';
 import { SiteFooter } from '../components/SiteFooter';
 import { SiteHeader } from '../components/SiteHeader';
 
@@ -76,6 +77,7 @@ export function AboutPage() {
           </div>
         </div>
       </section>
+      <AboutShowcases />
       <section className="values-section">
         <div className="section-head">
           <div className="sec-eyebrow">ارزش‌های ما</div>

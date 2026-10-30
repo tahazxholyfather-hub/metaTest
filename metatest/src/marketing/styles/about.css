@@ -114,6 +114,54 @@
     .sec-title { font-size: clamp(24px, 3.5vw, 40px); font-weight: 800; line-height: 1.4; margin-bottom: 20px; }
     .sec-body { color: var(--text-mid); line-height: 2.1; font-size: 15px; }
 
+    /* Product shots in the same phone frame as the homepage */
+    .showcase-section { padding: 72px 56px; position: relative; }
+    .showcase-row {
+      max-width: 1120px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between; gap: 72px;
+    }
+    .showcase-row.reverse { flex-direction: row-reverse; }
+    .showcase-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
+    .showcase-copy .sec-body { max-width: 520px; }
+    .showcase-duo {
+      max-width: 1180px; margin: 0 auto;
+      display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: center; gap: 40px;
+    }
+    .showcase-duo .showcase-copy { align-items: center; text-align: center; }
+    .showcase-duo .sec-body { text-align: center; }
+
+    .phone-stage { position: relative; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; min-height: 500px; }
+    .phone-glow { position: absolute; width: 280px; height: 443px; border-radius: 50px; background: var(--accent); filter: blur(90px); opacity: 0.18; }
+    .phone-frame {
+      position: relative; z-index: 5;
+      width: 280px; height: 443px;
+      border-radius: 44px; background: #05050A; padding: 10px;
+      box-shadow: inset 0 0 4px rgba(255,255,255,0.2), inset 0 0 15px rgba(0,0,0,0.9), 0 35px 70px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.06);
+      display: flex;
+    }
+    .phone-screen {
+      position: relative; width: 100%; height: 100%;
+      border-radius: 34px; background: #0A0A12; overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.04);
+    }
+    .phone-notch {
+      position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+      width: 76px; height: 18px; border-radius: 12px;
+      background: #000; z-index: 10;
+      box-shadow: inset 0 0 4px rgba(255,255,255,0.15);
+    }
+    .phone-screen-img {
+      width: 100%; height: 100%;
+      object-fit: cover; object-position: center top;
+      display: block; user-select: none; -webkit-user-drag: none;
+    }
+    .phone-stage.compact { min-height: 390px; }
+    .phone-stage.compact .phone-glow { width: 220px; height: 348px; filter: blur(70px); }
+    .phone-stage.compact .phone-frame { width: 220px; height: 348px; border-radius: 36px; padding: 8px; }
+    .phone-stage.compact .phone-screen { border-radius: 28px; }
+    .phone-stage.compact .phone-notch { width: 58px; height: 14px; top: 8px; }
+
     /* VALUES */
     .values-section { padding: 80px 56px; background: linear-gradient(180deg, transparent, rgba(139,92,246,0.03), transparent); }
     .section-head { text-align: center; max-width: 600px; margin: 0 auto 60px; }
@@ -310,7 +358,14 @@
       .header-actions .header-btn span { display: none; }
       .header-actions .header-btn { width: 36px; height: 36px; padding: 0; border-radius: 10px; }
       .header-btn svg { width: 15px; height: 15px; flex: 0 0 15px; }
-      .about-hero, .stats-section, .story-section, .values-section, .team-section, .timeline-section, .cta-section { padding-left: 20px; padding-right: 20px; }
+      .about-hero, .stats-section, .story-section, .showcase-section, .values-section, .team-section, .timeline-section, .cta-section { padding-left: 20px; padding-right: 20px; }
+      .showcase-row, .showcase-row.reverse { flex-direction: column; gap: 28px; }
+      .showcase-copy, .showcase-duo .showcase-copy { align-items: center; text-align: center; }
+      .showcase-duo { display: flex; flex-direction: column; }
+      .showcase-duo .showcase-copy { order: -1; }
+      .phone-stage { min-height: 0; }
+      .phone-frame, .phone-stage.compact .phone-frame { width: 236px; height: 374px; }
+      .phone-glow, .phone-stage.compact .phone-glow { width: 236px; height: 374px; }
       .stats-grid { grid-template-columns: repeat(2, 1fr); }
       .story-inner { grid-template-columns: 1fr; gap: 40px; }
       .story-visual { height: 280px; }
