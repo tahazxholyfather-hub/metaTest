@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { POST_SAMPLES, fetchPost, formatWhen, safeHtml, type BlogBlock, type BlogPost } from '../lib/blog';
 import { BackBlogIcon } from '../components/icons';
+import { PageField } from '../components/PageField';
 import { SiteFooter } from '../components/SiteFooter';
 import { SiteHeader } from '../components/SiteHeader';
 
@@ -94,7 +95,7 @@ export function BlogPostPage() {
   const date = formatWhen(current?.publishedAt);
 
   return (
-    <>
+    <PageField>
       <SiteHeader active="blog" />
       <main>
         <Link className="back" to="/blog/">
@@ -116,6 +117,6 @@ export function BlogPostPage() {
         </article>
       </main>
       <SiteFooter variant="sub" enamadClass />
-    </>
+    </PageField>
   );
 }

@@ -55,8 +55,6 @@
       background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.25);
       padding: 6px 16px; border-radius: 999px; margin-bottom: 28px; position: relative;
     }
-    .hero-eyebrow::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse-dot 2s ease-in-out infinite; }
-    @keyframes pulse-dot { 0%,100% { opacity:1; box-shadow:0 0 0 0 rgba(139,92,246,0.5); } 50% { opacity:0.7; box-shadow:0 0 0 5px rgba(139,92,246,0); } }
     .about-title {
       font-size: clamp(38px, 6vw, 80px); font-weight: 900; line-height: 1.15; margin-bottom: 24px;
       width: fit-content; max-width: 100%;

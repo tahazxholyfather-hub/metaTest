@@ -9,10 +9,16 @@ import { BlogPostPage } from './pages/BlogPostPage';
 import { HomePage } from './pages/HomePage';
 import aboutCss from './styles/about.css?raw';
 import blogCss from './styles/blog.css?raw';
+import fieldCss from './styles/field.css?raw';
 import homeCss from './styles/home.css?raw';
 import postCss from './styles/post.css?raw';
 
-const PAGE_CSS = { home: homeCss, blog: blogCss, post: postCss, about: aboutCss };
+const PAGE_CSS = {
+  home: homeCss,
+  blog: `${fieldCss}\n${blogCss}`,
+  post: `${fieldCss}\n${postCss}`,
+  about: `${fieldCss}\n${aboutCss}`,
+};
 
 function usePageStyle(css: string) {
   useLayoutEffect(() => {

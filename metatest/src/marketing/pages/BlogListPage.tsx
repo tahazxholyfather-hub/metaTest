@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BLOG_CATEGORIES, LIST_SAMPLES, fetchPosts, formatWhen, postHref, type BlogPost } from '../lib/blog';
+import { PageField } from '../components/PageField';
 import { SiteFooter } from '../components/SiteFooter';
 import { SiteHeader } from '../components/SiteHeader';
 
@@ -31,7 +32,7 @@ export function BlogListPage() {
   const show = drawn || query.trim().length > 0 || active !== 'all';
 
   return (
-    <>
+    <PageField>
       <SiteHeader active="blog" logoLinkClass="logo" />
       <main>
         <div className="eyebrow">مجله متاتست</div>
@@ -87,6 +88,6 @@ export function BlogListPage() {
         <p className="status" id="status">{!show ? 'در حال دریافت مطالب…' : filtered.length ? '' : 'مطلبی با این جستجو پیدا نشد.'}</p>
       </main>
       <SiteFooter variant="sub" enamadClass />
-    </>
+    </PageField>
   );
 }

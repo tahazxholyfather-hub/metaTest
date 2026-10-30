@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { appUrl } from '../lib/appUrl';
 import { BoltIcon, BookIcon } from '../components/icons';
 import { AboutShowcases } from '../components/AboutShowcases';
+import { PageField } from '../components/PageField';
 import { SiteFooter } from '../components/SiteFooter';
 import { SiteHeader } from '../components/SiteHeader';
 
@@ -32,7 +33,7 @@ const TIMELINE = [
 export function AboutPage() {
   const href = appUrl();
   return (
-    <>
+    <PageField>
       <SiteHeader active="about" />
       <section className="about-hero">
         <div className="hero-eyebrow">داستان ما</div>
@@ -139,6 +140,6 @@ export function AboutPage() {
         </div>
       </section>
       <SiteFooter variant="sub" />
-    </>
+    </PageField>
   );
 }

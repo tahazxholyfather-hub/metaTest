@@ -8,7 +8,7 @@
     ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 10px; }
     ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
     a { color: inherit; }
-    header { height: var(--hdr); display: flex; align-items: center; justify-content: space-between; padding: 0 56px; gap: 24px; }
+    header { position: relative; z-index: 50; height: var(--hdr); display: flex; align-items: center; justify-content: space-between; padding: 0 56px; gap: 24px; }
     .header-brand { display: flex; align-items: center; gap: 28px; min-width: 0; }
     .logo-img { width: 60px; height: 60px; object-fit: contain; }
     .header-nav { display: flex; align-items: center; gap: 22px; }

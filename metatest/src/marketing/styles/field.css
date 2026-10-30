@@ -1,0 +1,29 @@
+#smooth-wrapper {
+  position: relative;
+  width: 100%;
+  overflow: visible;
+  z-index: 0;
+}
+#smooth-content { position: relative; width: 100%; }
+.depth-world {
+  position: absolute; inset: 0;
+  z-index: 0; pointer-events: none; overflow: hidden;
+}
+.symbol {
+  position: absolute;
+  pointer-events: none;
+  user-select: none;
+  will-change: transform;
+  transform-origin: 50% 50%;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.symbol svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.ambient-veil {
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(circle at 15% 10%, rgba(139,92,246,0.06) 0%, transparent 40%),
+    radial-gradient(circle at 85% 85%, rgba(124,58,237,0.05) 0%, transparent 40%);
+}
+#smooth-content > :not(.depth-world):not(header) { position: relative; z-index: 1; }
+#smooth-content > header { z-index: 50; }

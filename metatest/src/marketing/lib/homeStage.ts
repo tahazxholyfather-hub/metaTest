@@ -34,6 +34,97 @@ const SYMBOLS: SymbolCfg[] = [
   { svg: 'orbit', layer: 4, x: 88, y: 88, scale: 1.7, opacity: 0.16, factor: 0.18, rotSpeed: 1.3, phase: 1 },
 ];
 
+export function startScienceField(root: HTMLElement): () => void {
+  const world = root.querySelector<HTMLElement>('#depth-world');
+  const symbolEls: { el: HTMLElement; cfg: SymbolCfg }[] = [];
+  const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isMobile = window.innerWidth <= 900 || isIOS;
+  if (!world) return () => undefined;
+
+  SYMBOLS.forEach((raw) => {
+    const cfg = isMobile
+      ? { ...raw, scale: Math.min(raw.scale * 0.7, 2.6), opacity: Math.min(raw.opacity * 1.25, 0.36) }
+      : raw;
+    const el = document.createElement('div');
+    el.className = 'symbol';
+    const size = 80 * cfg.scale;
+    el.style.width = `${size}px`;
+    el.style.height = `${size}px`;
+    let x = cfg.x;
+    if (isMobile) {
+      const widthPct = (size / Math.max(window.innerWidth, 1)) * 100;
+      x = Math.min(Math.max(x, 1), Math.max(1, 97 - widthPct));
+    }
+    el.style.left = `${x}%`;
+    el.style.top = `${cfg.y}%`;
+    el.style.opacity = String(cfg.opacity);
+    el.style.zIndex = String(cfg.layer);
+    el.innerHTML = SVG_LIB[cfg.svg] || '';
+    world.appendChild(el);
+    symbolEls.push({ el, cfg });
+  });
+
+  const rotMul = isIOS ? 0.09 : 0.14;
+  const nSymbols = symbolEls.length;
+  let lastY = -1;
+  let live = false;
+  let idleFrames = 0;
+  let frame = 0;
+  let alive = true;
+
+  function applySymbols(y: number) {
+    for (let i = 0; i < nSymbols; i += 1) {
+      const { el, cfg } = symbolEls[i];
+      const yo = y * cfg.factor;
+      const xo = Math.sin(y * 0.0022 + cfg.phase) * (58 * cfg.factor);
+      const rot = y * cfg.rotSpeed * rotMul;
+      el.style.transform = `translate3d(${xo}px,${yo}px,0) rotate(${rot}deg)`;
+    }
+  }
+
+  function kickSymbols() {
+    if (!alive || prefersReduced) return;
+    idleFrames = 0;
+    if (!live) {
+      live = true;
+      frame = requestAnimationFrame(tick);
+    }
+  }
+
+  function tick() {
+    if (!alive) return;
+    const y = window.scrollY;
+    if (y !== lastY) {
+      lastY = y;
+      applySymbols(y);
+      idleFrames = 0;
+    } else {
+      idleFrames += 1;
+    }
+    if (idleFrames < 120) frame = requestAnimationFrame(tick);
+    else live = false;
+  }
+
+  const onScroll = () => kickSymbols();
+  window.addEventListener('scroll', onScroll, { passive: true });
+  window.addEventListener('resize', kickSymbols, { passive: true });
+  if (!prefersReduced) {
+    applySymbols(window.scrollY || 0);
+    kickSymbols();
+  }
+
+  return () => {
+    alive = false;
+    live = false;
+    cancelAnimationFrame(frame);
+    window.removeEventListener('scroll', onScroll);
+    window.removeEventListener('resize', kickSymbols);
+    symbolEls.forEach(({ el }) => el.remove());
+  };
+}
+
 export function startHomeStage(root: HTMLElement): () => void {
   const world = root.querySelector<HTMLElement>('#depth-world');
   const backToTop = root.querySelector<HTMLElement>('#back-to-top');
