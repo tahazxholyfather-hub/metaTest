@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Toaster, toast } from "sonner";
+import { PushPrompt } from "./components/PushPrompt";
 import type { View } from "./types";
 import { getCookie, setCookie, removeCookie } from "./lib/cookies";
 import { useUser } from './context/UserContext';
@@ -13,7 +14,22 @@ import {
     Route,
     useLocation,
     useNavigate,
+    useNavigationType,
 } from "react-router-dom";
+import {
+    EXIT_NOTICE,
+    EXIT_WINDOW_MS,
+    applyRouterNote,
+    armRootBack,
+    bindAppHistory,
+    bootstrapHistory,
+    canGoBack,
+    entryForPath,
+    getLiveHistory,
+    recordForward,
+    sameEntry,
+    toAppPath,
+} from "./lib/appHistory.js";
 
 
 
@@ -41,9 +57,9 @@ import { LobbyView } from './views/LobbyView';
 import QuizPage from "./views/testworld/QuizPage";
 import ResultDashboard from "./views/testworld/QuizResultView";
 import {PdfLibraryView} from "./views/documents";
-import {PlanSelectorView} from "./views/f";
 import PaymentResultPage from "./views/paymentResult";
 import { MetView } from "./views/met";
+import InviteLanding from "./views/InviteLanding";
 
 
 
@@ -122,6 +138,7 @@ function MainApp() {
 
     const location = useLocation();
     const navigate = useNavigate();
+    const navigationType = useNavigationType();
     // Check if the current URL starts with /lobby
 
     const IsInRegularViews = ['/lobby', '/quiz', '/result'].some((path) =>
@@ -130,6 +147,8 @@ function MainApp() {
     const [pendingView, setPendingView] = useState<View | null>(null);
     const [quizExitRequested, setQuizExitRequested] = useState(false);
     const [showLogoutModal, setShowLogoutModal] = useState(false);
+    const [, setHistoryTick] = useState(0);
+    const bumpHistory = useCallback(() => setHistoryTick((tick) => tick + 1), []);
 
 
     // دریافت وضعیت احراز هویت مستقیماً از کانتکست
@@ -392,13 +411,18 @@ function MainApp() {
         if (view === "History") setHeaderState({ title: "سابقه آزمون ها", showBackButton: true });
         if (view === "met" || view === "ai_teacher" || view === "chat") setHeaderState({ title: "مِت", showBackButton: false });
 
-        if (pushToHistory) {
-            if (pushToHistory) {
-                navigate(`/${view}`);
-            }
+        if (!pushToHistory) return;
 
-        }
-    }, []);
+        bootstrapHistory(entryForPath(location.pathname));
+        const entry = { kind: 'view', view, path: `/${view}` };
+        const stack = getLiveHistory()?.stack || [];
+        const top = stack[stack.length - 1];
+        if (sameEntry(top, entry)) return;
+
+        const replaceGuard = Boolean(getLiveHistory()?.guardOnTop);
+        recordForward(entry, replaceGuard);
+        navigate(`/${view}`, { replace: replaceGuard, state: { mt: true, mtReady: true } });
+    }, [navigate, location.pathname]);
 
     const handleNavigation = useCallback((view: View, pushToHistory = true) => {
         if (isQuizActive) {
@@ -478,12 +502,52 @@ function MainApp() {
     }, []);
 
     const handleBack = useCallback(() => {
-        if (window.history.length > 1) {
+        if (toAppPath(window.location.pathname).startsWith('/quiz')) return;
+        if (canGoBack()) {
             navigate(-1);
-        } else {
-            handleNavigation("dashboard", true);
+            return;
         }
-    }, [navigate, handleNavigation]);
+        const decision = armRootBack(Date.now());
+        if (decision === 'leave') {
+            window.history.go(-2);
+            return;
+        }
+        toast(EXIT_NOTICE, { id: 'leave-app', duration: EXIT_WINDOW_MS });
+        bumpHistory();
+    }, [navigate, bumpHistory]);
+
+    useEffect(() => {
+        bootstrapHistory(entryForPath(toAppPath(window.location.pathname)));
+        return bindAppHistory({
+            onPracticeBack: () => window.dispatchEvent(new CustomEvent('trigger-practice-back')),
+            onTestScreen: (screen: string) => window.dispatchEvent(new CustomEvent('testworld-screen', { detail: screen })),
+            onTrap: (notice: string) => toast(notice, { id: 'leave-app', duration: EXIT_WINDOW_MS }),
+            onChange: bumpHistory,
+            onCustomNavigate: ({ replace, kind, step, screen }) => {
+                navigate(`${toAppPath(window.location.pathname)}${window.location.search}${window.location.hash}`, {
+                    replace,
+                    state: {
+                        mt: true,
+                        mtReady: true,
+                        practiceStep: kind === 'practice' ? step : undefined,
+                        testWorldView: kind === 'tests' ? screen : undefined,
+                    },
+                });
+            },
+        });
+    }, [bumpHistory, navigate]);
+
+    useEffect(() => {
+        const onRequestBack = () => handleBack();
+        window.addEventListener('app-request-back', onRequestBack);
+        return () => window.removeEventListener('app-request-back', onRequestBack);
+    }, [handleBack]);
+
+    useEffect(() => {
+        bootstrapHistory(entryForPath(location.pathname));
+        applyRouterNote(entryForPath(location.pathname), navigationType);
+        bumpHistory();
+    }, [location.pathname, location.key, navigationType, bumpHistory]);
 
     function useIsMobile() {
         const [isMobile, setIsMobile] = useState(false);
@@ -529,7 +593,7 @@ function MainApp() {
             case "met":
             case "ai_teacher":
             case "chat":
-                return <MetView key="met" onNavigate={handleNavigation} />;
+                return <MetView key="met" onNavigate={handleNavigation} onToggleHeader={setIsHeaderHiddenByChild} />;
             case "dashboard":
             default:
                 return <DashboardView key="dashboard" onNavigateToQuizHistory={() => handleNavigation("History")} onNavigateToFavorites={() => handleNavigation("favorites")} onNavigateToReports={() => handleNavigation("reports")} onNavigateToReview={() => handleNavigation("reviewbox")} onNavigateToNotes={() => handleNavigation("notes")}/>;
@@ -544,9 +608,9 @@ function MainApp() {
     const mainClassName = useMemo(
         () =>
             `flex-1 flex flex-col relative w-full min-h-0 ${
-                isAiTeacherChrome ? 'overflow-hidden' : 'overflow-y-auto scrollbar-hide md:pb-6'
+                isAiTeacherChrome || activeView === 'tests' ? 'overflow-hidden' : 'overflow-y-auto scrollbar-hide md:pb-6'
             }`,
-        [isAiTeacherChrome]
+        [isAiTeacherChrome, activeView]
     );
 
 
@@ -582,7 +646,7 @@ function MainApp() {
                                 title={headerState.title}
                                 step={headerState.step}
                                 maxSteps={headerState.maxSteps}
-                                showBackButton={headerState.showBackButton}
+                                showBackButton={headerState.showBackButton || canGoBack()}
                                 onBack={handleBack}
                                 onLogout={() => setShowLogoutModal(true)}
                                 activeView={activeView}
@@ -674,6 +738,7 @@ function MainApp() {
                 </div>
             </ResponsiveModal>
 
+            <PushPrompt />
             <Toaster
                 theme={theme}
                 position={isMobile ? "bottom-center" : "bottom-right"}
@@ -688,19 +753,20 @@ function MainApp() {
 // ==========================================
 // 2. THE NEW ROOT APP (Handles top-level routing)
 // ==========================================
+const appBase = import.meta.env.BASE_URL.replace(/\/$/, '');
 const router = createBrowserRouter(
     [
+
         { path: "/admin/*", element: <AdminPanel /> },
-        { path: "/re/*", element: <PlanSelectorView /> },
+
         { path: "/payment/result/:token", element: <PaymentResultPage /> },
-        { path: "/*", element: <MainApp /> },
-    ]
+        { path: "/invite/:code", element: <InviteLanding /> },
+
+        { path: "/*", element: <MainApp /> }
+    ],
+    appBase ? { basename: appBase } : undefined,
 );
 
 export default function App() {
     return <RouterProvider router={router} />;
 }
-
-// {
-//     basename: "/app",   // ← add this
-// }

@@ -1,11 +1,17 @@
 //server.js
-require('dotenv').config();
+const path = require('path');
+const net = require('net');
+const { spawn } = require('child_process');
+require('dotenv').config({ path: path.resolve(__dirname, '.env') });
+require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 const express = require('express');
 const cors = require('cors');
 // const router = express.Router();
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
+const { profile, ensureAvatarDir } = require('./runtimeMode');
+const { reportError, logFile } = require('./reportError');
+const uploadDir = ensureAvatarDir(profile);
+const { ensureVisitorCountIds } = require('./visitorCounts');
 const cookieParser = require('cookie-parser');
 // const jwt = require('jsonwebtoken');
 const { requireToken } = require('./middleware/auth');
@@ -13,9 +19,19 @@ const quizController = require('./controllers/quizController');
 const userController = require('./controllers/userController');
 const adminController = require('./controllers/adminController');
 const quizWorldController = require('./controllers/quizWorldController');
+const bankSelection = require('./controllers/bankSelection');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const aiTeacherRoutes = require('./ai-teacher/routes');
+const walletController = require('./controllers/walletController');
+const adminRoutes = require('./routes/adminRoutes');
+const blogRoutes = require('./routes/blogRoutes');
+const { ensureBlogSchema } = require('./controllers/blogController');
+const chemballController = require('./controllers/chemballController');
+const pushService = require('./push/pushService');
+const { ensureAdminSchema } = require('./middleware/adminAuth');
+const { loadRuntimeOverlayFromDb } = require('./controllers/adminAiController');
+const { ensureDiamondPlanActive } = require('./controllers/paymentController');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -54,12 +70,6 @@ function requireInternalService(req, res, next) {
 app.use(cookieParser());
 
 
-const uploadDir = path.resolve(__dirname, '../../public/avatars');
-
-if (!fs.existsSync(uploadDir)){
-    fs.mkdirSync(uploadDir, { recursive: true });
-}
-
 // 2. Use diskStorage to save directly to the fixed path
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
@@ -78,11 +88,18 @@ const upload = multer({
 });
 // ----------------------------
 
+const frontendOrigins = profile.corsOrigins;
+
 app.use(cors({
-    origin: 'http://localhost:5173', // <-- MUST BE YOUR ACTUAL FRONTEND URL (No trailing slash)
-    credentials: true,               // <-- REQUIRED FOR COOKIES
-    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-APP-TOKEN']
+    origin: (origin, cb) => {
+        // Same-origin / server-to-server requests have no Origin header.
+        if (!origin) return cb(null, true);
+        if (frontendOrigins.includes(origin) || frontendOrigins.includes('*')) return cb(null, true);
+        return cb(null, false);
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-APP-TOKEN', 'X-Admin-Token']
 }));
 
 
@@ -90,13 +107,21 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-app.use(express.static('public'));
+app.use('/avatars', express.static(uploadDir));
+app.use(express.static(profile.webRoot));
+app.use('/app', express.static(path.resolve(__dirname, '../../public')));
+app.use(express.static(path.resolve(__dirname, '../../../landing-static')));
 
 
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/payments', paymentRoutes);
 // AI Private Teacher module (bootstrap, teachers, chat stream, wallet, settings, …)
 app.use('/api/ai-teacher', aiTeacherRoutes);
+// Admin panel — independent session (admin_token cookie), not the student JWT
+app.use('/api/admin', adminRoutes);
+app.use('/api/blog', blogRoutes);
+app.get('/api/chemball/leaderboard', chemballController.handleGetLeaderboard);
+app.post('/api/chemball/score', requireToken, chemballController.handleSaveScore);
 
 // 3. Route updated to just use the fixed multer upload
 app.post(
@@ -111,33 +136,45 @@ app.post(
     userController.handleResetAvatar
 );
 
-app.get(
+function mountInternal(method, routePath, ...handlers) {
+    // Direct Node: /internal/...
+    // Public LiteSpeed /api proxy: /api/internal/...
+    app[method](routePath, ...handlers);
+    app[method](`/api${routePath}`, ...handlers);
+}
+
+mountInternal(
+    'get',
     '/internal/quizzes/:quizId/metadata',
     requireInternalService,
     quizWorldController.handleGetQuizMetadata
 );
 
-app.post(
+mountInternal(
+    'post',
     '/internal/quizzes/:quizId/members',
     requireInternalService,
     quizWorldController.handleAddQuizMember
 );
 
-app.post(
+mountInternal(
+    'post',
     '/internal/quizzes/:quizId/grade',
-    requireInternalService, // Ensure this endpoint is protected
+    requireInternalService,
     quizWorldController.handleInternalGradeQuiz
 );
 
-app.post(
+mountInternal(
+    'post',
     '/internal/quizzes/:quizId/finish',
-    requireInternalService, // Ensure this endpoint is protected
+    requireInternalService,
     quizWorldController.handleInternalFinishQuiz
 );
 
-app.post(
+mountInternal(
+    'post',
     '/internal/results',
-    requireInternalService, // Ensure this endpoint is protected
+    requireInternalService,
     quizWorldController.handleInternalSaveQuizResult
 );
 
@@ -201,6 +238,15 @@ app.post('/api/flow', requireToken, async (req, res) => {
                 break;
             case 'get_my_invites':
                 await userController.handleGetMyInvites(req, res);
+                break;
+            case 'get_my_referral_code':
+                await walletController.handleGetMyReferralCode(req, res);
+                break;
+            case 'get_my_wallet':
+                await walletController.handleGetMyWallet(req, res);
+                break;
+            case 'request_withdrawal':
+                await walletController.handleRequestWithdrawal(req, res);
                 break;
             case 'get_subjects':
                 await quizController.handleGetSubjects(req, res);
@@ -287,6 +333,21 @@ app.post('/api/flow', requireToken, async (req, res) => {
                 break;
             case 'get_mabahes_by_chapters_multi':
                 await quizWorldController.handleGetMabahesByChapters(req, res);
+                break;
+            case 'search_bank_questions':
+                await quizWorldController.handleSearchBankQuestions(req, res);
+                break;
+            case 'get_bank_question_answer':
+                await quizWorldController.handleGetBankQuestionAnswer(req, res);
+                break;
+            case 'save_bank_selection':
+                await bankSelection.handleSaveBankSelection(req, res);
+                break;
+            case 'get_bank_selection':
+                await bankSelection.handleGetBankSelection(req, res);
+                break;
+            case 'list_bank_selections':
+                await bankSelection.handleListBankSelections(req, res);
                 break;
             case 'generate_code':
                 await quizWorldController.generateCode(req, res);
@@ -395,6 +456,46 @@ app.post('/api/flow', requireToken, async (req, res) => {
                 await adminController.handleAdminInsertQuestions(req, res);
                 break;
 
+            case 'Admin_get_discount_codes':
+                await adminController.handleAdminGetDiscountCodes(req, res);
+                break;
+            case 'Admin_save_discount_code':
+                await adminController.handleAdminSaveDiscountCode(req, res);
+                break;
+            case 'Admin_toggle_discount_code':
+                await adminController.handleAdminToggleDiscountCode(req, res);
+                break;
+            case 'Admin_delete_discount_code':
+                await adminController.handleAdminDeleteDiscountCode(req, res);
+                break;
+            case 'Admin_get_referral_settings':
+                await adminController.handleAdminGetReferralSettings(req, res);
+                break;
+            case 'Admin_update_referral_settings':
+                await adminController.handleAdminUpdateReferralSettings(req, res);
+                break;
+            case 'Admin_get_withdrawal_requests':
+                await adminController.handleAdminGetWithdrawalRequests(req, res);
+                break;
+            case 'Admin_update_withdrawal_status':
+                await adminController.handleAdminUpdateWithdrawalStatus(req, res);
+                break;
+            case 'get_chemball_leaderboard':
+                await chemballController.handleGetLeaderboard(req, res);
+                break;
+            case 'save_chemball_score':
+                await chemballController.handleSaveScore(req, res);
+                break;
+            case 'get_push_config':
+                await pushService.handleGetConfig(req, res);
+                break;
+            case 'save_push_subscription':
+                await pushService.handleSaveSubscription(req, res);
+                break;
+            case 'delete_push_subscription':
+                await pushService.handleDeleteSubscription(req, res);
+                break;
+
             // =========================================================
 
             default:
@@ -402,12 +503,88 @@ app.post('/api/flow', requireToken, async (req, res) => {
                 break;
         }
     } catch (error) {
-        console.error(`Error in action [${action}]:`, error);
-        res.status(500).json({ success: false, message: 'Internal Server Error' });
+        const detail = reportError(`action ${action || '(none)'}`, error);
+        if (!res.headersSent) {
+            res.status(500).json({
+                success: false,
+                message: 'Internal Server Error',
+                code: detail.code || undefined,
+                detail: detail.message,
+            });
+        }
     }
 });
 
-// Start the server
+process.on('unhandledRejection', (error) => {
+    reportError('unhandledRejection', error);
+});
+process.on('uncaughtException', (error) => {
+    reportError('uncaughtException', error);
+});
+
+const { installMarketing } = require('./marketingSite');
+const siteRoot = path.resolve(__dirname, '../../..');
+
+function portOpen(port) {
+    return new Promise((resolve) => {
+        const socket = net.connect({ port, host: '127.0.0.1' });
+        const done = (open) => {
+            socket.removeAllListeners();
+            socket.destroy();
+            resolve(open);
+        };
+        socket.once('connect', () => done(true));
+        socket.once('error', () => done(false));
+    });
+}
+
+async function ensureLocalApp() {
+    if (!profile.localhost) return;
+    if (await portOpen(5173)) {
+        console.log('Local app is already on http://localhost:5173/');
+        return;
+    }
+    const appDir = path.resolve(__dirname, '../..');
+    console.log('Starting beforMain app on http://localhost:5173/');
+    const child = spawn('npm', ['run', 'dev', '--', '--host', '127.0.0.1', '--port', '5173', '--strictPort'], {
+        cwd: appDir,
+        stdio: 'inherit',
+        shell: true,
+    });
+    child.on('error', (err) => {
+        console.error('Could not start the app. From metatest run: npm install && npm run dev');
+        console.error(err.message);
+    });
+}
+
+// Start the server after the marketing routes are registered.
+function startServer() {
 app.listen(PORT, () => {
     console.log(`Backend server is running on http://localhost:${PORT}`);
+    console.log(`[runtime] LOCALHOST=${profile.localhost} base=${profile.appBase} socket=${profile.socketUrl}`);
+    console.log(`[runtime] avatars ${uploadDir}`);
+    console.log(`[runtime] errors ${logFile}`);
+    ensureVisitorCountIds()
+        .catch((err) => console.error('[db] visitor count repair failed:', err.message));
+    ensureAdminSchema()
+        .then(() => ensureBlogSchema())
+        .then(() => loadRuntimeOverlayFromDb())
+        .then(() => ensureDiamondPlanActive())
+        .then(() => pushService.ensureSchema())
+        .then(() => console.log('[admin] schema ready, AI runtime overlay loaded'))
+        .catch((err) => console.error('[admin] bootstrap failed:', err.message));
+    try {
+        pushService.startPushScheduler();
+    } catch (err) {
+        console.error('[push] scheduler failed to start:', err.message);
+    }
+    ensureLocalApp().catch((err) => console.error(err.message));
 });
+}
+
+installMarketing(app, { siteRoot, profile })
+    .then(startServer)
+    .catch((err) => {
+        console.error('[site] marketing setup failed:', err);
+        process.exit(1);
+    });

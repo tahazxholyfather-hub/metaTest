@@ -71,6 +71,35 @@ const SAMPLE_ACTIVITY_DATA = [
     { date: 'جمعه', time: 44 }
 ];
 
+const PERSIAN_MONTHS = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'];
+
+function gregorianToJalali(gy: number, gm: number, gd: number) {
+    const gDayMonth = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+    let jy = gy <= 1600 ? 0 : 979;
+    gy -= gy <= 1600 ? 621 : 1600;
+    const gy2 = gm > 2 ? gy + 1 : gy;
+    let days = (365 * gy) + Math.floor((gy2 + 3) / 4) - Math.floor((gy2 + 99) / 100) + Math.floor((gy2 + 399) / 400) - 80 + gd + gDayMonth[gm - 1];
+    jy += 33 * Math.floor(days / 12053);
+    days %= 12053;
+    jy += 4 * Math.floor(days / 1461);
+    days %= 1461;
+    if (days > 365) {
+        jy += Math.floor((days - 1) / 365);
+        days = (days - 1) % 365;
+    }
+    const jm = days < 186 ? 1 + Math.floor(days / 31) : 7 + Math.floor((days - 186) / 30);
+    const jd = 1 + (days < 186 ? days % 31 : (days - 186) % 30);
+    return { jy, jm, jd };
+}
+
+function formatActivityLabel(value: unknown) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value || ''));
+    if (!match) return String(value || '');
+    const { jm, jd } = gregorianToJalali(Number(match[1]), Number(match[2]), Number(match[3]));
+    const month = PERSIAN_MONTHS[jm - 1] || '';
+    return `${jd.toLocaleString('fa-IR')} ${month}`;
+}
+
 const SAMPLE_PENTAGON_DATA = [
     { subject: 'ریاضیات', score: 65, fullMark: 100 },
     { subject: 'زیست‌شناسی', score: 45, fullMark: 100 },
@@ -443,7 +472,7 @@ const ShortcutBtn = ({ icon: Icon, label, onClick }: any) => (
     >
         <div className="absolute top-1/2 right-0 -translate-y-1/2 w-1 h-0 group-hover:h-3/4 bg-[var(--accent)] transition-all duration-300 hidden sm:block rounded-l-full opacity-0 group-hover:opacity-100" />
         <div className="relative flex items-center justify-center shrink-0 w-11 h-11 sm:w-10 sm:h-10 rounded-[16px] sm:rounded-xl bg-[var(--bg-card)] sm:bg-[var(--bg-app)] shadow-[var(--shadow-1)] sm:shadow-none border border-[var(--border)] sm:border-transparent group-hover:bg-[var(--accent)] group-hover:border-[var(--accent)] transition-all duration-300 z-10">
-            <Icon className="w-5 h-5 sm:w-[22px] sm:h-[22px] text-[var(--icon-color)] sm:text-[var(--text-secondary)] group-hover:text-[var(--text-inverse)] transition-colors duration-300" strokeWidth={1.5} />
+            <Icon className="w-5 h-5 sm:w-[22px] sm:h-[22px] text-[var(--icon-color)] sm:text-[var(--text-secondary)] group-hover:text-white transition-colors duration-300" strokeWidth={1.5} />
         </div>
         <span className="text-[8.5px] sm:text-[13px] whitespace-nowrap font-bold text-[var(--text-muted)] sm:text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors duration-300 text-center sm:text-right z-10">{label}</span>
     </motion.button>
@@ -628,6 +657,8 @@ export function DashboardView({
     const [showVerificationConfirm, setShowVerificationConfirm] = useState(false);
     const [previewInviterData, setPreviewInviterData] = useState<{ name: string; phone: string } | null>(null);
 
+    const [referralCode, setReferralCode] = useState('');
+
     const [copied, setCopied] = useState(false);
     const [timeFilter, setTimeFilter] = useState<'7d' | '1m' | '1y'>('7d');
     const [renderCharts, setRenderCharts] = useState(false);
@@ -695,6 +726,12 @@ export function DashboardView({
     }, [startTour]);
 
     useEffect(() => {
+        flowApi.getMyReferralCode().then((res: any) => {
+            if (res?.success && res?.data?.referralCode) setReferralCode(res.data.referralCode);
+        }).catch(() => {});
+    }, []);
+
+    useEffect(() => {
         if (!isLoading) {
             const timer = setTimeout(() => setRenderCharts(true), 350);
             return () => clearTimeout(timer);
@@ -703,7 +740,8 @@ export function DashboardView({
 
     // Generate simple, shorter encrypted parameters for safety and UX
     const obfuscatedCode = useMemo(() => encryptPhoneNumber(user?.phone || user?.username || ''), [user]);
-    const inviteLink = `https://metatest.com/invite/${obfuscatedCode}`;
+    const inviteCode = referralCode || obfuscatedCode;
+    const inviteLink = `${window.location.origin}/invite/${inviteCode}`;
 
     const handleCopy = () => {
         navigator.clipboard.writeText(inviteLink);
@@ -936,14 +974,15 @@ export function DashboardView({
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                         {/* Activity Chart (taller) */}
                         <motion.div variants={itemVariants} className="dashboard-tour-activity lg:col-span-2 bg-[var(--bg-card)] p-4 rounded-xl border border-[var(--border)] flex flex-col">
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
-                                <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
-                                    <Activity className="text-[var(--color-primary-500)]" size={18} />گزارش فعالیت زمان‌بندی‌شده
+                            <div className="mb-3 flex items-center justify-between gap-2">
+                                <h2 className="flex min-w-0 items-center gap-1.5 text-[13px] font-bold text-[var(--text-primary)]">
+                                    <Activity className="shrink-0 text-[var(--color-primary-500)]" size={16} />
+                                    <span className="truncate">گزارش فعالیت زمان‌بندی‌شده</span>
                                 </h2>
-                                <div className="flex bg-[var(--bg-element)] p-1 rounded-lg w-fit">
+                                <div className="flex shrink-0 rounded-lg bg-[var(--bg-element)] p-0.5">
                                     {(['7d','1m','1y'] as const).map((filter, index) => (
-                                        <button key={`time-${filter}-${index}`} onClick={() => setTimeFilter(filter)} className={`relative px-3 py-1.5 text-[10px] font-bold rounded-md transition-colors duration-300 z-10 ${timeFilter === filter ? 'text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}>
-                                            {timeFilter === filter && <motion.div layoutId="activeTimeFilter" className="absolute inset-0 bg-[var(--color-primary-500)] rounded-md shadow-sm -z-10" transition={smoothTween} />}
+                                        <button key={`time-${filter}-${index}`} onClick={() => setTimeFilter(filter)} className={`relative z-10 cursor-pointer rounded-md px-2 py-1 text-[10px] font-bold transition-colors duration-200 ${timeFilter === filter ? 'text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}>
+                                            {timeFilter === filter && <motion.div layoutId="activeTimeFilter" className="absolute inset-0 -z-10 rounded-md bg-[var(--color-primary-500)] shadow-sm" transition={smoothTween} />}
                                             <span className="relative z-10">{filter === '7d' ? 'هفته' : filter === '1m' ? 'ماه' : 'سال'}</span>
                                         </button>
                                     ))}
@@ -960,15 +999,15 @@ export function DashboardView({
                                                         <stop offset="95%" stopColor={chartColors.primary} stopOpacity={0} />
                                                     </linearGradient>
                                                 </defs>
-                                                <XAxis dataKey="date" stroke={chartColors.axis} fontSize={10} tickLine={false} axisLine={false} />
+                                                <XAxis dataKey="date" tickFormatter={formatActivityLabel} interval="preserveStartEnd" minTickGap={18} stroke={chartColors.axis} fontSize={10} tickLine={false} axisLine={false} />
                                                 {hasActivityData && (
                                                     <Tooltip content={({ active, payload }) => {
                                                         if (active && payload?.length) {
                                                             const item = payload[0].payload;
                                                             return (
                                                                 <div className="rounded-xl border bg-[var(--bg-card)] border-[var(--border)] p-2.5 shadow-md">
-                                                                    <div className="text-xs font-bold text-[var(--text-primary)] mb-0.5">{item.date}</div>
-                                                                    <div className="text-[11px] text-[var(--color-primary-500)] font-medium">زمان فعالیت: {item.time} ثانیه</div>
+                                                                    <div className="text-xs font-bold text-[var(--text-primary)] mb-0.5">{formatActivityLabel(item.date)}</div>
+                                                                    <div className="text-[11px] text-[var(--color-primary-500)] font-medium">زمان فعالیت: {Number(item.time || 0).toLocaleString('fa-IR')} ثانیه</div>
                                                                 </div>
                                                             );
                                                         }
@@ -993,7 +1032,7 @@ export function DashboardView({
                         {/* Skill radar */}
                         <motion.div variants={itemVariants} className="dashboard-tour-mastery bg-[var(--bg-card)] p-4 rounded-xl border border-[var(--border)] flex flex-col items-center h-full">
                             <h2 className="text-sm font-bold text-[var(--text-primary)] self-start mb-1 flex items-center gap-2">
-                                <Target className="text-[var(--color-primary-500)]" size={16} />سطح توانمندی راداری
+                                <Target className="text-[var(--color-primary-500)]" size={16} />سطح توانایی
                             </h2>
                             <div className="flex-1 w-full relative min-h-[200px] md:min-h-[240px]" dir="ltr">
                                 {renderCharts && (

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowDown, ChevronDown, History, Plus, Settings2 } from 'lucide-react';
+import { ArrowDown, ChevronDown, Gamepad2, History, MoreVertical, Plus, Settings2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Met, chatStatusToMetState, subjectToMetColor } from '../../components/met';
 import { metApi } from './api';
@@ -11,7 +11,7 @@ import Message from './Message';
 import { SlugIcon, findSubject } from './subjectIcons';
 import { SubjectPicker } from './SubjectPicker';
 import type { RailPanel } from './MetRail';
-import { CoinChip, GraySpinner, IconButton, WorkingText, easeOut, usePrefersReducedMotion } from './ui';
+import { CoinChip, GraySpinner, IconButton, TypingDots, WorkingText, easeOut, usePrefersReducedMotion, workingStatusText } from './ui';
 
 type Chat = ReturnType<typeof useMetChat>;
 
@@ -26,6 +26,7 @@ type Props = {
     studentFirstName?: string | null;
     isMobile: boolean;
     onOpenPanel: (p: RailPanel) => void;
+    onOpenGame: () => void;
     onNewChat: () => void;
     onSpeak: (messageId: number) => Promise<string | null>;
     onListening: (level: number | null) => void;
@@ -34,13 +35,7 @@ type Props = {
     composerRef: React.RefObject<ComposerHandle | null>;
     /** Extra bottom padding (mobile global bottom nav). */
     bottomInset?: string;
-};
-
-const WORKING: Record<string, string> = {
-    sending: 'در حال ارسال…',
-    thinking: 'مِت فکر می‌کند…',
-    processing: 'در حال بررسی منابع…',
-    generating: 'در حال نوشتن…',
+    onChatAction?: (action: string) => void;
 };
 
 function greeting(firstName?: string | null) {
@@ -50,33 +45,58 @@ function greeting(firstName?: string | null) {
 }
 
 export function ChatScreen({
-    chat,
-    features,
-    subjects,
-    subjectKey,
-    onSubjectChange,
-    wallet,
-    settings,
-    studentFirstName,
-    isMobile,
-    onOpenPanel,
-    onNewChat,
-    onSpeak,
-    onListening,
-    audioLevel,
-    ensureConversation,
-    composerRef,
-    bottomInset,
-}: Props) {
+                               chat,
+                               features,
+                               subjects,
+                               subjectKey,
+                               onSubjectChange,
+                               wallet,
+                               settings,
+                               studentFirstName,
+                               isMobile,
+                               onOpenPanel,
+                               onOpenGame,
+                               onNewChat,
+                               onSpeak,
+                               onListening,
+                               audioLevel,
+                               ensureConversation,
+                               composerRef,
+                               bottomInset,
+                               onChatAction,
+                           }: Props) {
     const reduce = usePrefersReducedMotion();
     const subject = findSubject(subjects, subjectKey);
     const metColor = subjectToMetColor(subjectKey);
     const scrollRef = useRef<HTMLDivElement>(null);
     const [atBottom, setAtBottom] = useState(true);
+    const [menuOpen, setMenuOpen] = useState(false);
+    const menuRef = useRef<HTMLDivElement>(null);
     const [suggestions, setSuggestions] = useState<MetSuggestion[]>([]);
     const suggestionCache = useRef<Map<string, MetSuggestion[]>>(new Map());
     const isEmpty = chat.messages.length === 0 && !chat.loading;
     const working = chat.busy;
+
+    /* ── Close the "more" menu on outside tap / Escape ──────────────── */
+    useEffect(() => {
+        if (!menuOpen) return;
+
+        const handlePointerDown = (e: PointerEvent) => {
+            const target = e.target as Node;
+            if (menuRef.current?.contains(target)) return;
+            setMenuOpen(false);
+        };
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') setMenuOpen(false);
+        };
+
+        document.addEventListener('pointerdown', handlePointerDown);
+        document.addEventListener('keydown', handleKeyDown);
+        return () => {
+            document.removeEventListener('pointerdown', handlePointerDown);
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [menuOpen]);
 
     /* ── Suggestions for the empty state ─────────────────────────────── */
     useEffect(() => {
@@ -179,31 +199,63 @@ export function ChatScreen({
                     <span className="flex items-center gap-1.5 text-[10.5px] leading-tight mt-0.5" style={{ color: subject.color }}>
                         <SlugIcon icon={subject.icon} size={10} />
                         <span className="font-bold">{subject.nameFa}</span>
-                        <AnimatePresence mode="wait" initial={false}>
-                            {working && (
-                                <WorkingText key={chat.status} text={chat.toolLabel || WORKING[chat.status] || '…'} className="max-w-[9rem]" />
-                            )}
-                        </AnimatePresence>
                     </span>
                 </span>
             </button>
 
             <div className="flex-1" />
 
-            <CoinChip total={wallet.total} onClick={() => onOpenPanel('coins')} compact={isMobile} />
-            {isMobile && (
-                <>
-                    <IconButton label="تاریخچه" size={36} onClick={() => onOpenPanel('history')}>
-                        <History size={18} strokeWidth={1.9} />
+            {isMobile ? (
+                <div ref={menuRef} className="relative flex items-center gap-1.5">
+                    <CoinChip total={wallet.total} unlimited={wallet.unlimited} onClick={() => onOpenPanel('coins')} compact />
+                    <IconButton label="بیشتر" size={36} onClick={() => setMenuOpen((open) => !open)}>
+                        <MoreVertical size={18} strokeWidth={1.9} />
                     </IconButton>
-                    <IconButton label="تنظیمات" size={36} onClick={() => onOpenPanel('settings')}>
-                        <Settings2 size={18} strokeWidth={1.9} />
+                    <AnimatePresence>
+                        {menuOpen && (
+                            <motion.div
+                                initial={{ opacity: 0, y: -8 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -6 }}
+                                transition={{ duration: 0.18, ease: easeOut }}
+                                className="absolute left-0 top-[calc(100%+8px)] z-40 w-52 overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-1.5 shadow-[var(--shadow-2)]"
+                                dir="rtl"
+                            >
+                                {([
+                                    { label: 'گفتگوی جدید', icon: <Plus size={16} />, run: onNewChat, disabled: chat.busy },
+                                    { label: 'تاریخچه', icon: <History size={16} />, run: () => onOpenPanel('history') },
+                                    { label: 'بازی شیمی', icon: <Gamepad2 size={16} />, run: onOpenGame },
+                                    { label: 'تنظیمات', icon: <Settings2 size={16} />, run: () => onOpenPanel('settings') },
+                                ] as const).map((item) => (
+                                    <button
+                                        key={item.label}
+                                        type="button"
+                                        disabled={'disabled' in item ? item.disabled : false}
+                                        onClick={() => {
+                                            setMenuOpen(false);
+                                            item.run();
+                                        }}
+                                        className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px] font-bold text-[var(--text-primary)] transition-colors hover:bg-[var(--hover-overlay)] disabled:opacity-40"
+                                    >
+                                        <span className="text-[var(--text-secondary)]">{item.icon}</span>
+                                        {item.label}
+                                    </button>
+                                ))}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
+            ) : (
+                <>
+                    <CoinChip total={wallet.total} unlimited={wallet.unlimited} onClick={() => onOpenPanel('coins')} />
+                    <IconButton label="بازی شیمی" size={36} onClick={onOpenGame}>
+                        <Gamepad2 size={18} strokeWidth={1.9} />
+                    </IconButton>
+                    <IconButton label="گفتگوی جدید" size={36} tone="primary" onClick={onNewChat} disabled={chat.busy}>
+                        <Plus size={19} strokeWidth={2.1} />
                     </IconButton>
                 </>
             )}
-            <IconButton label="گفتگوی جدید" size={36} tone="primary" onClick={onNewChat} disabled={chat.busy}>
-                <Plus size={19} strokeWidth={2.1} />
-            </IconButton>
         </header>
     );
 
@@ -267,6 +319,22 @@ export function ChatScreen({
         <div className="relative flex-1 flex flex-col min-h-0 h-full" dir="rtl">
             {header}
 
+            <AnimatePresence initial={false}>
+                {working && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.22, ease: easeOut }}
+                        className="shrink-0 overflow-hidden"
+                    >
+                        <div className="flex justify-center py-1.5 border-b border-[var(--border)]/35 bg-[color-mix(in_srgb,var(--color-primary-500)_7%,transparent)]">
+                            <WorkingText text={workingStatusText(chat.status, chat.toolLabel)} />
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             <div className="relative flex-1 min-h-0">
                 <div ref={scrollRef} onScroll={onScroll} className="h-full overflow-y-auto overscroll-contain chat-scrollbar">
                     <div className="mx-auto w-full max-w-[820px] px-3 sm:px-6 flex flex-col min-h-full">
@@ -295,12 +363,14 @@ export function ChatScreen({
                                         busy={chat.busy}
                                         onSpeak={onSpeak}
                                         onRegenerate={(id) => void chat.regenerate(id)}
+                                        onContinue={m.truncated && m.id === chat.lastAssistantId ? (id) => void chat.continueReply(id) : undefined}
                                         onRetry={retry}
+                                        onChatAction={onChatAction}
                                     />
                                 ))}
-                                {/* Thinking indicator before the first token arrives */}
+                                {/* Typing dots until the first streamed token — never pair with an empty bubble. */}
                                 <AnimatePresence>
-                                    {(chat.status === 'sending' || chat.status === 'thinking' || chat.status === 'processing') && (
+                                    {chat.busy && !chat.messages.some((m) => m.streaming && !!m.content) && (
                                         <motion.div
                                             initial={{ opacity: 0, y: 6 }}
                                             animate={{ opacity: 1, y: 0 }}
@@ -308,16 +378,8 @@ export function ChatScreen({
                                             transition={{ duration: 0.2, ease: easeOut }}
                                             className="flex w-full justify-end gap-2.5 mt-5"
                                         >
-                                            <div className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-[16px] rounded-tr-[6px] bg-[color-mix(in_srgb,var(--text-primary)_4.5%,var(--bg-card))] border border-[var(--border)]/50">
-                                                {[0, 1, 2].map((i) => (
-                                                    <motion.span
-                                                        key={i}
-                                                        className="block w-1.5 h-1.5 rounded-full bg-[var(--text-muted)]"
-                                                        animate={reduce ? { opacity: 0.7 } : { y: [0, -3.5, 0], opacity: [0.4, 1, 0.4] }}
-                                                        transition={reduce ? {} : { duration: 1.1, repeat: Infinity, ease: 'easeInOut', delay: i * 0.15 }}
-                                                    />
-                                                ))}
-                                                <span className="text-[11px] text-[var(--text-muted)] mr-1">{chat.toolLabel || WORKING[chat.status]}</span>
+                                            <div className="inline-flex items-center justify-center min-w-[2.75rem] h-9 px-3 rounded-[16px] rounded-tr-[6px] bg-[color-mix(in_srgb,var(--text-primary)_4.5%,var(--bg-card))] border border-[var(--border)]/50">
+                                                <TypingDots />
                                             </div>
                                             <div className="w-7 shrink-0 mt-1">
                                                 <div className="w-7 h-7"><Met size="100%" state="thinking" color={metColor} /></div>

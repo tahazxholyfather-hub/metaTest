@@ -160,11 +160,9 @@ export function SocketProvider({
         };
     }, [socket]);
 
-    useEffect(() => {
-        return () => {
-            destroySocket();
-        };
-    }, []);
+    // Do not destroySocket() on provider unmount. React Strict Mode remounts
+    // immediately and would abort the handshake mid-open. Logout still calls
+    // disconnect().
 
     const value = useMemo<SocketContextValue>(
         () => ({

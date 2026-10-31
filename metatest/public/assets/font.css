@@ -1,0 +1,41 @@
+
+@font-face {
+	font-family: Alibaba;
+	font-style: normal;
+	font-weight: 900;
+	src: url('./eot/Alibaba-Black.eot');
+	src: url('./eot/Alibaba-Black.eot?#iefix') format('embedded-opentype'),
+	url('./woff2/Alibaba-Black.woff2') format('woff2'),
+	url('./woff/Alibaba-Black.woff') format('woff'),
+	url('./ttf/Alibaba-Black.ttf') format('truetype');
+}
+@font-face {
+	font-family: Alibaba;
+	font-style: normal;
+	font-weight: bold;
+	src: url('./eot/Alibaba-Bold.eot');
+	src: url('./eot/Alibaba-Bold.eot?#iefix') format('embedded-opentype'),
+	url('./woff2/Alibaba-Bold.woff2') format('woff2'),
+	url('./woff/Alibaba-Bold.woff') format('woff'),
+	url('./ttf/Alibaba-Bold.ttf') format('truetype');
+}
+@font-face {
+	font-family: Alibaba;
+	font-style: normal;
+	font-weight: 300;
+	src: url('./eot/Alibaba-Light.eot');
+	src: url('./eot/Alibaba-Light.eot?#iefix') format('embedded-opentype'),
+	url('./woff2/Alibaba-Light.woff2') format('woff2'),
+	url('./woff/Alibaba-Light.woff') format('woff'),
+	url('./ttf/Alibaba-Light.ttf') format('truetype');
+}
+@font-face {
+	font-family: Alibaba;
+	font-style: normal;
+	font-weight: normal;
+	src: url('./eot/Alibaba-Regular.eot');
+	src: url('./eot/Alibaba-Regular.eot?#iefix') format('embedded-opentype'),
+		 url('./woff2/Alibaba-Regular.woff2') format('woff2'),
+		 url('./woff/Alibaba-Regular.woff') format('woff'),
+		 url('./ttf/Alibaba-Regular.ttf') format('truetype');
+}

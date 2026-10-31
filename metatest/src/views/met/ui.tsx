@@ -7,6 +7,21 @@ import { Coins, X } from 'lucide-react';
 export const easeOut = [0.22, 1, 0.36, 1] as const;
 export const springSoft = { type: 'spring' as const, stiffness: 420, damping: 34 };
 export const springPanel = { type: 'spring' as const, stiffness: 380, damping: 36, mass: 0.9 };
+/** Practice Met drawer — slower, less bounce than the rail panels. */
+export const springDrawer = { type: 'spring' as const, stiffness: 240, damping: 32, mass: 0.92 };
+export const easeDrawer = { duration: 0.42, ease: easeOut } as const;
+
+export const WORKING_STATUS: Record<string, string> = {
+    sending: 'در حال ارسال',
+    thinking: 'در حال فکر کردن',
+    processing: 'در حال بررسی منابع',
+    generating: 'در حال نوشتن',
+};
+
+export function workingStatusText(status?: string | null, toolLabel?: string | null) {
+    if (toolLabel) return toolLabel;
+    return WORKING_STATUS[status || ''] || 'در حال نوشتن';
+}
 
 export function useIsMobile(breakpoint = 768) {
     const [isMobile, setIsMobile] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < breakpoint : true));
@@ -63,6 +78,23 @@ export function GlassCard({ children, className = '', ...rest }: React.HTMLAttri
     );
 }
 
+/** Sequential three-dot typing indicator — shown until the first streamed token. */
+export function TypingDots({ className = '', label = 'در حال نوشتن' }: { className?: string; label?: string }) {
+    const reduce = useReducedMotion();
+    return (
+        <span className={`inline-flex items-center gap-1.5 ${className}`} role="status" aria-label={label}>
+            {[0, 1, 2].map((i) => (
+                <motion.span
+                    key={i}
+                    className="block w-1.5 h-1.5 rounded-full bg-[var(--color-primary-400)]"
+                    animate={reduce ? { opacity: 0.55 } : { y: [0, -4, 0], opacity: [0.35, 1, 0.35] }}
+                    transition={reduce ? { duration: 0 } : { duration: 0.9, repeat: Infinity, ease: 'easeInOut', delay: i * 0.16 }}
+                />
+            ))}
+        </span>
+    );
+}
+
 export function GraySpinner({ size = 20, className = '' }: { size?: number; className?: string }) {
     return (
         <span
@@ -113,35 +145,38 @@ export function IconButton({
 /** Coin balance chip — the only place the number gets a subtle pop animation. */
 export function CoinChip({
     total,
+    unlimited = false,
     onClick,
     compact = false,
     className = '',
 }: {
     total: number;
+    unlimited?: boolean;
     onClick?: () => void;
     compact?: boolean;
     className?: string;
 }) {
-    const low = total <= 0;
+    const low = !unlimited && total <= 0;
+    const label = unlimited ? '∞' : faNum(total);
     const shared = {
         className: `inline-flex items-center gap-1.5 h-8 ${compact ? 'px-2' : 'px-2.5'} rounded-full border border-[var(--border)]/80 bg-[color-mix(in_srgb,var(--bg-card)_70%,transparent)] ${
             onClick ? 'hover:border-[var(--color-primary-500)]/40 transition-colors' : ''
         } ${className}`,
-        'aria-label': `سکه: ${faNum(total)}`,
-        title: 'سکه‌های مِت',
+        'aria-label': unlimited ? 'سکه: بی‌نهایت' : `سکه: ${faNum(total)}`,
+        title: unlimited ? 'سکه بی‌نهایت' : 'سکه‌های مِت',
         dir: 'ltr' as const,
     };
     const inner = (
         <>
-            <Coins size={14} className={low ? 'text-rose-400' : 'text-amber-400'} strokeWidth={2.2} />
+            <Coins size={14} className={low ? 'text-rose-400' : 'text-[var(--coin)]'} strokeWidth={2.2} />
             <motion.span
-                key={total}
+                key={unlimited ? 'inf' : total}
                 initial={{ opacity: 0.4, y: -3 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.22, ease: easeOut }}
                 className={`text-[12.5px] font-bold tabular-nums tracking-tight ${low ? 'text-rose-400' : 'text-[var(--text-primary)]'}`}
             >
-                {faNum(total)}
+                {label}
             </motion.span>
         </>
     );

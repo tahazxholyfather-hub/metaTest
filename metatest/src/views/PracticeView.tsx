@@ -71,6 +71,7 @@ export const PracticeView = ({ onStartQuiz, onStateChange }: PracticeViewProps) 
     const [dataLoading, setDataLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [step, setStep] = useState(1);
+    const lastPushedStep = useRef(1);
     const [history, setHistory] = useState<HistoryItem[]>([]);
     const [gridItems, setGridItems] = useState<any[]>([]);
     const [pageTitle, setPageTitle] = useState('انتخاب درس');
@@ -83,6 +84,8 @@ export const PracticeView = ({ onStartQuiz, onStateChange }: PracticeViewProps) 
     const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
     const [pendingQuizConfig, setPendingQuizConfig] = useState<Record<string, unknown> | null>(null);
     const [duplicateSavedQuiz, setDuplicateSavedQuiz] = useState<ActiveQuizState | null>(null);
+    const [highlightedIndex, setHighlightedIndex] = useState(0);
+    const [keyboardOn, setKeyboardOn] = useState(false);
 
     // --- First-visit guided tour (only shown once; completion is stored server-side) ---
     const { startTour } = useTour();
@@ -349,6 +352,15 @@ export const PracticeView = ({ onStartQuiz, onStateChange }: PracticeViewProps) 
         return () => window.removeEventListener('trigger-practice-back', handleExternalBack);
     }, [handleBack]);
 
+    useEffect(() => {
+        if (step > lastPushedStep.current) {
+            window.dispatchEvent(new CustomEvent('app-history-push', { detail: { kind: 'practice', step } }));
+            lastPushedStep.current = step;
+        } else if (step < lastPushedStep.current) {
+            lastPushedStep.current = step;
+        }
+    }, [step]);
+
     const handleCardClick = (item: any) => {
         if (item.locked) return;
 
@@ -395,6 +407,56 @@ export const PracticeView = ({ onStartQuiz, onStateChange }: PracticeViewProps) 
             fetchGridData(step + 1, newHistory);
         }
     };
+
+    useEffect(() => {
+        setHighlightedIndex(0);
+        setKeyboardOn(false);
+    }, [step, gridItems]);
+
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (isHistoryModalOpen || isDuplicateModalOpen || dataLoading || error) return;
+            const target = e.target as HTMLElement | null;
+            const tag = target?.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable) return;
+
+            const unlocked = gridItems
+                .map((item, index) => ({ item, index }))
+                .filter(({ item }) => !item.locked);
+            if (unlocked.length === 0) return;
+
+            if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') {
+                e.preventDefault();
+                setKeyboardOn(true);
+                setHighlightedIndex((prev) => {
+                    const pos = unlocked.findIndex(({ index }) => index === prev);
+                    const nextPos = pos < 0 ? 0 : Math.min(unlocked.length - 1, pos + 1);
+                    return unlocked[nextPos].index;
+                });
+                return;
+            }
+            if (e.key === 'ArrowUp' || e.key === 'ArrowRight') {
+                e.preventDefault();
+                setKeyboardOn(true);
+                setHighlightedIndex((prev) => {
+                    const pos = unlocked.findIndex(({ index }) => index === prev);
+                    const nextPos = pos <= 0 ? 0 : pos - 1;
+                    return unlocked[nextPos].index;
+                });
+                return;
+            }
+            if (e.key !== 'Enter' || e.repeat) return;
+            if (e.altKey || e.ctrlKey || e.metaKey) return;
+            if (tag === 'BUTTON' || target?.closest('button, [role="button"]')) return;
+            e.preventDefault();
+            const current = gridItems[highlightedIndex];
+            const fallback = unlocked[0]?.item;
+            const chosen = current && !current.locked ? current : fallback;
+            if (chosen) handleCardClick(chosen);
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    });
 
 
     const getTimeAgoFa = (timestamp: string | number | Date): React.ReactNode => {
@@ -476,7 +538,7 @@ export const PracticeView = ({ onStartQuiz, onStateChange }: PracticeViewProps) 
 
                             {step > 1 ? (
                                 <button
-                                    onClick={handleBack}
+                                    onClick={() => window.dispatchEvent(new CustomEvent('app-request-back'))}
                                     className="flex items-center gap-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-1 md:bg-black/5 dark:md:bg-white/5 md:px-4 md:py-2 md:rounded-xl"
                                     aria-label="بازگشت"
                                 >
@@ -518,12 +580,14 @@ export const PracticeView = ({ onStartQuiz, onStateChange }: PracticeViewProps) 
                             <div
                                 key={item.id}
                                 onClick={() => handleCardClick(item)}
+                                onMouseEnter={() => setHighlightedIndex(i)}
                                 className={item.locked ? 'cursor-not-allowed' : 'cursor-pointer'}
                             >
                                 <WideCard
                                     icon={item.icon}
                                     image={item.image}
                                     locked={item.locked}
+                                    selected={keyboardOn && highlightedIndex === i}
                                     label={item.label}
                                     progress={step === 4 ? undefined : item.progress ?? 0}
                                     desc={item.count !== undefined ? `${item.count} سوال موجود` : item.desc}

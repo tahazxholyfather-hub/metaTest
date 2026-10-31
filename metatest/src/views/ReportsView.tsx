@@ -180,7 +180,50 @@ export function ReportsView({ onBack }: ReportsViewProps) {
                             <p className="text-xs text-rose-500 dark:text-rose-300 max-w-xs leading-relaxed">{error}</p>
                         </motion.div>
                     ) : processedReports.length > 0 ? (
-                        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl overflow-hidden shadow-sm">
+                        <>
+                        <div className="md:hidden grid grid-cols-1 gap-4">
+                            <AnimatePresence mode="popLayout">
+                                {processedReports.map((report) => {
+                                    const status = getStatusConfig(report.status);
+                                    const issue = getIssueTypeConfig(report.issueType);
+                                    const IssueIcon = issue.icon;
+                                    return (
+                                        <motion.article
+                                            key={report.id}
+                                            layout
+                                            initial={{ opacity: 0, y: 12 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, scale: 0.98 }}
+                                            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                                            className="bg-[var(--bg-card)] border border-[var(--border)] rounded-3xl p-5 shadow-sm space-y-4"
+                                        >
+                                            <div className="flex items-center justify-between gap-3">
+                                                <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold ${issue.classes}`}>
+                                                    <IssueIcon size={14} strokeWidth={2.5} />
+                                                    <span>{issue.label}</span>
+                                                </div>
+                                                <div className={`inline-flex items-center justify-center px-3 py-1.5 rounded-lg border text-xs font-bold ${status.classes}`}>
+                                                    {status.label}
+                                                </div>
+                                            </div>
+                                            <p
+                                                className="text-sm font-bold text-[var(--text-primary)] leading-relaxed line-clamp-3"
+                                                dangerouslySetInnerHTML={{ __html: report.questionText || 'متن سوال در دسترس نیست' }}
+                                            />
+                                            <div className="flex items-start gap-3 p-3 rounded-xl bg-[var(--bg-element)]/40 border border-[var(--border)]/50">
+                                                <MessageSquare size={16} className="text-[var(--text-muted)] shrink-0 mt-0.5" />
+                                                <p className="text-xs text-[var(--text-secondary)] leading-relaxed">{report.reportText}</p>
+                                            </div>
+                                            <div className="flex items-center gap-2 text-xs font-medium text-[var(--text-muted)]">
+                                                <Calendar size={14} />
+                                                <span>{report.date}</span>
+                                            </div>
+                                        </motion.article>
+                                    );
+                                })}
+                            </AnimatePresence>
+                        </div>
+                        <div className="hidden md:block bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl overflow-hidden shadow-sm">
                             <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                                 <table className="w-full text-right min-w-[950px] border-collapse">
                                     <thead>
@@ -248,6 +291,7 @@ export function ReportsView({ onBack }: ReportsViewProps) {
                                 </table>
                             </div>
                         </div>
+                        </>
                     ) : (
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center py-24 text-center bg-[var(--bg-card)] rounded-3xl border border-[var(--border)] border-dashed">
                             <div className="w-16 h-16 rounded-full bg-[var(--bg-element)] flex items-center justify-center text-[var(--text-muted)] mb-5">

@@ -73,7 +73,7 @@ export const NotFoundView: React.FC<NotFoundViewProps> = ({ onBack }) => {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={onBack}
-                className="group flex items-center justify-center gap-3 px-8 py-3.5 bg-[var(--accent)] text-[var(--text-inverse)] font-medium rounded-2xl shadow-[var(--shadow-1)] transition-all duration-300 hover:brightness-110 focus:ring-2 focus:ring-[var(--border-focus)] focus:ring-offset-2 focus:ring-offset-[var(--bg-app)] focus:outline-none"
+                className="group flex items-center justify-center gap-3 px-8 py-3.5 bg-[var(--accent)] text-white font-medium rounded-2xl shadow-[var(--shadow-1)] transition-all duration-300 hover:brightness-110 focus:ring-2 focus:ring-[var(--border-focus)] focus:ring-offset-2 focus:ring-offset-[var(--bg-app)] focus:outline-none"
             >
                 <svg
                     className="w-5 h-5 transition-transform duration-300 group-hover:-translate-x-1"

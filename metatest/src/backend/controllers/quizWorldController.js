@@ -9,6 +9,19 @@ const {
     encodeResultId,
     decodeResultId
 } = require('../utils/hash');
+const {
+    ensureQuestionTagTables,
+    joinOnTag,
+    matchTagIn,
+    addTagFilter,
+    majorityGradeSql,
+    playableQuestionSql,
+    filterTopicsForSelectedGrades,
+    annotateTopicGrade,
+} = require('../utils/questionTags');
+const entitlements = require('../subscription/entitlements');
+const usage = require('../subscription/usage');
+const { ensureVisitorCountIds } = require('../visitorCounts');
 
 
 // ==========================================
@@ -16,26 +29,59 @@ const {
 // ==========================================
 const MIN_QUESTIONS = 1;
 
+const isPresent = (val) => {
+    if (val === undefined || val === null || val === '' || val === 'null' || val === 'undefined') return false;
+    if (Array.isArray(val) && val.length === 0) return false;
+    return true;
+};
+
+const pickBodyValue = (body, keys) => {
+    for (const key of keys) {
+        if (isPresent(body?.[key])) return body[key];
+    }
+    return undefined;
+};
+
+const toPositiveInt = (n) => {
+    const num = Number(n);
+    return Number.isInteger(num) && num > 0 ? num : null;
+};
+
 // Helper to ensure we always get an array of IDs from the request
 const parseArrayParam = (val) => {
-    if (!val || val === 'null' || val === 'undefined' || String(val).trim() === '') {
-        return [];
-    }
+    if (!isPresent(val)) return [];
     if (Array.isArray(val)) {
-        return val.map(Number).filter(n => !isNaN(n));
+        // String([]) === '' so empty arrays must be handled before any String() check
+        return val.flatMap((item) => {
+            if (item && typeof item === 'object' && item.id != null) {
+                return parseArrayParam(item.id);
+            }
+            const num = toPositiveInt(item);
+            return num == null ? [] : [num];
+        });
+    }
+    if (typeof val === 'object' && val.id != null) {
+        return parseArrayParam(val.id);
     }
     if (typeof val === 'string') {
+        const trimmed = val.trim();
+        if (!trimmed || trimmed === '[]') return [];
         try {
-            // In case it's a JSON array string "[1, 2]"
-            const parsed = JSON.parse(val);
-            if (Array.isArray(parsed)) return parsed.map(Number).filter(n => !isNaN(n));
+            const parsed = JSON.parse(trimmed);
+            if (parsed !== trimmed) return parseArrayParam(parsed);
         } catch (e) {
-            // In case it's comma separated "1,2,3"
-            return val.split(',').map(v => Number(v.trim())).filter(n => !isNaN(n));
+            // comma-separated "1,2,3"
         }
+        return trimmed.split(',').map((v) => toPositiveInt(v.trim())).filter((n) => n != null);
     }
-    const num = Number(val);
-    return isNaN(num) ? [] : [num];
+    const num = toPositiveInt(val);
+    return num == null ? [] : [num];
+};
+
+const addInFilter = (parts, params, column, ids) => {
+    if (!ids.length) return;
+    parts.push(`${column} IN (${ids.map(() => '?').join(',')})`);
+    params.push(...ids);
 };
 
 function getDifficultyDistribution(level, total) {
@@ -107,35 +153,40 @@ async function fetchQuestionIdsByDifficulty({
                                                 limit,
                                                 difficultySetting
                                             }) {
+    await ensureQuestionTagTables();
     const distribution = getDifficultyDistribution(difficultySetting, limit);
 
     const selectedIds = [];
     const selectedSet = new Set();
 
+    const gradeMatch = matchTagIn('q', 'grade', grades);
+    const itemMatch = targetColumn === 'topic_id'
+        ? matchTagIn('q', 'topic', [itemId])
+        : matchTagIn('q', 'mabhas', [itemId]);
+    const subjectPlaceholders = lessons.map(() => '?').join(',');
+
     const baseWhere = `
-        FROM questions_tam24
-        WHERE status = 'فعال'
-          AND edit_status = 'done'
-          AND subject_id IN (?)
-          AND grade_id IN (?)
-          AND ${targetColumn} = ?
+        FROM questions_tam24 q
+        WHERE ${playableQuestionSql('q')}
+          AND q.subject_id IN (${subjectPlaceholders})
+          ${gradeMatch.sql ? `AND ${gradeMatch.sql}` : ''}
+          ${itemMatch.sql ? `AND ${itemMatch.sql}` : ''}
     `;
+    const baseParams = [...lessons, ...gradeMatch.params, ...itemMatch.params];
 
     async function fetchBucket(difficultyLevel, bucketLimit) {
         if (bucketLimit <= 0) return [];
 
         const sql = `
-            SELECT id
+            SELECT q.id
             ${baseWhere}
-              AND difficulty_level = ?
+              AND q.difficulty_level = ?
             ORDER BY RAND()
             LIMIT ?
         `;
 
         const [rows] = await pool.query(sql, [
-            lessons,
-            grades,
-            itemId,
+            ...baseParams,
             difficultyLevel,
             bucketLimit
         ]);
@@ -147,15 +198,15 @@ async function fetchQuestionIdsByDifficulty({
         if (needed <= 0) return [];
 
         let sql = `
-            SELECT id
+            SELECT q.id
             ${baseWhere}
         `;
 
-        const params = [lessons, grades, itemId];
+        const params = [...baseParams];
 
         if (excludeIds.length > 0) {
-            sql += ` AND id NOT IN (?) `;
-            params.push(excludeIds);
+            sql += ` AND q.id NOT IN (${excludeIds.map(() => '?').join(',')}) `;
+            params.push(...excludeIds);
         }
 
         sql += `
@@ -228,11 +279,12 @@ const generateCode = async (req, res) => {
 
 const handleGetSubjects = async (req, res) => {
     try {
+        await ensureQuestionTagTables();
         const sql = `
             SELECT s.id, s.title, s.icon , COUNT(q.id) AS question_count
             FROM questions_tam24 q
             JOIN subjects_tam24 s ON q.subject_id = s.id
-            WHERE q.status = 'فعال' AND q.edit_status = 'done'
+            WHERE ${playableQuestionSql('q')}
             GROUP BY s.id, s.title, s.icon
             HAVING COUNT(q.id) >= ?
             ORDER BY s.id ASC
@@ -247,21 +299,20 @@ const handleGetSubjects = async (req, res) => {
 
 const handleGetGradesBySubjects = async (req, res) => {
     try {
-        const subjectIds = parseArrayParam(req.body.subject_ids || req.body.subjects);
+        await ensureQuestionTagTables();
+        const subjectIds = parseArrayParam(pickBodyValue(req.body, ['subject_ids', 'subjects', 'lessons']));
         if (subjectIds.length === 0) {
             return res.json({ success: false, message: "Missing or invalid parameter: subject_ids array" });
         }
 
         const sql = `
-            SELECT g.id, g.title, COUNT(q.id) AS question_count
+            SELECT g.id, g.title, COUNT(DISTINCT q.id) AS question_count
             FROM questions_tam24 q
-            INNER JOIN grades_tam24 g ON q.grade_id = g.id
+            INNER JOIN grades_tam24 g ON ${joinOnTag('q', 'g', 'grade')}
             WHERE q.subject_id IN (?)
-               AND q.status = 'فعال'
-               AND q.edit_status = 'done'
-               AND q.grade_id IS NOT NULL
+               AND ${playableQuestionSql('q')}
             GROUP BY g.id, g.title
-            HAVING COUNT(q.id) >= ?
+            HAVING COUNT(DISTINCT q.id) >= ?
             ORDER BY g.id ASC
         `;
         const [rows] = await pool.query(sql, [subjectIds, MIN_QUESTIONS]);
@@ -274,36 +325,41 @@ const handleGetGradesBySubjects = async (req, res) => {
 
 const handleGetChaptersBySubjects = async (req, res) => {
     try {
-        const subjectIds = parseArrayParam(req.body.subject_ids || req.body.subjects);
+        await ensureQuestionTagTables();
+        const subjectIds = parseArrayParam(pickBodyValue(req.body, ['subject_ids', 'subjects', 'lessons']));
         if (subjectIds.length === 0) {
             return res.json({ success: false, message: "Missing or invalid parameter: subject_ids array" });
         }
 
-        const gradeIds = parseArrayParam(req.body.grade_ids || req.body.grades);
+        const gradeIds = parseArrayParam(pickBodyValue(req.body, ['grade_ids', 'grades']));
+        const gradeMatch = matchTagIn('q', 'grade', gradeIds);
 
-        // Explicitly selecting q.grade_id so the frontend can associate chapters with their respective grades
         let sql = `
-            SELECT t.id, t.title, COUNT(q.id) AS question_count, q.subject_id, q.grade_id
+            SELECT t.id, t.title, COUNT(DISTINCT q.id) AS question_count, t.subject_id,
+                   MIN(q.grade_id) AS grade_id,
+                   ${majorityGradeSql('t', { requireEditDone: true })} AS majority_grade_id
             FROM questions_tam24 q
-            JOIN topics_tam24 t ON q.topic_id = t.id
+            JOIN topics_tam24 t ON ${joinOnTag('q', 't', 'topic')}
             WHERE q.subject_id IN (?)
-               AND q.status = 'فعال'
-               AND q.edit_status = 'done'
+               AND ${playableQuestionSql('q')}
         `;
         const params = [subjectIds];
-        if (gradeIds.length > 0) {
-            sql += " AND q.grade_id IN (?)";
-            params.push(gradeIds);
+        if (gradeMatch.sql) {
+            sql += ` AND ${gradeMatch.sql}`;
+            params.push(...gradeMatch.params);
         }
 
         sql += `
-            GROUP BY t.id, t.title, q.subject_id, q.grade_id
-            HAVING COUNT(q.id) >= ? 
-            ORDER BY q.subject_id ASC, t.id ASC
+            GROUP BY t.id, t.title, t.subject_id
+            HAVING COUNT(DISTINCT q.id) >= ?
+            ORDER BY t.subject_id ASC, t.id ASC
         `;
         params.push(MIN_QUESTIONS);
         const [rows] = await pool.query(sql, params);
-        res.json({ success: true, chapters: rows });
+        res.json({
+            success: true,
+            chapters: filterTopicsForSelectedGrades(rows, gradeIds).map(annotateTopicGrade),
+        });
     } catch (error) {
         console.error("❌ SQL Error in handleGetChaptersBySubjects:", error);
         res.json({ success: false, message: "Database error fetching chapters" });
@@ -312,24 +368,36 @@ const handleGetChaptersBySubjects = async (req, res) => {
 
 const handleGetMabahesByChapters = async (req, res) => {
     try {
-        const topicIds = parseArrayParam(req.body.topic_ids || req.body.chapters);
+        await ensureQuestionTagTables();
+        const topicIds = parseArrayParam(pickBodyValue(req.body, ['topic_ids', 'chapters']));
         if (topicIds.length === 0) {
             return res.json({ success: false, message: "Missing or invalid parameter: topic_ids array" });
         }
 
-        // Added q.grade_id and q.subject_id directly to the selection to enable direct filtering
-        const sql = `
-            SELECT c.id, c.title, COUNT(q.id) AS question_count, q.topic_id AS chapter_id, q.grade_id, q.subject_id
+        const gradeIds = parseArrayParam(pickBodyValue(req.body, ['grade_ids', 'grades']));
+        const topicMatch = matchTagIn('q', 'topic', topicIds);
+        const gradeMatch = matchTagIn('q', 'grade', gradeIds);
+
+        let sql = `
+            SELECT c.id, c.title, COUNT(DISTINCT q.id) AS question_count,
+                   MIN(q.topic_id) AS chapter_id, MIN(q.grade_id) AS grade_id, MIN(q.subject_id) AS subject_id
             FROM questions_tam24 q
-            JOIN chapters_tam24 c ON q.chapter_id = c.id
-            WHERE q.topic_id IN (?)
-               AND q.status = 'فعال'
-               AND q.edit_status = 'done'
-            GROUP BY c.id, c.title, q.topic_id, q.grade_id, q.subject_id
-            HAVING COUNT(q.id) >= ?
-            ORDER BY q.topic_id ASC, c.id ASC
+            JOIN chapters_tam24 c ON ${joinOnTag('q', 'c', 'mabhas')}
+            WHERE ${playableQuestionSql('q')}
+               AND ${topicMatch.sql || '1=1'}
         `;
-        const [rows] = await pool.query(sql, [topicIds, MIN_QUESTIONS]);
+        const params = [...topicMatch.params];
+        if (gradeMatch.sql) {
+            sql += ` AND ${gradeMatch.sql}`;
+            params.push(...gradeMatch.params);
+        }
+        sql += `
+            GROUP BY c.id, c.title
+            HAVING COUNT(DISTINCT q.id) >= ?
+            ORDER BY MIN(q.topic_id) ASC, c.id ASC
+        `;
+        params.push(MIN_QUESTIONS);
+        const [rows] = await pool.query(sql, params);
         res.json({ success: true, mabahes: rows });
     } catch (error) {
         console.error("❌ SQL Error in handleGetMabahesByChapters:", error);
@@ -395,11 +463,188 @@ const fetchQuestionImages = async (questionId) => {
     return rows.map(img => img.image_name);
 };
 
+const handleSearchBankQuestions = async (req, res) => {
+    try {
+        const body = req.body || {};
+        const subjectIds = parseArrayParam(pickBodyValue(body, ['subject_ids', 'subjects', 'lessons']));
+        const gradeIds = parseArrayParam(pickBodyValue(body, ['grade_ids', 'grades']));
+        const topicIds = parseArrayParam(pickBodyValue(body, ['topic_ids', 'chapters']));
+        const chapterIds = parseArrayParam(pickBodyValue(body, ['chapter_ids', 'mabhas']));
+        const difficultyList = (Array.isArray(body.difficulties) ? body.difficulties : [])
+            .map((d) => String(d).trim())
+            .filter((d) => ['آسان', 'متوسط', 'سخت'].includes(d));
+        const search = typeof body.search === 'string' ? body.search.trim() : '';
+        const includeOptions = Boolean(body.includeOptions);
+        const sample = Boolean(body.sample);
+        const page = Math.max(1, parseInt(body.page, 10) || 1);
+        const pageSize = Math.min(40, Math.max(5, parseInt(body.pageSize, 10) || 12));
+        const sampleSize = Math.min(300, Math.max(1, parseInt(body.sampleSize, 10) || 10));
+
+        const runFilteredCount = async (requireEditDone) => {
+            await ensureQuestionTagTables();
+            const parts = [requireEditDone ? playableQuestionSql('q') : "q.status = 'فعال'"];
+            const params = [];
+            addInFilter(parts, params, 'q.subject_id', subjectIds);
+            addTagFilter(parts, params, 'q', 'grade', gradeIds);
+            addTagFilter(parts, params, 'q', 'topic', topicIds);
+            addTagFilter(parts, params, 'q', 'mabhas', chapterIds);
+            addInFilter(parts, params, 'q.difficulty_level', difficultyList);
+            if (search) {
+                parts.push('q.question_text LIKE ?');
+                params.push(`%${search}%`);
+            }
+            const whereSql = parts.join(' AND ');
+            const [[{ total }]] = await pool.query(
+                `SELECT COUNT(*) AS total FROM questions_tam24 q WHERE ${whereSql}`,
+                params
+            );
+            return { total: Number(total) || 0, whereSql, params };
+        };
+
+        // Same pool as the wizard, including every زیست یازدهم question.
+        // If that pool is empty, fall back to any فعال row.
+        let filtered = await runFilteredCount(true);
+        let usedEditDone = true;
+        if (filtered.total === 0) {
+            const relaxed = await runFilteredCount(false);
+            if (relaxed.total > 0) {
+                filtered = relaxed;
+                usedEditDone = false;
+            }
+        }
+
+        const limit = sample ? sampleSize : pageSize;
+        const offset = sample ? 0 : (page - 1) * pageSize;
+        const orderSql = sample ? 'ORDER BY RAND()' : 'ORDER BY q.id DESC';
+        const safeLimit = Number.parseInt(limit, 10) || 12;
+        const safeOffset = Math.max(0, Number.parseInt(offset, 10) || 0);
+
+        const listSql = `
+            SELECT q.id, q.question_text, q.difficulty_level, q.subject_id, q.grade_id, q.topic_id, q.chapter_id,
+                   s.title AS subject_title, g.title AS grade_title, t.title AS topic_title, c.title AS chapter_title
+            FROM questions_tam24 q
+            LEFT JOIN subjects_tam24 s ON q.subject_id = s.id
+            LEFT JOIN grades_tam24 g ON q.grade_id = g.id
+            LEFT JOIN topics_tam24 t ON q.topic_id = t.id
+            LEFT JOIN chapters_tam24 c ON q.chapter_id = c.id
+            WHERE ${filtered.whereSql}
+            ${orderSql}
+            LIMIT ${safeLimit} OFFSET ${safeOffset}
+        `;
+        const [rows] = await pool.query(listSql, filtered.params);
+
+        let optionsByQuestion = {};
+        if (includeOptions && rows.length > 0) {
+            const ids = rows.map((r) => Number(r.id)).filter((n) => n > 0);
+            if (ids.length) {
+                const [optRows] = await pool.query(
+                    `SELECT id, question_id, option_text FROM options_tam24 WHERE question_id IN (${ids.map(() => '?').join(',')}) ORDER BY id ASC`,
+                    ids
+                );
+                for (const opt of optRows) {
+                    if (!optionsByQuestion[opt.question_id]) optionsByQuestion[opt.question_id] = [];
+                    optionsByQuestion[opt.question_id].push({ id: Number(opt.id), text: opt.option_text });
+                }
+            }
+        }
+
+        let imagesByQuestion = {};
+        if (rows.length > 0) {
+            const ids = rows.map((r) => Number(r.id)).filter((n) => n > 0);
+            if (ids.length) {
+                const [imgRows] = await pool.query(
+                    `SELECT question_id, image_name FROM question_images_tam24 WHERE question_id IN (${ids.map(() => '?').join(',')}) ORDER BY id ASC`,
+                    ids
+                );
+                for (const img of imgRows) {
+                    if (!imagesByQuestion[img.question_id]) imagesByQuestion[img.question_id] = img.image_name;
+                }
+            }
+        }
+
+        const questions = rows.map((q) => ({
+            id: Number(q.id),
+            text: q.question_text,
+            difficulty: q.difficulty_level || 'متوسط',
+            subject_id: q.subject_id,
+            grade_id: q.grade_id,
+            topic_id: q.topic_id,
+            chapter_id: q.chapter_id,
+            subject_title: q.subject_title || '',
+            grade_title: q.grade_title || '',
+            topic_title: q.topic_title || '',
+            chapter_title: q.chapter_title || '',
+            image: imagesByQuestion[q.id] || null,
+            options: optionsByQuestion[q.id] || [],
+        }));
+
+        res.json({
+            success: true,
+            questions,
+            pagination: {
+                total: filtered.total,
+                page: sample ? 1 : page,
+                pageSize: safeLimit,
+                sample,
+                editStatusFilter: usedEditDone ? 'done' : 'any',
+            },
+        });
+    } catch (error) {
+        console.error('❌ SQL Error in handleSearchBankQuestions:', error);
+        res.json({ success: false, message: 'خطا در دریافت سوالات بانک' });
+    }
+};
+
+const parseIsCorrectFlag = (val) => {
+    if (Buffer.isBuffer(val)) return val[0] === 1;
+    return Number(val) === 1 || val === true || val === '1';
+};
+
+const handleGetBankQuestionAnswer = async (req, res) => {
+    try {
+        const questionId = toPositiveInt(req.body?.question_id ?? req.body?.questionId);
+        if (!questionId) {
+            return res.json({ success: false, message: 'شناسه سوال نامعتبر است.' });
+        }
+
+        const [optRows] = await pool.query(
+            `SELECT id, option_text, COALESCE(CAST(is_correct AS UNSIGNED), 0) AS is_correct
+             FROM options_tam24
+             WHERE question_id = ?
+             ORDER BY id ASC`,
+            [questionId]
+        );
+        const [descRows] = await pool.query(
+            'SELECT answer_text FROM descriptive_answers_tam24 WHERE question_id = ? LIMIT 1',
+            [questionId]
+        );
+
+        const options = optRows.map((row) => ({
+            id: Number(row.id),
+            text: row.option_text,
+            is_correct: parseIsCorrectFlag(row.is_correct),
+        }));
+        const correct = options.find((opt) => opt.is_correct);
+
+        res.json({
+            success: true,
+            question_id: questionId,
+            options,
+            correct_option_id: correct ? correct.id : null,
+            descriptive_answer: descRows.length > 0 ? descRows[0].answer_text : null,
+        });
+    } catch (error) {
+        console.error('❌ SQL Error in handleGetBankQuestionAnswer:', error);
+        res.json({ success: false, message: 'خطا در دریافت پاسخ سوال' });
+    }
+};
+
 const handleCreateQuiz = async (req, res) => {
     const creatorId = req.user?.id || 1;
+    let examClaim = null;
 
     const {
-        quizType, // 'chapter' or 'mabhas'
+        quizType, // 'chapter' or 'mabhas' or 'selector'
         settings,
         lessonNames,
         gradeNames,
@@ -411,22 +656,38 @@ const handleCreateQuiz = async (req, res) => {
     const grades = parseArrayParam(req.body.grades);
     const chapters = parseArrayParam(req.body.chapters);
     const mabhas = parseArrayParam(req.body.mabhas);
+    const explicitQuestionIds = parseArrayParam(req.body.question_ids || req.body.questionIds);
     const shareCode = decodeShareCode(req.body.shareCode);
+    const isSelectorQuiz = quizType === 'selector' || explicitQuestionIds.length > 0;
 
-    if (!quizType || !settings || !settings.questionCounts) {
+    if (!settings || (!isSelectorQuiz && (!quizType || !settings.questionCounts))) {
         return res.json({ success: false, message: "اطلاعات ارسالی ناقص است." });
     }
 
     let allSelectedQuestionIds = [];
-    const questionCounts = settings.questionCounts;
+    const questionCounts = settings.questionCounts || {};
     const targetItems = quizType === 'chapter' ? chapters : mabhas;
     const targetColumn = quizType === 'chapter' ? 'topic_id' : 'chapter_id';
 
-    if (lessons.length === 0 || grades.length === 0) {
+    if (!isSelectorQuiz && (lessons.length === 0 || grades.length === 0)) {
         return res.json({ success: false, message: "پایه یا درس انتخاب نشده است." });
     }
 
     try {
+        if (isSelectorQuiz) {
+            const uniqueIds = [...new Set(explicitQuestionIds)].slice(0, 50);
+            if (uniqueIds.length === 0) {
+                return res.json({ success: false, message: "هیچ سوالی انتخاب نشده است." });
+            }
+            await ensureQuestionTagTables();
+            const [foundRows] = await pool.query(
+                `SELECT id FROM questions_tam24 q
+                 WHERE q.id IN (${uniqueIds.map(() => '?').join(',')}) AND ${playableQuestionSql('q')}`,
+                uniqueIds
+            );
+            const found = new Set(foundRows.map((r) => Number(r.id)));
+            allSelectedQuestionIds = uniqueIds.filter((id) => found.has(id));
+        } else {
         for (const itemId of targetItems) {
             const limit = parseInt(questionCounts[itemId]) || 0;
             if (limit <= 0) continue;
@@ -443,12 +704,15 @@ const handleCreateQuiz = async (req, res) => {
 
             allSelectedQuestionIds.push(...fetchedIds);
         }
+        }
 
         if (allSelectedQuestionIds.length === 0) {
             return res.json({ success: false, message: "هیچ سوالی با این مشخصات یافت نشد." });
         }
 
-        allSelectedQuestionIds = allSelectedQuestionIds.sort(() => Math.random() - 0.5);
+        if (!isSelectorQuiz) {
+            allSelectedQuestionIds = allSelectedQuestionIds.sort(() => Math.random() - 0.5);
+        }
 
         const title =
             settings.quizName && settings.quizName.trim() !== ''
@@ -473,6 +737,16 @@ const handleCreateQuiz = async (req, res) => {
             ? 'in_progress'
             : 'waiting';
 
+        examClaim = await entitlements.prepareExamCreate(creatorId, settings.visibility);
+        if (!examClaim.ok) {
+            return res.json({
+                success: false,
+                code: examClaim.code,
+                message: examClaim.message,
+                nextAllowedAt: examClaim.nextAllowedAt || null,
+            });
+        }
+
         const insertQuizSql = `
             INSERT INTO quizzes 
             (
@@ -495,17 +769,22 @@ const handleCreateQuiz = async (req, res) => {
             shareCode,
             creatorId,
             title,
-            quizType,
-            settings.difficulty,
-            settings.time,
-            settings.visibility,
-            settings.memberLimit,
+            isSelectorQuiz ? 'selector' : quizType,
+            Number(settings.difficulty) || 2,
+            Number(settings.time) || 30,
+            settings.visibility === 'public' ? 'public' : 'private',
+            Number(settings.memberLimit) || 10,
             quizStatus,
             JSON.stringify(allSelectedQuestionIds),
             JSON.stringify(enrichedSettings)
         ]);
 
         const newQuizId = quizResult.insertId;
+
+        if (examClaim?.usageId) {
+            await usage.bindResource(examClaim.usageId, newQuizId);
+            examClaim = null;
+        }
 
 
         return res.json({
@@ -522,6 +801,7 @@ const handleCreateQuiz = async (req, res) => {
         });
 
     } catch (error) {
+        if (examClaim?.usageId) await usage.releaseUsage(examClaim.usageId);
         console.error("❌ SQL Error in handleCreateQuiz:", error);
         return res.json({ success: false, message: "خطا در ساخت آزمون در پایگاه داده" });
     }
@@ -580,6 +860,25 @@ const handleAddQuizMember = async (req, res) => {
             success: false,
             message: "شناسه آزمون معتبر نیست."
         });
+    }
+
+    if (role === 'member' && await entitlements.multiplayerBlocked(userId)) {
+        const conn = await pool.getConnection();
+        try {
+            const [rows] = await conn.query(
+                `SELECT visibility FROM quizzes WHERE id = ? LIMIT 1`,
+                [quizId]
+            );
+            if (rows[0]?.visibility === 'public') {
+                return res.status(403).json({
+                    success: false,
+                    code: 'MULTIPLAYER_LOCKED',
+                    message: 'ورود به آزمون آنلاین با اشتراک ویژه ممکن است.',
+                });
+            }
+        } finally {
+            conn.release();
+        }
     }
 
     try {
@@ -790,21 +1089,7 @@ const handleGetQuizByShareCode = async (req, res) => {
 
 
 
-const handleGetQuizMetadata = async (req, res) => {
-    try {
-        const quizId = decodeQuizId(req.params.quizId);
-
-        if (!quizId) {
-            return res.status(400).json({
-                success: false,
-                error: {
-                    code: 'INVALID_QUIZ_ID',
-                    message: 'Invalid quiz id'
-                }
-            });
-        }
-
-        const sql = `
+const QUIZ_META_SQL = `
             SELECT
                 id,
                 share_code,
@@ -818,13 +1103,37 @@ const handleGetQuizMetadata = async (req, res) => {
                 question_ids,
                 settings
             FROM quizzes
-            WHERE id = ?
-                LIMIT 1
-        `;
+`;
 
-        const [rows] = await pool.query(sql, [quizId]);
+async function findQuizForMetadata(rawValue) {
+    const raw = String(rawValue || '').trim();
+    if (!raw) return null;
 
-        if (rows.length === 0) {
+    if (/^\d+$/.test(raw)) {
+        const [rows] = await pool.query(`${QUIZ_META_SQL} WHERE id = ? LIMIT 1`, [Number(raw)]);
+        if (rows.length) return rows[0];
+    }
+
+    const quizId = decodeQuizId(raw);
+    if (quizId) {
+        const [rows] = await pool.query(`${QUIZ_META_SQL} WHERE id = ? LIMIT 1`, [quizId]);
+        if (rows.length) return rows[0];
+    }
+
+    const shareId = decodeShareCode(raw);
+    if (shareId) {
+        const [rows] = await pool.query(`${QUIZ_META_SQL} WHERE share_code = ? LIMIT 1`, [shareId]);
+        if (rows.length) return rows[0];
+    }
+
+    return null;
+}
+
+const handleGetQuizMetadata = async (req, res) => {
+    try {
+        const quiz = await findQuizForMetadata(req.params.quizId);
+
+        if (!quiz) {
             return res.status(404).json({
                 success: false,
                 error: {
@@ -833,8 +1142,6 @@ const handleGetQuizMetadata = async (req, res) => {
                 }
             });
         }
-
-        const quiz = rows[0];
 
         let questionIds = [];
         if (quiz.question_ids) {
@@ -1021,9 +1328,15 @@ const handleGetQuizQuestions = async (req, res) => {
         );
 
         if (existingResult) {
+            const existingId = await positiveResultId(
+                connection,
+                existingResult.id,
+                decodedQuizId,
+                userId
+            );
             return res.status(200).json({
                 success: true,
-                resultId: encodeResultId(existingResult.id)
+                resultId: clientResultId(existingId)
             });
         }
 
@@ -1286,6 +1599,7 @@ async function handleSubmitQuizAnswers(req, res) {
     let connection;
 
     try {
+        await ensureVisitorCountIds();
         connection = await pool.getConnection();
         await connection.beginTransaction();
 
@@ -1342,11 +1656,19 @@ async function handleSubmitQuizAnswers(req, res) {
         );
 
         if (existingResult) {
-            await connection.rollback();
+            const existingId = await positiveResultId(connection, existingResult.id, decodedQuizId, userId);
+            await connection.commit();
 
+            const publicId = clientResultId(existingId);
+            if (!publicId) {
+                return res.status(500).json({
+                    success: false,
+                    error: "شناسه نتیجه از سمت سرور دریافت نشد."
+                });
+            }
             return res.status(200).json({
                 success: true,
-                resultId: encodeResultId(existingResult.id)
+                resultId: publicId
             });
         }
 
@@ -1440,9 +1762,17 @@ async function handleSubmitQuizAnswers(req, res) {
 
         await connection.commit();
 
+        const publicId = clientResultId(numericResultId);
+        if (!publicId) {
+            return res.status(500).json({
+                success: false,
+                error: "شناسه نتیجه از سمت سرور دریافت نشد."
+            });
+        }
+
         return res.status(200).json({
             success: true,
-            resultId: encodeResultId(numericResultId)
+            resultId: publicId
         });
     } catch (error) {
         if (connection) {
@@ -1466,9 +1796,22 @@ async function handleSubmitQuizAnswers(req, res) {
                 );
 
                 if (existingResult) {
+                    const existingId = await positiveResultId(
+                        fallbackConnection,
+                        existingResult.id,
+                        decodedQuizId,
+                        userId
+                    );
+                    const publicId = clientResultId(existingId);
+                    if (!publicId) {
+                        return res.status(500).json({
+                            success: false,
+                            error: "شناسه نتیجه از سمت سرور دریافت نشد."
+                        });
+                    }
                     return res.status(200).json({
                         success: true,
-                        resultId: encodeResultId(existingResult.id)
+                        resultId: publicId
                     });
                 }
             } catch (fallbackError) {
@@ -1556,6 +1899,35 @@ async function getExistingQuizResult(connection, quizId, userId) {
     `, [quizId, userId]);
 
     return rows.length ? rows[0] : null;
+}
+
+/** A missing AUTO_INCREMENT writes id 0, which cannot be encoded for the result page. */
+async function positiveResultId(connection, insertId, quizId, userId) {
+    let id = Number(insertId);
+    if (Number.isInteger(id) && id > 0) return id;
+
+    const existing = await getExistingQuizResult(connection, quizId, userId);
+    id = Number(existing?.id);
+    if (Number.isInteger(id) && id > 0) return id;
+    if (!existing) return null;
+
+    const [[maxRow]] = await connection.query(
+        'SELECT COALESCE(MAX(id), 0) AS maxId FROM quiz_results'
+    );
+    const nextId = Number(maxRow?.maxId || 0) + 1;
+    await connection.query(
+        'UPDATE quiz_results SET id = ? WHERE id = 0 AND quiz_id = ? AND user_id = ? LIMIT 1',
+        [nextId, quizId, userId]
+    );
+    return nextId;
+}
+
+/** Hash the row id for /result/:resultId. A positive numeric id still works if hashing fails. */
+function clientResultId(numericId) {
+    const encoded = encodeResultId(numericId);
+    if (encoded) return encoded;
+    const id = Number(numericId);
+    return Number.isInteger(id) && id > 0 ? String(id) : null;
 }
 
 async function getUserXpInfo(connection, userId) {
@@ -1942,7 +2314,7 @@ async function insertQuizResult(connection, {
         JSON.stringify(resultData ?? {})
     ]);
 
-    return result.insertId;
+    return positiveResultId(connection, result.insertId, quizId, userId);
 }
 
 async function persistUserAnswerMutations(connection, { inserts, updates }) {
@@ -1981,76 +2353,29 @@ function safeJsonParse(value, fallback = null) {
     }
 }
 
-async function handleInternalGradeQuiz(req, res) {
-    const { quizId } = req.params;
-    // اضافه شدن دریافت فیلدهای جدید زمان و لاگ
-    const { userId, answers, timeSpent, questionTimes, selectionLog } = req.body;
-
-    if (!answers || typeof answers !== 'object' || Array.isArray(answers)) {
-        return res.status(400).json({ error: "Invalid payload. Expected answers to be an object map." });
-    }
-
-    const decodedQuizId = decodeQuizId(quizId);
-    let connection;
-
-    try {
-        connection = await pool.getConnection();
-        const quiz = await getQuizById(connection, decodedQuizId);
-
-        if (!quiz) {
-            return res.status(404).json({ error: "Quiz not found." });
-        }
-
-        const questionIds = parseQuestionIds(quiz.question_ids);
-        const formattedAnswers = answers;
-
-        const metadata = await getQuizEvaluationMetadata(connection, questionIds, userId);
-
-        const evaluation = evaluateQuizSubmission({
-            questionIds,
-            submittedAnswers: formattedAnswers,
-            correctOptionsMap: metadata.correctOptionsMap,
-            descriptiveMap: metadata.descriptiveMap,
-            questionMetaMap: metadata.questionMetaMap
-        });
-
-        // The lobby service expects exactly this shape:
-        return res.status(200).json({
-            score: evaluation.summary.score,
-            total: questionIds.length,
-            correctCount: evaluation.summary.correct_count,
-            wrongCount: evaluation.summary.incorrect_count,
-            // Include extra data for the next saving step
-            evaluationData: evaluation,
-            formattedAnswers,
-
-            // پاس دادن مقادیر جدید به مرحله ذخیره‌سازی
-            timeSpent: timeSpent || 0,
-            questionTimes: questionTimes || {},
-            selectionLog: selectionLog || []
-        });
-
-    } catch (error) {
-        console.error("Error in handleInternalGradeQuiz:", error);
-        return res.status(500).json({ error: "Internal server error." });
-    } finally {
-        if (connection) connection.release();
-    }
+function httpError(message, statusCode) {
+    const error = new Error(message);
+    error.statusCode = statusCode;
+    return error;
 }
 
-
-
-
-
-// Saves the result, applies XP, and saves individual answers
-async function handleInternalSaveQuizResult(req, res) {
-    const { quizId, userId, lobbyCode, result } = req.body;
-
-    if (!userId || !quizId || !result) {
-        return res.status(400).json({ error: "Invalid payload." });
+/**
+ * Insert the graded attempt and return its numeric quiz_results id.
+ * A second call for the same quiz and user returns the existing id and does not grant XP again.
+ */
+async function persistGradedAttempt({
+    decodedQuizId,
+    userId,
+    lobbyCode,
+    evaluation,
+    formattedAnswers,
+    timeSpent,
+    questionTimes,
+    selectionLog
+}) {
+    if (!evaluation || !evaluation.summary || !evaluation.resultData) {
+        throw httpError("Invalid grade payload.", 400);
     }
-
-    const decodedQuizId = decodeQuizId(quizId);
 
     const toPositiveInt = (v) => {
         const n = Number(v);
@@ -2062,10 +2387,38 @@ async function handleInternalSaveQuizResult(req, res) {
         return Number.isFinite(n) && n >= 0 ? Math.floor(n) : null;
     };
 
-    let connection;
+    const spent = toNonNegativeInt(timeSpent) ?? 0;
+
+    const sanitizedQuestionTimes = {};
+    if (questionTimes && typeof questionTimes === "object" && !Array.isArray(questionTimes)) {
+        for (const [qid, time] of Object.entries(questionTimes)) {
+            const questionId = toPositiveInt(qid);
+            const value = toNonNegativeInt(time);
+            if (questionId && value !== null) {
+                sanitizedQuestionTimes[String(questionId)] = value;
+            }
+        }
+    }
+
+    const sanitizedSelectionLog = Array.isArray(selectionLog)
+        ? selectionLog
+            .map((entry) => {
+                const questionId = toPositiveInt(entry?.questionId);
+                const optionId = toPositiveInt(entry?.optionId);
+                const timeSpentMs = toNonNegativeInt(entry?.timeSpentMs);
+                const timestamp = toNonNegativeInt(entry?.timestamp);
+                if (!questionId || !optionId || timeSpentMs === null || timestamp === null) {
+                    return null;
+                }
+                return { questionId, optionId, timeSpentMs, timestamp };
+            })
+            .filter(Boolean)
+        : [];
+
+    await ensureVisitorCountIds();
+    const connection = await pool.getConnection();
 
     try {
-        connection = await pool.getConnection();
         await connection.beginTransaction();
 
         const quiz = await getQuizById(connection, decodedQuizId);
@@ -2073,50 +2426,24 @@ async function handleInternalSaveQuizResult(req, res) {
 
         if (!quiz || !user) {
             await connection.rollback();
-            return res.status(404).json({ error: "Quiz or User not found." });
+            throw httpError("Quiz or User not found.", 404);
+        }
+
+        const existingResult = await getExistingQuizResult(connection, decodedQuizId, userId);
+        if (existingResult) {
+            const existingId = await positiveResultId(
+                connection,
+                existingResult.id,
+                decodedQuizId,
+                userId
+            );
+            await connection.commit();
+            if (!existingId) throw httpError("Result id was not created.", 500);
+            return existingId;
         }
 
         const questionIds = parseQuestionIds(quiz.question_ids);
-
-        const evaluation = result.evaluationData;
-        const formattedAnswers = result.formattedAnswers || {};
-
-        const timeSpent = toNonNegativeInt(result.timeSpent) ?? 0;
-
-        const sanitizedQuestionTimes = {};
-        if (result.questionTimes && typeof result.questionTimes === "object") {
-            for (const [qid, time] of Object.entries(result.questionTimes)) {
-                const questionId = toPositiveInt(qid);
-                const value = toNonNegativeInt(time);
-
-                if (questionId && value !== null) {
-                    sanitizedQuestionTimes[String(questionId)] = value;
-                }
-            }
-        }
-
-        const sanitizedSelectionLog = Array.isArray(result.selectionLog)
-            ? result.selectionLog
-                .map((entry) => {
-                    const questionId = toPositiveInt(entry?.questionId);
-                    const optionId = toPositiveInt(entry?.optionId);
-                    const timeSpentMs = toNonNegativeInt(entry?.timeSpentMs);
-                    const timestamp = toNonNegativeInt(entry?.timestamp);
-
-                    if (!questionId || !optionId || timeSpentMs === null || timestamp === null) {
-                        return null;
-                    }
-
-                    return {
-                        questionId,
-                        optionId,
-                        timeSpentMs,
-                        timestamp
-                    };
-                })
-                .filter(Boolean)
-            : [];
-
+        const answers = formattedAnswers && typeof formattedAnswers === "object" ? formattedAnswers : {};
         const metadata = await getQuizEvaluationMetadata(connection, questionIds, userId);
 
         const answerMutations = buildUserAnswerMutations({
@@ -2133,32 +2460,16 @@ async function handleInternalSaveQuizResult(req, res) {
         });
 
         const enrichedEvaluation = {};
-
-        if (evaluation.resultData && typeof evaluation.resultData === "object") {
-            for (const qid of questionIds) {
-                const key = String(qid);
-                const item = evaluation.resultData[key];
-
-                if (!item) continue;
-
-                enrichedEvaluation[key] = {
-                    ...item,
-                    selected_option_id: formattedAnswers[key] ?? null,
-                    is_answered: Object.prototype.hasOwnProperty.call(formattedAnswers, key)
-                };
-            }
+        for (const qid of questionIds) {
+            const key = String(qid);
+            const item = evaluation.resultData[key];
+            if (!item) continue;
+            enrichedEvaluation[key] = {
+                ...item,
+                selected_option_id: answers[key] ?? null,
+                is_answered: Object.prototype.hasOwnProperty.call(answers, key)
+            };
         }
-
-        const resultDataToStore = {
-            evaluation: enrichedEvaluation,
-            submission: {
-                submittedAnswers: formattedAnswers,
-                totalTimeSpent: timeSpent,
-                questionTimes: sanitizedQuestionTimes,
-                selectionLog: sanitizedSelectionLog,
-                lobbyCode: lobbyCode || null
-            }
-        };
 
         const savedResultId = await insertQuizResult(connection, {
             quizId: decodedQuizId,
@@ -2168,46 +2479,171 @@ async function handleInternalSaveQuizResult(req, res) {
             unansweredCount: evaluation.summary.unanswered_count,
             accuracyRate: evaluation.summary.accuracy_rate,
             score: evaluation.summary.score,
-            totalTimeSpent: timeSpent,
+            totalTimeSpent: spent,
             summary: evaluation.summary,
-            resultData: resultDataToStore
+            resultData: {
+                evaluation: enrichedEvaluation,
+                submission: {
+                    submittedAnswers: answers,
+                    totalTimeSpent: spent,
+                    questionTimes: sanitizedQuestionTimes,
+                    selectionLog: sanitizedSelectionLog,
+                    lobbyCode: lobbyCode || null
+                }
+            }
         });
 
         await persistUserAnswerMutations(connection, answerMutations);
-
         await updateUserXp(connection, {
             userId,
             xpPoints: xpResult.updatedXpPoints,
             xpLevel: xpResult.updatedXpLevel
         });
-
         await connection.commit();
+
+        if (!savedResultId) throw httpError("Result id was not created.", 500);
+        return savedResultId;
+    } catch (error) {
+        try { await connection.rollback(); } catch (_) {}
+
+        if (error && (error.code === "ER_DUP_ENTRY" || error.errno === 1062)) {
+            const fallback = await pool.getConnection();
+            try {
+                const existingResult = await getExistingQuizResult(fallback, decodedQuizId, userId);
+                const existingId = existingResult
+                    ? await positiveResultId(fallback, existingResult.id, decodedQuizId, userId)
+                    : null;
+                if (existingId) return existingId;
+            } finally {
+                fallback.release();
+            }
+        }
+
+        throw error;
+    } finally {
+        connection.release();
+    }
+}
+
+async function handleInternalGradeQuiz(req, res) {
+    const { quizId } = req.params;
+    const { userId, lobbyCode, answers, timeSpent, questionTimes, selectionLog } = req.body || {};
+
+    if (!answers || typeof answers !== "object" || Array.isArray(answers)) {
+        return res.status(400).json({ error: "Invalid payload. Expected answers to be an object map." });
+    }
+
+    const decodedQuizId = decodeQuizId(quizId);
+    if (!Number.isInteger(decodedQuizId) || decodedQuizId <= 0) {
+        return res.status(400).json({ error: "Invalid quizId." });
+    }
+
+    let connection;
+
+    try {
+        connection = await pool.getConnection();
+        const quiz = await getQuizById(connection, decodedQuizId);
+
+        if (!quiz) {
+            return res.status(404).json({ error: "Quiz not found." });
+        }
+
+        const questionIds = parseQuestionIds(quiz.question_ids);
+        const formattedAnswers = answers;
+        const metadata = await getQuizEvaluationMetadata(connection, questionIds, userId);
+        const evaluation = evaluateQuizSubmission({
+            questionIds,
+            submittedAnswers: formattedAnswers,
+            correctOptionsMap: metadata.correctOptionsMap,
+            descriptiveMap: metadata.descriptiveMap,
+            questionMetaMap: metadata.questionMetaMap
+        });
+
+        connection.release();
+        connection = null;
+
+        let resultId = null;
+        if (userId) {
+            const numericResultId = await persistGradedAttempt({
+                decodedQuizId,
+                userId,
+                lobbyCode,
+                evaluation,
+                formattedAnswers,
+                timeSpent: timeSpent || 0,
+                questionTimes: questionTimes || {},
+                selectionLog: selectionLog || []
+            });
+            resultId = clientResultId(numericResultId);
+            if (!resultId) {
+                return res.status(500).json({ error: "Result id was not created." });
+            }
+        }
+
+        return res.status(200).json({
+            resultId,
+            id: resultId,
+            score: evaluation.summary.score,
+            total: questionIds.length,
+            correctCount: evaluation.summary.correct_count,
+            wrongCount: evaluation.summary.incorrect_count,
+            evaluationData: evaluation,
+            formattedAnswers,
+            timeSpent: timeSpent || 0,
+            questionTimes: questionTimes || {},
+            selectionLog: selectionLog || []
+        });
+    } catch (error) {
+        console.error("Error in handleInternalGradeQuiz:", error);
+        const status = Number(error.statusCode) || 500;
+        return res.status(status).json({
+            error: status === 404 ? "Quiz or User not found." : "Internal server error."
+        });
+    } finally {
+        if (connection) connection.release();
+    }
+}
+
+// Saves the result, applies XP, and saves individual answers
+async function handleInternalSaveQuizResult(req, res) {
+    const { quizId, userId, lobbyCode, result } = req.body || {};
+
+    if (!userId || !quizId || !result) {
+        return res.status(400).json({ error: "Invalid payload." });
+    }
+
+    const decodedQuizId = decodeQuizId(quizId);
+    if (!Number.isInteger(decodedQuizId) || decodedQuizId <= 0) {
+        return res.status(400).json({ error: "Invalid quizId." });
+    }
+
+    try {
+        const numericResultId = await persistGradedAttempt({
+            decodedQuizId,
+            userId,
+            lobbyCode,
+            evaluation: result.evaluationData,
+            formattedAnswers: result.formattedAnswers || {},
+            timeSpent: result.timeSpent,
+            questionTimes: result.questionTimes,
+            selectionLog: result.selectionLog
+        });
+        const publicId = clientResultId(numericResultId);
+        if (!publicId) {
+            return res.status(500).json({ error: "Result id was not created." });
+        }
 
         return res.status(200).json({
             success: true,
-            resultId: savedResultId
+            resultId: publicId,
+            id: publicId
         });
-
     } catch (error) {
-        if (connection) {
-            try { await connection.rollback(); } catch (_) {}
-        }
-
-        if (error && (error.code === "ER_DUP_ENTRY" || error.errno === 1062)) {
-            return res.status(200).json({
-                success: true,
-                note: "Already saved"
-            });
-        }
-
         console.error("Error in handleInternalSaveQuizResult:", error);
-
-        return res.status(500).json({
-            error: "Internal server error."
+        const status = Number(error.statusCode) || 500;
+        return res.status(status).json({
+            error: status === 404 ? "Quiz or User not found." : "Internal server error."
         });
-
-    } finally {
-        if (connection) connection.release();
     }
 }
 
@@ -2230,22 +2666,26 @@ async function getQuizResultById(connection, {
     resultId,
     userId
 }) {
-    const [rows] = await connection.query(`
+        const [rows] = await connection.query(`
         SELECT
-            id,
-            quiz_id,
-            user_id,
-            correct_count,
-            incorrect_count,
-            unanswered_count,
-            accuracy_rate,
-            total_score,
-            summary_json,
-            result_data_json,
-            created_at
-        FROM quiz_results
-        WHERE id = ?
-          AND user_id = ?
+            r.id,
+            r.quiz_id,
+            r.user_id,
+            r.correct_count,
+            r.incorrect_count,
+            r.unanswered_count,
+            r.accuracy_rate,
+            r.total_score,
+            r.summary_json,
+            r.result_data_json,
+            r.created_at,
+            q.title AS quiz_title,
+            u.avatar_url
+        FROM quiz_results r
+        LEFT JOIN quizzes q ON q.id = r.quiz_id
+        LEFT JOIN tam24_users u ON u.id = r.user_id
+        WHERE r.id = ?
+          AND r.user_id = ?
         LIMIT 1
     `, [
         resultId,
@@ -2261,6 +2701,8 @@ async function getQuizResultById(connection, {
     return {
         id: row.id,
         quizId: row.quiz_id,
+        quizName: row.quiz_title || null,
+        avatarUrl: row.avatar_url || null,
         userId: row.user_id,
         correctCount: row.correct_count,
         incorrectCount: row.incorrect_count,
@@ -2386,6 +2828,8 @@ async function handleGetQuizResult(req, res) {
         const formattedResult = {
             id: encodeResultId(result.id),
             quizId: encodeQuizId(result.quizId),
+            quizName: result.quizName || null,
+            avatarUrl: result.avatarUrl || null,
             is_public: is_public,
             userId: result.userId,
             success: result.success,
@@ -2472,7 +2916,7 @@ const handleGetQuizMembers = async (req, res) => {
         const members = sorted.map((m, index) => ({
             id: m.id,
             userId: m.id,
-            fullName: m.first_name + '' + m.last_name || "کاربر ناشناس",
+            fullName: `${m.first_name || ''} ${m.last_name || ''}`.trim() || "کاربر ناشناس",
             avatar: m.avatar_url || null,
             role: m.role,
             score: m.score,
@@ -2511,21 +2955,23 @@ const handleGetQuizResultByUserAndQuiz = async (req, res) => {
         // Retrieve quiz result record by quiz and user
         const [rows] = await connection.query(`
             SELECT
-                id,
-                quiz_id,
-                user_id,
-                correct_count,
-                incorrect_count,
-                unanswered_count,
-                accuracy_rate,
-                total_score,
-                total_time_spent,
-                summary_json,
-                result_data_json,
-                created_at
-            FROM quiz_results
-            WHERE quiz_id = ?
-              AND user_id = ?
+                r.id,
+                r.quiz_id,
+                r.user_id,
+                r.correct_count,
+                r.incorrect_count,
+                r.unanswered_count,
+                r.accuracy_rate,
+                r.total_score,
+                r.total_time_spent,
+                r.summary_json,
+                r.result_data_json,
+                r.created_at,
+                u.avatar_url
+            FROM quiz_results r
+            LEFT JOIN tam24_users u ON u.id = r.user_id
+            WHERE r.quiz_id = ?
+              AND r.user_id = ?
             LIMIT 1
         `, [decodedQuizId, targetUserId]);
 
@@ -2538,6 +2984,7 @@ const handleGetQuizResultByUserAndQuiz = async (req, res) => {
             id: row.id,
             quizId: row.quiz_id,
             userId: row.user_id,
+            avatarUrl: row.avatar_url || null,
             correctCount: row.correct_count,
             incorrectCount: row.incorrect_count,
             unansweredCount: row.unanswered_count,
@@ -2639,6 +3086,7 @@ const handleGetQuizResultByUserAndQuiz = async (req, res) => {
             id: encodeResultId(result.id),
             quizId: encodeQuizId(result.quizId),
             userId: result.userId,
+            avatarUrl: result.avatarUrl || null,
             correctCount: result.correctCount,
             incorrectCount: result.incorrectCount,
             unansweredCount: result.unansweredCount || 0,
@@ -2735,6 +3183,8 @@ module.exports = {
     handleGetGradesBySubjects,     // به روز شده
     handleGetChaptersBySubjects,   // به روز شده
     handleGetMabahesByChapters,    // به روز شده
+    handleSearchBankQuestions,
+    handleGetBankQuestionAnswer,
     handleCreateQuiz,
     handleGetQuizByShareCode,
     handleGetQuizMetadata,

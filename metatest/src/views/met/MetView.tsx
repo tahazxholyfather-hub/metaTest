@@ -18,10 +18,16 @@ import { SubjectPicker } from './SubjectPicker';
 import { SUBJECT_FALLBACKS, sortSubjects } from './subjectIcons';
 import { subscribeSharedAudio } from './audio';
 import { GraySpinner, easeOut, useIsMobile } from './ui';
+import PlanSelectionModal from '../../components/PlanSelectionModal';
+import CoinPurchaseModal from '../../components/CoinPurchaseModal';
+import { ChemballGame } from '../../games/chemball/ChemballGame';
 
 type Props = {
     onNavigate: (view: View) => void;
+    onToggleHeader?: (hidden: boolean) => void;
 };
+
+const GAME_REVEAL_MS = 2000;
 
 const PANEL_TITLES: Record<RailPanel, string> = {
     history: 'تاریخچه گفتگوها',
@@ -31,17 +37,21 @@ const PANEL_TITLES: Record<RailPanel, string> = {
 };
 
 /** Root of the AI tutor. No intro screen — the student lands straight in the chat. */
-export function MetView({ onNavigate }: Props) {
+export function MetView({ onNavigate, onToggleHeader }: Props) {
     const isMobile = useIsMobile();
+    void onNavigate;
     const [boot, setBoot] = useState<MetBootstrap | null>(null);
     const [bootError, setBootError] = useState<string | null>(null);
     const [wallet, setWallet] = useState<MetWallet | null>(null);
     const [settings, setSettings] = useState<MetSettings | null>(null);
     const [subjectKey, setSubjectKey] = useState<SubjectKey>('general');
     const [panel, setPanel] = useState<RailPanel | null>(null);
+    const [gamePhase, setGamePhase] = useState<'off' | 'loading' | 'play'>('off');
     const [historyKey, setHistoryKey] = useState(0);
     const [listeningLevel, setListeningLevel] = useState<number | null>(null);
     const [speaking, setSpeaking] = useState<{ on: boolean; level: number }>({ on: false, level: 0 });
+    const [buyOpen, setBuyOpen] = useState(false);
+    const [plansOpen, setPlansOpen] = useState(false);
     const composerRef = useRef<ComposerHandle | null>(null);
     const openedInitial = useRef(false);
 
@@ -154,18 +164,63 @@ export function MetView({ onNavigate }: Props) {
 
     const togglePanel = useCallback((p: RailPanel) => setPanel((cur) => (cur === p ? null : p)), []);
 
+    const openGame = useCallback(() => {
+        setPanel(null);
+        setGamePhase('loading');
+    }, []);
+
+    const closeGame = useCallback(() => setGamePhase('off'), []);
+
+    useEffect(() => {
+        if (gamePhase !== 'loading') return;
+        const timer = window.setTimeout(() => setGamePhase('play'), GAME_REVEAL_MS);
+        return () => window.clearTimeout(timer);
+    }, [gamePhase]);
+
+    useEffect(() => {
+        const hideChrome = isMobile && gamePhase !== 'off';
+        onToggleHeader?.(hideChrome);
+        return () => onToggleHeader?.(false);
+    }, [gamePhase, isMobile, onToggleHeader]);
+
+    const gameInner = gamePhase === 'loading' ? (
+        <div className="grid h-full min-h-0 place-items-center text-[#eef2fb]" dir="rtl">
+            <div className="flex flex-col items-center gap-4">
+                <GraySpinner size={28} />
+                <p className="text-sm font-extrabold">در حال آماده‌سازی بازی</p>
+            </div>
+        </div>
+    ) : (
+        <ChemballGame onExit={closeGame} />
+    );
+
     /* ── Render states ───────────────────────────────────────────────── */
     if (bootError && !boot) {
         return (
-            <div className="ai-teacher-root flex-1 h-full grid place-items-center bg-[var(--bg-app)] p-6" dir="rtl">
-                <div className="text-center max-w-[32ch]">
-                    <div className="w-20 h-20 mx-auto mb-4"><Met size="100%" state="sad" color="neutral" /></div>
-                    <div className="inline-flex items-center gap-1.5 text-[14px] font-extrabold text-[var(--text-primary)]"><WifiOff size={16} /> مِت در دسترس نیست</div>
-                    <p className="text-[12.5px] text-[var(--text-muted)] mt-2 leading-relaxed">{bootError}</p>
-                    <button type="button" onClick={load} className="mt-4 h-10 px-4 rounded-[12px] bg-[var(--color-primary-500)] text-white text-[12.5px] font-extrabold inline-flex items-center gap-1.5">
-                        <RefreshCw size={14} /> تلاش دوباره
-                    </button>
-                </div>
+            <div className="ai-teacher-root relative flex-1 h-full min-h-0 bg-[var(--bg-app)]" dir="rtl">
+                {gamePhase === 'off' ? (
+                    <div className="h-full grid place-items-center p-6">
+                        <div className="text-center max-w-[32ch]">
+                            <div className="w-20 h-20 mx-auto mb-4"><Met size="100%" state="sad" color="neutral" /></div>
+                            <div className="inline-flex items-center gap-1.5 text-[14px] font-extrabold text-[var(--text-primary)]"><WifiOff size={16} /> مِت در دسترس نیست</div>
+                            <p className="text-[12.5px] text-[var(--text-muted)] mt-2 leading-relaxed">{bootError}</p>
+                            <button type="button" onClick={load} className="mt-4 h-10 px-4 rounded-[12px] bg-[var(--color-primary-500)] text-white text-[12.5px] font-extrabold inline-flex items-center gap-1.5">
+                                <RefreshCw size={14} /> تلاش دوباره
+                            </button>
+                            <button type="button" onClick={openGame} className="mt-2 block mx-auto h-10 px-4 rounded-[12px] border border-[var(--border)] text-[12.5px] font-extrabold text-[var(--text-primary)]">
+                                بازی شیمی
+                            </button>
+                        </div>
+                    </div>
+                ) : isMobile ? (
+                    <div className="fixed inset-0 z-[80] bg-[#030605]">{gameInner}</div>
+                ) : (
+                    <div className="flex h-full items-center justify-center p-5">
+                        <div className="h-[min(740px,100%)] aspect-[9/17.2] max-w-full overflow-hidden rounded-[2rem] bg-[#0B0B10] shadow-[0_28px_70px_rgba(11,18,32,0.28)]">
+                            <div className="h-full w-full">{gameInner}</div>
+                        </div>
+                    </div>
+                )}
             </div>
         );
     }
@@ -197,7 +252,7 @@ export function MetView({ onNavigate }: Props) {
             case 'settings':
                 return <SettingsPanel settings={settings} features={features} onChange={setSettings} className="flex-1" />;
             case 'coins':
-                return <CoinsPanel wallet={wallet} onRefresh={refreshWallet} className="flex-1" />;
+                return <CoinsPanel wallet={wallet} onRefresh={refreshWallet} onBuy={() => setBuyOpen(true)} className="flex-1" />;
             case 'subjects':
                 return <SubjectPicker subjects={subjects} value={subjectKey} onChange={changeSubject} />;
             default:
@@ -220,6 +275,13 @@ export function MetView({ onNavigate }: Props) {
             {unavailableBanner}
 
             <div className="relative flex-1 flex min-h-0">
+                {gamePhase !== 'off' && !isMobile ? (
+                    <div className="flex h-full min-h-0 min-w-0 flex-1 items-center justify-center bg-[var(--bg-app)] p-5">
+                        <div className="h-[min(740px,100%)] aspect-[9/17.2] max-w-full overflow-hidden rounded-[2rem] bg-[#0B0B10] shadow-[0_28px_70px_rgba(11,18,32,0.28)]">
+                            <div className="h-full w-full">{gameInner}</div>
+                        </div>
+                    </div>
+                ) : (
                 <div className={`flex-1 flex flex-col min-w-0 min-h-0 ${isMobile ? '' : 'pl-[76px]'}`}>
                     <ChatScreen
                         chat={chat}
@@ -232,18 +294,24 @@ export function MetView({ onNavigate }: Props) {
                         studentFirstName={boot.user.firstName}
                         isMobile={isMobile}
                         onOpenPanel={(p) => setPanel(p)}
+                        onOpenGame={openGame}
                         onNewChat={newChat}
                         onSpeak={speak}
                         onListening={setListeningLevel}
                         audioLevel={audioLevel}
                         ensureConversation={ensureConversation}
                         composerRef={composerRef}
-                        bottomInset={isMobile ? 'calc(4rem + env(safe-area-inset-bottom) + 0.5rem)' : undefined}
+                        bottomInset={isMobile && gamePhase === 'off' ? 'var(--app-bottom-nav-space)' : undefined}
+                        onChatAction={(action) => {
+                            if (action === 'open_plans') setPlansOpen(true);
+                            if (action === 'open_coins') setBuyOpen(true);
+                        }}
                     />
                 </div>
+                )}
 
                 {/* Desktop: floating rail + panel */}
-                {!isMobile && (
+                {!isMobile && gamePhase === 'off' && (
                     <div className="pointer-events-none absolute inset-y-0 left-3 z-30 flex items-center gap-3 py-4" dir="ltr">
                         <div className="pointer-events-auto">
                             <MetRail
@@ -251,11 +319,12 @@ export function MetView({ onNavigate }: Props) {
                                 metColor={subjectToMetColor(subjectKey)}
                                 audioLevel={audioLevel}
                                 coins={wallet.total}
+                                unlimited={wallet.unlimited}
                                 activePanel={panel}
                                 onTogglePanel={togglePanel}
                                 onChat={() => { setPanel(null); composerRef.current?.focus(); }}
                                 onNewChat={newChat}
-                                onGames={() => onNavigate('tests')}
+                                onGames={openGame}
                                 busy={chat.busy}
                             />
                         </div>
@@ -279,12 +348,22 @@ export function MetView({ onNavigate }: Props) {
                 )}
             </div>
 
-            {/* Mobile: bottom sheets */}
+            {isMobile && gamePhase !== 'off' && (
+                <div className="fixed inset-0 z-[80] flex min-h-0 flex-col bg-[#030605]">{gameInner}</div>
+            )}
+
             {isMobile && (
                 <ResponsiveModal isOpen={panel !== null} onClose={() => setPanel(null)} title={panel ? PANEL_TITLES[panel] : ''}>
                     <div className="ai-teacher-root flex flex-col min-h-[40vh] max-h-[70vh]">{panelContent(panel)}</div>
                 </ResponsiveModal>
             )}
+
+            <CoinPurchaseModal
+                isOpen={buyOpen}
+                onClose={() => setBuyOpen(false)}
+                onRequirePlan={() => { setBuyOpen(false); setPlansOpen(true); }}
+            />
+            <PlanSelectionModal isOpen={plansOpen} onClose={() => setPlansOpen(false)} />
         </div>
     );
 }

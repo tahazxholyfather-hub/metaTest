@@ -93,11 +93,11 @@ export default function PdfLibraryManager({ user }: PdfLibraryManagerProps) {
             if (res.success) {
                 setPdfs(res.pdfs || []);
             } else {
-                setErrorMessage(res.message || 'Failed to load the PDF library.');
+                setErrorMessage(res.message || 'بارگذاری کتابخانه ناموفق بود.');
             }
         } catch (error) {
             console.error('Fetch PDFs error:', error);
-            setErrorMessage('An error occurred while communicating with the server.');
+            setErrorMessage('ارتباط با سرور برقرار نشد.');
         } finally {
             setIsLoading(false);
         }
@@ -155,7 +155,7 @@ export default function PdfLibraryManager({ user }: PdfLibraryManagerProps) {
         if (!file) return;
 
         if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
-            setErrorMessage('Only PDF files are allowed.');
+            setErrorMessage('فقط فایل PDF مجاز است.');
             e.target.value = '';
             return;
         }
@@ -169,15 +169,15 @@ export default function PdfLibraryManager({ user }: PdfLibraryManagerProps) {
         reader.onload = () => {
             setForm(prev => ({ ...prev, file_data: reader.result as string, file_name: file.name }));
         };
-        reader.onerror = () => setErrorMessage('Failed to read the selected file.');
+        reader.onerror = () => setErrorMessage('خواندن فایل ناموفق بود.');
         reader.readAsDataURL(file);
     };
 
     const handleSave = async () => {
-        if (!form.title.trim()) { setErrorMessage('Title is required.'); return; }
-        if (!form.subject.trim()) { setErrorMessage('Subject is required.'); return; }
-        if (!form.grade.trim()) { setErrorMessage('Grade is required.'); return; }
-        if (!form.id && !form.file_data) { setErrorMessage('Please select a PDF file to upload.'); return; }
+        if (!form.title.trim()) { setErrorMessage('عنوان الزامی است.'); return; }
+        if (!form.subject.trim()) { setErrorMessage('درس الزامی است.'); return; }
+        if (!form.grade.trim()) { setErrorMessage('پایه الزامی است.'); return; }
+        if (!form.id && !form.file_data) { setErrorMessage('یک فایل PDF انتخاب کن.'); return; }
 
         setIsSaving(true);
         setErrorMessage(null);
@@ -203,14 +203,14 @@ export default function PdfLibraryManager({ user }: PdfLibraryManagerProps) {
 
             if (res.success) {
                 setIsModalOpen(false);
-                setSuccessMessage(form.id ? 'PDF updated successfully.' : 'PDF uploaded successfully.');
+                setSuccessMessage(form.id ? 'PDF به‌روز شد.' : 'PDF بارگذاری شد.');
                 await fetchPdfs();
             } else {
-                setErrorMessage(res.message || 'Failed to save the PDF.');
+                setErrorMessage(res.message || 'ذخیره PDF ناموفق بود.');
             }
         } catch (error) {
             console.error('Save PDF error:', error);
-            setErrorMessage('An error occurred while saving. Large files may exceed the server limit.');
+            setErrorMessage('هنگام ذخیره خطایی رخ داد. فایل‌های خیلی بزرگ ممکن است از سقف سرور بیشتر باشند.');
         } finally {
             setIsSaving(false);
         }
@@ -218,7 +218,7 @@ export default function PdfLibraryManager({ user }: PdfLibraryManagerProps) {
 
     const handleDelete = async (pdf: PdfItem) => {
         if (!canDelete) return;
-        if (!window.confirm(`Delete "${pdf.title}" (ID: ${pdf.id})? This cannot be undone.`)) return;
+        if (!window.confirm(`«${pdf.title}» (شناسه ${pdf.id}) حذف شود؟ این کار برگشت‌پذیر نیست.`)) return;
 
         setDeletingId(pdf.id);
         setErrorMessage(null);
@@ -227,14 +227,14 @@ export default function PdfLibraryManager({ user }: PdfLibraryManagerProps) {
             const res = response.data || response;
 
             if (res.success) {
-                setSuccessMessage('PDF deleted successfully.');
+                setSuccessMessage('PDF حذف شد.');
                 await fetchPdfs();
             } else {
-                setErrorMessage(res.message || 'Failed to delete the PDF.');
+                setErrorMessage(res.message || 'حذف PDF ناموفق بود.');
             }
         } catch (error) {
             console.error('Delete PDF error:', error);
-            setErrorMessage('An error occurred while deleting.');
+            setErrorMessage('هنگام حذف خطایی رخ داد.');
         } finally {
             setDeletingId(null);
         }
@@ -260,7 +260,7 @@ export default function PdfLibraryManager({ user }: PdfLibraryManagerProps) {
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && fetchPdfs()}
-                            placeholder="Search title, subject, grade..."
+                            placeholder="جستجوی عنوان، درس یا پایه..."
                             className="w-full bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-xl pr-9 pl-4 py-2.5 text-xs font-medium outline-none focus:border-[#1a73e8] transition-all"
                             dir="auto"
                         />
@@ -270,7 +270,7 @@ export default function PdfLibraryManager({ user }: PdfLibraryManagerProps) {
                             value={categoryFilter}
                             options={CATEGORY_OPTIONS}
                             onChange={(v) => setCategoryFilter(v as string | null)}
-                            placeholder="All Categories"
+                            placeholder="همه دسته‌ها"
                         />
                     </div>
                 </div>
@@ -280,8 +280,8 @@ export default function PdfLibraryManager({ user }: PdfLibraryManagerProps) {
                         <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
                     </button>
                     <button onClick={openAddModal} className="flex items-center gap-2 bg-[#1a73e8] hover:bg-[#1557b0] text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md">
-                        <Plus size={16} /> <span className="hidden sm:inline">Add PDF</span>
-                        <span className="sm:hidden">Add</span>
+                        <Plus size={16} /> <span className="hidden sm:inline">افزودن PDF</span>
+                        <span className="sm:hidden">افزودن</span>
                     </button>
                 </div>
             </div>
@@ -327,7 +327,7 @@ export default function PdfLibraryManager({ user }: PdfLibraryManagerProps) {
                                             : 'bg-gray-100 text-gray-500 dark:bg-gray-500/10 dark:text-gray-400'
                                     }`}>
                                         {pdf.is_active === 1 ? <Eye size={10} /> : <EyeOff size={10} />}
-                                        {pdf.is_active === 1 ? 'Active' : 'Hidden'}
+                                        {pdf.is_active === 1 ? 'فعال' : 'مخفی'}
                                     </span>
                                 </div>
                             </div>
@@ -343,19 +343,19 @@ export default function PdfLibraryManager({ user }: PdfLibraryManagerProps) {
                             {/* Meta */}
                             <div className="grid grid-cols-2 gap-2 text-[11px] font-medium">
                                 <div className="flex justify-between bg-[#f8f9fa] dark:bg-[#131314] px-3 py-2 rounded-lg">
-                                    <span className="text-gray-400">Subject</span>
+                                    <span className="text-gray-400">درس</span>
                                     <span className="text-gray-700 dark:text-gray-300 truncate mr-2" dir="auto">{pdf.subject}</span>
                                 </div>
                                 <div className="flex justify-between bg-[#f8f9fa] dark:bg-[#131314] px-3 py-2 rounded-lg">
-                                    <span className="text-gray-400">Grade</span>
+                                    <span className="text-gray-400">پایه</span>
                                     <span className="text-gray-700 dark:text-gray-300 truncate mr-2" dir="auto">{pdf.grade}</span>
                                 </div>
                                 <div className="flex justify-between bg-[#f8f9fa] dark:bg-[#131314] px-3 py-2 rounded-lg">
-                                    <span className="text-gray-400">Size</span>
+                                    <span className="text-gray-400">حجم</span>
                                     <span className="text-gray-700 dark:text-gray-300">{pdf.file_size}</span>
                                 </div>
                                 <div className="flex justify-between bg-[#f8f9fa] dark:bg-[#131314] px-3 py-2 rounded-lg">
-                                    <span className="text-gray-400">Pages</span>
+                                    <span className="text-gray-400">صفحات</span>
                                     <span className="text-gray-700 dark:text-gray-300">{pdf.pages}</span>
                                 </div>
                             </div>
@@ -372,7 +372,7 @@ export default function PdfLibraryManager({ user }: PdfLibraryManagerProps) {
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="p-2 rounded-lg text-[#86868b] hover:bg-gray-100 dark:hover:bg-[#2b2d2f] transition-all"
-                                        title="Open PDF"
+                                        title="باز کردن PDF"
                                     >
                                         <Download size={14} />
                                     </a>
@@ -380,7 +380,7 @@ export default function PdfLibraryManager({ user }: PdfLibraryManagerProps) {
                                         onClick={() => openEditModal(pdf)}
                                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold text-[#1a73e8] bg-[#e8f0fe] dark:bg-[#1a73e8]/10 hover:bg-[#d2e3fc] dark:hover:bg-[#1a73e8]/20 transition-all"
                                     >
-                                        <Edit2 size={12} /> Edit
+                                        <Edit2 size={12} /> ویرایش
                                     </button>
                                     {canDelete && (
                                         <button
@@ -399,7 +399,7 @@ export default function PdfLibraryManager({ user }: PdfLibraryManagerProps) {
 
                 {!isLoading && pdfs.length === 0 && (
                     <div className="py-16 text-center text-xs font-medium text-gray-400 bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl">
-                        No PDFs found in the library.
+                        PDFی در کتابخانه نیست.
                     </div>
                 )}
             </div>
@@ -411,7 +411,7 @@ export default function PdfLibraryManager({ user }: PdfLibraryManagerProps) {
                     <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto custom-scrollbar bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-[2rem] p-8 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
                         <div className="flex justify-between items-center mb-6">
                             <span className="text-sm font-bold text-gray-800 dark:text-gray-200">
-                                {form.id ? `Edit PDF #${form.id}` : 'Add New PDF'}
+                                {form.id ? `ویرایش PDF #${form.id}` : 'افزودن PDF'}
                             </span>
                             <button onClick={() => !isSaving && setIsModalOpen(false)} className="p-1.5 bg-gray-100 dark:bg-[#2d3748] rounded-full hover:text-red-500 transition-colors">
                                 <X size={14} />
@@ -421,12 +421,12 @@ export default function PdfLibraryManager({ user }: PdfLibraryManagerProps) {
                         <div className="flex flex-col gap-4 mb-6">
                             {/* Title */}
                             <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider px-1">Title *</label>
+                                <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider px-1">عنوان *</label>
                                 <input
                                     type="text"
                                     value={form.title}
                                     onChange={(e) => setForm(prev => ({ ...prev, title: e.target.value }))}
-                                    placeholder="PDF title..."
+                                    placeholder="عنوان PDF..."
                                     autoFocus
                                     className="w-full bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-xl px-4 py-3 text-xs font-medium outline-none focus:border-[#1a73e8] transition-all"
                                     dir="auto"
@@ -435,11 +435,11 @@ export default function PdfLibraryManager({ user }: PdfLibraryManagerProps) {
 
                             {/* Description */}
                             <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider px-1">Description</label>
+                                <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider px-1">توضیح</label>
                                 <textarea
                                     value={form.description}
                                     onChange={(e) => setForm(prev => ({ ...prev, description: e.target.value }))}
-                                    placeholder="Short description..."
+                                    placeholder="توضیح کوتاه..."
                                     className="w-full h-20 bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-xl px-4 py-3 text-xs font-medium resize-y outline-none focus:border-[#1a73e8] transition-all custom-scrollbar"
                                     dir="auto"
                                 />
@@ -448,14 +448,14 @@ export default function PdfLibraryManager({ user }: PdfLibraryManagerProps) {
                             {/* Category + Label */}
                             <div className="grid grid-cols-2 gap-4">
                                 <CustomSelect
-                                    label="Category *"
+                                    label="دسته *"
                                     value={form.category}
                                     options={CATEGORY_OPTIONS}
                                     onChange={handleCategoryChange}
-                                    placeholder="Select Category..."
+                                    placeholder="انتخاب دسته..."
                                 />
                                 <div className="space-y-1.5">
-                                    <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider px-1">Category Label</label>
+                                    <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider px-1">نام دسته</label>
                                     <input
                                         type="text"
                                         value={form.category_label}
@@ -470,23 +470,23 @@ export default function PdfLibraryManager({ user }: PdfLibraryManagerProps) {
                             {/* Subject + Grade */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1.5">
-                                    <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider px-1">Subject *</label>
+                                    <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider px-1">درس *</label>
                                     <input
                                         type="text"
                                         value={form.subject}
                                         onChange={(e) => setForm(prev => ({ ...prev, subject: e.target.value }))}
-                                        placeholder="e.g. ریاضی"
+                                        placeholder="مثلاً ریاضی"
                                         className="w-full bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-xl px-4 py-3 text-xs font-medium outline-none focus:border-[#1a73e8] transition-all"
                                         dir="auto"
                                     />
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider px-1">Grade *</label>
+                                    <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider px-1">پایه *</label>
                                     <input
                                         type="text"
                                         value={form.grade}
                                         onChange={(e) => setForm(prev => ({ ...prev, grade: e.target.value }))}
-                                        placeholder="e.g. دهم"
+                                        placeholder="مثلاً دهم"
                                         className="w-full bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-xl px-4 py-3 text-xs font-medium outline-none focus:border-[#1a73e8] transition-all"
                                         dir="auto"
                                     />
@@ -496,7 +496,7 @@ export default function PdfLibraryManager({ user }: PdfLibraryManagerProps) {
                             {/* Pages + Active */}
                             <div className="grid grid-cols-2 gap-4 items-end">
                                 <div className="space-y-1.5">
-                                    <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider px-1">Pages</label>
+                                    <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider px-1">صفحات</label>
                                     <input
                                         type="number"
                                         min="0"
@@ -515,14 +515,14 @@ export default function PdfLibraryManager({ user }: PdfLibraryManagerProps) {
                                     }`}
                                 >
                                     {form.is_active ? <Eye size={14} /> : <EyeOff size={14} />}
-                                    {form.is_active ? 'Active (Visible)' : 'Inactive (Hidden)'}
+                                    {form.is_active ? 'فعال (قابل مشاهده)' : 'غیرفعال (مخفی)'}
                                 </button>
                             </div>
 
                             {/* File upload */}
                             <div className="space-y-1.5">
                                 <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider px-1">
-                                    PDF File {form.id ? '(leave empty to keep the current file)' : '*'}
+                                    فایل PDF {form.id ? '(خالی بگذار تا فایل فعلی بماند)' : '*'}
                                 </label>
                                 <input ref={fileInputRef} type="file" accept="application/pdf,.pdf" onChange={handleFileSelect} className="hidden" />
                                 <button
@@ -530,7 +530,7 @@ export default function PdfLibraryManager({ user }: PdfLibraryManagerProps) {
                                     className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-[#dadce0] dark:border-[#444746] hover:border-[#1a73e8] rounded-xl px-4 py-5 text-xs font-bold text-[#86868b] hover:text-[#1a73e8] transition-all"
                                 >
                                     <Upload size={16} />
-                                    {form.file_name ? form.file_name : `Click to select a PDF file (max ${MAX_FILE_SIZE_MB} MB)`}
+                                    {form.file_name ? form.file_name : `برای انتخاب PDF کلیک کن (حداکثر ${MAX_FILE_SIZE_MB} مگابایت)`}
                                 </button>
                             </div>
                         </div>
@@ -541,7 +541,7 @@ export default function PdfLibraryManager({ user }: PdfLibraryManagerProps) {
                             className="w-full flex items-center justify-center gap-2 bg-[#1a73e8] hover:bg-[#1557b0] disabled:bg-[#1a73e8]/70 text-white py-3 rounded-xl text-xs font-bold transition-all shadow-md"
                         >
                             {isSaving ? <Loader2 size={16} className="animate-spin" /> : form.id ? <Edit2 size={16} /> : <Upload size={16} />}
-                            {isSaving ? 'Saving...' : form.id ? 'Save Changes' : 'Upload PDF'}
+                            {isSaving ? 'در حال ذخیره...' : form.id ? 'ذخیره تغییرات' : 'بارگذاری PDF'}
                         </button>
                     </div>
                 </div>

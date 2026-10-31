@@ -4,6 +4,7 @@ import { authService } from '../../services/auth.service';
 import { AuthenticatedUser } from '../../core/types/user.types';
 import { getStorage } from '../../storage/storage.factory';
 import { logger } from '../../config/logger';
+import { getIO } from '../io.registry';
 
 export interface AuthenticatedSocket extends Socket {
     data: {
@@ -28,24 +29,37 @@ export async function socketAuthMiddleware(
                 : undefined;
 
         const rawToken = tokenFromAuth ?? tokenFromHeader;
-
         const token = authService.extractBearerToken(rawToken);
         const user = await authService.getAuthenticatedUser(token);
 
         socket.data.user = user;
         socket.data.accessToken = token;
 
-        await getStorage().bindSocketToUser({
+        const storage = getStorage();
+        const previous = await storage.getUserBinding(user.id);
+
+        await storage.bindSocketToUser({
             userId: user.id,
             socketId: socket.id,
             connectedAt: Date.now(),
+            lobbyCode: previous?.lobbyCode,
         });
+
+        if (previous?.socketId && previous.socketId !== socket.id) {
+            const previousSocket = getIO()?.sockets.sockets.get(previous.socketId);
+            if (previousSocket) {
+                previousSocket.emit('lobby:error', {
+                    message: 'Session replaced',
+                    code: 'SESSION_REPLACED',
+                });
+                previousSocket.disconnect(true);
+            }
+        }
 
         logger.info(
             {
                 socketId: socket.id,
                 userId: user.id,
-                user: user,
             },
             'Socket authenticated',
         );
@@ -54,7 +68,6 @@ export async function socketAuthMiddleware(
     } catch (err) {
         logger.warn(
             {
-                err,
                 socketId: socket.id,
             },
             'Socket authentication failed',

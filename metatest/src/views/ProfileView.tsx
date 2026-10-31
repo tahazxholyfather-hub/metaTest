@@ -3,17 +3,22 @@ import Cropper from "react-easy-crop";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import {
-    CreditCard, Crown, Calendar, CheckCircle2, XCircle,
+    CreditCard, Crown, Calendar, Check, CheckCircle2, XCircle,
     Clock, Loader2, Star, Shield as ShieldIcon, Diamond, User as UserIcon,
-    Inbox, Receipt, BadgePercent, UserPlus
+    Inbox, Receipt, BadgePercent, UserPlus, Wallet,
+    ArrowDownLeft, ArrowUpRight, Gift, Banknote
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useUser } from "../context/UserContext";
 import { flowApi } from '../lib/authApi';
 import { getCookie } from '../lib/cookies.ts';
 import { getCroppedImg } from "../lib/cropImage";
+import { avatarSrc } from "../lib/asset";
 
 // --- FIX 2: Import your custom ResponsiveModal component ---
 import { ResponsiveModal } from "../components/ResponsiveModal"; // Adjust the path if necessary
+import PlanSelectionModal from "../components/PlanSelectionModal";
+import { PlanDaysCircle, PlanRibbonBadge, planBenefitLines, planTint, type ShopPlan } from "../components/plan/PlanMarks";
 
 // --- Icons (no changes) ---
 const Icons = {
@@ -41,7 +46,7 @@ const PLATFORMS = {
     website: { name: "وب‌سایت", icon: Icons.Link, color: "text-[var(--accent)]", prefix: "https://" }
 };
 
-type Tab = "info" | "social" | "security" | "payments" | "plan" | "invites";
+type Tab = "info" | "social" | "security" | "payments" | "plan" | "invites" | "wallet";
 
 interface ProfileViewProps {
     onLogout: () => void;
@@ -56,7 +61,10 @@ const TAB_CONFIG: { id: Tab; label: string; shortLabel: string; icon: React.Reac
     { id: "plan", label: "اشتراک من", shortLabel: "اشتراک", icon: <Crown size={19} strokeWidth={1.7} /> },
     { id: "payments", label: "تاریخچه پرداخت‌ها", shortLabel: "پرداخت‌ها", icon: <CreditCard size={19} strokeWidth={1.7} /> },
     { id: "invites", label: "دعوت‌های من", shortLabel: "دعوت‌ها", icon: <UserPlus size={19} strokeWidth={1.7} /> },
+    { id: "wallet", label: "کیف پول", shortLabel: "کیف پول", icon: <Wallet size={19} strokeWidth={1.7} /> },
 ];
+
+const VISIBLE_TABS = TAB_CONFIG.filter((tab) => tab.id !== "social");
 
 const TAB_HEADERS: Record<Tab, { title: string; subtitle: string }> = {
     info: { title: "ویرایش اطلاعات فردی", subtitle: "اطلاعات حساب کاربری خود را در اینجا مدیریت کنید" },
@@ -65,6 +73,7 @@ const TAB_HEADERS: Record<Tab, { title: string; subtitle: string }> = {
     plan: { title: "اشتراک فعال", subtitle: "وضعیت طرح فعلی، روزهای باقی‌مانده و سوابق خرید بسته‌ها" },
     payments: { title: "تاریخچه پرداخت‌ها", subtitle: "اطلاعات کامل تمام تراکنش‌های شما در سیستم" },
     invites: { title: "دعوت‌های من", subtitle: "لیست کامل کاربرانی که با معرفی شما ثبت‌نام کرده‌اند" },
+    wallet: { title: "کیف پول تومانی", subtitle: "موجودی، تراکنش‌ها و درخواست برداشت وجه" },
 };
 
 // Plan meta used in the subscription tab
@@ -84,8 +93,93 @@ const PAYMENT_STATUS_META: Record<string, { label: string; classes: string; icon
     expired: { label: 'منقضی شده', classes: 'text-slate-500 bg-slate-500/10 border-slate-500/20', icon: Clock },
 };
 
+const FREE_PLAN_LINES = [
+    'یک پاسخ تشریحی در هر درس',
+    'یک پرسش از مِت در هر درس',
+    'یک آزمون شخصی در هر ۲۴ ساعت',
+    'روزانه ۲۴ سکه هوش مصنوعی',
+];
+
+function RotatingBenefit({ lines }: { lines: string[] }) {
+    const [index, setIndex] = useState(0);
+    const signature = lines.join('\n');
+
+    useEffect(() => {
+        setIndex(0);
+    }, [signature]);
+
+    useEffect(() => {
+        if (lines.length < 2) return;
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        const id = window.setInterval(() => setIndex((value) => (value + 1) % lines.length), 2400);
+        return () => window.clearInterval(id);
+    }, [lines.length, signature]);
+
+    const line = lines[index] || lines[0];
+    if (!line) return null;
+    return (
+        <div className="relative h-5 min-w-0 flex-1 overflow-hidden">
+            <AnimatePresence mode="wait">
+                <motion.p
+                    key={`${index}-${line}`}
+                    initial={{ y: 10, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    exit={{ y: -10, opacity: 0 }}
+                    transition={{ duration: 0.28 }}
+                    className="truncate text-[12px] font-bold text-[var(--text-primary)]"
+                >
+                    {line}
+                </motion.p>
+            </AnimatePresence>
+        </div>
+    );
+}
+
+function toShopPlan(plan: any): ShopPlan {
+    return {
+        id: String(plan.id),
+        name: plan.name || '',
+        days: plan.unlimited === true || plan.days == null ? null : Number(plan.days || 0),
+        unlimited: plan.unlimited === true || plan.days == null,
+        price: Number(plan.price || 0),
+        comparePrice: plan.comparePrice ? Number(plan.comparePrice) : null,
+        attributes: Array.isArray(plan.attributes) ? plan.attributes : [],
+        iconKey: plan.iconKey || null,
+        dailyCoins: plan.dailyCoins == null ? null : Number(plan.dailyCoins),
+        savings: plan.savings?.amount
+            ? { amount: Number(plan.savings.amount), versusName: String(plan.savings.versusName || '') }
+            : null,
+        purchasable: plan.purchasable !== false,
+        iconColors: plan.iconColors,
+    };
+}
+
 const formatPrice = (value: number | string) => `${Number(value || 0).toLocaleString('fa-IR')} ریال`;
 const formatDate = (value?: string | null) => value ? new Date(value).toLocaleDateString('fa-IR') : '—';
+
+const walletTxVisual = (type: string, amount: number) => {
+    if (type === 'referral_reward') return { icon: Gift, chip: 'bg-emerald-500/10 text-emerald-600', label: 'پاداش دعوت' };
+    if (type === 'withdrawal') return { icon: Banknote, chip: 'bg-amber-500/10 text-amber-600', label: 'برداشت' };
+    if (type === 'purchase') return { icon: ArrowUpRight, chip: 'bg-rose-500/10 text-rose-600', label: 'خرید' };
+    if (amount >= 0) return { icon: ArrowDownLeft, chip: 'bg-emerald-500/10 text-emerald-600', label: 'واریز' };
+    return { icon: ArrowUpRight, chip: 'bg-rose-500/10 text-rose-600', label: 'برداشت از موجودی' };
+};
+
+function WalletStat({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: number }) {
+    return (
+        <div className="flex items-center gap-2.5 rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] px-3 py-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--icon-bg)] text-[var(--accent)]">
+                <Icon size={16} strokeWidth={1.8} />
+            </span>
+            <span className="min-w-0">
+                <span className="block truncate text-[10px] text-[var(--text-muted)]">{label}</span>
+                <span className="mt-0.5 block text-[13px] font-black tabular-nums text-[var(--text-primary)]">
+                    {Number(value || 0).toLocaleString('fa-IR')}
+                </span>
+            </span>
+        </div>
+    );
+}
 
 const ProfileInput = ({ icon: Icon, label, value, onChange, type = "text", readOnly = false, placeholder, rightElement }: any) => (
     <div className="group">
@@ -165,10 +259,23 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
     const [paymentsData, setPaymentsData] = useState<{ payments: any[]; subscription: any } | null>(null);
     const [paymentsLoading, setPaymentsLoading] = useState(false);
     const [paymentsError, setPaymentsError] = useState<string | null>(null);
+    const [planModalOpen, setPlanModalOpen] = useState(false);
+    const [shopPlans, setShopPlans] = useState<ShopPlan[]>([]);
 
     const [invitesData, setInvitesData] = useState<{ list: any[]; totalInvited: number; activeInvites: number } | null>(null);
     const [invitesLoading, setInvitesLoading] = useState(false);
     const [invitesError, setInvitesError] = useState<string | null>(null);
+
+    const [walletData, setWalletData] = useState<{ balance: number; lifetimeEarned: number; lifetimeSpent: number; totalReferralEarned: number; pendingWithdrawal: number; transactions: any[] } | null>(null);
+    const [walletLoading, setWalletLoading] = useState(false);
+    const [walletError, setWalletError] = useState<string | null>(null);
+    const [withdrawOpen, setWithdrawOpen] = useState(false);
+    const [withdrawAmount, setWithdrawAmount] = useState('');
+    const [withdrawSubmitting, setWithdrawSubmitting] = useState(false);
+    const [referralCode, setReferralCode] = useState('');
+    const [inviteUrl, setInviteUrl] = useState('');
+    const [referralLoading, setReferralLoading] = useState(true);
+    const [referralError, setReferralError] = useState<string | null>(null);
 
     const fetchPayments = useCallback(async () => {
         setPaymentsLoading(true);
@@ -204,6 +311,44 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
         }
     }, []);
 
+    const fetchWallet = useCallback(async () => {
+        setWalletLoading(true);
+        setWalletError(null);
+        try {
+            const res = await flowApi.dispatch('get_my_wallet');
+            if (res.success && res.data) {
+                setWalletData(res.data);
+            } else {
+                setWalletError(res.message || 'خطا در دریافت کیف پول');
+            }
+        } catch (err: any) {
+            setWalletError(err?.message || 'خطای شبکه در ارتباط با سرور');
+        } finally {
+            setWalletLoading(false);
+        }
+    }, []);
+
+    const handleRequestWithdrawal = async () => {
+        const amount = Number(withdrawAmount);
+        if (!amount || amount <= 0) return;
+        setWithdrawSubmitting(true);
+        try {
+            const res = await flowApi.dispatch('request_withdrawal', { amount });
+            if (res.success) {
+                toast.success(res.message || 'درخواست شما ثبت شد؛ با شما تماس گرفته خواهد شد.');
+                setWithdrawOpen(false);
+                setWithdrawAmount('');
+                fetchWallet();
+            } else {
+                toast.error(res.message || 'خطا در ثبت درخواست برداشت');
+            }
+        } catch (err: any) {
+            toast.error(err?.message || 'خطای شبکه');
+        } finally {
+            setWithdrawSubmitting(false);
+        }
+    };
+
     useEffect(() => {
         if ((activeTab === 'payments' || activeTab === 'plan') && !paymentsData && !paymentsLoading) {
             fetchPayments();
@@ -211,7 +356,52 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
         if (activeTab === 'invites' && !invitesData && !invitesLoading) {
             fetchInvites();
         }
-    }, [activeTab, paymentsData, paymentsLoading, invitesData, invitesLoading, fetchPayments, fetchInvites]);
+        if (activeTab === 'wallet' && !walletData && !walletLoading) {
+            fetchWallet();
+        }
+        if (activeTab === 'plan' && shopPlans.length === 0) {
+            flowApi.subscriptionPlans()
+                .then((res) => {
+                    if (res.success && Array.isArray(res.data)) setShopPlans(res.data.map(toShopPlan));
+                })
+                .catch(() => undefined);
+        }
+    }, [activeTab, paymentsData, paymentsLoading, invitesData, invitesLoading, fetchPayments, fetchInvites, walletData, walletLoading, fetchWallet, shopPlans.length]);
+
+    useEffect(() => {
+        let cancelled = false;
+        setReferralLoading(true);
+        flowApi.getMyReferralCode().then((res: any) => {
+            if (cancelled) return;
+            if (res?.success && res?.data?.referralCode) {
+                setReferralCode(res.data.referralCode);
+                setInviteUrl(res.data.inviteUrl || '');
+                setReferralError(null);
+            } else {
+                setReferralError(res?.message || 'لینک دعوت ساخته نشد. مایگریشن کیف پول را روی دیتابیس اجرا کنید.');
+            }
+        }).catch(() => {
+            if (!cancelled) setReferralError('خطا در دریافت لینک دعوت.');
+        }).finally(() => {
+            if (!cancelled) setReferralLoading(false);
+        });
+        return () => { cancelled = true; };
+    }, []);
+
+    const inviteLink = referralCode
+        ? `${window.location.origin}/invite/${referralCode}`
+        : inviteUrl;
+
+    const copyInviteLink = async () => {
+        const link = inviteLink;
+        if (!link) return;
+        try {
+            await navigator.clipboard.writeText(link);
+            toast.success('لینک دعوت کپی شد.');
+        } catch {
+            toast.error('کپی نشد؛ لطفاً دستی کپی کنید.');
+        }
+    };
 
     useEffect(() => {
         if (user) {
@@ -313,7 +503,7 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
             const result = await response.json();
 
             if (response.ok && result.success) {
-                const defaultAvatarUrl = result.avatar_url || '/avatars/user_default.png';
+                const defaultAvatarUrl = avatarSrc(result.avatar_url);
                 setAvatar(defaultAvatarUrl);
                 setUser({ ...user!, avatar_url: defaultAvatarUrl });
                 toast.success("تصویر پروفایل با موفقیت حذف شد");
@@ -405,7 +595,7 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
                         {isCustomAvatar ? (
                             <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
                         ) : (
-                            <img src='/avatars/user_default.png' alt="Avatar" className="w-full h-full object-cover" />
+                            <img src={avatarSrc(null)} alt="Avatar" className="w-full h-full object-cover" />
                         )}
                         <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200">
                             <div className="text-white"><Icons.Camera /></div>
@@ -439,7 +629,7 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
             </div>
 
             <div className="hidden lg:flex flex-col gap-2 px-4 pb-4 flex-1">
-                {TAB_CONFIG.map((tab) => (
+                {VISIBLE_TABS.map((tab) => (
                     <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id)}
@@ -574,7 +764,7 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
 
                 <div className="lg:col-span-8 xl:col-span-9 space-y-6 relative z-10">
                     <div className="lg:hidden bg-[var(--bg-elevated)] p-1.5 rounded-2xl flex relative overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                        {TAB_CONFIG.map((tab) => (
+                        {VISIBLE_TABS.map((tab) => (
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
@@ -785,48 +975,112 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
                                     ) : (
                                         (() => {
                                             const sub = paymentsData?.subscription;
-                                            const planKey = (sub?.currentPlan === 'epic' ? 'diamond' : sub?.currentPlan) || 'free';
-                                            const meta = PLAN_META[planKey] || PLAN_META.free;
-                                            const PlanIcon = meta.icon;
-                                            const daysRemaining = sub?.daysRemaining || 0;
-                                            const progress = meta.totalDays > 0 ? Math.min(100, Math.max(0, (daysRemaining / meta.totalDays) * 100)) : 0;
+                                            const planKey = (sub?.currentPlan === 'epic' ? 'diamond' : sub?.currentPlan === 'gold' ? 'golden' : sub?.currentPlan) || 'free';
+                                            const meta = PLAN_META[planKey] || {
+                                                label: sub?.planName || 'اشتراک ویژه',
+                                                colorClass: 'text-violet-500',
+                                                bgClass: 'bg-violet-500/10',
+                                                icon: Crown,
+                                                totalDays: 30,
+                                            };
+                                            const unlimited = Boolean(sub?.unlimited);
+                                            const daysRemaining = unlimited ? null : (sub?.daysRemaining || 0);
                                             const paidPayments = (paymentsData?.payments || []).filter((p: any) => p.status === 'paid');
+                                            const expired = sub?.expiredPlan;
+                                            const queue = Array.isArray(sub?.queue) ? sub.queue : [];
+                                            const currentShop = shopPlans.find((plan) => plan.id === planKey)
+                                                || shopPlans.find((plan) => plan.name === (sub?.planName || meta.label));
+                                            const totalDays = Number(user?.plan_days || currentShop?.days || meta.totalDays || 0);
+                                            const ringProgress = !unlimited && totalDays > 0
+                                                ? Math.min(100, Math.max(0, ((daysRemaining || 0) / totalDays) * 100))
+                                                : 0;
+                                            const currentLines = planKey === 'free'
+                                                ? FREE_PLAN_LINES
+                                                : (currentShop ? planBenefitLines(currentShop) : ['دسترسی به امکانات ویژه', 'آزمون چندنفره و لابی', 'پاسخ تشریحی بدون سقف']);
+                                            const nextPlan = shopPlans
+                                                .filter((plan) => plan.purchasable !== false && plan.id !== currentShop?.id)
+                                                .sort((a, b) => a.price - b.price)
+                                                .find((plan) => planKey === 'free' || plan.price > (currentShop?.price || 0));
+                                            const extraLines = nextPlan
+                                                ? planBenefitLines(nextPlan).filter((line) => !currentLines.includes(line))
+                                                : [];
+                                            const statusLine = planKey === 'free'
+                                                ? (expired
+                                                    ? `اشتراک ${expired.name || 'قبلی'} در ${formatDate(expired.expiredAt)} تمام شد.`
+                                                    : 'اشتراک فعالی ندارید.')
+                                                : unlimited
+                                                    ? 'این اشتراک نامحدود است.'
+                                                    : `اعتبار تا ${formatDate(sub?.planExpiresAt)}`;
 
+                                            const tint = planTint(planKey, currentShop?.name || meta.label, currentShop?.iconColors?.primary || user?.plan_icon_primary);
                                             return (
                                                 <>
-                                                    {/* Active plan card */}
-                                                    <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)]/60 p-5">
-                                                        <div className="flex items-center justify-between flex-wrap gap-3">
-                                                            <div className="flex items-center gap-3">
-                                                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${meta.bgClass}`}>
-                                                                    <PlanIcon size={24} className={meta.colorClass} />
-                                                                </div>
-                                                                <div>
-                                                                    <h4 className={`text-base font-black ${meta.colorClass}`}>{meta.label}</h4>
-                                                                    <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                                                                        {planKey === 'free'
-                                                                            ? 'شما در حال حاضر اشتراک فعالی ندارید.'
-                                                                            : `اعتبار تا ${formatDate(sub?.planExpiresAt)}`}
-                                                                    </p>
-                                                                </div>
-                                                            </div>
-                                                            {planKey !== 'free' && (
-                                                                <div className="text-center px-4 py-2 rounded-xl bg-[var(--bg-card)] border border-[var(--border)]">
-                                                                    <span className="block text-2xl font-black text-[var(--text-primary)] leading-none">{daysRemaining.toLocaleString('fa-IR')}</span>
-                                                                    <span className="text-[10px] text-[var(--text-muted)]">روز باقی‌مانده</span>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                        {planKey !== 'free' && meta.totalDays > 0 && (
-                                                            <div className="mt-4 h-2 w-full bg-[var(--bg-element)] rounded-full overflow-hidden border border-[var(--border)]/60">
-                                                                <motion.div
-                                                                    initial={{ width: 0 }}
-                                                                    animate={{ width: `${progress}%` }}
-                                                                    transition={{ duration: 0.9, ease: "easeOut" }}
-                                                                    className="h-full rounded-full bg-[var(--accent)]"
+                                                    <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)]/60">
+                                                        <div className="flex items-center justify-between gap-3 p-4">
+                                                            <div className="flex min-w-0 flex-col items-center text-center">
+                                                                <PlanRibbonBadge
+                                                                    planId={planKey}
+                                                                    name={currentShop?.name || meta.label}
+                                                                    color={tint}
+                                                                    size={64}
+                                                                    playKey={`profile-${planKey}`}
                                                                 />
+                                                                <h4 className="plan-title-shine mt-1 max-w-[9rem] truncate text-[15px] font-black" style={{ '--shine': tint } as React.CSSProperties}>{currentShop?.name || meta.label}</h4>
+                                                                <p className="mt-0.5 max-w-[11rem] text-[10px] leading-4 text-[var(--text-muted)]">{statusLine}</p>
+                                                            </div>
+                                                            <PlanDaysCircle
+                                                                progress={planKey === 'free' ? 0 : ringProgress}
+                                                                days={daysRemaining || 0}
+                                                                unlimited={Boolean(unlimited) && planKey !== 'free'}
+                                                                size={104}
+                                                            />
+                                                        </div>
+
+                                                        <div className="grid grid-cols-1 gap-2 px-4 pb-4 sm:grid-cols-2">
+                                                            {currentLines.map((line, index) => (
+                                                                <div
+                                                                    key={line}
+                                                                    className={`flex items-start gap-2 rounded-xl border border-[color-mix(in_srgb,var(--accent)_22%,transparent)] bg-[color-mix(in_srgb,var(--accent)_9%,var(--bg-card))] px-3 py-2.5 text-[12px] leading-5 text-[var(--text-primary)] ${currentLines.length % 2 === 1 && index === currentLines.length - 1 ? 'sm:col-span-2' : ''}`}
+                                                                >
+                                                                    <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-white">
+                                                                        <Check size={11} strokeWidth={3} />
+                                                                    </span>
+                                                                    <span>{line}</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+
+                                                        {queue.length > 0 && (
+                                                            <div className="space-y-2 px-4 pb-3">
+                                                                <p className="text-[11px] font-bold text-[var(--text-muted)]">صف رزرو</p>
+                                                                {queue.map((item: any) => (
+                                                                    <div key={item.id} className="flex items-center justify-between rounded-xl border border-[var(--border)] px-3 py-2 text-[11px]">
+                                                                        <span className="font-bold text-[var(--text-primary)]">{item.planName}</span>
+                                                                        <span className="text-[var(--text-muted)]">
+                                                                            از {formatDate(item.startsAt)}
+                                                                            {item.unlimited ? ' • نامحدود' : ` تا ${formatDate(item.endsAt)}`}
+                                                                        </span>
+                                                                    </div>
+                                                                ))}
                                                             </div>
                                                         )}
+
+                                                        <div className="flex items-center gap-3 border-t border-[color-mix(in_srgb,var(--accent)_18%,var(--border))] bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] px-3 py-2.5">
+                                                            {extraLines.length > 0 && (
+                                                                <div className="flex min-w-0 flex-1 items-center gap-2">
+                                                                    <span className="shrink-0 text-[11px] font-black text-[var(--accent)]">با ارتقا</span>
+                                                                    <RotatingBenefit lines={extraLines} />
+                                                                </div>
+                                                            )}
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setPlanModalOpen(true)}
+                                                                className="inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full bg-[var(--accent)] px-4 text-[12px] font-bold text-white"
+                                                            >
+                                                                <Crown size={14} />
+                                                                {planKey === 'free' ? 'خرید اشتراک' : 'ارتقای پلن'}
+                                                            </button>
+                                                        </div>
                                                     </div>
 
                                                     {/* Purchase history (paid packages) */}
@@ -851,7 +1105,7 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
                                                                                 <span className="block text-xs font-bold text-[var(--text-primary)] truncate">{p.planName}</span>
                                                                                 <span className="flex items-center gap-1 text-[10px] text-[var(--text-muted)] mt-0.5">
                                                                                     <Calendar size={10} /> {formatDate(p.paidAt || p.requestedAt)}
-                                                                                    {p.planDays ? ` • ${p.planDays} روزه` : ''}
+                                                                                    {p.planDays == null ? ' • نامحدود' : p.planDays ? ` • ${p.planDays} روزه` : ''}
                                                                                 </span>
                                                                             </div>
                                                                         </div>
@@ -960,6 +1214,35 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
                                     transition={{ duration: 0.2 }}
                                     className="space-y-4"
                                 >
+                                    <div className="p-4 rounded-2xl bg-[var(--bg-elevated)]/60 border border-[var(--accent)]/30 space-y-3">
+                                        <span className="text-xs font-bold text-[var(--accent)]">لینک دعوت اختصاصی شما</span>
+                                        {referralLoading ? (
+                                            <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
+                                                <Loader2 size={14} className="animate-spin text-[var(--accent)]" />
+                                                در حال ساخت لینک دعوت...
+                                            </div>
+                                        ) : referralError ? (
+                                            <p className="text-[11px] text-rose-500 font-bold leading-5">{referralError}</p>
+                                        ) : (
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    readOnly
+                                                    dir="ltr"
+                                                    value={inviteLink}
+                                                    className="flex-1 min-w-0 bg-[var(--bg-card)] border border-[var(--border)] rounded-lg px-3 py-2 text-[11px] text-[var(--text-primary)] outline-none"
+                                                />
+                                                <button
+                                                    onClick={copyInviteLink}
+                                                    disabled={!inviteLink}
+                                                    className="shrink-0 px-4 py-2 rounded-lg bg-[var(--accent)] text-white text-xs font-bold hover:opacity-90 disabled:opacity-40 transition-opacity"
+                                                >
+                                                    کپی لینک
+                                                </button>
+                                            </div>
+                                        )}
+                                        <p className="text-[10px] text-[var(--text-muted)] leading-5">با ارسال این لینک، هرکس ثبت‌نام کند و اولین پکیج پولی را بخرد، ۳۰٪ مبلغ همان خرید به کیف پول تومانی شما واریز می‌شود.</p>
+                                    </div>
+
                                     {invitesLoading ? (
                                         <div className="flex flex-col items-center justify-center py-16 gap-3 text-[var(--text-muted)]">
                                             <Loader2 size={26} className="animate-spin text-[var(--accent)]" />
@@ -989,7 +1272,7 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
                                                 <div className="flex flex-col items-center justify-center py-12 gap-2 text-[var(--text-muted)] bg-[var(--bg-elevated)]/40 border border-dashed border-[var(--border)] rounded-2xl">
                                                     <UserPlus size={24} />
                                                     <span className="text-xs font-bold">هنوز کسی با معرفی شما ثبت‌نام نکرده است.</span>
-                                                    <span className="text-[10px]">لینک دعوت خود را از داشبورد برای دوستانتان ارسال کنید.</span>
+                                                    <span className="text-[10px]">لینک بالای همین بخش را برای دوستانتان بفرستید.</span>
                                                 </div>
                                             ) : (
                                                 <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
@@ -1023,7 +1306,127 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
                                     )}
                                 </motion.div>
                             )}
+                            {/* ─── Wallet Tab ─── */}
+                            {activeTab === "wallet" && (
+                                <motion.div
+                                    key="wallet"
+                                    initial={{ opacity: 0, x: -10 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    exit={{ opacity: 0, x: 10 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="space-y-4"
+                                >
+                                    {walletLoading ? (
+                                        <div className="flex flex-col items-center justify-center py-16 gap-3 text-[var(--text-muted)]">
+                                            <Loader2 size={26} className="animate-spin text-[var(--accent)]" />
+                                            <span className="text-xs font-bold">در حال دریافت اطلاعات کیف پول...</span>
+                                        </div>
+                                    ) : walletError ? (
+                                        <div className="text-center py-12 space-y-3">
+                                            <p className="text-sm text-rose-500 font-bold">{walletError}</p>
+                                            <button onClick={fetchWallet} className="px-5 py-2 bg-[var(--accent)] text-white rounded-xl text-xs font-bold">تلاش مجدد</button>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)]/50 px-4 py-4">
+                                                <div className="min-w-0">
+                                                    <p className="text-[11px] font-medium text-[var(--text-muted)]">موجودی قابل برداشت</p>
+                                                    <p className="mt-1 text-[28px] font-black leading-none tabular-nums text-[var(--text-primary)]">
+                                                        {(walletData?.balance || 0).toLocaleString('fa-IR')}
+                                                        <span className="mr-1.5 text-xs font-bold text-[var(--text-muted)]">تومان</span>
+                                                    </p>
+                                                </div>
+                                                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--accent)]/10 text-[var(--accent)]">
+                                                    <Wallet size={22} strokeWidth={1.7} />
+                                                </span>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-2.5">
+                                                <WalletStat icon={Gift} label="درآمد دعوت" value={walletData?.totalReferralEarned || 0} />
+                                                <WalletStat icon={Clock} label="در انتظار برداشت" value={walletData?.pendingWithdrawal || 0} />
+                                                <WalletStat icon={ArrowDownLeft} label="کل دریافتی" value={walletData?.lifetimeEarned || 0} />
+                                                <WalletStat icon={ArrowUpRight} label="کل خرج‌شده" value={walletData?.lifetimeSpent || 0} />
+                                            </div>
+
+                                            <button
+                                                onClick={() => setWithdrawOpen(true)}
+                                                disabled={Number(walletData?.balance || 0) <= 0}
+                                                className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent)] text-sm font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+                                            >
+                                                <Banknote size={17} strokeWidth={1.8} />
+                                                درخواست برداشت
+                                            </button>
+
+                                            <div>
+                                                <h4 className="mb-2 flex items-center gap-1.5 text-xs font-bold text-[var(--text-primary)]">
+                                                    <Receipt size={14} className="text-[var(--accent)]" />
+                                                    تراکنش‌ها
+                                                </h4>
+                                                {(walletData?.transactions || []).length === 0 ? (
+                                                    <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-[var(--border)] bg-[var(--bg-elevated)]/40 py-8 text-[var(--text-muted)]">
+                                                        <Receipt size={20} />
+                                                        <span className="text-xs font-bold">تراکنشی ثبت نشده است.</span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="max-h-[320px] space-y-2 overflow-y-auto pr-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                                                        {(walletData?.transactions || []).map((tx: any) => {
+                                                            const visual = walletTxVisual(String(tx.type || ''), Number(tx.amount));
+                                                            const TxIcon = visual.icon;
+                                                            return (
+                                                                <div key={tx.id} className="flex items-center gap-3 rounded-xl border border-[var(--border)] px-3 py-2.5">
+                                                                    <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${visual.chip}`}>
+                                                                        <TxIcon size={16} strokeWidth={1.8} />
+                                                                    </span>
+                                                                    <div className="min-w-0 flex-1">
+                                                                        <p className="truncate text-xs font-bold text-[var(--text-primary)]">{tx.description || visual.label}</p>
+                                                                        <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">{formatDate(tx.createdAt)}</p>
+                                                                    </div>
+                                                                    <span className={`shrink-0 text-sm font-black tabular-nums ${tx.amount >= 0 ? 'text-emerald-600' : 'text-rose-600'}`} dir="ltr">
+                                                                        {tx.amount >= 0 ? '+' : ''}{Number(tx.amount).toLocaleString('fa-IR')}
+                                                                    </span>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </>
+                                    )}
+                                </motion.div>
+                            )}
+
                         </AnimatePresence>
+
+                        <ResponsiveModal isOpen={withdrawOpen} onClose={() => { setWithdrawOpen(false); setWithdrawAmount(''); }} title="درخواست برداشت وجه">
+                            <div className="space-y-4 p-1">
+                                <p className="text-xs text-[var(--text-muted)] leading-6">
+                                    مبلغ مورد نظر را وارد کنید. پس از ثبت، کارشناسان ما برای پرداخت کارت‌به‌کارت با شما تماس خواهند گرفت.
+                                </p>
+                                <div>
+                                    <label className="block text-xs font-bold text-[var(--text-secondary)] mb-2 mr-1">مبلغ برداشت (تومان)</label>
+                                    <input
+                                        type="number"
+                                        dir="ltr"
+                                        value={withdrawAmount}
+                                        onChange={(e) => setWithdrawAmount(e.target.value)}
+                                        placeholder="مثلاً 500000"
+                                        className="w-full rounded-xl py-3.5 px-4 bg-[var(--bg-elevated)] border border-transparent focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent)]/10 text-[var(--text-primary)] outline-none font-medium text-center"
+                                    />
+                                </div>
+                                <div className="flex items-center justify-between rounded-xl bg-[var(--bg-elevated)]/60 px-4 py-3">
+                                    <span className="text-xs text-[var(--text-muted)]">موجودی قابل برداشت</span>
+                                    <span className="text-sm font-black text-[var(--text-primary)]">{Number(walletData?.balance || 0).toLocaleString('fa-IR')} تومان</span>
+                                </div>
+                                <button
+                                    onClick={handleRequestWithdrawal}
+                                    disabled={withdrawSubmitting || !Number(withdrawAmount) || Number(withdrawAmount) > Number(walletData?.balance || 0)}
+                                    className="w-full h-12 rounded-xl bg-[var(--accent)] text-white font-bold text-sm transition-opacity hover:opacity-90 disabled:opacity-40 flex items-center justify-center gap-2"
+                                >
+                                    {withdrawSubmitting ? <Loader2 size={18} className="animate-spin" /> : null}
+                                    ثبت درخواست برداشت
+                                </button>
+                            </div>
+                        </ResponsiveModal>
 
                         {["info", "social", "security"].includes(activeTab) && (
                             <div className="mt-8 pt-4 border-t border-[var(--border)]/50 flex justify-end">
@@ -1057,6 +1460,11 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
 
                 </div>
             </div>
+            <PlanSelectionModal
+                isOpen={planModalOpen}
+                onClose={() => setPlanModalOpen(false)}
+                onActivated={fetchPayments}
+            />
         </div>
     );
 }

@@ -1,17 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    Play, ChevronLeft, Book, Clock, Activity, Users, Globe, ShieldCheck,
+    Play, ChevronLeft, Book, Clock, Activity, Users, Radio, ShieldCheck,
     CheckCircle2, List, Image as ImageIcon, Check,
-    Target, PenTool, Zap, Edit3, Layers
+    Target, PenTool, Zap, Edit3, Layers, Lock
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { flowApi } from '../../lib/authApi';
-import { useUser } from '../../context/UserContext';
 import { useNavigate } from 'react-router-dom';
 import { createLobby } from '../../socket/lobby.socket';
 import { useSocket } from '../../socket/useSocket';
 import { QuizCountdown } from '../../components/QuizCountdown';
+import { PremiumUpgrade } from '../../components/PremiumUpgrade';
+import PlanSelectionModal from '../../components/PlanSelectionModal';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -38,6 +39,17 @@ type FlowState = {
     chapters: string[];
     mabhas: string[];
     settings: QuizSettings;
+};
+
+type PlanEntitlements = {
+    isPaid: boolean;
+    multiplayer: boolean;
+    personalExam?: {
+        allowed: boolean;
+        used?: number;
+        limit?: number | null;
+        nextAllowedAt?: string | null;
+    };
 };
 
 // ─── Motion variants ──────────────────────────────────────────────────────────
@@ -100,6 +112,31 @@ const getSubjectId = (item: any): string | null => {
 const getGradeId = (item: any): string | null => {
     const gid = item?.grade_id ?? item?.gradeId;
     return gid != null ? String(gid) : null;
+};
+
+/** A chapter titled دوازدهم stays on that grade, even if one question was tagged یازدهم. */
+const chapterGradeIds = (item: any): string[] => {
+    if (Array.isArray(item?.grade_ids) && item.grade_ids.length) {
+        return item.grade_ids.map((id: unknown) => String(id));
+    }
+    const one = getGradeId(item);
+    return one ? [one] : [];
+};
+
+const lookupCache = (cache: Record<string, any>, id: string | number) => cache[String(id)] || null;
+
+const hasId = (ids: Array<string | number>, id: string | number) =>
+    ids.some(value => String(value) === String(id));
+
+/** Keep one card per entity id so a SQL join cannot render the same mabhas twice. */
+const uniqueById = (items: any[]) => {
+    const seen = new Map<string, any>();
+    for (const item of items) {
+        if (item == null || item.id == null) continue;
+        const key = String(item.id);
+        if (!seen.has(key)) seen.set(key, item);
+    }
+    return Array.from(seen.values());
 };
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -283,9 +320,25 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
         lessons: [], grades: [], quizType: null, chapters: [], mabhas: [],
         settings: { time: 30, difficulty: 2, visibility: 'private', memberLimit: 10, quizName: '', questionCounts: {} },
     });
+    const [entitlements, setEntitlements] = useState<PlanEntitlements | null>(null);
+    const [plansOpen, setPlansOpen] = useState(false);
 
     const navigate = useNavigate();
     const { socket, connect } = useSocket();
+
+    useEffect(() => {
+        let alive = true;
+        flowApi.getEntitlements()
+            .then((res) => {
+                if (alive && res?.success && res.data) setEntitlements(res.data);
+            })
+            .catch(() => { /* server still enforces on create */ });
+        return () => { alive = false; };
+    }, []);
+
+    const multiplayerLocked = !!entitlements && !entitlements.isPaid && !entitlements.multiplayer;
+    const personalExamLocked = !!entitlements && !entitlements.isPaid && entitlements.personalExam?.allowed === false;
+    const createBlocked = flowData.settings.visibility === 'public' ? multiplayerLocked : personalExamLocked;
 
     // ─── Data fetching ────────────────────────────────────────────────────────
 
@@ -298,11 +351,11 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
             if (step === 1) {
                 const res = await flowApi.dispatch('get_subjects');
                 const raw = res.subjects || res.data || [];
-                formattedItems = raw.map((s: any) => ({
+                formattedItems = uniqueById(raw.map((s: any) => ({
                     ...s,
                     imageSrc: LESSON_IMAGES[s.id] || DEFAULT_LESSON_ICON,
                     // subtitle: s.question_count ? `${s.question_count} سوال` : undefined,
-                }));
+                })));
 
                 setSubjectsCache(prev => {
                     const next = { ...prev };
@@ -312,10 +365,10 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
             } else if (step === 2) {
                 const res = await flowApi.dispatch('get_grades_by_subjects_multi', { subjects: flowData.lessons });
                 const raw = res.grades || res.data || [];
-                formattedItems = raw.map((g: any) => ({
+                formattedItems = uniqueById(raw.map((g: any) => ({
                     ...g,
                     // desc: g.question_count ? `${g.question_count} سوال` : undefined
-                }));
+                })));
 
                 setGradesCache(prev => {
                     const next = { ...prev };
@@ -328,10 +381,10 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
                     grades: flowData.grades
                 });
                 const raw = res.chapters || res.data || [];
-                formattedItems = raw.map((c: any) => ({
+                formattedItems = uniqueById(raw.map((c: any) => ({
                     ...c,
                     // desc: c.question_count ? `${c.question_count} سوال` : undefined
-                }));
+                })));
 
                 setChaptersCache(prev => {
                     const next = { ...prev };
@@ -339,12 +392,15 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
                     return next;
                 });
             } else if (step === 5) {
-                const res = await flowApi.dispatch('get_mabahes_by_chapters_multi', { chapters: flowData.chapters });
+                const res = await flowApi.dispatch('get_mabahes_by_chapters_multi', {
+                    chapters: flowData.chapters,
+                    grades: flowData.grades,
+                });
                 const raw = res.mabahes || res.data || [];
-                formattedItems = raw.map((m: any) => ({
+                formattedItems = uniqueById(raw.map((m: any) => ({
                     ...m,
                     // desc: m.question_count ? `${m.question_count} سوال` : undefined
-                }));
+                })));
 
                 setMabhasCache(prev => {
                     const next = { ...prev };
@@ -424,7 +480,8 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
 
         selectedItems.forEach(id => {
             if (newCounts[id] === undefined) {
-                const item = getCachedItem(id) || {};
+                const cache = flowData.quizType === 'chapter' ? chaptersCache : mabhasCache;
+                const item = lookupCache(cache, id) || {};
                 const avail = item.question_count || 30;
                 const cap = Math.min(perItemBudget, avail);
                 newCounts[id] = Math.min(10, cap);
@@ -440,16 +497,7 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
         flowData.quizType
     ]);
 
-    const getCachedItem = (id: string | number) => {
-        const key = String(id);
-        return (
-            subjectsCache[key] ||
-            gradesCache[key] ||
-            chaptersCache[key] ||
-            mabhasCache[key] ||
-            null
-        );
-    };
+    const getCachedItem = (id: string | number, cache: Record<string, any>) => lookupCache(cache, id);
 
     // ─── Filter logic for Steps 4 & 5 ─────────────────────────────────────────
 
@@ -459,7 +507,7 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
         let items = currentItems;
 
         if (activeGradeTab !== 'all' && flowData.grades.length > 1) {
-            items = items.filter(item => getGradeId(item) === String(activeGradeTab));
+            items = items.filter(item => chapterGradeIds(item).includes(String(activeGradeTab)));
         }
 
         if (activeSubjectTab !== 'all' && flowData.lessons.length > 1) {
@@ -505,20 +553,37 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
         if (step === 3) return !flowData.quizType;
         if (step === 4) return flowData.chapters.length === 0;
         if (step === 5) return flowData.mabhas.length === 0;
-        if (step === 6) return !flowData.settings.time || flowData.settings.time <= 0;
+        if (step === 6) {
+            if (!flowData.settings.time || flowData.settings.time <= 0) return true;
+            if (flowData.settings.visibility === 'public' && multiplayerLocked) return true;
+            if (flowData.settings.visibility === 'private' && personalExamLocked) return true;
+        }
         return false;
+    };
+
+    const isReviewBudgetOver = () => {
+        if (step !== 7) return false;
+        const TOTAL_BUDGET = 50;
+        const selectedItems = (flowData.quizType === 'chapter' ? flowData.chapters : flowData.mabhas)
+            .map((id) => getCachedItem(id, flowData.quizType === 'chapter' ? chaptersCache : mabhasCache))
+            .filter(Boolean);
+        const perItemBudget = selectedItems.length > 0 ? Math.floor(TOTAL_BUDGET / selectedItems.length) : TOTAL_BUDGET;
+        const totalQuestions = selectedItems.reduce((acc: number, item: any) => {
+            return acc + (flowData.settings.questionCounts[item.id] || Math.min(10, Math.min(perItemBudget, item.question_count || 30)));
+        }, 0);
+        return totalQuestions > TOTAL_BUDGET;
     };
 
     // ─── State mutators ───────────────────────────────────────────────────────
 
     const toggleLesson = (item: any) => {
         setFlowData(prev => {
-            const exists = prev.lessons.includes(item.id);
+            const exists = hasId(prev.lessons, item.id);
 
             return {
                 ...prev,
                 lessons: exists
-                    ? prev.lessons.filter(id => id !== item.id)
+                    ? prev.lessons.filter(id => String(id) !== String(item.id))
                     : [...prev.lessons, item.id],
                 grades: [],
                 chapters: [],
@@ -534,12 +599,12 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
     ) => {
         setFlowData(prev => {
             const arr = prev[key];
-            const exists = arr.includes(item.id);
+            const exists = hasId(arr, item.id);
 
             const next = {
                 ...prev,
                 [key]: exists
-                    ? arr.filter(id => id !== item.id)
+                    ? arr.filter(id => String(id) !== String(item.id))
                     : [...arr, item.id],
             };
 
@@ -563,11 +628,15 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
     // ─── Quiz creation ────────────────────────────────────────────────────────
 
     const handleStartQuiz = async () => {
+        if (createBlocked) {
+            setPlansOpen(true);
+            return;
+        }
         setIsCreatingQuiz(true);
         const loadingToastId = toast.loading('درحال ساخت آزمون...');
         try {
-            const nameMap = (ids: string[]) => ids.reduce((acc, id) => {
-                const match = getCachedItem(id);
+            const nameMap = (ids: string[], cache: Record<string, any>) => ids.reduce((acc, id) => {
+                const match = getCachedItem(id, cache);
 
                 return {
                     ...acc,
@@ -581,14 +650,33 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
                 lessons: flowData.lessons, grades: flowData.grades,
                 quizType: flowData.quizType, chapters: flowData.chapters, mabhas: flowData.mabhas,
                 settings: flowData.settings, shareCode,
-                lessonNames: nameMap(flowData.lessons), gradeNames: nameMap(flowData.grades),
-                chapterNames: nameMap(flowData.chapters), mabhasNames: nameMap(flowData.mabhas),
+                lessonNames: nameMap(flowData.lessons, subjectsCache),
+                gradeNames: nameMap(flowData.grades, gradesCache),
+                chapterNames: nameMap(flowData.chapters, chaptersCache),
+                mabhasNames: nameMap(flowData.mabhas, mabhasCache),
             };
 
-            const res = await flowApi.dispatch('create_quiz', payload);
+            const res = await flowApi.dispatch('create_quiz', payload) as {
+                success?: boolean;
+                message?: string;
+                code?: string;
+                nextAllowedAt?: string | null;
+                quiz?: { id?: string; _id?: string };
+                data?: any;
+            };
             await new Promise(r => setTimeout(r, 800));
 
             if (!res?.success) {
+                if (res?.code === 'MULTIPLAYER_LOCKED' || res?.code === 'PERSONAL_EXAM_COOLDOWN') {
+                    setEntitlements((prev) => ({
+                        isPaid: false,
+                        multiplayer: res.code === 'MULTIPLAYER_LOCKED' ? false : (prev?.multiplayer ?? false),
+                        personalExam: res.code === 'PERSONAL_EXAM_COOLDOWN'
+                            ? { allowed: false, used: 1, limit: 1, nextAllowedAt: res.nextAllowedAt || null }
+                            : (prev?.personalExam || { allowed: true }),
+                    }));
+                    setPlansOpen(true);
+                }
                 toast.error(res?.message || 'ساخت آزمون ناموفق بود.', { id: loadingToastId });
                 return;
             }
@@ -632,6 +720,29 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
         }
     };
 
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key !== 'Enter' || e.repeat) return;
+            if (e.altKey || e.ctrlKey || e.metaKey) return;
+            const target = e.target as HTMLElement | null;
+            const tag = target?.tagName;
+            if (tag === 'TEXTAREA' || target?.isContentEditable) return;
+            if (tag === 'SELECT') return;
+            if (dataLoading || isCreatingQuiz || showStartCountdown) return;
+            if (step < 7) {
+                if (isNextDisabled()) return;
+                e.preventDefault();
+                handleNext();
+                return;
+            }
+            if (isNextDisabled() || isReviewBudgetOver()) return;
+            e.preventDefault();
+            handleStartQuiz();
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    });
+
     if (showStartCountdown && createdPrivateQuizId) {
         return <QuizCountdown durationMs={3000} onComplete={() => navigate(`/quiz/${createdPrivateQuizId}`)} />;
     }
@@ -659,23 +770,22 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
 
         const selectedIds = flowData[listKey];
         const filteredIds = filteredStepItems.map(i => i.id);
-        const selectedFilteredCount = filteredIds.filter(id => selectedIds.includes(id)).length;
+        const selectedFilteredCount = filteredIds.filter(id => hasId(selectedIds, id)).length;
         const allFilteredSelected = selectedFilteredCount === filteredIds.length && filteredIds.length > 0;
 
         const handleSelectAllFiltered = () => {
             if (allFilteredSelected) {
-                setFlowData(prev => ({ ...prev, [listKey]: prev[listKey].filter((id: string) => !filteredIds.includes(id)) }));
+                setFlowData(prev => ({
+                    ...prev,
+                    [listKey]: prev[listKey].filter((id: string) => !hasId(filteredIds, id)),
+                }));
             } else {
                 setFlowData(prev => {
-                    const newSet = new Set(prev[listKey]);
-
-                    filteredIds.forEach(id => {
-                        newSet.add(id);
-                    });
-
+                    const nextIds = prev[listKey].filter((id: string) => !hasId(filteredIds, id));
+                    filteredIds.forEach(id => nextIds.push(id));
                     return {
                         ...prev,
-                        [listKey]: Array.from(newSet),
+                        [listKey]: nextIds,
                     };
                 });
 
@@ -731,7 +841,7 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
                         <AnimatePresence mode="popLayout">
                             {filteredStepItems.map(item => (
                                 <motion.div
-                                    key={item.id}
+                                    key={String(item.id)}
                                     layout
                                     initial={{ opacity: 0, scale: 0.95 }}
                                     animate={{ opacity: 1, scale: 1 }}
@@ -742,7 +852,7 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
                                         icon={icon}
                                         label={getDisplayLabel(item, item.id)}
                                         desc={item.desc}
-                                        checked={selectedIds.includes(item.id)}
+                                        checked={hasId(selectedIds, item.id)}
                                         onToggle={() => toggleArrayItem(listKey, item)}
                                     />
                                 </motion.div>
@@ -771,10 +881,10 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
                                     imageSrc={lesson.imageSrc}
                                     label={lesson.name || lesson.title}
                                     desc={lesson.desc || lesson.subtitle}
-                                    active={flowData.lessons.includes(lesson.id)}
+                                    active={hasId(flowData.lessons, lesson.id)}
                                     onClick={() => toggleLesson(lesson)}
                                 />
-                                {flowData.lessons.includes(lesson.id) && (
+                                {hasId(flowData.lessons, lesson.id) && (
                                     <div className="absolute top-2 left-2 bg-[var(--accent)] text-white p-1 rounded-full shadow-sm z-10">
                                         <Check size={12} strokeWidth={3} />
                                     </div>
@@ -795,7 +905,7 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
                                 icon={Layers}
                                 label={grade.title || grade.name}
                                 desc={grade.desc}
-                                checked={flowData.grades.includes(grade.id)}
+                                checked={hasId(flowData.grades, grade.id)}
                                 onToggle={() => toggleArrayItem('grades', grade)}
                             />
                         ))}
@@ -863,18 +973,22 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
                         {/* Privacy & Member Capacity block */}
                         <div className="bg-[var(--bg-card)] rounded-[16px] overflow-hidden border border-[var(--border)] shadow-sm">
                             <SettingRow
-                                icon={flowData.settings.visibility === 'public' ? Globe : ShieldCheck}
-                                label="حریم خصوصی آزمون"
+                                icon={flowData.settings.visibility === 'public' ? Radio : ShieldCheck}
+                                label="نوع آزمون"
                                 desc={flowData.settings.visibility === 'public'
-                                    ? "دیگران می‌توانند از طریق کد دعوت وارد لابی شوند و با شما رقابت کنند."
-                                    : "فقط شما این آزمون را می‌بینید. بدون لابی، مستقیم وارد آزمون می‌شوید."
+                                    ? (multiplayerLocked
+                                        ? 'آزمون آنلاین با اشتراک ویژه فعال می‌شود.'
+                                        : 'با کد دعوت، دیگران وارد لابی می‌شوند.')
+                                    : (personalExamLocked
+                                        ? 'سهم امروز تمام شده است.'
+                                        : 'فقط شما این آزمون را می‌بینید.')
                                 }
                             >
                                 <SmoothSegmentedControl
                                     uniqueId="visibility"
                                     options={[
                                         { label: 'شخصی', value: 'private', icon: ShieldCheck },
-                                        { label: 'عمومی', value: 'public', icon: Users },
+                                        { label: 'آنلاین', value: 'public', icon: Radio },
                                     ]}
                                     value={flowData.settings.visibility}
                                     onChange={(v: any) => updateSetting('visibility', v)}
@@ -882,7 +996,24 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
                             </SettingRow>
 
                             <AnimatePresence initial={false}>
-                                {flowData.settings.visibility === 'public' && (
+                                {flowData.settings.visibility === 'public' && multiplayerLocked && (
+                                    <motion.div
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: 'auto', opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        transition={{ duration: 0.2 }}
+                                        className="overflow-hidden px-4 pb-4"
+                                    >
+                                        <PremiumUpgrade
+                                            icon={Lock}
+                                            title="آزمون آنلاین"
+                                            description="رقابت و لابی با اشتراک ویژه فعال می‌شود."
+                                            actionLabel="اشتراک ویژه"
+                                            onAction={() => setPlansOpen(true)}
+                                        />
+                                    </motion.div>
+                                )}
+                                {flowData.settings.visibility === 'public' && !multiplayerLocked && (
                                     <motion.div
                                         initial={{ height: 0, opacity: 0 }}
                                         animate={{ height: 'auto', opacity: 1 }}
@@ -904,6 +1035,23 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
                                         </SettingRow>
                                     </motion.div>
                                 )}
+                                {flowData.settings.visibility === 'private' && personalExamLocked && (
+                                    <motion.div
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: 'auto', opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        transition={{ duration: 0.2 }}
+                                        className="overflow-hidden px-4 pb-4"
+                                    >
+                                        <PremiumUpgrade
+                                            icon={Lock}
+                                            title="سهم امروز تمام شد"
+                                            description="با اشتراک رایگان، هر ۲۴ ساعت یک آزمون شخصی می‌سازید."
+                                            actionLabel="اشتراک ویژه"
+                                            onAction={() => setPlansOpen(true)}
+                                        />
+                                    </motion.div>
+                                )}
                             </AnimatePresence>
                         </div>
                     </div>
@@ -914,10 +1062,10 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
                 const TOTAL_BUDGET = 50;
 
 
-                const selectedLessonsList = flowData.lessons.map(getCachedItem).filter(Boolean);
-                const selectedGradesList = flowData.grades.map(getCachedItem).filter(Boolean);
-                const selectedChaptersList = flowData.chapters.map(getCachedItem).filter(Boolean);
-                const selectedMabhasList = flowData.mabhas.map(getCachedItem).filter(Boolean);
+                const selectedLessonsList = flowData.lessons.map(id => getCachedItem(id, subjectsCache)).filter(Boolean);
+                const selectedGradesList = flowData.grades.map(id => getCachedItem(id, gradesCache)).filter(Boolean);
+                const selectedChaptersList = flowData.chapters.map(id => getCachedItem(id, chaptersCache)).filter(Boolean);
+                const selectedMabhasList = flowData.mabhas.map(id => getCachedItem(id, mabhasCache)).filter(Boolean);
                 const selectedItems = flowData.quizType === 'chapter' ? selectedChaptersList : selectedMabhasList;
 
                 const perItemBudget = selectedItems.length > 0 ? Math.floor(TOTAL_BUDGET / selectedItems.length) : TOTAL_BUDGET;
@@ -1045,7 +1193,7 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
                                         {[
                                             { icon: Clock, label: 'زمان', value: `${flowData.settings.time} دقیقه` },
                                             { icon: Activity, label: 'سطح', value: ['آسان', 'متوسط', 'سخت'][flowData.settings.difficulty - 1] },
-                                            { icon: flowData.settings.visibility === 'public' ? Users : ShieldCheck, label: 'نوع', value: flowData.settings.visibility === 'public' ? 'عمومی' : 'شخصی' },
+                                            { icon: flowData.settings.visibility === 'public' ? Radio : ShieldCheck, label: 'نوع', value: flowData.settings.visibility === 'public' ? 'آنلاین' : 'شخصی' },
                                         ].map(({ icon: Icon, label, value }, i) => (
                                             <div key={i} className="flex flex-col items-center justify-center gap-2 p-3 rounded-xl bg-[var(--bg-element)]/60 border border-[var(--border)]/50">
                                                 <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
@@ -1087,6 +1235,17 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
                                         )}
                                     </div>
 
+                                    {createBlocked ? (
+                                        <PremiumUpgrade
+                                            icon={Lock}
+                                            title={flowData.settings.visibility === 'public' ? 'آزمون آنلاین' : 'سهم امروز تمام شد'}
+                                            description={flowData.settings.visibility === 'public'
+                                                ? 'رقابت و لابی با اشتراک ویژه فعال می‌شود.'
+                                                : 'با اشتراک رایگان، هر ۲۴ ساعت یک آزمون شخصی می‌سازید.'}
+                                            actionLabel="اشتراک ویژه"
+                                            onAction={() => setPlansOpen(true)}
+                                        />
+                                    ) : (
                                     <button
                                         onClick={handleStartQuiz}
                                         disabled={isNextDisabled() || isCreatingQuiz || budgetOver}
@@ -1101,6 +1260,7 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
                                             : <><span>{flowData.settings.visibility === 'public' ? 'ساخت آزمون' : 'ساخت و شروع آزمون'}</span><Play size={18} className="rotate-180" /></>
                                         }
                                     </button>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -1184,6 +1344,7 @@ export const NeedsView = ({ isCollapsed, onStateChange, shareCode, onQuizStart }
                 </div>
 
             </div>
+            <PlanSelectionModal isOpen={plansOpen} onClose={() => setPlansOpen(false)} />
         </div>
     );
 };

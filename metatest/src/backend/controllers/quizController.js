@@ -1,4 +1,7 @@
 const pool = require('../db');
+const { ensureQuestionTagTables, joinOnTag, matchTagIn, majorityGradeSql, filterTopicsForSelectedGrades } = require('../utils/questionTags');
+const entitlements = require('../subscription/entitlements');
+const usage = require('../subscription/usage');
 
 
 
@@ -214,6 +217,7 @@ const handleGetSubjects = async (req, res) => {
 
 const handleGetGradesBySubject = async (req, res) => {
     try {
+        await ensureQuestionTagTables();
         const subjectId = requirePost(req, res, 'subject_id');
         if (subjectId === null) return;
 
@@ -241,7 +245,7 @@ const handleGetGradesBySubject = async (req, res) => {
 
             FROM questions_tam24 q
             INNER JOIN grades_tam24 g 
-                ON q.grade_id = g.id
+                ON ${joinOnTag('q', 'g', 'grade')}
 
             LEFT JOIN tam24_user_answers ua
                 ON ua.question_id = q.id
@@ -249,7 +253,6 @@ const handleGetGradesBySubject = async (req, res) => {
 
             WHERE q.subject_id = ?
               AND q.status = 'فعال'
-              AND q.grade_id IS NOT NULL
 
             GROUP BY g.id, g.title
 
@@ -275,6 +278,7 @@ const handleGetGradesBySubject = async (req, res) => {
 
 const handleGetChaptersBySubject = async (req, res) => {
     try {
+        await ensureQuestionTagTables();
         const subjectId = requirePost(req, res, 'subject_id');
         if (subjectId === null) return;
 
@@ -285,6 +289,7 @@ const handleGetChaptersBySubject = async (req, res) => {
             SELECT 
                 t.id, 
                 t.title,
+                ${majorityGradeSql('t', { requireEditDone: false })} AS majority_grade_id,
                 COUNT(q.id) AS question_count,
 
                 COUNT(CASE WHEN ua.status = 'correct' THEN 1 END) AS correct_count,
@@ -303,7 +308,7 @@ const handleGetChaptersBySubject = async (req, res) => {
 
             FROM questions_tam24 q
             JOIN topics_tam24 t 
-                ON q.topic_id = t.id
+                ON ${joinOnTag('q', 't', 'topic')}
 
             LEFT JOIN tam24_user_answers ua
                 ON ua.question_id = q.id
@@ -324,8 +329,9 @@ const handleGetChaptersBySubject = async (req, res) => {
             gradeId !== 'undefined' &&
             String(gradeId).trim() !== ''
         ) {
-            sql += ` AND q.grade_id = ?`;
-            params.push(Number(gradeId));
+            const gradeMatch = matchTagIn('q', 'grade', gradeId);
+            sql += ` AND ${gradeMatch.sql}`;
+            params.push(...gradeMatch.params);
         }
 
         sql += `
@@ -340,7 +346,10 @@ const handleGetChaptersBySubject = async (req, res) => {
 
         const [rows] = await pool.query(sql, params);
 
-        res.json({ success: true, chapters: rows });
+        res.json({
+            success: true,
+            chapters: filterTopicsForSelectedGrades(rows, gradeId),
+        });
     } catch (error) {
         console.error("❌ SQL Error in handleGetChaptersBySubject:", error);
         res.json({ success: false, message: "Database error fetching chapters" });
@@ -351,10 +360,13 @@ const handleGetChaptersBySubject = async (req, res) => {
 
 const handleGetMabahesByChapter = async (req, res) => {
     try {
+        await ensureQuestionTagTables();
         const topicId = requirePost(req, res, 'topic_id');
         if (topicId === null) return;
 
         const userId = req.user?.id || req.body.user_id || null;
+
+        const topicMatch = matchTagIn('q', 'topic', topicId);
 
         const sql = `
             SELECT 
@@ -378,13 +390,13 @@ const handleGetMabahesByChapter = async (req, res) => {
 
             FROM questions_tam24 q
             JOIN chapters_tam24 c 
-                ON q.chapter_id = c.id
+                ON ${joinOnTag('q', 'c', 'mabhas')}
 
             LEFT JOIN tam24_user_answers ua
                 ON ua.question_id = q.id
                AND ua.user_id = ?
 
-            WHERE q.topic_id = ?
+            WHERE ${topicMatch.sql || '1=1'}
               AND q.status = 'فعال'
 
             GROUP BY c.id, c.title
@@ -396,7 +408,7 @@ const handleGetMabahesByChapter = async (req, res) => {
 
         const [rows] = await pool.query(sql, [
             userId ? Number(userId) : null,
-            Number(topicId),
+            ...topicMatch.params,
             MIN_QUESTIONS
         ]);
 
@@ -446,8 +458,19 @@ const buildQuestionFilters = (body) => {
     for (const [postKey, column] of Object.entries(mapping)) {
         const value = body[postKey];
         if (value !== undefined && value !== null && value !== 'null' && value !== 'undefined' && String(value).trim() !== '') {
-            filters.push(`${column} = ?`);
-            params.push(value);
+            if (postKey === 'grade_id') {
+                const matched = matchTagIn('q', 'grade', value);
+                if (matched.sql) { filters.push(matched.sql); params.push(...matched.params); }
+            } else if (postKey === 'topic_id') {
+                const matched = matchTagIn('q', 'topic', value);
+                if (matched.sql) { filters.push(matched.sql); params.push(...matched.params); }
+            } else if (postKey === 'chapter_id') {
+                const matched = matchTagIn('q', 'mabhas', value);
+                if (matched.sql) { filters.push(matched.sql); params.push(...matched.params); }
+            } else {
+                filters.push(`${column} = ?`);
+                params.push(value);
+            }
         }
     }
 
@@ -486,6 +509,7 @@ const handleGetPracticeQuestion = async (req, res) => {
         }
 
         const { filters, params } = buildQuestionFilters(req.body);
+        await ensureQuestionTagTables();
         const whereClause = filters.length > 0 ? ' AND ' + filters.join(' AND ') : '';
 
         // 1. Get TOTAL questions count matching the active filters
@@ -658,6 +682,7 @@ const handleGetPracticeQuestion = async (req, res) => {
 
 const handleCheckAnswer = async (req, res) => {
     let conn;
+    let checked = null;
 
     try {
         // ==========================================
@@ -674,6 +699,8 @@ const handleCheckAnswer = async (req, res) => {
         if (questionId <= 0 || optionId <= 0) {
             return res.json({ success: false, message: 'Invalid parameters' });
         }
+
+        await usage.ensureReady();
 
         // Bulletproof helper to parse is_correct regardless of what type mysql2 returns
         const parseIsCorrect = (val) => {
@@ -904,23 +931,84 @@ const handleCheckAnswer = async (req, res) => {
             [questionId]
         );
 
+        const [subjectRows] = await conn.query(
+            `SELECT q.subject_id, s.title AS subject_title
+             FROM questions_tam24 q
+             LEFT JOIN subjects_tam24 s ON s.id = q.subject_id
+             WHERE q.id = ?
+             LIMIT 1`,
+            [questionId]
+        );
+
         await conn.commit();
 
-        res.json({
-            success: true,
-            is_correct: isCorrect,
-            correct_option_id: correctOptionId,
-            descriptive_answer: descRows.length > 0 ? descRows[0].answer_text : null,
+        checked = {
+            isCorrect,
+            correctOptionId,
+            descriptiveText: descRows.length > 0 ? descRows[0].answer_text : null,
+            subjectTitle: subjectRows[0]?.subject_title,
+            subjectId: subjectRows[0]?.subject_id,
             option_stats,
-            reward_data: rewardData,
-        });
+            rewardData,
+            userId,
+            questionId,
+        };
     } catch (error) {
         if (conn) await conn.rollback();
         console.error("❌ SQL Error in handleCheckAnswer:", error);
-        res.json({ success: false, message: "Database error checking answer" });
+        return res.json({ success: false, message: "خطا در بررسی پاسخ. دوباره تلاش کنید." });
     } finally {
         if (conn) conn.release();
     }
+
+    // Solution quota locks the same user row. Doing it inside the answer
+    // transaction deadlocks and the quiz never shows right or wrong.
+    let solutionAccess = {
+        allowed: false,
+        locked: true,
+        subjectKey: null,
+        subjectLabel: null,
+        used: 0,
+        limit: null,
+        remaining: 0,
+    };
+    try {
+        solutionAccess = await entitlements.consumeSolution(null, {
+            userId: checked.userId,
+            subjectTitle: checked.subjectTitle,
+            subjectId: checked.subjectId,
+            questionId: checked.questionId,
+        });
+    } catch (solutionError) {
+        console.error("❌ solution access in handleCheckAnswer:", solutionError);
+    }
+
+    if (checked?.rewardData?.leveled_up && checked.userId) {
+        try {
+            const { notifyLevelUp } = require('../push/pushService');
+            void notifyLevelUp(checked.userId, checked.rewardData.current_level);
+        } catch (pushError) {
+            console.error('[push] level', pushError.message);
+        }
+    }
+
+    return res.json({
+        success: true,
+        is_correct: checked.isCorrect,
+        correct_option_id: checked.correctOptionId,
+        descriptive_answer: solutionAccess.allowed ? checked.descriptiveText : null,
+        solution_access: {
+            locked: solutionAccess.locked,
+            allowed: solutionAccess.allowed,
+            subjectKey: solutionAccess.subjectKey,
+            subjectLabel: solutionAccess.subjectLabel,
+            used: solutionAccess.used,
+            limit: solutionAccess.limit,
+            remaining: solutionAccess.remaining,
+        },
+        option_stats: checked.option_stats,
+        reward_data: checked.rewardData,
+    });
 };
 
 
@@ -941,6 +1029,13 @@ const handleFinishQuiz = async (req, res) => {
              VALUES (?, CURDATE(), ?, ?, ?)`,
             [userId, practiceSeconds, questionsAnswered, correctAnswers]
         );
+
+        try {
+            const { notifyPracticeFinished } = require('../push/pushService');
+            void notifyPracticeFinished(userId);
+        } catch (pushError) {
+            console.error('[push] achievement', pushError.message);
+        }
 
         res.json({ success: true, message: "Quiz activity saved successfully" });
     } catch (error) {

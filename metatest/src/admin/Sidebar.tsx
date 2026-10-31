@@ -1,6 +1,8 @@
 import React from 'react';
-import { LayoutDashboard, Layers, LogOut, Hexagon, ChevronLeft, ListTree, FileText, FilePlus2 } from 'lucide-react';
+import { LayoutDashboard, Layers, LogOut, Hexagon, ListTree, FileText, FilePlus2, BadgePercent, UserPlus, Wallet, Bot, Shield, PenLine, Flag, KeyRound, Crown, Bell, BellRing, Coins, Newspaper } from 'lucide-react';
 import type { User } from './AuthView';
+import { ADMIN_NAV, canAccessSection } from './access';
+import type { LucideIcon } from 'lucide-react';
 
 interface SidebarProps {
     activeTab: string;
@@ -11,14 +13,32 @@ interface SidebarProps {
     onLogout: () => void;
 }
 
+const ICONS: Record<string, LucideIcon> = {
+    dashboard: LayoutDashboard,
+    'edit-questions': Layers,
+    'insert-questions': FilePlus2,
+    curriculum: ListTree,
+    'pdf-library': FileText,
+    'subscription-plans': Crown,
+    'discount-codes': BadgePercent,
+    'referral-settings': UserPlus,
+    withdrawals: Wallet,
+    'word-stats': PenLine,
+    announcements: Bell,
+    push: BellRing,
+    coins: Coins,
+    reports: Flag,
+    'ai-manager': Bot,
+    admins: Shield,
+    blog: Newspaper,
+    access: KeyRound,
+};
+
 const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpen, setIsOpen, user, onLogout }) => {
-    const navItems = [
-        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-        { id: 'edit-questions', label: 'Edit Questions', icon: Layers },
-        { id: 'insert-questions', label: 'Insert Questions', icon: FilePlus2 },
-        { id: 'curriculum', label: 'Curriculum', icon: ListTree },
-        { id: 'pdf-library', label: 'PDF Library', icon: FileText },
-    ];
+    const navItems = ADMIN_NAV.filter((item) => canAccessSection(user, item.id)).map((item) => ({
+        ...item,
+        icon: ICONS[item.id] || LayoutDashboard,
+    }));
 
     return (
         <>
@@ -28,18 +48,18 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpen, setI
             )}
 
             <aside className={`
-                fixed lg:relative z-70 h-full w-64 bg-white dark:bg-[#1e1f20] border-l border-[#dadce0] dark:border-[#333537]
+                fixed lg:relative z-70 h-screen max-h-screen w-64 min-h-0 shrink-0 overflow-hidden bg-white dark:bg-[#1e1f20] border-l border-[#dadce0] dark:border-[#333537]
                 flex flex-col transition-transform duration-300
                 ${isOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'}
             `}>
-                <div className="h-16 flex items-center px-6 gap-3">
+                <div className="h-16 shrink-0 flex items-center px-6 gap-3">
                     <div className="p-1.5 bg-[#1a73e8] rounded-lg shadow-inner">
                         <Hexagon size={18} className="text-white" fill="currentColor" />
                     </div>
-                    <span className="font-semibold text-[#1f1f1f] dark:text-[#e3e3e3] tracking-tight">Admin Panel</span>
+                    <span className="font-semibold text-[#1f1f1f] dark:text-[#e3e3e3] tracking-tight">پنل ادمین</span>
                 </div>
 
-                <nav className="flex-1 px-3 py-4 space-y-1">
+                <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 space-y-1 [scrollbar-width:thin]">
                     {navItems.map((item) => {
                         const isActive = activeTab === item.id;
                         return (
@@ -47,7 +67,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpen, setI
                                 key={item.id}
                                 onClick={() => setActiveTab(item.id)}
                                 className={`
-                                    w-full flex items-center gap-3 px-4 py-2.5 rounded-full text-sm font-medium transition-all
+                                    w-full shrink-0 flex items-center gap-3 px-4 py-2.5 rounded-full text-sm font-medium transition-all
                                     ${isActive
                                     ? 'bg-[#e8f0fe] dark:bg-[#2d3748] text-[#1a73e8] dark:text-[#8ab4f8]'
                                     : 'text-[#444746] dark:text-[#c4c7c5] hover:bg-[#f1f3f4] dark:hover:bg-[#333537]'}
@@ -60,14 +80,14 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpen, setI
                     })}
                 </nav>
 
-                <div className="p-4 border-t border-[#dadce0] dark:border-[#333537]">
+                <div className="shrink-0 p-4 border-t border-[#dadce0] dark:border-[#333537]">
                     <div className="flex items-center gap-3 px-2 py-3 bg-[#f8f9fa] dark:bg-[#131314] rounded-2xl">
                         <div className="w-8 h-8 rounded-full bg-[#1a73e8] flex items-center justify-center text-white text-[10px] font-bold">
                             {user.username.split(' ').map(n => n[0]).join('')}
                         </div>
                         <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold truncate uppercase tracking-tighter">{user.username}</p>
-                            <p className="text-[10px] text-[#86868b] truncate">{user.role}</p>
+                            <p className="text-xs font-semibold truncate uppercase tracking-tighter">{user.fullName || user.username}</p>
+                            <p className="text-[10px] text-[#86868b] truncate">{user.isSuper ? 'مدیر اصلی' : (user.role === 'selector' ? 'سلکتور' : user.role === 'typing' ? 'تایپ' : user.role === 'admin' ? 'مدیر' : user.role)}</p>
                         </div>
                         <button onClick={onLogout} className="p-2 text-[#86868b] hover:text-red-500 transition-colors">
                             <LogOut size={14} />
