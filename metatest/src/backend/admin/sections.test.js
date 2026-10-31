@@ -75,15 +75,16 @@ test('plan edits stay on the subscription_plans shape students already see', () 
 });
 
 test('landing no longer contains the stats section and points at plans and blog', () => {
-    const html = fs.readFileSync(path.resolve(__dirname, '../../../../landing.html'), 'utf8');
-    assert.equal(html.includes('اعدادی که خودشان حرف می‌زنند'), false);
-    assert.equal(html.includes('stats-section'), false);
-    assert.equal(html.includes('id="plans"'), true);
-    assert.equal(html.includes('/api/payments/plans'), true);
-    assert.equal(html.includes('href="/blog/"'), true);
-    assert.equal(html.includes('href="#plans"'), true);
-    const blog = fs.readFileSync(path.resolve(__dirname, '../../../../blog/index.html'), 'utf8');
-    const post = fs.readFileSync(path.resolve(__dirname, '../../../../blog/post.html'), 'utf8');
+    const home = fs.readFileSync(path.resolve(__dirname, '../../marketing/pages/HomePage.tsx'), 'utf8');
+    const plans = fs.readFileSync(path.resolve(__dirname, '../../marketing/components/PlansSection.tsx'), 'utf8');
+    const footer = fs.readFileSync(path.resolve(__dirname, '../../marketing/components/SiteFooter.tsx'), 'utf8');
+    const blog = fs.readFileSync(path.resolve(__dirname, '../../marketing/lib/blog.ts'), 'utf8');
+    assert.equal(home.includes('اعدادی که خودشان حرف می‌زنند'), false);
+    assert.equal(home.includes('stats-section'), false);
+    assert.equal(plans.includes('id="plans"'), true);
+    assert.equal(plans.includes('/api/payments/plans'), true);
+    assert.equal(footer.includes('/blog/'), true);
+    assert.equal(footer.includes('#plans'), true);
     assert.equal(blog.includes('/api/blog/posts'), true);
-    assert.equal(post.includes('/api/blog/posts/'), true);
+    assert.equal(blog.includes('/api/blog/posts/'), true);
 });

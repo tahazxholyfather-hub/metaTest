@@ -17,13 +17,6 @@ const PAGE_PATHS = [
     '/about/index.html',
 ];
 
-function htmlFallback(siteRoot, pathname) {
-    if (pathname === '/about' || pathname.startsWith('/about/')) return path.join(siteRoot, 'about', 'index.html');
-    if (pathname === '/blog/post' || pathname === '/blog/post.html') return path.join(siteRoot, 'blog', 'post.html');
-    if (pathname === '/blog' || pathname.startsWith('/blog/')) return path.join(siteRoot, 'blog', 'index.html');
-    return path.join(siteRoot, 'landing.html');
-}
-
 function isViteAsset(pathname) {
     return pathname.startsWith('/src/')
         || pathname.startsWith('/@')
@@ -31,7 +24,7 @@ function isViteAsset(pathname) {
         || pathname === '/marketing.html';
 }
 
-async function installMarketing(app, { siteRoot, profile }) {
+async function installMarketing(app, { profile }) {
     const express = require('express');
     let vite = null;
     const forceHtml = process.env.MARKETING_HTML === '1';
@@ -76,11 +69,6 @@ async function installMarketing(app, { siteRoot, profile }) {
             res.sendFile(distHtml);
             return;
         }
-        const file = htmlFallback(siteRoot, req.path || '/');
-        if (fs.existsSync(file)) {
-            res.sendFile(file);
-            return;
-        }
         next();
     }
 
@@ -88,10 +76,6 @@ async function installMarketing(app, { siteRoot, profile }) {
     app.get('/blog/:slug', (req, res, next) => {
         const slug = String(req.params.slug || '');
         if (slug.includes('.')) return next();
-        if (!vite && !fs.existsSync(distHtml)) {
-            res.redirect(302, `/blog/post.html?slug=${encodeURIComponent(slug)}`);
-            return;
-        }
         return sendMarketing(req, res, next);
     });
 }
