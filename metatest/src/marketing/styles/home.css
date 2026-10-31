@@ -149,7 +149,7 @@
     }
     .header-brand { display: flex; align-items: center; gap: 28px; min-width: 0; }
     .logo { display: flex; align-items: center; text-decoration: none; flex: 0 0 auto; }
-    .logo-img { width: 60px; height: 60px; object-fit: contain; transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); }
+    .logo-img { width: 60px; height: 60px; object-fit: contain; display: block; transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); }
     .logo:hover .logo-img { transform: scale(1.1); }
 
     .header-nav { display: flex; align-items: center; gap: 22px; }

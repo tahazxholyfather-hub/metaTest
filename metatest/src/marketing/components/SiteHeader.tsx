@@ -17,7 +17,7 @@ type Props = {
   logoLabel?: string;
 };
 
-export function SiteHeader({ active, logoLinkClass, logoAlt = 'Metatest', logoLabel = 'متاتست' }: Props) {
+export function SiteHeader({ active, logoLinkClass = 'logo', logoAlt = 'Metatest', logoLabel = 'متاتست' }: Props) {
   const href = appUrl();
   return (
     <header>
