@@ -23,6 +23,7 @@ export const ADMIN_NAV: { id: string; label: string; superOnly?: boolean }[] = [
     { id: 'reports', label: 'گزارش‌ها' },
     { id: 'ai-manager', label: 'مدیریت هوش مصنوعی' },
     { id: 'admins', label: 'ادمین‌ها' },
+    { id: 'blog', label: 'بلاگ آموزشی' },
     { id: 'access', label: 'دسترسی‌ها', superOnly: true },
 ];
 
@@ -42,7 +43,7 @@ export function canAccessSection(user: User | null | undefined, section: string)
     if (MAIN_ADMIN_ONLY.has(section)) return isMainAdmin;
     if (isMainAdmin) return true;
     if (!user.sections) {
-        return section !== 'ai-manager' && section !== 'admins' && section !== 'announcements' && section !== 'coins' && section !== 'push';
+        return section !== 'ai-manager' && section !== 'admins' && section !== 'announcements' && section !== 'coins' && section !== 'push' && section !== 'blog';
     }
     return user.sections[section] === true;
 }

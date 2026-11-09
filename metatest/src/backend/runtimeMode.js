@@ -65,7 +65,7 @@ function profileFromEnv(env = process.env, options = {}) {
         .map((item) => item.trim())
         .filter(Boolean);
     const corsOrigins = localhost
-        ? ['http://localhost:5173', 'http://127.0.0.1:5173']
+        ? ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:5199', 'http://127.0.0.1:5199']
         : ['https://metatest.app', 'https://www.metatest.app'];
 
     return {

@@ -1,0 +1,27 @@
+.page-root { position: relative; }
+.page-sheet { position: relative; z-index: 1; }
+.field-clip {
+  position: absolute; inset: 0;
+  overflow: hidden; pointer-events: none; z-index: 0;
+}
+.depth-world {
+  position: absolute; top: 0; right: 0; left: 0;
+  height: max(100%, 5200px);
+  pointer-events: none;
+}
+.symbol {
+  position: absolute;
+  pointer-events: none;
+  user-select: none;
+  will-change: transform;
+  transform-origin: 50% 50%;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.symbol svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.ambient-veil {
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(circle at 15% 10%, rgba(139,92,246,0.06) 0%, transparent 40%),
+    radial-gradient(circle at 85% 85%, rgba(124,58,237,0.05) 0%, transparent 40%);
+}

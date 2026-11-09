@@ -1,5 +1,7 @@
 //server.js
 const path = require('path');
+const net = require('net');
+const { spawn } = require('child_process');
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 const express = require('express');
@@ -23,6 +25,8 @@ const paymentRoutes = require('./routes/paymentRoutes');
 const aiTeacherRoutes = require('./ai-teacher/routes');
 const walletController = require('./controllers/walletController');
 const adminRoutes = require('./routes/adminRoutes');
+const blogRoutes = require('./routes/blogRoutes');
+const { ensureBlogSchema } = require('./controllers/blogController');
 const chemballController = require('./controllers/chemballController');
 const pushService = require('./push/pushService');
 const { ensureAdminSchema } = require('./middleware/adminAuth');
@@ -105,6 +109,8 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 app.use('/avatars', express.static(uploadDir));
 app.use(express.static(profile.webRoot));
+app.use('/app', express.static(path.resolve(__dirname, '../../public')));
+app.use(express.static(path.resolve(__dirname, '../../../landing-static')));
 
 
 app.use('/api/dashboard', dashboardRoutes);
@@ -113,6 +119,7 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/ai-teacher', aiTeacherRoutes);
 // Admin panel — independent session (admin_token cookie), not the student JWT
 app.use('/api/admin', adminRoutes);
+app.use('/api/blog', blogRoutes);
 app.get('/api/chemball/leaderboard', chemballController.handleGetLeaderboard);
 app.post('/api/chemball/score', requireToken, chemballController.handleSaveScore);
 
@@ -515,7 +522,43 @@ process.on('uncaughtException', (error) => {
     reportError('uncaughtException', error);
 });
 
-// Start the server
+const { installMarketing } = require('./marketingSite');
+const siteRoot = path.resolve(__dirname, '../../..');
+
+function portOpen(port) {
+    return new Promise((resolve) => {
+        const socket = net.connect({ port, host: '127.0.0.1' });
+        const done = (open) => {
+            socket.removeAllListeners();
+            socket.destroy();
+            resolve(open);
+        };
+        socket.once('connect', () => done(true));
+        socket.once('error', () => done(false));
+    });
+}
+
+async function ensureLocalApp() {
+    if (!profile.localhost) return;
+    if (await portOpen(5173)) {
+        console.log('Local app is already on http://localhost:5173/');
+        return;
+    }
+    const appDir = path.resolve(__dirname, '../..');
+    console.log('Starting beforMain app on http://localhost:5173/');
+    const child = spawn('npm', ['run', 'dev', '--', '--host', '127.0.0.1', '--port', '5173', '--strictPort'], {
+        cwd: appDir,
+        stdio: 'inherit',
+        shell: true,
+    });
+    child.on('error', (err) => {
+        console.error('Could not start the app. From metatest run: npm install && npm run dev');
+        console.error(err.message);
+    });
+}
+
+// Start the server after the marketing routes are registered.
+function startServer() {
 app.listen(PORT, () => {
     console.log(`Backend server is running on http://localhost:${PORT}`);
     console.log(`[runtime] LOCALHOST=${profile.localhost} base=${profile.appBase} socket=${profile.socketUrl}`);
@@ -524,6 +567,7 @@ app.listen(PORT, () => {
     ensureVisitorCountIds()
         .catch((err) => console.error('[db] visitor count repair failed:', err.message));
     ensureAdminSchema()
+        .then(() => ensureBlogSchema())
         .then(() => loadRuntimeOverlayFromDb())
         .then(() => ensureDiamondPlanActive())
         .then(() => pushService.ensureSchema())
@@ -534,4 +578,13 @@ app.listen(PORT, () => {
     } catch (err) {
         console.error('[push] scheduler failed to start:', err.message);
     }
+    ensureLocalApp().catch((err) => console.error(err.message));
 });
+}
+
+installMarketing(app, { siteRoot, profile })
+    .then(startServer)
+    .catch((err) => {
+        console.error('[site] marketing setup failed:', err);
+        process.exit(1);
+    });

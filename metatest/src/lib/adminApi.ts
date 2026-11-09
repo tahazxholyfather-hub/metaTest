@@ -163,6 +163,30 @@ export const adminApi = {
     updateReport: (id: number, payload: Json) =>
         adminRequest<Json>(`/reports/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
 
+    uploadBlogMedia: (file: File) => {
+        const body = new FormData();
+        body.append('file', file);
+        return adminRequest<{ success: boolean; url: string; message?: string }>('/blog/media', {
+            method: 'POST',
+            body,
+        });
+    },
+    listBlogCategories: () => adminRequest<{ success: boolean; data: { slug: string; name: string }[] }>('/blog/categories'),
+    createBlogCategory: (name: string) => adminRequest<{ success: boolean; message?: string; data: { slug: string; name: string }[] }>('/blog/categories', {
+        method: 'POST',
+        body: JSON.stringify({ name }),
+    }),
+    blogCategoryImpact: (slug: string) => adminRequest<{ success: boolean; data: { name: string; onlyCount: number; sharedCount: number } }>(`/blog/categories/${encodeURIComponent(slug)}/impact`),
+    deleteBlogCategory: (slug: string) => adminRequest<{ success: boolean; message?: string; data: { slug: string; name: string }[] }>(`/blog/categories/${encodeURIComponent(slug)}`, {
+        method: 'DELETE',
+    }),
+    listBlog: () => adminRequest<Json>('/blog'),
+    saveBlog: (payload: Json) => adminRequest<Json>(payload.id ? `/blog/${payload.id}` : '/blog', {
+        method: payload.id ? 'PUT' : 'POST',
+        body: JSON.stringify(payload),
+    }),
+    deleteBlog: (id: number) => adminRequest<Json>(`/blog/${id}`, { method: 'DELETE' }),
+
     listAccess: () => adminRequest<Json>('/access'),
     saveAccess: (id: number, sections: Json) =>
         adminRequest<Json>(`/access/${id}`, { method: 'PUT', body: JSON.stringify({ sections }) }),

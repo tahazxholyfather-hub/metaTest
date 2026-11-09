@@ -17,6 +17,7 @@ const ASSIGNABLE_SECTIONS = [
     { key: 'reports', label: 'گزارش‌ها', defaultAllowed: true },
     { key: 'ai-manager', label: 'مدیریت هوش مصنوعی', defaultAllowed: false },
     { key: 'admins', label: 'ادمین‌ها', defaultAllowed: false },
+    { key: 'blog', label: 'بلاگ آموزشی', defaultAllowed: false },
 ];
 
 const ASSIGNABLE_KEYS = new Set(ASSIGNABLE_SECTIONS.map((section) => section.key));
@@ -44,6 +45,8 @@ const ACTION_SECTIONS = {
     Admin_update_referral_settings: ['referral-settings'],
     Admin_get_withdrawal_requests: ['withdrawals'],
     Admin_update_withdrawal_status: ['withdrawals'],
+    Admin_save_blog_post: ['blog'],
+    Admin_delete_blog_post: ['blog'],
     Admin_get_subjects: ['edit-questions', 'insert-questions', 'curriculum', 'reports'],
     Admin_get_grades_by_subject: ['edit-questions', 'insert-questions', 'curriculum', 'reports'],
     Admin_get_chapters_by_subject: ['edit-questions', 'insert-questions', 'curriculum', 'reports'],

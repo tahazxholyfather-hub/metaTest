@@ -112,6 +112,14 @@ export default defineConfig(({ mode }) => {
           target: 'http://localhost:3000',
           changeOrigin: true,
         },
+        '/about': {
+          target: 'http://localhost:3000',
+          changeOrigin: true,
+        },
+        '/blog': {
+          target: 'http://localhost:3000',
+          changeOrigin: true,
+        },
       }
     }
   }
