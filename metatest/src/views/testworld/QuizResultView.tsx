@@ -348,6 +348,7 @@ function mapResultData(data) {
             topic: qData.mabhas || '',
             description: qData.descriptive_answer?.text || '',
             options: qData.options || [],
+            images: Array.isArray(qData.images) ? qData.images : [],
             selected: qData.selected_option_id ?? null,
             correctAnswer: qData.correct_option_id ?? null,
             time: Math.floor((qData.time_spent_ms || 0) / 1000),
@@ -1070,6 +1071,18 @@ export default function ResultDashboard() {
                                     className="text-sm md:text-base font-medium leading-8 text-[var(--text-primary)]"
                                     inline={true}
                                 />
+                                {selectedQuestion.images?.length > 0 && (
+                                    <div className="mt-4 flex flex-col gap-3">
+                                        {selectedQuestion.images.map((name) => (
+                                            <img
+                                                key={name}
+                                                src={`/images/questions/${name}`}
+                                                alt="تصویر سوال"
+                                                className="max-h-80 w-full rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] object-contain"
+                                            />
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
                             <div className="flex flex-wrap items-center gap-2">

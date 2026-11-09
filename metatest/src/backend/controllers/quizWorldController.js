@@ -455,6 +455,21 @@ const fetchQuestionOptions = async (questionId) => {
     return rows.map(opt => ({ id: Number(opt.id), text: opt.option_text }));
 };
 
+async function attachQuestionImages(connection, questionIds, questionDetailsMap) {
+    if (!questionIds.length) return;
+    const placeholders = questionIds.map(() => '?').join(',');
+    const [rows] = await connection.query(
+        `SELECT question_id, image_name FROM question_images_tam24 WHERE question_id IN (${placeholders}) ORDER BY id ASC`,
+        questionIds
+    );
+    for (const row of rows) {
+        const bucket = questionDetailsMap[row.question_id];
+        if (!bucket) continue;
+        if (!bucket.images) bucket.images = [];
+        bucket.images.push(row.image_name);
+    }
+}
+
 const fetchQuestionImages = async (questionId) => {
     const [rows] = await pool.query(
         "SELECT image_name FROM question_images_tam24 WHERE question_id = ? ORDER BY id ASC",
@@ -2799,16 +2814,20 @@ async function handleGetQuizResult(req, res) {
                 }
             }
 
+            await attachQuestionImages(connection, questionIds, questionDetailsMap);
+
             for (const qId of questionIds) {
                 const details = questionDetailsMap[qId] || {
                     question_text: "متن سوال یافت نشد",
                     options: [],
+                    images: [],
                 };
 
                 evaluation[qId] = {
                     ...evaluation[qId],
                     question_text: details.question_text,
                     options: details.options,
+                    images: details.images || [],
                     selected_option_id:
                         evaluation[qId]?.selected_option_id ??
                         submittedAnswers[qId] ??
@@ -3056,16 +3075,20 @@ const handleGetQuizResultByUserAndQuiz = async (req, res) => {
                 }
             }
 
+            await attachQuestionImages(connection, questionIds, questionDetailsMap);
+
             for (const qId of questionIds) {
                 const details = questionDetailsMap[qId] || {
                     question_text: "متن سوال یافت نشد",
                     options: [],
+                    images: [],
                 };
 
                 evaluation[qId] = {
                     ...evaluation[qId],
                     question_text: details.question_text,
                     options: details.options,
+                    images: details.images || [],
                     selected_option_id:
                         evaluation[qId]?.selected_option_id ??
                         submittedAnswers[qId] ??

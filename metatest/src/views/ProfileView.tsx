@@ -254,6 +254,13 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
         newPass: "",
         confirmPass: ""
     });
+    const [resetOpen, setResetOpen] = useState(false);
+    const [resetStep, setResetStep] = useState<'code' | 'password'>('code');
+    const [resetCode, setResetCode] = useState('');
+    const [resetPass, setResetPass] = useState('');
+    const [resetConfirm, setResetConfirm] = useState('');
+    const [resetBusy, setResetBusy] = useState(false);
+    const [resetPhone, setResetPhone] = useState('');
 
     // --- Payments / Plan / Invites (lazy-loaded from backend) ---
     const [paymentsData, setPaymentsData] = useState<{ payments: any[]; subscription: any } | null>(null);
@@ -535,6 +542,86 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
         setSocials({ ...socials, [platformKey]: val });
     };
 
+    const closeReset = () => {
+        setResetOpen(false);
+        setResetStep('code');
+        setResetCode('');
+        setResetPass('');
+        setResetConfirm('');
+    };
+
+    const handleForgotPassword = async () => {
+        setResetBusy(true);
+        try {
+            const result = await flowApi.dispatch('send_password_reset_otp', {});
+            if (!result?.success) {
+                toast.error(result?.message || 'ارسال کد ممکن نشد');
+                return;
+            }
+            setResetPhone(result.phone_mask || '');
+            setResetStep('code');
+            setResetCode('');
+            setResetPass('');
+            setResetConfirm('');
+            setResetOpen(true);
+            toast.success(result.message || 'کد تایید پیامک شد');
+        } catch (error: any) {
+            toast.error(error.message || 'خطا در ارسال کد');
+        } finally {
+            setResetBusy(false);
+        }
+    };
+
+    const handleCheckResetCode = async () => {
+        if (!resetCode.trim()) {
+            toast.error('کد تایید را وارد کنید');
+            return;
+        }
+        setResetBusy(true);
+        try {
+            const result = await flowApi.dispatch('check_password_reset_otp', { code: resetCode.trim() });
+            if (!result?.success) {
+                toast.error(result?.message || 'کد اشتباه است');
+                return;
+            }
+            setResetStep('password');
+        } catch (error: any) {
+            toast.error(error.message || 'خطا در بررسی کد');
+        } finally {
+            setResetBusy(false);
+        }
+    };
+
+    const handleResetPassword = async () => {
+        if (resetPass.length < 6) {
+            toast.error('رمز عبور جدید باید حداقل ۶ کاراکتر باشد');
+            return;
+        }
+        if (resetPass !== resetConfirm) {
+            toast.error('رمز عبور جدید و تکرار آن مطابقت ندارند');
+            return;
+        }
+        setResetBusy(true);
+        try {
+            const result = await flowApi.dispatch('reset_password_with_otp', {
+                code: resetCode.trim(),
+                newPass: resetPass,
+            });
+            if (!result?.success) {
+                toast.error(result?.message || 'تغییر رمز ممکن نشد');
+                return;
+            }
+            if (user) setUser({ ...user, password_set: true });
+            setSecurity({ currentPass: '', newPass: '', confirmPass: '' });
+            closeReset();
+            toast.success(result.message || 'رمز عبور جدید ذخیره شد');
+        } catch (error: any) {
+            toast.error(error.message || 'خطا در تغییر رمز');
+        } finally {
+            setResetBusy(false);
+        }
+    };
+
     const handleSave = async () => {
         if (security.newPass && security.newPass !== security.confirmPass) {
             toast.error("رمز عبور جدید و تکرار آن مطابقت ندارند");
@@ -753,6 +840,61 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
                 </div>
             </ResponsiveModal>
 
+            <ResponsiveModal
+                isOpen={resetOpen}
+                onClose={closeReset}
+                title="فراموشی رمز عبور"
+                className="md:w-[420px]"
+            >
+                <div className="space-y-4 p-1 text-right">
+                    {resetStep === 'code' ? (
+                        <>
+                            <p className="text-sm leading-7 text-[var(--text-secondary)]">
+                                کد تایید به شماره {resetPhone || 'موبایل حساب شما'} پیامک شد. همان کد را اینجا وارد کنید.
+                            </p>
+                            <ProfileInput
+                                icon={Icons.Shield}
+                                label="کد تایید"
+                                type="tel"
+                                value={resetCode}
+                                placeholder="مثلاً ۱۲۳۴"
+                                onChange={(e: any) => setResetCode(e.target.value)}
+                            />
+                            <div className="flex justify-end gap-3 pt-2">
+                                <button type="button" onClick={closeReset} className="rounded-xl bg-[var(--bg-elevated)] px-4 py-2 text-sm font-bold text-[var(--text-primary)]">انصراف</button>
+                                <button type="button" onClick={handleCheckResetCode} disabled={resetBusy} className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-bold text-white disabled:opacity-60">
+                                    {resetBusy ? 'در حال بررسی…' : 'تایید کد'}
+                                </button>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <p className="text-sm leading-7 text-[var(--text-secondary)]">کد درست بود. رمز جدید را وارد کنید.</p>
+                            <ProfileInput
+                                icon={Icons.Lock}
+                                label="رمز عبور جدید"
+                                type="password"
+                                value={resetPass}
+                                onChange={(e: any) => setResetPass(e.target.value)}
+                            />
+                            <ProfileInput
+                                icon={Icons.Check}
+                                label="تکرار رمز عبور"
+                                type="password"
+                                value={resetConfirm}
+                                onChange={(e: any) => setResetConfirm(e.target.value)}
+                            />
+                            <div className="flex justify-end gap-3 pt-2">
+                                <button type="button" onClick={closeReset} className="rounded-xl bg-[var(--bg-elevated)] px-4 py-2 text-sm font-bold text-[var(--text-primary)]">انصراف</button>
+                                <button type="button" onClick={handleResetPassword} disabled={resetBusy} className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-bold text-white disabled:opacity-60">
+                                    {resetBusy ? 'در حال ذخیره…' : 'ذخیره رمز جدید'}
+                                </button>
+                            </div>
+                        </>
+                    )}
+                </div>
+            </ResponsiveModal>
+
 
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
@@ -918,9 +1060,19 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
                                         </div>
                                     ) : (
                                         <>
-                                            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800/30 text-amber-700 dark:text-amber-400 text-xs p-4 rounded-xl leading-relaxed flex items-start gap-2">
-                                                <div className="mt-0.5"><Icons.Shield /></div>
-                                                <span>برای تغییر رمز عبور، ابتدا باید رمز فعلی خود را وارد کنید.</span>
+                                            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800/30 text-amber-700 dark:text-amber-400 text-xs p-4 rounded-xl leading-relaxed flex items-start justify-between gap-3">
+                                                <div className="flex items-start gap-2">
+                                                    <div className="mt-0.5"><Icons.Shield /></div>
+                                                    <span>برای تغییر رمز عبور، ابتدا باید رمز فعلی خود را وارد کنید.</span>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleForgotPassword}
+                                                    disabled={resetBusy}
+                                                    className="shrink-0 text-[11px] font-bold text-[var(--accent)] underline-offset-4 hover:underline disabled:opacity-60"
+                                                >
+                                                    فراموشی رمز عبور
+                                                </button>
                                             </div>
                                             <ProfileInput
                                                 icon={Icons.Lock}

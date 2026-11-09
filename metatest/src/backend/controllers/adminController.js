@@ -939,11 +939,15 @@ const docxXmlToText = (xml) => {
         .replace(/<w:br[^>]*\/>/g, '\n')
         .replace(/<\/w:p>/g, '\n')
         .replace(/<[^>]+>/g, '')
+        .replace(/&laquo;|&#171;/gi, '«')
+        .replace(/&raquo;|&#187;/gi, '»')
+        .replace(/&nbsp;|&#160;/gi, ' ')
         .replace(/&lt;/g, '<')
         .replace(/&gt;/g, '>')
         .replace(/&quot;/g, '"')
         .replace(/&apos;/g, "'")
         .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
+        .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(parseInt(code, 16)))
         .replace(/&amp;/g, '&');
 };
 

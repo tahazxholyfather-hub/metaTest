@@ -34,6 +34,23 @@ import { normalizeAssistantText } from '../../backend/ai-teacher/services/replyQ
 //   cp -r node_modules/@mathjax/mathjax-newcm-font public/mathjax-newcm-font
 // ---------------------------------------------------------------------
 
+// Word stores Persian quotation marks as HTML entities. The quiz screen
+// already decodes them; the answer sheet has to do the same or "&laquo;"
+// shows up as a stray "&".
+const decodeWordEntities = (value: string) => value
+    .replace(/&laquo;|&#171;/gi, '«')
+    .replace(/&raquo;|&#187;/gi, '»')
+    .replace(/&nbsp;|&#160;/gi, ' ')
+    .replace(/&zwnj;|&#8204;/gi, '\u200c')
+    .replace(/&zwj;|&#8205;/gi, '\u200d')
+    .replace(/&quot;|&#34;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&lt;|&#60;/gi, '<')
+    .replace(/&gt;|&#62;/gi, '>')
+    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(parseInt(code, 16)))
+    .replace(/&amp;|&#38;/gi, '&');
+
 const MATHJAX_SCRIPT_URL = '/mathjax/tex-mml-chtml.js';
 const MATHJAX_FONT_PATH = '/mathjax-newcm-font';
 
@@ -185,7 +202,7 @@ export const MathRenderer: React.FC<MathRendererProps> = ({
 
     const processedText = useMemo(() => {
         if (!text) return '';
-        const normalized = normalizeAssistantText(text);
+        const normalized = decodeWordEntities(normalizeAssistantText(text));
         return isChemistrySubject(subject) ? formatChemistryText(normalized) : normalized;
     }, [text, subject]);
 

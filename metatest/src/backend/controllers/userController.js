@@ -455,6 +455,111 @@ const handleVerifyOtp = async (req, res) => {
 };
 
 
+// ===================== Forgot password (logged-in user) =====================
+const maskPhone = (phone) => {
+    const digits = String(phone || '').replace(/\D/g, '');
+    if (digits.length < 6) return '';
+    return `${digits.slice(0, 4)}***${digits.slice(-3)}`;
+};
+
+const loadUserPhone = async (userId) => {
+    const [users] = await db.query('SELECT phone FROM tam24_users WHERE id = ? LIMIT 1', [userId]);
+    return users[0]?.phone ? String(users[0].phone) : '';
+};
+
+const handleSendPasswordResetOtp = async (req, res) => {
+    const userId = req.user?.id;
+    if (!userId) return res.json({ success: false, message: 'ابتدا وارد حساب شوید.' });
+
+    try {
+        const phone = await loadUserPhone(userId);
+        if (!phone) {
+            return res.json({ success: false, message: 'شماره موبایلی برای این حساب ثبت نشده است.' });
+        }
+
+        const code = generateOtp();
+        const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+        const ip = getClientIp(req);
+
+        await db.query(`
+                    INSERT INTO tam24_otps (phone, code, expires_at, ip)
+                    VALUES (?, ?, ?, ?)
+                        ON DUPLICATE KEY UPDATE code = ?, expires_at = ?, ip = ?`,
+            [phone, code, expiresAt, ip, code, expiresAt, ip]
+        );
+
+        const smsResult = await sendOtpSms(phone, code);
+        if (!smsResult.success) {
+            return res.json({ success: false, message: smsResult.error });
+        }
+
+        return res.json({
+            success: true,
+            message: 'کد تایید پیامک شد.',
+            phone_mask: maskPhone(phone),
+        });
+    } catch (error) {
+        console.error('Error in handleSendPasswordResetOtp:', error);
+        return res.status(500).json({ success: false, message: 'خطا در ارسال کد تایید. لطفاً دوباره تلاش کنید.' });
+    }
+};
+
+const handleCheckPasswordResetOtp = async (req, res) => {
+    const userId = req.user?.id;
+    const code = String(req.body?.code || '').trim();
+    if (!userId) return res.json({ success: false, message: 'ابتدا وارد حساب شوید.' });
+    if (!code) return res.json({ success: false, message: 'کد تایید را وارد کنید.' });
+
+    try {
+        const phone = await loadUserPhone(userId);
+        if (!phone) return res.json({ success: false, message: 'شماره موبایلی برای این حساب ثبت نشده است.' });
+
+        const [otps] = await db.query(
+            'SELECT id FROM tam24_otps WHERE phone = ? AND code = ? AND expires_at > UTC_TIMESTAMP() LIMIT 1',
+            [phone, code]
+        );
+        if (otps.length === 0) {
+            return res.json({ success: false, message: 'کد وارد شده اشتباه یا منقضی شده است.' });
+        }
+        return res.json({ success: true, message: 'کد تایید شد.' });
+    } catch (error) {
+        console.error('Error in handleCheckPasswordResetOtp:', error);
+        return res.status(500).json({ success: false, message: 'خطا در بررسی کد.' });
+    }
+};
+
+const handleResetPasswordWithOtp = async (req, res) => {
+    const userId = req.user?.id;
+    const code = String(req.body?.code || '').trim();
+    const newPass = String(req.body?.newPass || '');
+    if (!userId) return res.json({ success: false, message: 'ابتدا وارد حساب شوید.' });
+    if (!code) return res.json({ success: false, message: 'کد تایید را وارد کنید.' });
+    if (newPass.length < 6) return res.json({ success: false, message: 'رمز عبور جدید باید حداقل ۶ کاراکتر باشد.' });
+
+    try {
+        const phone = await loadUserPhone(userId);
+        if (!phone) return res.json({ success: false, message: 'شماره موبایلی برای این حساب ثبت نشده است.' });
+
+        const [otps] = await db.query(
+            'SELECT id FROM tam24_otps WHERE phone = ? AND code = ? AND expires_at > UTC_TIMESTAMP() LIMIT 1',
+            [phone, code]
+        );
+        if (otps.length === 0) {
+            return res.json({ success: false, message: 'کد وارد شده اشتباه یا منقضی شده است.' });
+        }
+
+        const passwordHash = await hashPassword(newPass);
+        await db.query('UPDATE tam24_users SET password_hash = ? WHERE id = ?', [passwordHash, userId]);
+        await db.query('DELETE FROM tam24_otps WHERE phone = ?', [phone]);
+        await markManualTask(userId, 9).catch((err) => console.error('markManualTask(9) failed:', err));
+
+        return res.json({ success: true, message: 'رمز عبور جدید ذخیره شد.', password_set: true });
+    } catch (error) {
+        console.error('Error in handleResetPasswordWithOtp:', error);
+        return res.status(500).json({ success: false, message: 'خطا در تغییر رمز عبور.' });
+    }
+};
+
 // ===================== FAVORITES =====================
 const handleGetFavorites = async (req, res) => {
     try {
@@ -1202,6 +1307,9 @@ module.exports = {
     handleGuestLogin,
     handleVerifyOtp,
     handleSendOtp,
+    handleSendPasswordResetOtp,
+    handleCheckPasswordResetOtp,
+    handleResetPasswordWithOtp,
     handlePasswordLogin,
     handleUpdateProfile,
     handleGetFavorites,

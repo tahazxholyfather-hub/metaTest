@@ -183,6 +183,14 @@ export default function PrintResultSheet({ activeUser, questions, lessonsData, q
                             {/* Question Body */}
                             <div style={{ fontSize: '10.5pt', fontWeight: 500, marginBottom: 10, color: '#111827', wordWrap: 'break-word' }}>
                                 <MathRenderer text={String(q.text || '')} inline />
+                                {Array.isArray(q.images) && q.images.map((name) => (
+                                    <img
+                                        key={name}
+                                        src={`/images/questions/${name}`}
+                                        alt="تصویر سوال"
+                                        style={{ display: 'block', maxWidth: '100%', maxHeight: 280, marginTop: 8, objectFit: 'contain' }}
+                                    />
+                                ))}
                             </div>
 
                             {/* Options */}

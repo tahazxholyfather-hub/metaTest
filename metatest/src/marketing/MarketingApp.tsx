@@ -16,7 +16,7 @@ import postCss from './styles/post.css?raw';
 const PAGE_CSS = {
   home: homeCss,
   blog: `${fieldCss}\n${blogCss}`,
-  post: `${fieldCss}\n${postCss}`,
+  post: postCss,
   about: `${fieldCss}\n${aboutCss}`,
 };
 

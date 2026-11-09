@@ -208,6 +208,15 @@ app.post('/api/flow', requireToken, async (req, res) => {
             case 'send_otp':
                 await userController.handleSendOtp(req, res);
                 break;
+            case 'send_password_reset_otp':
+                await userController.handleSendPasswordResetOtp(req, res);
+                break;
+            case 'check_password_reset_otp':
+                await userController.handleCheckPasswordResetOtp(req, res);
+                break;
+            case 'reset_password_with_otp':
+                await userController.handleResetPasswordWithOtp(req, res);
+                break;
             case 'verify_otp':
                 await userController.handleVerifyOtp(req, res);
                 break;

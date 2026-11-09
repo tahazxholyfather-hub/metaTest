@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react';
+import homeShot from '../assets/home-dashboard.png';
 import { appUrl } from '../lib/appUrl';
 import { startHomeStage } from '../lib/homeStage';
 import { HomeBlog } from '../components/HomeBlog';
@@ -63,7 +64,7 @@ export function HomePage() {
                 <div className="phone-frame">
                   <div className="phone-notch" />
                   <div className="phone-screen">
-                    <img src="/app-preview.png" className="phone-screen-img" alt="پیش‌نمایش اپلیکیشن متاتست" />
+                    <img src={homeShot} className="phone-screen-img" alt="صفحه اصلی اپلیکیشن متاتست" />
                   </div>
                 </div>
               </div>
