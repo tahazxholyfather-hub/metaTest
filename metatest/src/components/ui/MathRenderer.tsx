@@ -162,6 +162,29 @@ const isChemistrySubject = (subject?: number | string): boolean =>
  *   $H2O + CO2 -> H2CO3$  becomes  $\ce{H2O + CO2 -> H2CO3}$
  * Already-wrapped formulas are left untouched.
  */
+const EASTERN_DIGITS = '۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩';
+
+// mhchem only accepts ASCII digits after _ and ^. A Persian coefficient
+// such as ۲NO or H_۲ is read as a subscript with no argument, which is the
+// red "Missing superscript or subscript argument" message.
+const toAsciiDigits = (value: string) => value.replace(/[۰-۹٠-٩]/g, (ch) => {
+    const index = EASTERN_DIGITS.indexOf(ch);
+    return index < 0 ? ch : String(index % 10);
+});
+
+// A Word run boundary often leaves a space or zero-width mark between _/^ and
+// the digit. TeX then sees a subscript with no argument and replaces the
+// whole formula with "Missing superscript or subscript argument".
+const cleanMathChunk = (chunk: string) => {
+    const digits = toAsciiDigits(chunk);
+    return digits.replace(/([_^])[\s\u200c\u200d\u200e\u200f\ufeff]+/g, '$1');
+};
+
+const asciiDigitsInMath = (text: string) => text.replace(
+    /\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\$(?:\\\$|[^$])+\$|\\\([\s\S]*?\\\)|\\ce\{[^{}]*\}/g,
+    (chunk) => cleanMathChunk(chunk),
+);
+
 const shouldWrapCe = (formula: string) => !/\\/.test(formula) && !/[\u0600-\u06FF]/.test(formula);
 
 const formatChemistryText = (text: string): string => {
@@ -202,7 +225,7 @@ export const MathRenderer: React.FC<MathRendererProps> = ({
 
     const processedText = useMemo(() => {
         if (!text) return '';
-        const normalized = decodeWordEntities(normalizeAssistantText(text));
+        const normalized = asciiDigitsInMath(decodeWordEntities(normalizeAssistantText(text)));
         return isChemistrySubject(subject) ? formatChemistryText(normalized) : normalized;
     }, [text, subject]);
 
