@@ -261,6 +261,8 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
     const [resetConfirm, setResetConfirm] = useState('');
     const [resetBusy, setResetBusy] = useState(false);
     const [resetPhone, setResetPhone] = useState('');
+    const [resetSent, setResetSent] = useState(false);
+    const [resetLeft, setResetLeft] = useState(0);
 
     // --- Payments / Plan / Invites (lazy-loaded from backend) ---
     const [paymentsData, setPaymentsData] = useState<{ payments: any[]; subscription: any } | null>(null);
@@ -548,6 +550,40 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
         setResetCode('');
         setResetPass('');
         setResetConfirm('');
+        setResetSent(false);
+        setResetLeft(0);
+    };
+
+    const openReset = () => {
+        setResetStep('code');
+        setResetCode('');
+        setResetPass('');
+        setResetConfirm('');
+        setResetSent(false);
+        setResetLeft(0);
+        setResetOpen(true);
+    };
+
+    const resetTicking = resetOpen && resetLeft > 0;
+    useEffect(() => {
+        if (!resetTicking) return;
+        const timer = window.setInterval(() => {
+            setResetLeft((seconds) => (seconds <= 1 ? 0 : seconds - 1));
+        }, 1000);
+        return () => window.clearInterval(timer);
+    }, [resetTicking]);
+
+    useEffect(() => {
+        if (resetOpen && resetSent && resetLeft === 0 && resetStep === 'password') {
+            setResetStep('code');
+        }
+    }, [resetOpen, resetSent, resetLeft, resetStep]);
+
+    const formatResetTimer = (seconds: number) => {
+        const minutes = Math.floor(seconds / 60);
+        const remain = seconds % 60;
+        const fa = (value: number) => String(value).replace(/\d/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'[Number(digit)]);
+        return `${fa(minutes)}:${fa(remain).padStart(2, '۰')}`;
     };
 
     const handleForgotPassword = async () => {
@@ -561,9 +597,8 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
             setResetPhone(result.phone_mask || '');
             setResetStep('code');
             setResetCode('');
-            setResetPass('');
-            setResetConfirm('');
-            setResetOpen(true);
+            setResetSent(true);
+            setResetLeft(Number(result.expires_in) || 120);
             toast.success(result.message || 'کد تایید پیامک شد');
         } catch (error: any) {
             toast.error(error.message || 'خطا در ارسال کد');
@@ -573,6 +608,10 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
     };
 
     const handleCheckResetCode = async () => {
+        if (resetLeft <= 0) {
+            toast.error('مهلت این کد تمام شده است. دوباره کد تایید را ارسال کنید');
+            return;
+        }
         if (!resetCode.trim()) {
             toast.error('کد تایید را وارد کنید');
             return;
@@ -581,6 +620,7 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
         try {
             const result = await flowApi.dispatch('check_password_reset_otp', { code: resetCode.trim() });
             if (!result?.success) {
+                if (String(result?.message || '').includes('مهلت')) setResetLeft(0);
                 toast.error(result?.message || 'کد اشتباه است');
                 return;
             }
@@ -593,6 +633,11 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
     };
 
     const handleResetPassword = async () => {
+        if (resetLeft <= 0) {
+            toast.error('مهلت این کد تمام شده است. دوباره کد تایید را ارسال کنید');
+            setResetStep('code');
+            return;
+        }
         if (resetPass.length < 6) {
             toast.error('رمز عبور جدید باید حداقل ۶ کاراکتر باشد');
             return;
@@ -608,6 +653,10 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
                 newPass: resetPass,
             });
             if (!result?.success) {
+                if (String(result?.message || '').includes('مهلت')) {
+                    setResetLeft(0);
+                    setResetStep('code');
+                }
                 toast.error(result?.message || 'تغییر رمز ممکن نشد');
                 return;
             }
@@ -850,26 +899,50 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
                     {resetStep === 'code' ? (
                         <>
                             <p className="text-sm leading-7 text-[var(--text-secondary)]">
-                                کد تایید به شماره {resetPhone || 'موبایل حساب شما'} پیامک شد. همان کد را اینجا وارد کنید.
+                                {!resetSent
+                                    ? 'کد تایید به شماره موبایل همین حساب پیامک می‌شود. بعد از ارسال، دو دقیقه برای وارد کردن آن وقت دارید.'
+                                    : resetLeft > 0
+                                        ? `کد به شماره ${resetPhone || 'موبایل حساب شما'} پیامک شد. تا پایان زمان زیر آن را وارد کنید.`
+                                        : 'مهلت این کد تمام شد و دیگر پذیرفته نمی‌شود. برای دریافت کد تازه، دوباره ارسال کد تایید را بزنید.'}
                             </p>
-                            <ProfileInput
-                                icon={Icons.Shield}
-                                label="کد تایید"
-                                type="tel"
-                                value={resetCode}
-                                placeholder="مثلاً ۱۲۳۴"
-                                onChange={(e: any) => setResetCode(e.target.value)}
-                            />
+                            {resetSent && resetLeft > 0 && (
+                                <div className="flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-3">
+                                    <span className="text-xs font-bold text-[var(--text-secondary)]">زمان باقی‌مانده</span>
+                                    <span className="font-mono text-lg font-bold text-[var(--accent)]" dir="ltr">{formatResetTimer(resetLeft)}</span>
+                                </div>
+                            )}
+                            {resetSent && resetLeft > 0 && (
+                                <ProfileInput
+                                    icon={Icons.Shield}
+                                    label="کد تایید"
+                                    type="tel"
+                                    value={resetCode}
+                                    placeholder="مثلاً ۱۲۳۴"
+                                    onChange={(e: any) => setResetCode(e.target.value)}
+                                />
+                            )}
                             <div className="flex justify-end gap-3 pt-2">
                                 <button type="button" onClick={closeReset} className="rounded-xl bg-[var(--bg-elevated)] px-4 py-2 text-sm font-bold text-[var(--text-primary)]">انصراف</button>
-                                <button type="button" onClick={handleCheckResetCode} disabled={resetBusy} className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-bold text-white disabled:opacity-60">
-                                    {resetBusy ? 'در حال بررسی…' : 'تایید کد'}
-                                </button>
+                                {!resetSent || resetLeft <= 0 ? (
+                                    <button type="button" onClick={handleForgotPassword} disabled={resetBusy} className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-bold text-white disabled:opacity-60">
+                                        {resetBusy ? 'در حال ارسال…' : 'ارسال کد تایید'}
+                                    </button>
+                                ) : (
+                                    <button type="button" onClick={handleCheckResetCode} disabled={resetBusy} className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-bold text-white disabled:opacity-60">
+                                        {resetBusy ? 'در حال بررسی…' : 'تایید کد'}
+                                    </button>
+                                )}
                             </div>
                         </>
                     ) : (
                         <>
-                            <p className="text-sm leading-7 text-[var(--text-secondary)]">کد درست بود. رمز جدید را وارد کنید.</p>
+                            <p className="text-sm leading-7 text-[var(--text-secondary)]">کد درست بود. رمز جدید را تا پایان زمان باقی‌مانده وارد کنید.</p>
+                            {resetLeft > 0 && (
+                                <div className="flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-3">
+                                    <span className="text-xs font-bold text-[var(--text-secondary)]">زمان باقی‌مانده</span>
+                                    <span className="font-mono text-lg font-bold text-[var(--accent)]" dir="ltr">{formatResetTimer(resetLeft)}</span>
+                                </div>
+                            )}
                             <ProfileInput
                                 icon={Icons.Lock}
                                 label="رمز عبور جدید"
@@ -1067,8 +1140,7 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
                                                 </div>
                                                 <button
                                                     type="button"
-                                                    onClick={handleForgotPassword}
-                                                    disabled={resetBusy}
+                                                    onClick={openReset}
                                                     className="shrink-0 text-[11px] font-bold text-[var(--accent)] underline-offset-4 hover:underline disabled:opacity-60"
                                                 >
                                                     فراموشی رمز عبور
