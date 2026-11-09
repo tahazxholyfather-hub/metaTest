@@ -181,7 +181,7 @@ function WalletStat({ icon: Icon, label, value }: { icon: LucideIcon; label: str
     );
 }
 
-const ProfileInput = ({ icon: Icon, label, value, onChange, type = "text", readOnly = false, placeholder, rightElement }: any) => (
+const ProfileInput = ({ icon: Icon, label, value, onChange, type = "text", readOnly = false, placeholder, rightElement, autoComplete, name, inputMode, dir }: any) => (
     <div className="group">
         <label className="block text-xs font-bold text-[var(--text-secondary)] mb-2 mr-1 opacity-80 group-focus-within:opacity-100 transition-opacity">
             {label}
@@ -191,8 +191,11 @@ const ProfileInput = ({ icon: Icon, label, value, onChange, type = "text", readO
                 <Icon />
             </div>
             <input
-                dir={type === "password" || type === "tel" || type === "email" ? "ltr" : "rtl"}
+                dir={dir || (type === "password" || type === "tel" || type === "email" ? "ltr" : "rtl")}
                 type={type}
+                name={name}
+                autoComplete={autoComplete}
+                inputMode={inputMode}
                 readOnly={readOnly}
                 disabled={readOnly}
                 className={`w-full rounded-xl py-3.5 pr-12 pl-[4.5rem] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] transition-all duration-200 outline-none font-medium
@@ -582,8 +585,7 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
     const formatResetTimer = (seconds: number) => {
         const minutes = Math.floor(seconds / 60);
         const remain = seconds % 60;
-        const fa = (value: number) => String(value).replace(/\d/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'[Number(digit)]);
-        return `${fa(minutes)}:${fa(remain).padStart(2, '۰')}`;
+        return `${minutes}:${String(remain).padStart(2, '0')}`;
     };
 
     const handleForgotPassword = async () => {
@@ -915,10 +917,18 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
                                 <ProfileInput
                                     icon={Icons.Shield}
                                     label="کد تایید"
-                                    type="tel"
+                                    type="text"
+                                    dir="ltr"
+                                    name="one-time-code"
+                                    autoComplete="one-time-code"
+                                    inputMode="numeric"
                                     value={resetCode}
-                                    placeholder="مثلاً ۱۲۳۴"
-                                    onChange={(e: any) => setResetCode(e.target.value)}
+                                    placeholder="1234"
+                                    onChange={(e: any) => {
+                                        const next = String(e.target.value || '');
+                                        if (/^09\d{9}$/.test(next.replace(/\D/g, ''))) return;
+                                        setResetCode(next);
+                                    }}
                                 />
                             )}
                             <div className="flex justify-end gap-3 pt-2">
