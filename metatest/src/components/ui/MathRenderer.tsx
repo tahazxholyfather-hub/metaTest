@@ -207,14 +207,17 @@ export interface MathRendererProps {
     subject?: number | string;
     className?: string;
     inline?: boolean;
+    /** auto follows the first strong letter. rtl keeps Persian lines on the right. */
+    dir?: 'auto' | 'rtl' | 'ltr';
 }
 
 export const MathRenderer: React.FC<MathRendererProps> = ({
                                                               text,
                                                               subject,
-                                                              className = '',
-                                                              inline = false,
-                                                          }) => {
+    className = '',
+    inline = false,
+    dir = 'auto',
+}) => {
     const containerRef = useRef<HTMLElement | null>(null);
     const [ready, setReady] = useState(false);
     const [trackedText, setTrackedText] = useState(text);
@@ -279,11 +282,11 @@ export const MathRenderer: React.FC<MathRendererProps> = ({
         : 'min(100%, 16em)';
 
     const formula = inline ? (
-        <span key={processedText} ref={containerRef as React.RefObject<HTMLSpanElement>} className={`${classes} ${ready ? '' : 'absolute inset-0 opacity-0'}`} dir="auto">
+        <span key={processedText} ref={containerRef as React.RefObject<HTMLSpanElement>} className={`${classes} ${ready ? '' : 'absolute inset-0 opacity-0'}`} dir={dir}>
             {processedText}
         </span>
     ) : (
-        <div key={processedText} ref={containerRef as React.RefObject<HTMLDivElement>} className={`${classes} ${ready ? '' : 'absolute inset-x-0 top-0 opacity-0'}`} dir="auto">
+        <div key={processedText} ref={containerRef as React.RefObject<HTMLDivElement>} className={`${classes} ${ready ? '' : 'absolute inset-x-0 top-0 opacity-0'}`} dir={dir}>
             {processedText}
         </div>
     );

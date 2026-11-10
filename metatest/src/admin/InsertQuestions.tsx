@@ -370,8 +370,8 @@ export default function InsertQuestions() {
                                 value={manual.text}
                                 onChange={(e) => setManual(prev => ({ ...prev, text: e.target.value }))}
                                 placeholder="متن سوال را بنویس..."
-                                className="w-full h-40 bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-xl p-4 text-sm font-medium leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-[#1a73e8] custom-scrollbar"
-                                dir="auto"
+                                className="w-full h-40 bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-xl p-4 text-sm font-medium leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-[#1a73e8] custom-scrollbar text-right"
+                                dir="rtl"
                             />
                         </div>
 
@@ -392,8 +392,8 @@ export default function InsertQuestions() {
                                             value={optionText}
                                             onChange={(e) => handleManualOptionChange(index, e.target.value)}
                                             placeholder={`گزینه ${index + 1}...`}
-                                            className="w-full h-24 bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-xl p-3 text-xs font-medium resize-y focus:outline-none focus:ring-2 focus:ring-[#1a73e8] custom-scrollbar"
-                                            dir="auto"
+                                            className="w-full h-24 bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-xl p-3 text-xs font-medium resize-y focus:outline-none focus:ring-2 focus:ring-[#1a73e8] custom-scrollbar text-right"
+                                            dir="rtl"
                                         />
                                     </div>
                                 ))}
@@ -407,8 +407,8 @@ export default function InsertQuestions() {
                                 value={manual.descriptive}
                                 onChange={(e) => setManual(prev => ({ ...prev, descriptive: e.target.value }))}
                                 placeholder="توضیح یا راه‌حل تشریحی..."
-                                className="w-full h-32 bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-xl p-4 text-sm font-medium leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-[#1a73e8] custom-scrollbar"
-                                dir="auto"
+                                className="w-full h-32 bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-xl p-4 text-sm font-medium leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-[#1a73e8] custom-scrollbar text-right"
+                                dir="rtl"
                             />
                         </div>
                     </div>
@@ -548,9 +548,9 @@ export default function InsertQuestions() {
                                     {/* Content */}
                                     <div className="flex-1 min-w-0 flex flex-col gap-3">
                                         <div className="flex items-start justify-between gap-3">
-                                            <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 leading-relaxed" dir="auto">
-                                                <span className="text-[#86868b] font-bold ml-2">{index + 1}.</span>
-                                                <MathRenderer text={q.text} subject={meta.subject_id ?? undefined} inline />
+                                            <p className="w-full text-sm font-semibold text-gray-800 dark:text-gray-200 leading-relaxed text-right" dir="rtl">
+                                                <span className="text-[#86868b] font-bold me-2">{index + 1}.</span>
+                                                <MathRenderer text={q.text} subject={meta.subject_id ?? undefined} inline dir="rtl" className="text-right" />
                                             </p>
                                         </div>
 
@@ -558,25 +558,25 @@ export default function InsertQuestions() {
                                             {q.options.map((opt, optIdx) => (
                                                 <div
                                                     key={optIdx}
-                                                    className={`flex items-start gap-2 text-xs font-medium p-2.5 rounded-lg border ${
+                                                    className={`flex items-start gap-2 text-xs font-medium p-2.5 rounded-lg border text-right ${
                                                         q.correct_index === optIdx + 1
                                                             ? 'bg-green-50 dark:bg-green-500/10 border-green-200 dark:border-green-500/20 text-green-700 dark:text-green-400'
                                                             : 'bg-[#f8f9fa] dark:bg-[#131314] border-[#dadce0] dark:border-[#444746] text-gray-600 dark:text-gray-300'
                                                     }`}
-                                                    dir="auto"
+                                                    dir="rtl"
                                                 >
                                                     {q.correct_index === optIdx + 1
                                                         ? <CheckCircle2 size={14} className="shrink-0 mt-0.5" />
                                                         : <Circle size={14} className="shrink-0 mt-0.5 text-gray-300 dark:text-gray-600" />}
-                                                    <MathRenderer text={opt} subject={meta.subject_id ?? undefined} />
+                                                    <MathRenderer text={opt} subject={meta.subject_id ?? undefined} dir="rtl" className="text-right" />
                                                 </div>
                                             ))}
                                         </div>
 
                                         {q.descriptive && (
-                                            <div className="text-xs font-medium text-gray-500 dark:text-gray-400 bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-lg p-3" dir="auto">
+                                            <div className="text-xs font-medium text-gray-500 dark:text-gray-400 bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-lg p-3 text-right" dir="rtl">
                                                 <span className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider block mb-1">پاسخ تشریحی</span>
-                                                <MathRenderer text={q.descriptive} subject={meta.subject_id ?? undefined} />
+                                                <MathRenderer text={q.descriptive} subject={meta.subject_id ?? undefined} dir="rtl" className="text-right" />
                                             </div>
                                         )}
                                     </div>
