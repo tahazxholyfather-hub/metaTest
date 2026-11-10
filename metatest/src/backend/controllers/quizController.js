@@ -346,6 +346,9 @@ const handleGetChaptersBySubject = async (req, res) => {
 
         const [rows] = await pool.query(sql, params);
 
+        // A combined question is tagged to two grades, so the join above
+        // also sees the other grade's فصل. The title decides which list it
+        // belongs to: فصل یک یازدهم stays out of دوازدهم.
         res.json({
             success: true,
             chapters: filterTopicsForSelectedGrades(rows, gradeId),
@@ -400,6 +403,7 @@ const handleGetMabahesByChapter = async (req, res) => {
                AND ua.user_id = ?
 
             WHERE ${topicMatch.sql || '1=1'}
+              -- گفتار of a combined question stay under their own فصل.
               AND c.topic_id IN (${topicPlaceholders})
               AND q.status = 'فعال'
 

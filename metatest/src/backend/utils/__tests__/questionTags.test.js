@@ -28,6 +28,18 @@ test('absolute value stays grade 11', () => {
     assert.ok(gradesFromTopicTitle('قدر مطلق و جزء صحیح').has(2));
 });
 
+test('a question tagged to two grades does not mix their فصل lists', () => {
+    const rows = [
+        { id: 75, title: 'فصل یک دهم', majority_grade_id: 2 },
+        { id: 79, title: 'فصل یک یازدهم', majority_grade_id: 3 },
+        { id: 82, title: 'فصل یک دوازدهم', majority_grade_id: 2 },
+        { id: 90, title: 'ترکیبی دهم و یازدهم', majority_grade_id: 1 },
+    ];
+    assert.deepEqual(filterTopicsForSelectedGrades(rows, [1]).map((row) => row.id), [75, 90]);
+    assert.deepEqual(filterTopicsForSelectedGrades(rows, [2]).map((row) => row.id), [79, 90]);
+    assert.deepEqual(filterTopicsForSelectedGrades(rows, [3]).map((row) => row.id), [82]);
+});
+
 test('a دوازدهم chapter is not filed under یازدهم because one question is tagged 11', () => {
     const row = annotateTopicGrade({ id: 43, title: 'تابع دوازدهم', grade_id: 2, majority_grade_id: 3 });
     assert.deepEqual(row.grade_ids, [3]);
