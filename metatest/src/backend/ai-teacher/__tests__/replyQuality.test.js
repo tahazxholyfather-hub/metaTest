@@ -116,6 +116,13 @@ test('Persian inside a chemical equation leaves math and keeps word order', () =
     assert.ok(triglyceride < formula && formula < glycerol);
 });
 
+test('Persian subscript digits stay inside the formula', () => {
+    const formula = '$L_۱ = \\frac{g m_۲}{k_۲}$';
+    const normalized = normalizeAssistantText(formula);
+    assert.strictEqual(normalized, formula);
+    assert.ok(!normalized.includes('$L_$'));
+});
+
 test('pure formulas and code fences stay untouched', () => {
     const pure = '$$\\mathrm{C_{17}H_{35}COONa}$$ و $H_2O$';
     assert.strictEqual(normalizeAssistantText(pure), pure);

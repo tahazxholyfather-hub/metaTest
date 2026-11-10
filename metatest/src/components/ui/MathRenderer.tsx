@@ -225,7 +225,11 @@ export const MathRenderer: React.FC<MathRendererProps> = ({
 
     const processedText = useMemo(() => {
         if (!text) return '';
-        const normalized = asciiDigitsInMath(decodeWordEntities(normalizeAssistantText(text)));
+        // Digits must become ASCII before Persian text is lifted out of math.
+        // Otherwise $L_۱$ is split into $L_$ plus the digit, and MathJax reports
+        // a missing subscript.
+        const decoded = asciiDigitsInMath(decodeWordEntities(text));
+        const normalized = normalizeAssistantText(decoded);
         return isChemistrySubject(subject) ? formatChemistryText(normalized) : normalized;
     }, [text, subject]);
 

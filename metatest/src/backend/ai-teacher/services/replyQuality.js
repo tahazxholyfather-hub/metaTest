@@ -6,8 +6,10 @@
  * No I/O. Used by the chat controller and the chat renderer.
  */
 
-const PERSIAN_CHAR = '[\\u0600-\\u06FF\\u0750-\\u077F\\u08A0-\\u08FF\\uFB50-\\uFDFF\\uFE70-\\uFEFF\\u200c]';
-const PERSIAN_RE = /[\u0600-\u06FF]/;
+// Arabic-Indic (٠-٩) and Persian (۰-۹) digits stay inside formulas.
+// Treating them as words pulls them out of $L_۱$ and leaves a bare subscript.
+const PERSIAN_CHAR = '[\\u0600-\\u065F\\u066A-\\u06EF\\u06FA-\\u06FF\\u0750-\\u077F\\u08A0-\\u08FF\\uFB50-\\uFDFF\\uFE70-\\uFEFF\\u200c]';
+const PERSIAN_RE = /[\u0600-\u065F\u066A-\u06EF\u06FA-\u06FF]/;
 const LRI = '\u2066';
 const RLI = '\u2067';
 const PDI = '\u2069';

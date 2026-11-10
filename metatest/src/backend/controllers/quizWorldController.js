@@ -14,6 +14,7 @@ const {
     joinOnTag,
     matchTagIn,
     addTagFilter,
+    toPositiveIds,
     majorityGradeSql,
     playableQuestionSql,
     filterTopicsForSelectedGrades,
@@ -369,7 +370,7 @@ const handleGetChaptersBySubjects = async (req, res) => {
 const handleGetMabahesByChapters = async (req, res) => {
     try {
         await ensureQuestionTagTables();
-        const topicIds = parseArrayParam(pickBodyValue(req.body, ['topic_ids', 'chapters']));
+        const topicIds = toPositiveIds(parseArrayParam(pickBodyValue(req.body, ['topic_ids', 'chapters'])));
         if (topicIds.length === 0) {
             return res.json({ success: false, message: "Missing or invalid parameter: topic_ids array" });
         }
@@ -378,6 +379,7 @@ const handleGetMabahesByChapters = async (req, res) => {
         const topicMatch = matchTagIn('q', 'topic', topicIds);
         const gradeMatch = matchTagIn('q', 'grade', gradeIds);
 
+        const topicPlaceholders = topicIds.map(() => '?').join(',');
         let sql = `
             SELECT c.id, c.title, COUNT(DISTINCT q.id) AS question_count,
                    MIN(q.topic_id) AS chapter_id, MIN(q.grade_id) AS grade_id, MIN(q.subject_id) AS subject_id
@@ -385,8 +387,9 @@ const handleGetMabahesByChapters = async (req, res) => {
             JOIN chapters_tam24 c ON ${joinOnTag('q', 'c', 'mabhas')}
             WHERE ${playableQuestionSql('q')}
                AND ${topicMatch.sql || '1=1'}
+               AND c.topic_id IN (${topicPlaceholders})
         `;
-        const params = [...topicMatch.params];
+        const params = [...topicMatch.params, ...topicIds];
         if (gradeMatch.sql) {
             sql += ` AND ${gradeMatch.sql}`;
             params.push(...gradeMatch.params);

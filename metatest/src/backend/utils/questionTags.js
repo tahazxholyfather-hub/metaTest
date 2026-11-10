@@ -77,6 +77,18 @@ async function ensureQuestionTagTables() {
             `INSERT IGNORE INTO question_grades_tam24 (question_id, grade_id)
              SELECT id, 2 FROM questions_tam24 WHERE topic_id = 62 AND grade_id = 2`
         );
+        // A گفتار belongs to one فصل. Drop links that put a دهم گفتار on a
+        // question whose topics do not include that فصل.
+        await pool.query(
+            `DELETE qm FROM question_mabhas_tam24 qm
+             INNER JOIN chapters_tam24 c ON c.id = qm.chapter_id
+             INNER JOIN questions_tam24 q ON q.id = qm.question_id
+             WHERE c.topic_id <> q.topic_id
+               AND NOT EXISTS (
+                   SELECT 1 FROM question_topics_tam24 qt
+                   WHERE qt.question_id = q.id AND qt.topic_id = c.topic_id
+               )`
+        );
         ensured = true;
     } catch (error) {
         console.error('❌ Failed to ensure question tag tables:', error.message);

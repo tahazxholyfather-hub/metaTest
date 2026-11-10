@@ -1,5 +1,5 @@
 const pool = require('../db');
-const { ensureQuestionTagTables, joinOnTag, matchTagIn, majorityGradeSql, filterTopicsForSelectedGrades } = require('../utils/questionTags');
+const { ensureQuestionTagTables, joinOnTag, matchTagIn, majorityGradeSql, filterTopicsForSelectedGrades, toPositiveIds } = require('../utils/questionTags');
 const entitlements = require('../subscription/entitlements');
 const usage = require('../subscription/usage');
 
@@ -366,7 +366,10 @@ const handleGetMabahesByChapter = async (req, res) => {
 
         const userId = req.user?.id || req.body.user_id || null;
 
-        const topicMatch = matchTagIn('q', 'topic', topicId);
+        const topicIds = toPositiveIds(topicId);
+        if (!topicIds.length) return res.json({ success: true, mabahes: [] });
+        const topicMatch = matchTagIn('q', 'topic', topicIds);
+        const topicPlaceholders = topicIds.map(() => '?').join(',');
 
         const sql = `
             SELECT 
@@ -397,6 +400,7 @@ const handleGetMabahesByChapter = async (req, res) => {
                AND ua.user_id = ?
 
             WHERE ${topicMatch.sql || '1=1'}
+              AND c.topic_id IN (${topicPlaceholders})
               AND q.status = 'فعال'
 
             GROUP BY c.id, c.title
@@ -409,6 +413,7 @@ const handleGetMabahesByChapter = async (req, res) => {
         const [rows] = await pool.query(sql, [
             userId ? Number(userId) : null,
             ...topicMatch.params,
+            ...topicIds,
             MIN_QUESTIONS
         ]);
 

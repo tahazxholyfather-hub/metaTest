@@ -302,15 +302,19 @@ const handleAdminGetMabahesByChapter = async (req, res) => {
         }
 
         await ensureQuestionTagTables();
-        const topicMatch = matchTagIn('q', 'topic', topic_id);
+        const topicIds = toPositiveIds(topic_id);
+        if (!topicIds.length) return res.json({ success: true, mabahes: [] });
+        const topicMatch = matchTagIn('q', 'topic', topicIds);
+        const topicPlaceholders = topicIds.map(() => '?').join(',');
         const sql = `
             SELECT DISTINCT c.id, c.title
             FROM questions_tam24 q
             JOIN chapters_tam24 c ON ${joinOnTag('q', 'c', 'mabhas')}
             WHERE ${topicMatch.sql || '1=1'}
+              AND c.topic_id IN (${topicPlaceholders})
             ORDER BY c.id ASC
         `;
-        const [rows] = await pool.query(sql, topicMatch.params);
+        const [rows] = await pool.query(sql, [...topicMatch.params, ...topicIds]);
         res.json({ success: true, mabahes: rows });
     } catch (error) {
         console.error("Error in handleAdminGetMabahesByChapter:", error);
