@@ -145,7 +145,7 @@ export const adminApi = {
     saveAiUserSettings: (userId: number, payload: Json) =>
         adminRequest<Json>(`/ai/user-settings/${userId}`, { method: 'PUT', body: JSON.stringify(payload) }),
 
-    wordStats: () => adminRequest<Json>('/words'),
+    wordStats: (params?: { from?: string; to?: string }) => adminRequest<Json>('/words', { params }),
 
     listAnnouncements: () => adminRequest<Json>('/announcements'),
     sendAnnouncement: (payload: Json) =>

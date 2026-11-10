@@ -31,6 +31,33 @@ interface RecentEvent {
 
 const fmt = (n: number) => Number(n || 0).toLocaleString();
 
+function tehranToday() {
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Tehran',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).format(new Date());
+}
+
+function shiftIso(iso: string, days: number) {
+    const [year, month, day] = iso.split('-').map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day + days));
+    const nextMonth = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const nextDay = String(date.getUTCDate()).padStart(2, '0');
+    return `${date.getUTCFullYear()}-${nextMonth}-${nextDay}`;
+}
+
+function persianDay(iso: string) {
+    const [year, month, day] = iso.split('-').map(Number);
+    if (!year || !month || !day) return '';
+    return new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+    }).format(new Date(year, month - 1, day));
+}
+
 export default function WordStats() {
     const [admins, setAdmins] = useState<AdminWords[]>([]);
     const [recent, setRecent] = useState<RecentEvent[]>([]);
@@ -38,13 +65,21 @@ export default function WordStats() {
     const [backfill, setBackfill] = useState<{ complete?: boolean; error?: string } | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [from, setFrom] = useState('');
+    const [to, setTo] = useState('');
     const retries = useRef(0);
+    const rangeRef = useRef({ from: '', to: '' });
+    rangeRef.current = { from, to };
 
     const load = async (silent = false) => {
         if (!silent) setLoading(true);
         setError(null);
         try {
-            const res = await adminApi.wordStats();
+            const current = rangeRef.current;
+            const res = await adminApi.wordStats({
+                from: current.from || undefined,
+                to: current.to || undefined,
+            });
             if (!res.success) throw new Error(res.message || 'بارگذاری فعالیت واژه‌ها ناموفق بود');
             setAdmins(res.admins || []);
             setRecent(res.recent || []);
@@ -57,7 +92,24 @@ export default function WordStats() {
         }
     };
 
-    useEffect(() => { load(); }, []);
+    useEffect(() => {
+        retries.current = 0;
+        load();
+    }, [from, to]);
+
+    const setRange = (nextFrom: string, nextTo: string) => {
+        if (nextFrom && nextTo && nextFrom > nextTo) {
+            setFrom(nextTo);
+            setTo(nextFrom);
+            return;
+        }
+        setFrom(nextFrom);
+        setTo(nextTo);
+    };
+
+    const rangeLabel = from || to
+        ? `از ${from ? persianDay(from) : 'ابتدا'} تا ${to ? persianDay(to) : 'امروز'}`
+        : '';
 
     useEffect(() => {
         if (!backfill || backfill.complete || backfill.error) return;
@@ -69,16 +121,69 @@ export default function WordStats() {
 
     return (
         <div className="flex flex-col gap-6 w-full">
-            <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl p-4 shadow-sm">
-                <div>
+            <div className="flex flex-wrap items-end justify-between gap-3 bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl p-4 shadow-sm">
+                <div className="min-w-[16rem] flex-1">
                     <h1 className="text-sm font-bold">فعالیت واژه‌ها</h1>
                     <p className="text-xs text-[#86868b] mt-0.5 max-w-2xl">
                         واژه‌های افزوده‌شده از سوال‌هایی است که هر ادمین ساخته. «واژه ویرایش‌شده» اختلاف کلمه‌های متن، گزینه‌ها و پاسخ تشریحی در هر ذخیره است. «سوال ویرایش‌شده» تعداد سوال‌هایی است که آن ادمین آخرین ویرایششان را ثبت کرده.
+                        {rangeLabel ? ` این اعداد ${rangeLabel} هستند و هر دو تاریخ داخل بازه‌اند.` : ''}
                     </p>
                 </div>
-                <button onClick={() => { retries.current = 0; load(); }} className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746]">
-                    <RefreshCw size={14} /> بروزرسانی
-                </button>
+                <div className="flex flex-wrap items-end gap-2">
+                    <label className="flex flex-col gap-1">
+                        <span className="text-[10px] font-bold text-[#86868b]">از تاریخ</span>
+                        <input
+                            type="date"
+                            value={from}
+                            max={to || undefined}
+                            onChange={(event) => setRange(event.target.value, to)}
+                            className="bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-[#1a73e8] dark:[color-scheme:dark]"
+                        />
+                        <span className="text-[10px] text-[#86868b] min-h-4">{from ? persianDay(from) : ''}</span>
+                    </label>
+                    <label className="flex flex-col gap-1">
+                        <span className="text-[10px] font-bold text-[#86868b]">تا تاریخ</span>
+                        <input
+                            type="date"
+                            value={to}
+                            min={from || undefined}
+                            onChange={(event) => setRange(from, event.target.value)}
+                            className="bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-[#1a73e8] dark:[color-scheme:dark]"
+                        />
+                        <span className="text-[10px] text-[#86868b] min-h-4">{to ? persianDay(to) : ''}</span>
+                    </label>
+                    <div className="flex flex-wrap items-center gap-1 pb-5">
+                        {[
+                            { label: 'امروز', days: 0 },
+                            { label: '۷ روز', days: 6 },
+                            { label: '۳۰ روز', days: 29 },
+                        ].map((preset) => (
+                            <button
+                                key={preset.label}
+                                type="button"
+                                onClick={() => {
+                                    const today = tehranToday();
+                                    setRange(shiftIso(today, -preset.days), today);
+                                }}
+                                className="px-2.5 py-2 rounded-xl text-[11px] font-bold text-[#1a73e8] bg-[#e8f0fe] dark:bg-[#1a73e8]/10"
+                            >
+                                {preset.label}
+                            </button>
+                        ))}
+                        {(from || to) && (
+                            <button
+                                type="button"
+                                onClick={() => setRange('', '')}
+                                className="px-2.5 py-2 rounded-xl text-[11px] font-bold text-[#86868b]"
+                            >
+                                همه زمان‌ها
+                            </button>
+                        )}
+                    </div>
+                    <button onClick={() => { retries.current = 0; load(); }} className="mb-5 flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746]">
+                        <RefreshCw size={14} /> بروزرسانی
+                    </button>
+                </div>
             </div>
 
             {backfill && !backfill.complete && !backfill.error && (
@@ -157,7 +262,7 @@ export default function WordStats() {
             <div className="bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-[2rem] p-6 shadow-sm">
                 <h2 className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider mb-4">تغییرهای اخیر</h2>
                 {recent.length === 0 ? (
-                    <p className="text-xs text-[#86868b]">هنوز فعالیتی ثبت نشده.</p>
+                    <p className="text-xs text-[#86868b]">{rangeLabel ? 'در این بازه فعالیتی ثبت نشده.' : 'هنوز فعالیتی ثبت نشده.'}</p>
                 ) : (
                     <div className="flex flex-col gap-2">
                         {recent.map((event) => (

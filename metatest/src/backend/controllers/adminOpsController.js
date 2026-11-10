@@ -6,6 +6,7 @@ const { backfillInsertedWords } = require('../admin/words');
 const { ensureOpsSchema } = require('../admin/schema');
 const { catalog, listAccess, saveSections } = require('../admin/access');
 const { resolveSections } = require('../admin/sections');
+const { parseDateRange, sqlBounds } = require('../admin/dateRange');
 
 const REPORT_STATUSES = ['pending', 'investigating', 'resolved', 'rejected'];
 
@@ -17,6 +18,11 @@ function snippet(text, limit = 180) {
 
 const handleWordStats = async (req, res) => {
     await ensureOpsSchema(pool);
+    const range = parseDateRange(req.query || {});
+    if (range.error) {
+        return res.status(400).json({ success: false, message: range.error });
+    }
+
     let backfill = { complete: true, scanned: 0, logged: 0 };
     if (String(req.query.backfill || '') !== '0') {
         try {
@@ -27,44 +33,96 @@ const handleWordStats = async (req, res) => {
         }
     }
 
+    // Inserts follow the question's creation date. Backfill writes the event
+    // later, so the event clock would put old questions in the wrong range.
+    const insertedAt = sqlBounds('COALESCE(q.created_at, e.created_at)', range);
+    const editedAt = sqlBounds('e.created_at', range);
     const [admins] = await pool.query(
         `SELECT a.id, a.username, a.full_name, a.role, a.status,
-                COALESCE(SUM(CASE WHEN e.action = 'insert' THEN e.word_count ELSE 0 END), 0) AS words_inserted,
-                COALESCE(SUM(CASE WHEN e.action = 'edit' THEN e.word_count ELSE 0 END), 0) AS words_edited,
-                COALESCE(SUM(CASE WHEN e.action = 'insert' AND e.word_count > 0 THEN 1 ELSE 0 END), 0) AS insert_events,
-                COALESCE(SUM(CASE WHEN e.action = 'edit' AND e.word_count > 0 THEN 1 ELSE 0 END), 0) AS edit_events,
-                MAX(e.created_at) AS last_activity
+                COALESCE(SUM(CASE WHEN e.action = 'insert' AND ${insertedAt.sql} THEN e.word_count ELSE 0 END), 0) AS words_inserted,
+                COALESCE(SUM(CASE WHEN e.action = 'edit' AND ${editedAt.sql} THEN e.word_count ELSE 0 END), 0) AS words_edited,
+                COALESCE(SUM(CASE WHEN e.action = 'insert' AND e.word_count > 0 AND ${insertedAt.sql} THEN 1 ELSE 0 END), 0) AS insert_events,
+                COALESCE(SUM(CASE WHEN e.action = 'edit' AND e.word_count > 0 AND ${editedAt.sql} THEN 1 ELSE 0 END), 0) AS edit_events,
+                MAX(CASE
+                    WHEN e.action = 'insert' AND ${insertedAt.sql} THEN COALESCE(q.created_at, e.created_at)
+                    WHEN e.action = 'edit' AND ${editedAt.sql} THEN e.created_at
+                    ELSE NULL
+                END) AS last_activity
          FROM tam24_admins a
          LEFT JOIN tam24_admin_word_events e ON e.admin_id = a.id
-         GROUP BY a.id, a.username, a.full_name, a.role, a.status`
+         LEFT JOIN questions_tam24 q ON e.action = 'insert' AND q.id = e.question_id
+         GROUP BY a.id, a.username, a.full_name, a.role, a.status`,
+        [
+            ...insertedAt.params,
+            ...editedAt.params,
+            ...insertedAt.params,
+            ...editedAt.params,
+            ...insertedAt.params,
+            ...editedAt.params,
+        ]
     );
 
     let questionCounts = new Map();
     let editCounts = new Map();
     try {
+        const createdAt = sqlBounds('created_at', range);
         const [counts] = await pool.query(
-            `SELECT admin_id, COUNT(*) AS questions_inserted FROM questions_tam24 GROUP BY admin_id`
+            `SELECT admin_id, COUNT(*) AS questions_inserted
+             FROM questions_tam24
+             WHERE ${createdAt.sql}
+             GROUP BY admin_id`,
+            createdAt.params
         );
         questionCounts = new Map(counts.map((row) => [Number(row.admin_id), Number(row.questions_inserted)]));
-        const [edits] = await pool.query(
-            `SELECT last_edit_by AS admin_id, COUNT(*) AS questions_edited
-             FROM questions_tam24
-             WHERE last_edit_by IS NOT NULL AND last_edit_by > 0
-             GROUP BY last_edit_by`
-        );
+
+        let edits;
+        if (range.active) {
+            const lastEditAt = sqlBounds('last_edit_date', range);
+            const eventAt = sqlBounds('created_at', range);
+            [edits] = await pool.query(
+                `SELECT admin_id, COUNT(DISTINCT question_id) AS questions_edited
+                 FROM (
+                    SELECT last_edit_by AS admin_id, id AS question_id
+                    FROM questions_tam24
+                    WHERE last_edit_by IS NOT NULL AND last_edit_by > 0 AND ${lastEditAt.sql}
+                    UNION
+                    SELECT admin_id, question_id
+                    FROM tam24_admin_word_events
+                    WHERE action = 'edit' AND question_id IS NOT NULL AND ${eventAt.sql}
+                 ) activity
+                 GROUP BY admin_id`,
+                [...lastEditAt.params, ...eventAt.params]
+            );
+        } else {
+            [edits] = await pool.query(
+                `SELECT last_edit_by AS admin_id, COUNT(*) AS questions_edited
+                 FROM questions_tam24
+                 WHERE last_edit_by IS NOT NULL AND last_edit_by > 0
+                 GROUP BY last_edit_by`
+            );
+        }
         editCounts = new Map(edits.map((row) => [Number(row.admin_id), Number(row.questions_edited)]));
     } catch (err) {
         console.error('question counts unavailable:', err.message);
     }
 
+    const recentInsertedAt = sqlBounds('COALESCE(q.created_at, e.created_at)', range);
+    const recentEditedAt = sqlBounds('e.created_at', range);
     const [recent] = await pool.query(
-        `SELECT e.id, e.admin_id, e.action, e.question_id, e.word_count, e.source, e.created_at,
+        `SELECT e.id, e.admin_id, e.action, e.question_id, e.word_count, e.source,
+                CASE WHEN e.action = 'insert' THEN COALESCE(q.created_at, e.created_at) ELSE e.created_at END AS created_at,
                 a.username, a.full_name
          FROM tam24_admin_word_events e
          LEFT JOIN tam24_admins a ON a.id = e.admin_id
+         LEFT JOIN questions_tam24 q ON e.action = 'insert' AND q.id = e.question_id
          WHERE e.word_count > 0
-         ORDER BY e.id DESC
-         LIMIT 40`
+           AND (
+                (e.action = 'insert' AND ${recentInsertedAt.sql})
+                OR (e.action = 'edit' AND ${recentEditedAt.sql})
+           )
+         ORDER BY created_at DESC, e.id DESC
+         LIMIT 40`,
+        [...recentInsertedAt.params, ...recentEditedAt.params]
     );
 
     const rows = admins.map((row) => ({
@@ -112,6 +170,7 @@ const handleWordStats = async (req, res) => {
             createdAt: row.created_at,
         })),
         backfill,
+        range: range.active ? { from: range.from, to: range.to } : null,
     });
 };
 
