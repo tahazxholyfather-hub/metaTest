@@ -27,3 +27,50 @@ export function topicMatchesGrades(title: string, gradeIds: number[]): boolean {
     if (!named.length) return true;
     return named.some((grade) => selected.includes(grade));
 }
+
+export interface CurriculumListItem {
+    id: number;
+    title: string;
+    subject_id?: number;
+    topic_id?: number;
+}
+
+/** A فصل belongs to the picked پایه only when its title names that پایه. */
+export function topicMatchesGradeTitle(topicTitle: string, gradeTitle: string | null | undefined): boolean {
+    const wanted = gradesFromTopicTitle(gradeTitle || '');
+    if (!wanted.length) return true;
+    const compact = String(topicTitle || '').replace(/\s+/g, '');
+    // «ترکیبی سه پایه» is shared by دهم، یازدهم and دوازدهم.
+    if (compact.includes('سهپایه')) return true;
+    const named = gradesFromTopicTitle(topicTitle);
+    if (!named.length) return false;
+    return named.some((grade) => wanted.includes(grade));
+}
+
+/**
+ * Order فصل‌ها and مباحث by درس, then پایه, then their own id,
+ * so دهم of one subject stays together instead of mixing with the rest.
+ */
+export function compareCurriculumItems(
+    a: CurriculumListItem,
+    b: CurriculumListItem,
+    kind: 'topic' | 'chapter',
+    topics: CurriculumListItem[],
+): number {
+    const topicOf = (item: CurriculumListItem) => (
+        kind === 'topic' ? item : topics.find((topic) => topic.id === item.topic_id)
+    );
+    const rank = (item: CurriculumListItem) => {
+        const topic = topicOf(item);
+        const subjectId = Number(kind === 'topic' ? item.subject_id : topic?.subject_id) || 999;
+        const grades = gradesFromTopicTitle(topic?.title || '');
+        const gradeKey = grades.length ? Math.min(...grades) : 99;
+        return [subjectId, gradeKey, topic?.id ?? 0, item.id];
+    };
+    const left = rank(a);
+    const right = rank(b);
+    for (let i = 0; i < left.length; i += 1) {
+        if (left[i] !== right[i]) return left[i] - right[i];
+    }
+    return 0;
+}

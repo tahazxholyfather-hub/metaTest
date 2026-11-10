@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
     Plus, Edit2, Trash2, X, Loader2, AlertCircle, Search, RefreshCw,
-    BookOpen, GraduationCap, Layers, ListTree, CheckCircle2
+    BookOpen, GraduationCap, Layers, ListTree, CheckCircle2, ChevronDown, Filter
 } from 'lucide-react';
 import { flowApi } from '../lib/authApi';
 import { CustomSelect, type SelectOption } from './EditQuestions';
+import { compareCurriculumItems, topicMatchesGradeTitle } from './chapterGrades';
 import type { User } from './AuthView';
 
 // --- TYPES ---
@@ -57,6 +58,8 @@ export default function CurriculumManager({ user }: CurriculumManagerProps) {
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [filterSubjectId, setFilterSubjectId] = useState<number | null>(null);
+    const [filterGradeId, setFilterGradeId] = useState<number | null>(null);
 
     // Modal / form state
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -108,25 +111,11 @@ export default function CurriculumManager({ user }: CurriculumManagerProps) {
         }
     };
 
-    const parentOptions: SelectOption[] = useMemo(() => {
-        if (activeType === 'topic') {
-            return data.subjects.map(s => ({ id: s.id, title: s.title }));
-        }
-        if (activeType === 'chapter') {
-            // Show topics with their subject for clarity
-            return data.topics.map(t => {
-                const subject = data.subjects.find(s => s.id === t.subject_id);
-                return { id: t.id, title: subject ? `${subject.title} — ${t.title}` : t.title };
-            });
-        }
-        return [];
-    }, [activeType, data]);
-
-    const parentTitle = (item: CurriculumItem): string => {
-        if (activeType === 'topic') {
+    const describeParent = (item: CurriculumItem, type: CurriculumType = activeType): string => {
+        if (type === 'topic') {
             return data.subjects.find(s => s.id === item.subject_id)?.title || '----';
         }
-        if (activeType === 'chapter') {
+        if (type === 'chapter') {
             const topic = data.topics.find(t => t.id === item.topic_id);
             if (!topic) return '----';
             const subject = data.subjects.find(s => s.id === topic.subject_id);
@@ -135,23 +124,62 @@ export default function CurriculumManager({ user }: CurriculumManagerProps) {
         return '';
     };
 
+    const showListFilter = activeType === 'topic' || activeType === 'chapter';
+
+    const parentOptions: SelectOption[] = useMemo(() => {
+        if (activeType === 'topic') {
+            return data.subjects.map(s => ({ id: s.id, title: s.title }));
+        }
+        if (activeType === 'chapter') {
+            const gradeTitle = data.grades.find(g => g.id === filterGradeId)?.title || '';
+            const narrowed = data.topics.filter((topic) => {
+                if (form.id) return true;
+                if (filterSubjectId && topic.subject_id !== filterSubjectId) return false;
+                if (filterGradeId && !topicMatchesGradeTitle(topic.title, gradeTitle)) return false;
+                return true;
+            });
+            const topics = narrowed.length ? narrowed : data.topics;
+            return topics.map(t => {
+                const subject = data.subjects.find(s => s.id === t.subject_id);
+                return { id: t.id, title: subject ? `${subject.title} — ${t.title}` : t.title };
+            });
+        }
+        return [];
+    }, [activeType, data, filterSubjectId, filterGradeId, form.id]);
+
     const filteredItems = useMemo(() => {
         const items = itemsForType(activeType);
         const term = searchTerm.trim().toLowerCase();
-        if (!term) return items;
-        return items.filter(item =>
-            item.title.toLowerCase().includes(term) ||
-            String(item.id).includes(term) ||
-            parentTitle(item).toLowerCase().includes(term)
-        );
-    }, [activeType, data, searchTerm]);
+        const gradeTitle = data.grades.find(g => g.id === filterGradeId)?.title || '';
+        const matched = items.filter(item => {
+            if (activeType === 'topic' || activeType === 'chapter') {
+                const topic = activeType === 'topic'
+                    ? item
+                    : data.topics.find(t => t.id === item.topic_id);
+                if (filterSubjectId && (activeType === 'topic' ? item.subject_id : topic?.subject_id) !== filterSubjectId) {
+                    return false;
+                }
+                if (filterGradeId && !topicMatchesGradeTitle(topic?.title || '', gradeTitle)) return false;
+            }
+            if (!term) return true;
+            const parent = describeParent(item);
+            return item.title.toLowerCase().includes(term) ||
+                String(item.id).includes(term) ||
+                parent.toLowerCase().includes(term);
+        });
+        if (activeType !== 'topic' && activeType !== 'chapter') return matched;
+        return [...matched].sort((a, b) => compareCurriculumItems(a, b, activeType, data.topics));
+    }, [activeType, data, searchTerm, filterSubjectId, filterGradeId]);
 
     const hasParent = activeType === 'topic' || activeType === 'chapter';
     const config = TYPE_CONFIG[activeType];
 
     // --- HANDLERS ---
     const openAddModal = () => {
-        setForm(EMPTY_FORM);
+        setForm({
+            ...EMPTY_FORM,
+            parent_id: activeType === 'topic' ? filterSubjectId : null,
+        });
         setIsModalOpen(true);
     };
 
@@ -248,7 +276,24 @@ export default function CurriculumManager({ user }: CurriculumManagerProps) {
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center gap-3 flex-1 md:flex-none justify-end">
+                <div className="flex items-center gap-2 flex-1 justify-end flex-wrap">
+                    {showListFilter && (
+                        <div className="flex items-center gap-2">
+                            <Filter size={14} className="text-[#86868b] shrink-0" />
+                            <FilterSelect
+                                value={filterSubjectId}
+                                onChange={setFilterSubjectId}
+                                placeholder="همه درس‌ها"
+                                options={data.subjects.map(s => ({ id: s.id, title: s.title }))}
+                            />
+                            <FilterSelect
+                                value={filterGradeId}
+                                onChange={setFilterGradeId}
+                                placeholder="همه پایه‌ها"
+                                options={data.grades.map(g => ({ id: g.id, title: g.title }))}
+                            />
+                        </div>
+                    )}
                     <div className="relative flex-1 md:flex-none md:w-56">
                         <Search size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
                         <input
@@ -295,6 +340,21 @@ export default function CurriculumManager({ user }: CurriculumManagerProps) {
                     </div>
                 )}
 
+                {showListFilter && (
+                    <div className="flex items-center justify-between gap-3 px-6 py-2.5 border-b border-[#dadce0] dark:border-[#333537] text-[11px] font-medium text-[#86868b]">
+                        <span>{filteredItems.length.toLocaleString('fa-IR')} {config.singular}</span>
+                        {(filterSubjectId || filterGradeId) && (
+                            <button
+                                type="button"
+                                onClick={() => { setFilterSubjectId(null); setFilterGradeId(null); }}
+                                className="text-[#1a73e8] font-bold hover:underline"
+                            >
+                                پاک کردن فیلتر
+                            </button>
+                        )}
+                    </div>
+                )}
+
                 {/* Table header */}
                 <div className="grid grid-cols-12 gap-4 px-6 py-4 border-b border-[#dadce0] dark:border-[#333537] text-[10px] font-bold text-[#86868b] uppercase tracking-wider">
                     <div className="col-span-1">شناسه</div>
@@ -311,7 +371,7 @@ export default function CurriculumManager({ user }: CurriculumManagerProps) {
                         </div>
                         {hasParent && (
                             <div className="col-span-4 text-xs font-medium text-gray-500 dark:text-gray-400 truncate" dir="auto">
-                                {parentTitle(item)}
+                                {describeParent(item)}
                             </div>
                         )}
                         <div className="col-span-3 flex items-center justify-start gap-2">
@@ -336,7 +396,9 @@ export default function CurriculumManager({ user }: CurriculumManagerProps) {
 
                 {!isLoading && filteredItems.length === 0 && (
                     <div className="py-16 text-center text-xs font-medium text-gray-400">
-                        موردی در {config.label} نیست.
+                        {(filterSubjectId || filterGradeId || searchTerm.trim())
+                            ? `موردی با این فیلتر در ${config.label} نیست.`
+                            : `موردی در ${config.label} نیست.`}
                     </div>
                 )}
             </div>
@@ -404,6 +466,66 @@ export default function CurriculumManager({ user }: CurriculumManagerProps) {
                             {isSaving ? 'در حال ذخیره...' : form.id ? 'ذخیره تغییرات' : `ساخت ${config.singular}`}
                         </button>
                     </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+function FilterSelect({ value, onChange, placeholder, options }: {
+    value: number | null;
+    onChange: (id: number | null) => void;
+    placeholder: string;
+    options: { id: number; title: string }[];
+}) {
+    const [open, setOpen] = useState(false);
+    const ref = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const close = (event: MouseEvent) => {
+            if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false);
+        };
+        document.addEventListener('mousedown', close);
+        return () => document.removeEventListener('mousedown', close);
+    }, []);
+
+    const selected = options.find((option) => option.id === value)?.title || placeholder;
+
+    return (
+        <div className="relative" ref={ref}>
+            <button
+                type="button"
+                onClick={() => setOpen((current) => !current)}
+                className={`flex items-center justify-between gap-2 min-w-[7.75rem] max-w-[11rem] bg-[#f8f9fa] dark:bg-[#131314] border rounded-xl px-3 py-2.5 text-xs font-bold transition-all ${
+                    value
+                        ? 'border-[#1a73e8] text-[#1a73e8] dark:text-[#8ab4f8]'
+                        : 'border-[#dadce0] dark:border-[#444746] text-gray-500 dark:text-gray-300'
+                }`}
+            >
+                <span className="truncate">{selected}</span>
+                <ChevronDown size={14} className={`shrink-0 transition-transform ${open ? 'rotate-180 text-[#1a73e8]' : 'text-gray-400'}`} />
+            </button>
+            {open && (
+                <div className="absolute top-[calc(100%+4px)] right-0 z-[80] min-w-full w-max max-w-[16rem] max-h-64 overflow-y-auto bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-xl shadow-xl">
+                    <button
+                        type="button"
+                        onClick={() => { onChange(null); setOpen(false); }}
+                        className="w-full text-right px-3 py-2.5 text-xs font-medium text-gray-400 hover:bg-[#f8f9fa] dark:hover:bg-[#131314]"
+                    >
+                        {placeholder}
+                    </button>
+                    {options.map((option) => (
+                        <button
+                            key={option.id}
+                            type="button"
+                            onClick={() => { onChange(option.id); setOpen(false); }}
+                            className={`w-full text-right px-3 py-2.5 text-xs font-bold hover:bg-[#f8f9fa] dark:hover:bg-[#131314] ${
+                                option.id === value ? 'text-[#1a73e8] dark:text-[#8ab4f8]' : 'text-gray-800 dark:text-gray-200'
+                            }`}
+                        >
+                            {option.title}
+                        </button>
+                    ))}
                 </div>
             )}
         </div>
