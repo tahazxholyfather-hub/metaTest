@@ -10,7 +10,7 @@ exports.sendOtpSms = async (phone, code) => {
             password: process.env.SMS_PASSWORD,
             text: `${code}`,
             to: phone,
-            bodyId: 451100
+            bodyId: 577506
         });
 
         // دریافت نتیجه از خروجی JSON یا XML پنل
