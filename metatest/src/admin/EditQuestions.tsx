@@ -269,16 +269,17 @@ export const CustomMultiSelect = ({ label, values, options, onChange, placeholde
 
 // --- FILTER SWITCH COMPONENT ---
 // Segmented pill switch used for the quick filters (Status / Images).
-const FilterSwitch = ({ label, value, options, onChange, disabled = false }: {
+const FilterSwitch = ({ label, value, options, onChange, disabled = false, wrap = false }: {
     label: string;
     value: string | null;
     options: { id: string | null; title: string }[];
     onChange: (v: string | null) => void;
     disabled?: boolean;
+    wrap?: boolean;
 }) => (
-    <div className={`flex items-center gap-2.5 ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
+    <div className={`flex gap-2.5 ${wrap ? 'flex-col items-stretch' : 'items-center'} ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
         <span className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider whitespace-nowrap">{label}</span>
-        <div className="flex items-center bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-full p-1">
+        <div className={`flex items-center bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] p-1 ${wrap ? 'flex-wrap gap-1 rounded-2xl' : 'rounded-full'}`}>
             {options.map(opt => (
                 <button
                     key={String(opt.id)}
@@ -336,8 +337,9 @@ export default function EditQuestions({
         chapter_id: number | null;
         status: string | null;
         has_image: string | null;
+        has_answer: string | null;
         search_text: string;
-    }>({ subject_id: null, grade_id: null, topic_id: null, chapter_id: null, status: null, has_image: null, search_text: '' });
+    }>({ subject_id: null, grade_id: null, topic_id: null, chapter_id: null, status: null, has_image: null, has_answer: null, search_text: '' });
     const [lists, setLists] = useState<{ subjects: SelectOption[], grades: SelectOption[], chapters: SelectOption[], mabahes: SelectOption[] }>({ subjects: [], grades: [], chapters: [], mabahes: [] });
     const [curriculum, setCurriculum] = useState<{
         subjects: { id: number; title: string }[];
@@ -378,6 +380,12 @@ export default function EditQuestions({
         { id: null, title: 'همه' },
         { id: 'with', title: 'با تصویر' },
         { id: 'without', title: 'بدون تصویر' },
+    ];
+
+    const answerSwitchOptions = [
+        { id: null, title: 'همه سوالات' },
+        { id: 'with', title: 'سوالات پاسخ‌دار' },
+        { id: 'without', title: 'سوالات بی‌پاسخ' },
     ];
 
     // --- HELPER & LIFECYCLE HOOKS ---
@@ -675,7 +683,7 @@ export default function EditQuestions({
     }
 
     // Quick filters (Status / Images switches) apply immediately
-    const handleQuickFilterChange = (key: 'status' | 'has_image', value: string | null) => {
+    const handleQuickFilterChange = (key: 'status' | 'has_image' | 'has_answer', value: string | null) => {
         const newFilters = { ...filters, [key]: value };
         setFilters(newFilters);
         getQuestion({ filters: newFilters, resetHistory: true });
@@ -784,6 +792,13 @@ export default function EditQuestions({
                                         <CustomSelect label="پایه" value={filters.grade_id} options={lists.grades} onChange={(v) => handleFilterChange('grade_id', v)} placeholder="انتخاب پایه..." disabled={!filters.subject_id} />
                                         <CustomSelect label="فصل" value={filters.topic_id} options={lists.chapters} onChange={(v) => handleFilterChange('topic_id', v)} placeholder="انتخاب فصل..." disabled={!filters.subject_id} />
                                         <CustomSelect label="مبحث" value={filters.chapter_id} options={lists.mabahes} onChange={(v) => handleFilterChange('chapter_id', v)} placeholder="انتخاب مبحث..." disabled={!filters.topic_id} />
+                                        <FilterSwitch
+                                            label="پاسخ"
+                                            value={filters.has_answer}
+                                            options={answerSwitchOptions}
+                                            onChange={(v) => handleQuickFilterChange('has_answer', v)}
+                                            wrap
+                                        />
                                     </div>
                                     <button onClick={handleApplyFilters} className="w-full bg-[#1a73e8] hover:bg-[#1557b0] text-white py-2.5 rounded-xl text-xs font-bold transition-all">
                                         اعمال و دریافت
@@ -831,6 +846,13 @@ export default function EditQuestions({
                         value={filters.has_image}
                         options={imageSwitchOptions}
                         onChange={(v) => handleQuickFilterChange('has_image', v)}
+                        disabled={isLoading}
+                    />
+                    <FilterSwitch
+                        label="پاسخ"
+                        value={filters.has_answer}
+                        options={answerSwitchOptions}
+                        onChange={(v) => handleQuickFilterChange('has_answer', v)}
                         disabled={isLoading}
                     />
                 </div>

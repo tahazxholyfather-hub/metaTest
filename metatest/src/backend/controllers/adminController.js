@@ -121,6 +121,13 @@ const handleGetQuestionForEdit = async (req, res) => {
                 sql += ` AND NOT EXISTS (SELECT 1 FROM question_images_tam24 qi WHERE qi.question_id = q.id)`;
             }
 
+            // Typists sometimes leave the correct option unmarked.
+            if (filters.has_answer === 'with') {
+                sql += ` AND EXISTS (SELECT 1 FROM options_tam24 oc WHERE oc.question_id = q.id AND oc.is_correct = 1)`;
+            } else if (filters.has_answer === 'without') {
+                sql += ` AND NOT EXISTS (SELECT 1 FROM options_tam24 oc WHERE oc.question_id = q.id AND oc.is_correct = 1)`;
+            }
+
             // Free-text search within the question text
             if (filters.search_text && String(filters.search_text).trim() !== '') {
                 sql += ` AND q.question_text LIKE ?`;
