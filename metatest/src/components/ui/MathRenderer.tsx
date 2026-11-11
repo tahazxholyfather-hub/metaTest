@@ -209,24 +209,35 @@ const scheduleTypeset = (el: HTMLElement) => {
     };
 };
 
+const distanceToView = (el: HTMLElement) => {
+    const rect = el.getBoundingClientRect();
+    if (rect.bottom >= 0 && rect.top <= window.innerHeight) return 0;
+    if (rect.top > window.innerHeight) return rect.top - window.innerHeight;
+    return -rect.bottom;
+};
+
 const pumpTypeset = async () => {
     const loaded = await loadMathJax();
     while (typesetQueue.length) {
+        for (let i = typesetQueue.length - 1; i >= 0; i--) {
+            const job = typesetQueue[i];
+            if (job.cancelled || !job.el.isConnected) {
+                typesetQueue.splice(i, 1);
+                job.done();
+            }
+        }
+        typesetQueue.sort((a, b) => distanceToView(a.el) - distanceToView(b.el));
         const batch = typesetQueue.splice(0, 4);
-        const live = batch.filter((job) => !job.cancelled && job.el.isConnected);
-        batch.forEach((job) => {
-            if (!live.includes(job)) job.done();
-        });
-        if (!loaded || !mathJaxIsReady() || live.length === 0) {
-            live.forEach((job) => job.done());
+        if (!loaded || !mathJaxIsReady() || batch.length === 0) {
+            batch.forEach((job) => job.done());
             continue;
         }
         try {
-            await window.MathJax.typesetPromise(live.map((job) => job.el));
+            await window.MathJax.typesetPromise(batch.map((job) => job.el));
         } catch (err) {
             console.error('MathRenderer typeset failed:', err);
         }
-        live.forEach((job) => job.done());
+        batch.forEach((job) => job.done());
         await new Promise((resolve) => window.setTimeout(resolve, 16));
     }
 };
@@ -345,9 +356,6 @@ export const MathRenderer: React.FC<MathRendererProps> = ({
         const reveal = () => {
             if (!cancelled) setReady(true);
         };
-        // Never leave the words behind the skeleton. MathJax may still
-        // upgrade the text after this; the reader is not blocked on it.
-        const revealTimer = window.setTimeout(reveal, expectsMath ? 800 : 0);
 
         let cancelJob = () => {};
         const start = () => {
@@ -355,6 +363,9 @@ export const MathRenderer: React.FC<MathRendererProps> = ({
                 reveal();
                 return;
             }
+            // Stay hidden until this block is typeset, so the words and the
+            // formula appear together. The queue still runs a few at a time,
+            // otherwise a long review never finishes on a phone.
             const job = scheduleTypeset(element);
             cancelJob = job.cancel;
             job.finished.then(reveal);
@@ -368,7 +379,7 @@ export const MathRenderer: React.FC<MathRendererProps> = ({
                 if (!entries.some((entry) => entry.isIntersecting)) return;
                 observer?.disconnect();
                 start();
-            }, { rootMargin: '280px' });
+            }, { rootMargin: '1200px' });
             observer.observe(wrapper);
         } else {
             start();
@@ -376,7 +387,6 @@ export const MathRenderer: React.FC<MathRendererProps> = ({
 
         return () => {
             cancelled = true;
-            window.clearTimeout(revealTimer);
             observer?.disconnect();
             cancelJob();
         };
