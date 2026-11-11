@@ -283,6 +283,20 @@
     .math-skeleton { animation: none; }
 }
 
+/* Question review on a phone. Tailwind's md: breakpoint is in rem, so a
+   larger default font (or desktop-site mode) lays four options out as two
+   cramped columns. px keeps the stack tied to the real screen width. */
+.extract-options {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.5rem;
+}
+@media (min-width: 1100px) {
+    .extract-options {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
 .eq-figure {
     color: var(--accent);
     text-shadow: 0 0 16px color-mix(in srgb, var(--accent) 55%, transparent);

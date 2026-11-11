@@ -500,10 +500,10 @@ export default function InsertQuestions() {
                     {parsed.length > 0 && (
                         <div className="bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl overflow-hidden">
                             {/* Table toolbar */}
-                            <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-[#dadce0] dark:border-[#333537]">
+                            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4 border-b border-[#dadce0] dark:border-[#333537]">
                                 <div className="flex flex-col gap-2">
-                                    <span className="text-[11px] font-bold text-[#86868b] uppercase tracking-wider">
-                                        Review Extracted Questions — {checkedCount} of {parsed.length} selected
+                                    <span className="text-[11px] font-bold text-[#86868b] tracking-wider">
+                                        بازبینی سوال‌های استخراج‌شده — {checkedCount} از {parsed.length} انتخاب شده
                                     </span>
                                     {(meta.subject_id || meta.grade_ids.length || meta.topic_ids.length || meta.chapter_ids.length) && (
                                         <div className="flex flex-wrap items-center gap-1.5">
@@ -534,7 +534,7 @@ export default function InsertQuestions() {
                             {parsed.map((q, index) => (
                                 <div
                                     key={index}
-                                    className={`flex gap-4 px-6 py-5 border-b border-[#f1f3f4] dark:border-[#2b2d2f] last:border-0 transition-colors ${
+                                    className={`flex gap-3 sm:gap-4 px-4 py-4 sm:px-6 sm:py-5 border-b border-[#f1f3f4] dark:border-[#2b2d2f] last:border-0 transition-colors ${
                                         q.checked ? '' : 'opacity-50'
                                     }`}
                                 >
@@ -554,7 +554,7 @@ export default function InsertQuestions() {
                                             </p>
                                         </div>
 
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                        <div className="extract-options">
                                             {q.options.map((opt, optIdx) => (
                                                 <div
                                                     key={optIdx}

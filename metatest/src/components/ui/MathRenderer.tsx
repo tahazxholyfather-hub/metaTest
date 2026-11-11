@@ -1,6 +1,6 @@
 // src/components/MathRenderer.tsx
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { normalizeAssistantText } from '../../backend/ai-teacher/services/replyQuality.js';
 
 // =====================================================================
@@ -60,16 +60,46 @@ declare global {
     }
 }
 
-// Singleton loader: the script is injected exactly once for the whole app
+// Singleton loader: the script is injected exactly once for the whole app.
+// The app also injects MathJax from utils/mathjax at startup. A second config
+// written while that script is still downloading (common on a phone) leaves
+// startup.promise pending forever, and every formula stays a skeleton.
 let mathJaxPromise: Promise<boolean> | null = null;
+
+const mathJaxIsReady = () => typeof window.MathJax?.typesetPromise === 'function';
 
 export const loadMathJax = (): Promise<boolean> => {
     if (mathJaxPromise) return mathJaxPromise;
 
     mathJaxPromise = new Promise<boolean>((resolve) => {
-        // Already fully loaded (e.g. earlier in this session)
-        if (window.MathJax?.typesetPromise) {
-            resolve(true);
+        let settled = false;
+        const arm = (ok: boolean) => {
+            if (settled) return;
+            settled = true;
+            resolve(ok);
+        };
+        const waitForStartup = () => {
+            const pending = window.MathJax?.startup?.promise;
+            if (pending && typeof pending.then === 'function') {
+                pending.then(() => arm(mathJaxIsReady())).catch(() => arm(false));
+                return;
+            }
+            arm(mathJaxIsReady());
+        };
+
+        if (mathJaxIsReady()) {
+            arm(true);
+            return;
+        }
+
+        const existing = document.querySelector('script[src*="mathjax"]') as HTMLScriptElement | null;
+        if (existing) {
+            if (window.MathJax?.startup?.promise) {
+                waitForStartup();
+                return;
+            }
+            existing.addEventListener('load', () => waitForStartup(), { once: true });
+            existing.addEventListener('error', () => arm(false), { once: true });
             return;
         }
 
@@ -123,26 +153,85 @@ export const loadMathJax = (): Promise<boolean> => {
         const script = document.createElement('script');
         script.src = MATHJAX_SCRIPT_URL;
         script.async = true;
-        script.onload = () => {
-            const startupPromise = window.MathJax?.startup?.promise;
-            if (startupPromise) {
-                startupPromise.then(() => resolve(true)).catch(() => resolve(false));
-            } else {
-                resolve(true);
-            }
-        };
+        script.onload = () => waitForStartup();
         script.onerror = () => {
             console.error(
                 `MathJax could not be loaded from ${MATHJAX_SCRIPT_URL}. ` +
                 `Make sure the mathjax v4 package was copied into the public folder (see MathRenderer.tsx header).`
             );
-            resolve(false); // fall back to plain-text rendering
+            arm(false); // fall back to plain-text rendering
         };
         document.head.appendChild(script);
     });
 
     return mathJaxPromise;
 };
+
+// One shared queue. A review of 70 questions mounts hundreds of formulas at
+// once; firing typesetPromise for each of them stalls MathJax's internal
+// chain on a phone, and the skeleton never goes away.
+type TypesetJob = {
+    el: HTMLElement;
+    cancelled: boolean;
+    done: () => void;
+};
+
+const typesetQueue: TypesetJob[] = [];
+let typesetPump: Promise<void> | null = null;
+
+const kickTypeset = () => {
+    if (typesetPump) return;
+    typesetPump = pumpTypeset().finally(() => {
+        typesetPump = null;
+        if (typesetQueue.length) kickTypeset();
+    });
+};
+
+const scheduleTypeset = (el: HTMLElement) => {
+    let settled = false;
+    let markDone = () => {};
+    const finished = new Promise<void>((resolve) => {
+        markDone = () => {
+            if (settled) return;
+            settled = true;
+            resolve();
+        };
+    });
+    const job: TypesetJob = { el, cancelled: false, done: markDone };
+    typesetQueue.push(job);
+    kickTypeset();
+    return {
+        finished,
+        cancel() {
+            job.cancelled = true;
+            job.done();
+        },
+    };
+};
+
+const pumpTypeset = async () => {
+    const loaded = await loadMathJax();
+    while (typesetQueue.length) {
+        const batch = typesetQueue.splice(0, 4);
+        const live = batch.filter((job) => !job.cancelled && job.el.isConnected);
+        batch.forEach((job) => {
+            if (!live.includes(job)) job.done();
+        });
+        if (!loaded || !mathJaxIsReady() || live.length === 0) {
+            live.forEach((job) => job.done());
+            continue;
+        }
+        try {
+            await window.MathJax.typesetPromise(live.map((job) => job.el));
+        } catch (err) {
+            console.error('MathRenderer typeset failed:', err);
+        }
+        live.forEach((job) => job.done());
+        await new Promise((resolve) => window.setTimeout(resolve, 16));
+    }
+};
+
+const containsMath = (value: string) => /[$\\]/.test(value);
 
 /**
  * Subject ids from the database (subjects_tam24)
@@ -219,12 +308,7 @@ export const MathRenderer: React.FC<MathRendererProps> = ({
     dir = 'auto',
 }) => {
     const containerRef = useRef<HTMLElement | null>(null);
-    const [ready, setReady] = useState(false);
-    const [trackedText, setTrackedText] = useState(text);
-    if (trackedText !== text) {
-        setTrackedText(text);
-        setReady(false);
-    }
+    const wrapperRef = useRef<HTMLSpanElement | null>(null);
 
     const processedText = useMemo(() => {
         if (!text) return '';
@@ -236,67 +320,89 @@ export const MathRenderer: React.FC<MathRendererProps> = ({
         return isChemistrySubject(subject) ? formatChemistryText(normalized) : normalized;
     }, [text, subject]);
 
-    useEffect(() => {
-        let cancelled = false;
-        const element = containerRef.current;
-        if (!element || !processedText) return;
-        setReady(false);
+    const expectsMath = containsMath(processedText);
+    const [trackedText, setTrackedText] = useState(processedText);
+    const [ready, setReady] = useState(!expectsMath || !processedText);
+    if (trackedText !== processedText) {
+        setTrackedText(processedText);
+        setReady(!containsMath(processedText) || !processedText);
+    }
 
-        const finish = () => {
+    // Text is written imperatively so a later render (checkbox toggle, the
+    // ready flag) cannot put the raw string back over MathJax's DOM.
+    useLayoutEffect(() => {
+        const element = containerRef.current;
+        const wrapper = wrapperRef.current;
+        if (!element) return;
+        if (!processedText) {
+            element.textContent = '';
+            setReady(true);
+            return;
+        }
+        let cancelled = false;
+        element.textContent = processedText;
+
+        const reveal = () => {
             if (!cancelled) setReady(true);
         };
+        // Never leave the words behind the skeleton. MathJax may still
+        // upgrade the text after this; the reader is not blocked on it.
+        const revealTimer = window.setTimeout(reveal, expectsMath ? 800 : 0);
 
-        loadMathJax().then((loaded) => {
-            if (!loaded || cancelled || !containerRef.current) {
-                finish();
+        let cancelJob = () => {};
+        const start = () => {
+            if (cancelled || !expectsMath) {
+                reveal();
                 return;
             }
-            try {
-                // Clear previous typeset state for this element, then typeset only this node
-                window.MathJax.typesetClear?.([containerRef.current]);
-                window.MathJax
-                    .typesetPromise([containerRef.current])
-                    .then(finish)
-                    .catch((err: any) => {
-                        console.error('MathRenderer typeset failed:', err);
-                        finish();
-                    });
-            } catch (err) {
-                console.error('MathRenderer typeset failed:', err);
-                finish();
-            }
-        });
+            const job = scheduleTypeset(element);
+            cancelJob = job.cancel;
+            job.finished.then(reveal);
+        };
+
+        let observer: IntersectionObserver | null = null;
+        if (!expectsMath) {
+            start();
+        } else if (typeof IntersectionObserver === 'function' && wrapper) {
+            observer = new IntersectionObserver((entries) => {
+                if (!entries.some((entry) => entry.isIntersecting)) return;
+                observer?.disconnect();
+                start();
+            }, { rootMargin: '280px' });
+            observer.observe(wrapper);
+        } else {
+            start();
+        }
 
         return () => {
             cancelled = true;
-            try {
-                window.MathJax?.typesetClear?.([element]);
-            } catch { /* MathJax not loaded yet — nothing to clear */ }
+            window.clearTimeout(revealTimer);
+            observer?.disconnect();
+            cancelJob();
         };
-    }, [processedText]);
+    }, [processedText, expectsMath]);
 
-    const classes = `whitespace-pre-wrap break-words leading-relaxed math-renderer ${className}`;
+    const classes = `whitespace-pre-wrap break-words leading-relaxed math-renderer max-w-full ${className}`;
     const plainLength = processedText.replace(/[$\\{}]/g, '').trim().length;
     const skeletonWidth = inline
-        ? `${Math.min(12, Math.max(2.2, plainLength * 0.45))}em`
-        : 'min(100%, 16em)';
+        ? `${Math.min(18, Math.max(4, plainLength * 0.42))}em`
+        : '100%';
 
+    // Stay in normal flow so a phone lays the question out at full width.
+    // Opacity only covers the wait; the words are revealed even if MathJax never finishes.
+    const hidden = ready ? '' : 'opacity-0';
     const formula = inline ? (
-        <span key={processedText} ref={containerRef as React.RefObject<HTMLSpanElement>} className={`${classes} ${ready ? '' : 'absolute inset-0 opacity-0'}`} dir={dir}>
-            {processedText}
-        </span>
+        <span key={processedText} ref={containerRef as React.RefObject<HTMLSpanElement>} className={`${classes} ${hidden}`} dir={dir} />
     ) : (
-        <div key={processedText} ref={containerRef as React.RefObject<HTMLDivElement>} className={`${classes} ${ready ? '' : 'absolute inset-x-0 top-0 opacity-0'}`} dir={dir}>
-            {processedText}
-        </div>
+        <div key={processedText} ref={containerRef as React.RefObject<HTMLDivElement>} className={`${classes} ${hidden}`} dir={dir} />
     );
 
     return (
-        <span className={`relative ${inline ? 'inline-block align-middle' : 'block w-full'}`} aria-busy={!ready}>
+        <span ref={wrapperRef} className={`relative max-w-full ${inline ? 'inline-block align-middle' : 'block w-full'}`} aria-busy={!ready}>
             {!ready && processedText && (
                 <span
-                    className="math-skeleton"
-                    style={{ width: skeletonWidth, height: inline ? '0.95em' : '2.3em' }}
+                    className="math-skeleton absolute inset-x-0 top-0"
+                    style={{ width: skeletonWidth, height: inline ? '0.95em' : '1.35em' }}
                     aria-hidden
                 />
             )}
