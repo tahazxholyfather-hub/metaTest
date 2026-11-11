@@ -12,7 +12,10 @@ precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
 
 const shell = createHandlerBoundToURL(`${import.meta.env.BASE_URL}index.html`);
+// The worker stays registered at "/" so push still arrives, but only /app
+// navigations should open the app shell. "/" , /blog and /about are the landing.
 registerRoute(new NavigationRoute(shell, {
+    allowlist: [/^\/app(?:\/|$|\?)/],
     denylist: [/^\/api\//, /\/socket\.io\//, /^\/avatars\//, /^\/images\//],
 }));
 
