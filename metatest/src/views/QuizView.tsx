@@ -24,11 +24,9 @@ import { toast } from 'sonner';
 import { ResponsiveModal } from '../components/ResponsiveModal';
 import { QuestionGeneralInfo } from '../components/QuestionGeneralInfo';
 import { QuestionTimer } from '../components/QuestionTimer';
-import { QuestionCounter } from '../components/QuestionCounter';
 import QuestionStatsDisplay, { type StatItem } from '../components/QuestionStatsDisplay';
 import { QuizCountdown } from '../components/QuizCountdown';
 import { MathRenderer } from '../components/ui/MathRenderer';
-import { QuestionTextClamp } from '../components/QuestionTextClamp';
 import {GameRewardToast} from '../components/GameRewardToast';
 import { Met } from '../components/met';
 import { QuizMetPanel } from './met/QuizMetPanel';
@@ -1106,14 +1104,6 @@ export function QuizView({
                         <div dir="rtl" className="hidden md:grid grid-cols-3 max-w-6xl mx-auto h-full px-4 items-center">
                             <div className="flex justify-start items-center gap-4">
                                 <QuestionTimer seconds={quizElapsedSeconds} isLoading={!question} />
-                                <div className="w-px h-5 bg-[var(--border)]"></div>
-                                <div className="text-sm font-medium text-[var(--text-muted)]">
-                                    <QuestionCounter
-                                        isLoading={!question}
-                                        current={currentQuestionCount}
-                                        total={totalQuestions}
-                                    />
-                                </div>
                             </div>
 
                             <div className="flex flex-col items-center justify-center text-center overflow-hidden">
@@ -1286,13 +1276,6 @@ export function QuizView({
                                 <div className="bg-[var(--bg-app)] border border-[var(--border)] shadow-sm rounded-full px-2.5 py-0.5 text-[10px] font-mono text-[var(--text-muted)] flex items-center justify-center min-w-[45px]">
                                     <QuestionTimer  seconds={quizElapsedSeconds} isLoading={!question} />
                                 </div>
-                                <div className="bg-[var(--bg-app)] border border-[var(--border)] shadow-sm rounded-full px-2.5 py-0.5 text-[10px] font-mono text-[var(--text-muted)] flex items-center justify-center min-w-[45px]">
-                                    <QuestionCounter
-                                        isLoading={!question}
-                                        current={currentQuestionCount}
-                                        total={totalQuestions}
-                                    />
-                                </div>
                             </div>
                         </div>
                     </header>
@@ -1335,14 +1318,22 @@ export function QuizView({
                                         <div className="absolute top-0 right-0 w-1.5 md:w-1.5 h-full bg-gradient-to-b from-[var(--accent)] to-[var(--accent)]/40"></div>
                                         <div className="absolute -top-4 -left-4 w-24 h-24 bg-[var(--accent)]/5 rounded-full blur-2xl md:hidden pointer-events-none"></div>
 
-                                        <QuestionTextClamp
-                                            resetKey={question.id}
-                                            text={question.text}
-                                            subject={question.subject_id}
-                                            inline
-                                            images={question.has_image ? questionImageSrcs(question.images) : undefined}
-                                            className="text-[16px] md:text-[19px] whitespace-pre-wrap font-semibold tracking-[-0.01em] leading-8 md:leading-10 text-right text-[var(--text-primary)] select-text"
-                                        />
+                                        <div className="text-[16px] md:text-[19px] whitespace-pre-wrap font-semibold tracking-[-0.01em] leading-8 md:leading-10 text-right text-[var(--text-primary)] select-text">
+                                            <MathRenderer text={question.text} subject={question.subject_id} inline />
+                                        </div>
+                                        {question.has_image && questionImageSrcs(question.images).length > 0 && (
+                                            <div className="mt-4 flex flex-col items-center gap-4">
+                                                {questionImageSrcs(question.images).map((src, index) => (
+                                                    <img
+                                                        key={`${src}-${index}`}
+                                                        src={src}
+                                                        alt=""
+                                                        loading="lazy"
+                                                        className="mx-auto block h-auto w-auto max-h-52 max-w-[min(100%,28rem)] object-contain md:max-h-72 md:max-w-[min(100%,36rem)]"
+                                                    />
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Options */}
