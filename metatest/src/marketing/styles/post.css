@@ -81,8 +81,8 @@
     /* RESPONSIVE */
     @media (max-width: 900px) {
       header { padding: 0 16px; height: 68px; gap: 8px; justify-content: space-between; }
-      main { padding-left: 20px; padding-right: 20px; }
-      .modern-footer { padding: 0 20px 40px; }
+      main { padding-left: 16px; padding-right: 16px; }
+      .modern-footer { padding: 0 16px 40px; }
       .header-brand { gap: 10px; min-width: 0; }
       .logo-img { width: 40px; height: 40px; }
       .header-nav { gap: 8px; }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { adminApi } from '../lib/adminApi';
+import { BlogComments } from './blog/BlogComments';
 import { BlogEditor } from './blog/BlogEditor';
 import { BlogList } from './blog/BlogList';
 import { CategoryManager } from './blog/CategoryManager';
@@ -33,6 +34,8 @@ export default function BlogManager() {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
+    const [pendingByPost, setPendingByPost] = useState<Record<number, number>>({});
+    const [commentsFor, setCommentsFor] = useState<BlogPost | null>(null);
 
     const load = async () => {
         setLoading(true);
@@ -42,6 +45,14 @@ export default function BlogManager() {
             setPosts((res.data || []) as BlogPost[]);
             const cats = await adminApi.listBlogCategories();
             setCategories(cats.data || []);
+            try {
+                const comments = await adminApi.listBlogComments();
+                const pending: Record<number, number> = {};
+                for (const row of comments.byPost || []) pending[Number(row.postId)] = Number(row.pending || 0);
+                setPendingByPost(pending);
+            } catch {
+                setPendingByPost({});
+            }
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : 'دریافت مطالب ممکن نشد');
         } finally {
@@ -82,6 +93,19 @@ export default function BlogManager() {
         }
     };
 
+    if (commentsFor) {
+        return (
+            <BlogComments
+                postId={commentsFor.id}
+                postTitle={commentsFor.title}
+                onBack={() => {
+                    setCommentsFor(null);
+                    void load();
+                }}
+            />
+        );
+    }
+
     if (!editing) {
         return (
             <div className="flex flex-col gap-4">
@@ -101,6 +125,8 @@ export default function BlogManager() {
                     }}
                     onEdit={(post) => { setForm(draftFromPost(post)); setEditing(true); setSuccess(null); setError(null); }}
                     onDelete={(post) => { void remove(post); }}
+                    onComments={(post) => { setCommentsFor(post); setSuccess(null); setError(null); }}
+                    pendingByPost={pendingByPost}
                 />
             </div>
         );

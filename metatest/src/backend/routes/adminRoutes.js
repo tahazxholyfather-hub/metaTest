@@ -11,6 +11,7 @@ const announcements = require('../controllers/announcementController');
 const pushService = require('../push/pushService');
 const coins = require('../controllers/coinAdminController');
 const blog = require('../controllers/blogController');
+const blogComments = require('../controllers/blogCommentController');
 const contact = require('../controllers/contactController');
 const { blogUpload, rejectUpload } = require('../blog/upload');
 const { requireSection, withSections } = require('../admin/access');
@@ -119,6 +120,10 @@ router.get('/blog/categories', requireSection('blog'), wrap(blog.handleAdminCate
 router.post('/blog/categories', requireSection('blog'), wrap(blog.handleAdminCreateCategory));
 router.get('/blog/categories/:slug/impact', requireSection('blog'), wrap(blog.handleAdminCategoryImpact));
 router.delete('/blog/categories/:slug', requireSection('blog'), wrap(blog.handleAdminDeleteCategory));
+router.get('/blog/comments', requireSection('blog'), wrap(blogComments.handleAdminList));
+router.post('/blog/:id/comments', requireSection('blog'), wrap(blogComments.handleAdminCreate));
+router.patch('/blog/comments/:id', requireSection('blog'), wrap(blogComments.handleAdminUpdate));
+router.delete('/blog/comments/:id', requireSection('blog'), wrap(blogComments.handleAdminDelete));
 router.get('/blog', requireSection('blog'), wrap(blog.handleAdminList));
 router.post('/blog', requireSection('blog'), wrap(blog.handleAdminSave));
 router.put('/blog/:id', requireSection('blog'), wrap(blog.handleAdminSave));

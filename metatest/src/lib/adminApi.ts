@@ -186,6 +186,13 @@ export const adminApi = {
         body: JSON.stringify(payload),
     }),
     deleteBlog: (id: number) => adminRequest<Json>(`/blog/${id}`, { method: 'DELETE' }),
+    listBlogComments: (params?: { postId?: number; status?: string }) =>
+        adminRequest<Json>('/blog/comments', { params }),
+    createBlogComment: (postId: number, payload: { name: string; body: string }) =>
+        adminRequest<Json>(`/blog/${postId}/comments`, { method: 'POST', body: JSON.stringify(payload) }),
+    updateBlogComment: (id: number, status: string) =>
+        adminRequest<Json>(`/blog/comments/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+    deleteBlogComment: (id: number) => adminRequest<Json>(`/blog/comments/${id}`, { method: 'DELETE' }),
 
     listContactMessages: (status?: string) => adminRequest<Json>('/contact', { params: { status } }),
     updateContactMessage: (id: number, status: string) =>

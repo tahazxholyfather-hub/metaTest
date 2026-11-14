@@ -2,6 +2,7 @@
 
 const express = require('express');
 const blog = require('../controllers/blogController');
+const comments = require('../controllers/blogCommentController');
 
 const router = express.Router();
 
@@ -17,6 +18,8 @@ function wrap(handler) {
 
 router.get('/categories', wrap(blog.handlePublicCategories));
 router.get('/posts', wrap(blog.handlePublicList));
+router.get('/posts/:slug/comments', wrap(comments.handlePublicList));
+router.post('/posts/:slug/comments', wrap(comments.handlePublicSubmit));
 router.get('/posts/:slug', wrap(blog.handlePublicOne));
 
 router.use((err, _req, res, _next) => {

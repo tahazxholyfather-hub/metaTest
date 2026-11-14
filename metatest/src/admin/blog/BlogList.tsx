@@ -11,6 +11,8 @@ export function BlogList({
     onCreate,
     onEdit,
     onDelete,
+    onComments,
+    pendingByPost,
 }: {
     posts: BlogPost[];
     query: string;
@@ -21,6 +23,8 @@ export function BlogList({
     onCreate: () => void;
     onEdit: (post: BlogPost) => void;
     onDelete: (post: BlogPost) => void;
+    onComments: (post: BlogPost) => void;
+    pendingByPost: Record<number, number>;
 }) {
     const visible = posts.filter((post) => !query || post.title.includes(query));
     return (
@@ -41,9 +45,16 @@ export function BlogList({
                         <div key={post.id} className="flex items-center justify-between gap-3 bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl px-4 py-3">
                             <div>
                                 <p className="text-sm font-bold">{post.title}</p>
-                                <p className="text-[11px] text-[#86868b]">{post.published ? 'منتشر شده' : 'پیش‌نویس'}{post.featured ? ' · ویژه' : ''}</p>
+                                <p className="text-[11px] text-[#86868b]">
+                                    {post.published ? 'منتشر شده' : 'پیش‌نویس'}
+                                    {post.featured ? ' · ویژه' : ''}
+                                    {pendingByPost[post.id] ? ` · ${pendingByPost[post.id].toLocaleString('fa-IR')} نظر در انتظار تأیید` : ''}
+                                </p>
                             </div>
                             <div className="flex gap-3">
+                                <button onClick={() => onComments(post)} className="text-xs font-bold text-[#1a73e8]">
+                                    نظرات{pendingByPost[post.id] ? ` (${pendingByPost[post.id].toLocaleString('fa-IR')})` : ''}
+                                </button>
                                 <button onClick={() => onEdit(post)} className="text-xs font-bold text-[#1a73e8]">ویرایش</button>
                                 <button onClick={() => onDelete(post)} className="text-red-500"><Trash2 size={14} /></button>
                             </div>

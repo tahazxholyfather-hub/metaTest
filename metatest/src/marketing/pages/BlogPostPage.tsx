@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { SiteFooter } from '../components/SiteFooter';
 import { SiteHeader } from '../components/SiteHeader';
+import { ArticleComments } from '../components/ArticleComments';
 import { PostCard } from '../components/PostCard';
 import { fetchPost, fetchPosts, formatWhen, LIST_SAMPLES, POST_SAMPLES, postHref, readingLabel, safeHtml, type BlogBlock, type BlogPost } from '../lib/blog';
 import { coverFor } from '../lib/covers';
@@ -146,8 +147,8 @@ export function BlogPostPage() {
   return (
     <div className="page-root">
       <SiteHeader active="blog" />
-      <main className="page-wide">
-        <article className="read">
+      <main className="page-footer-rail">
+        <article className="read read-sheet">
           {!slug ? <p className="status">مطلبی انتخاب نشده است.</p> : null}
           {slug && !ready ? <p className="status">در حال دریافت مطلب…</p> : null}
           {slug && ready && missing ? <p className="status">این مطلب پیدا نشد.</p> : null}
@@ -239,6 +240,7 @@ export function BlogPostPage() {
                   )}
                 </aside>
               </div>
+              <ArticleComments slug={current.slug} />
             </>
           ) : null}
         </article>

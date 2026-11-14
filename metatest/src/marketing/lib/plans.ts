@@ -11,6 +11,8 @@ export type PublicPlan = {
   iconKey?: string;
   iconColors?: { primary?: string | null; secondary?: string | null };
   attributes?: string[];
+  dailyCoins?: number | null;
+  savings?: { amount?: number; versusName?: string } | null;
 };
 
 export function faNum(value: number) {

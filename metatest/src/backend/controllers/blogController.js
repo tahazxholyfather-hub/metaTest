@@ -124,6 +124,20 @@ function ensureBlogSchema() {
                 FROM blog_posts p
                 JOIN blog_categories c ON c.slug = p.category
             `);
+            await pool.query(`
+                CREATE TABLE IF NOT EXISTS blog_comments (
+                    id INT NOT NULL AUTO_INCREMENT,
+                    post_id INT NOT NULL,
+                    author_name VARCHAR(80) NOT NULL,
+                    body VARCHAR(2000) NOT NULL,
+                    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                    source VARCHAR(20) NOT NULL DEFAULT 'visitor',
+                    ip VARCHAR(64) NULL,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (id),
+                    KEY idx_blog_comments_post (post_id, status, created_at)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+            `);
         })().catch((err) => {
             schemaReady = null;
             throw err;
@@ -444,6 +458,7 @@ async function handleAdminDelete(req, res) {
     await ensureBlogSchema();
     const id = Number(req.params?.id || req.body?.id);
     if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ success: false, message: 'شناسه مطلب نامعتبر است.' });
+    await pool.query(`DELETE FROM blog_comments WHERE post_id = ?`, [id]);
     const [result] = await pool.query(`DELETE FROM blog_posts WHERE id = ?`, [id]);
     if (!result.affectedRows) return res.status(404).json({ success: false, message: 'مطلب پیدا نشد.' });
     return res.json({ success: true, message: 'مطلب حذف شد.' });
