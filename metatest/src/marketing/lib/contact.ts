@@ -16,6 +16,11 @@ export const SITE_CONTACT = {
   email: 'metatestinfo@gmail.com',
   emailHref: 'mailto:metatestinfo@gmail.com',
   address: 'مشهد، بلوار سجاد، امین غربی ۴، پلاک ۶، ساختمان A10',
+  hours: [
+    { label: 'شنبه تا چهارشنبه', value: '۱۰ تا ۱۸' },
+    { label: 'پنجشنبه', value: '۱۰ تا ۱۳' },
+    { label: 'جمعه', value: 'تعطیل' },
+  ],
 };
 
 export function validateContact(draft: ContactDraft) {
