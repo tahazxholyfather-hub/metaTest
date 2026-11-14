@@ -18,6 +18,7 @@ const { requireToken } = require('./middleware/auth');
 const quizController = require('./controllers/quizController');
 const userController = require('./controllers/userController');
 const adminController = require('./controllers/adminController');
+const purgeQuestions = require('./admin/purgeQuestions');
 const quizWorldController = require('./controllers/quizWorldController');
 const bankSelection = require('./controllers/bankSelection');
 const dashboardRoutes = require('./routes/dashboardRoutes');
@@ -466,6 +467,12 @@ app.post('/api/flow', requireToken, async (req, res) => {
                 break;
             case 'Admin_insert_questions':
                 await adminController.handleAdminInsertQuestions(req, res);
+                break;
+            case 'Admin_preview_question_purge':
+                await purgeQuestions.handleAdminPreviewQuestionPurge(req, res);
+                break;
+            case 'Admin_apply_question_purge':
+                await purgeQuestions.handleAdminApplyQuestionPurge(req, res);
                 break;
 
             case 'Admin_get_discount_codes':

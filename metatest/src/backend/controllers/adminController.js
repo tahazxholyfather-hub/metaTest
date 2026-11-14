@@ -30,6 +30,7 @@ const {
 } = require('../middleware/adminAuth');
 const { withSections } = require('../admin/access');
 const { countWords, recordWordEvent, measureEditDelta } = require('../admin/words');
+const { findExactDuplicates } = require('../admin/purgeQuestions');
 
 // --- PDF Library upload configuration ---
 // Defaults to the same web root used for avatar uploads in server.js
@@ -1054,6 +1055,19 @@ const handleAdminInsertQuestions = async (req, res) => {
             const ci = parseInt(q.correct_index, 10);
             if (!ci || ci < 1 || ci > 4) {
                 return res.json({ success: false, message: `Question ${i + 1}: correct answer index must be 1-4.` });
+            }
+        }
+
+        const confirmed = req.body.confirm_duplicates === true || req.body.confirm_duplicates === 1 || req.body.confirm_duplicates === 'true';
+        if (!confirmed) {
+            const duplicates = await findExactDuplicates(pool, questions);
+            if (duplicates.length > 0) {
+                return res.json({
+                    success: false,
+                    code: 'DUPLICATES',
+                    message: `${duplicates.length} سوال از این فهرست همین الان در بانک وجود دارد. اگر مطمئنی، ثبت را تأیید کن.`,
+                    duplicates,
+                });
             }
         }
 
