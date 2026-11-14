@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { PageField } from '../components/PageField';
-import { MailIcon, PhoneIcon, PinIcon } from '../components/icons';
+import { ClockIcon, MailIcon, PhoneIcon, PinIcon } from '../components/icons';
 import { SiteFooter } from '../components/SiteFooter';
 import { SiteHeader } from '../components/SiteHeader';
 import { SITE_CONTACT, submitContact, validateContact, type ContactDraft, type ContactField } from '../lib/contact';
@@ -52,16 +52,16 @@ export function ContactPage() {
     <PageField>
       <SiteHeader active="contact" />
       <main className="page-wide">
-        <div className="page-hero">
+        <div className="contact-sheet">
+        <div className="page-hero contact-hero">
           <nav className="breadcrumbs" aria-label="مسیر">
             <ol>
               <li><Link to="/">خانه</Link></li>
               <li><span aria-current="page">تماس</span></li>
             </ol>
           </nav>
-          <p className="sec-eyebrow">تماس</p>
-          <h1 className="page-title shine-title">راه‌های ارتباطی منتشرشده</h1>
-          <p className="page-lede">فقط تلفن، ایمیل و نشانی‌ای اینجا آمده که در معرفی متاتست وجود دارد. شبکه اجتماعی جداگانه‌ای اعلام نشده است.</p>
+          <h1 className="page-title shine-title">تماس با ما</h1>
+          <p className="page-lede">پیام را از فرم بفرستید؛ در پنل پشتیبانی ثبت می‌شود.</p>
         </div>
         <div className="contact-layout">
           <ul className="contact-cards">
@@ -86,35 +86,50 @@ export function ContactPage() {
                 <p>{SITE_CONTACT.address}</p>
               </div>
             </li>
+            <li className="glass-panel">
+              <ClockIcon />
+              <div>
+                <h2>ساعات پاسخگویی</h2>
+                <ul className="contact-hours">
+                  {SITE_CONTACT.hours.map((row) => (
+                    <li key={row.label}>
+                      <span>{row.label}</span>
+                      <b>{row.value}</b>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </li>
           </ul>
           <form className="contact-form" onSubmit={onSubmit} noValidate>
-            <p className="form-note">ایمیل یا تلفن کافی است. پیام در پنل پشتیبانی ثبت می‌شود.</p>
             <label className="contact-trap" htmlFor="contact-website">
               وب‌سایت
               <input id="contact-website" name="website" value={website} tabIndex={-1} autoComplete="off" onChange={(event) => setWebsite(event.target.value)} />
             </label>
-            {fields.map((field) => (
-              <label key={field.name} htmlFor={`contact-${field.name}`}>
-                <span>{field.label}</span>
-                <input
-                  id={`contact-${field.name}`}
-                  name={field.name}
-                  type={field.type ?? 'text'}
-                  autoComplete={field.autoComplete}
-                  value={draft[field.name]}
-                  aria-invalid={errors[field.name] ? true : undefined}
-                  aria-describedby={errors[field.name] ? `contact-${field.name}-error` : undefined}
-                  onChange={(event) => update(field.name, event.target.value)}
-                />
-                {errors[field.name] ? <small id={`contact-${field.name}-error`} role="alert">{errors[field.name]}</small> : null}
-              </label>
-            ))}
+            <div className="contact-fields">
+              {fields.map((field) => (
+                <label key={field.name} htmlFor={`contact-${field.name}`}>
+                  <span>{field.label}</span>
+                  <input
+                    id={`contact-${field.name}`}
+                    name={field.name}
+                    type={field.type ?? 'text'}
+                    autoComplete={field.autoComplete}
+                    value={draft[field.name]}
+                    aria-invalid={errors[field.name] ? true : undefined}
+                    aria-describedby={errors[field.name] ? `contact-${field.name}-error` : undefined}
+                    onChange={(event) => update(field.name, event.target.value)}
+                  />
+                  {errors[field.name] ? <small id={`contact-${field.name}-error`} role="alert">{errors[field.name]}</small> : null}
+                </label>
+              ))}
+            </div>
             <label htmlFor="contact-message">
               <span>پیام</span>
               <textarea
                 id="contact-message"
                 name="message"
-                rows={6}
+                rows={4}
                 value={draft.message}
                 aria-invalid={errors.message ? true : undefined}
                 aria-describedby={errors.message ? 'contact-message-error' : undefined}
@@ -127,6 +142,7 @@ export function ContactPage() {
             </button>
             <p className="form-status" role="status" aria-live="polite">{notice}</p>
           </form>
+        </div>
         </div>
       </main>
       <SiteFooter variant="sub" enamadClass />
