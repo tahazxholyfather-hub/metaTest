@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Layers, LogOut, Hexagon, ListTree, FileText, FilePlus2, BadgePercent, UserPlus, Wallet, Bot, Shield, PenLine, Flag, KeyRound, Crown, Bell, BellRing, Coins, Newspaper } from 'lucide-react';
+import { LayoutDashboard, Layers, LogOut, Hexagon, ListTree, FileText, FilePlus2, BadgePercent, UserPlus, Wallet, Bot, Shield, PenLine, Flag, KeyRound, Crown, Bell, BellRing, Coins, Newspaper, Eraser } from 'lucide-react';
 import type { User } from './AuthView';
 import { ADMIN_NAV, canAccessSection } from './access';
 import type { LucideIcon } from 'lucide-react';
@@ -17,6 +17,7 @@ const ICONS: Record<string, LucideIcon> = {
     dashboard: LayoutDashboard,
     'edit-questions': Layers,
     'insert-questions': FilePlus2,
+    'purge-questions': Eraser,
     curriculum: ListTree,
     'pdf-library': FileText,
     'subscription-plans': Crown,

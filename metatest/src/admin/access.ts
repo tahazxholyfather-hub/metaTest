@@ -10,6 +10,7 @@ export const ADMIN_NAV: { id: string; label: string; superOnly?: boolean }[] = [
     { id: 'dashboard', label: 'داشبورد' },
     { id: 'edit-questions', label: 'ویرایش سوال‌ها' },
     { id: 'insert-questions', label: 'افزودن سوال' },
+    { id: 'purge-questions', label: 'پاکسازی ورود', superOnly: true },
     { id: 'curriculum', label: 'سرفصل‌ها' },
     { id: 'pdf-library', label: 'کتابخانه PDF' },
     { id: 'subscription-plans', label: 'مدیریت اشتراک‌ها', superOnly: true },

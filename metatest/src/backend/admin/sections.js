@@ -31,6 +31,8 @@ const ACTION_SECTIONS = {
     Admin_get_question_by_filters: ['edit-questions'],
     Admin_insert_questions: ['insert-questions'],
     Admin_parse_questions_docx: ['insert-questions'],
+    Admin_preview_question_purge: ['purge-questions'],
+    Admin_apply_question_purge: ['purge-questions'],
     Admin_get_curriculum: ['curriculum', 'insert-questions', 'edit-questions', 'reports'],
     Admin_save_curriculum_item: ['curriculum'],
     Admin_delete_curriculum_item: ['curriculum'],

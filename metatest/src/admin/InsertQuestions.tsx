@@ -45,6 +45,7 @@ export default function InsertQuestions() {
     const [mode, setMode] = useState<'manual' | 'auto'>('manual');
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
+    const [duplicates, setDuplicates] = useState<{ mode: 'manual' | 'auto'; items: { index: number; count: number; preview: string; existing_ids: number[] }[] } | null>(null);
 
     // Shared curriculum lists (all records, for metadata selects)
     const [curriculum, setCurriculum] = useState<CurriculumData>({ subjects: [], grades: [], topics: [], chapters: [] });
@@ -146,7 +147,7 @@ export default function InsertQuestions() {
         setManual(prev => ({ ...prev, options: prev.options.map((o, i) => i === index ? value : o) }));
     };
 
-    const handleManualSubmit = async () => {
+    const handleManualSubmit = async (confirmDuplicates = false) => {
         if (!manual.text.trim()) { setErrorMessage('متن سوال الزامی است.'); return; }
         if (manual.options.some(o => !o.trim())) { setErrorMessage('هر ۴ گزینه الزامی است.'); return; }
 
@@ -155,6 +156,7 @@ export default function InsertQuestions() {
         try {
             const response: any = await flowApi.dispatch('Admin_insert_questions', {
                 insert_type: 'دستی',
+                confirm_duplicates: confirmDuplicates,
                 meta: {
                     subject_id: meta.subject_id,
                     grade_id: meta.grade_ids[0] ?? null,
@@ -174,7 +176,12 @@ export default function InsertQuestions() {
             });
             const res = response.data || response;
 
+            if (res.code === 'DUPLICATES') {
+                setDuplicates({ mode: 'manual', items: res.duplicates || [] });
+                return;
+            }
             if (res.success) {
+                setDuplicates(null);
                 setSuccessMessage(`سوال ثبت شد (شناسه: ${res.inserted_ids?.[0] ?? '—'}). سوال‌های جدید تا بازبینی غیرفعال می‌مانند.`);
                 // Keep metadata selections for faster batch entry, reset the content
                 setManual(EMPTY_MANUAL);
@@ -249,7 +256,7 @@ export default function InsertQuestions() {
         setParsed(prev => prev.map(q => ({ ...q, checked: target })));
     };
 
-    const handleAutoSubmit = async () => {
+    const handleAutoSubmit = async (confirmDuplicates = false) => {
         const selected = parsed.filter(q => q.checked);
         if (selected.length === 0) { setErrorMessage('سوالی انتخاب نشده.'); return; }
 
@@ -258,6 +265,7 @@ export default function InsertQuestions() {
         try {
             const response: any = await flowApi.dispatch('Admin_insert_questions', {
                 insert_type: 'اتوماتیک',
+                confirm_duplicates: confirmDuplicates,
                 // Optional metadata applied to ALL extracted questions in this batch
                 meta: {
                     subject_id: meta.subject_id,
@@ -278,7 +286,12 @@ export default function InsertQuestions() {
             });
             const res = response.data || response;
 
+            if (res.code === 'DUPLICATES') {
+                setDuplicates({ mode: 'auto', items: res.duplicates || [] });
+                return;
+            }
             if (res.success) {
+                setDuplicates(null);
                 setSuccessMessage(`${res.inserted_ids?.length ?? selected.length} سوال به‌صورت غیرفعال ثبت شد.`);
                 // Keep only unchecked questions in the review table
                 setParsed(prev => prev.filter(q => !q.checked));
@@ -322,7 +335,7 @@ export default function InsertQuestions() {
                 {/* Primary Action */}
                 {mode === 'manual' ? (
                     <button
-                        onClick={handleManualSubmit}
+                        onClick={() => handleManualSubmit(false)}
                         disabled={isSavingManual}
                         className="flex items-center gap-2 bg-[#1a73e8] hover:bg-[#1557b0] disabled:bg-[#1a73e8]/70 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md"
                     >
@@ -332,7 +345,7 @@ export default function InsertQuestions() {
                     </button>
                 ) : (
                     <button
-                        onClick={handleAutoSubmit}
+                        onClick={() => handleAutoSubmit(false)}
                         disabled={isSubmitting || checkedCount === 0}
                         className="flex items-center gap-2 bg-[#1a73e8] hover:bg-[#1557b0] disabled:bg-gray-200 disabled:text-gray-400 dark:disabled:bg-[#2b2d2f] dark:disabled:text-gray-500 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md"
                     >
@@ -349,6 +362,30 @@ export default function InsertQuestions() {
                     <AlertCircle size={20} />
                     <span className="text-sm font-medium">{errorMessage}</span>
                     <button onClick={() => setErrorMessage(null)} className="mr-auto"><X size={16} /></button>
+                </div>
+            )}
+            {duplicates && (
+                <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 text-amber-900 dark:text-amber-100 px-4 py-4 rounded-2xl flex flex-col gap-3">
+                    <span className="text-sm font-medium leading-relaxed">
+                        {duplicates.items.length} سوال از این فهرست همین الان در بانک هست. ثبت دوباره کپی تازه می‌سازد و کپی‌های قبلی را پاک نمی‌کند.
+                    </span>
+                    <ul className="text-xs leading-relaxed space-y-1 text-right" dir="rtl">
+                        {duplicates.items.slice(0, 6).map((item) => (
+                            <li key={item.index}>سوال {item.index}: {item.count} بار — {item.preview}</li>
+                        ))}
+                    </ul>
+                    <div className="flex flex-wrap gap-2">
+                        <button
+                            onClick={() => duplicates.mode === 'manual' ? handleManualSubmit(true) : handleAutoSubmit(true)}
+                            disabled={isSavingManual || isSubmitting}
+                            className="px-4 py-2 rounded-xl bg-amber-600 text-white text-xs font-bold disabled:opacity-40"
+                        >
+                            با این حال ثبت کن
+                        </button>
+                        <button onClick={() => setDuplicates(null)} disabled={isSavingManual || isSubmitting} className="px-4 py-2 rounded-xl bg-white dark:bg-[#1e1f20] text-xs font-bold disabled:opacity-40">
+                            انصراف
+                        </button>
+                    </div>
                 </div>
             )}
             {successMessage && (
@@ -586,7 +623,7 @@ export default function InsertQuestions() {
                             {/* Bottom submit */}
                             <div className="flex justify-end px-6 py-4 border-t border-[#dadce0] dark:border-[#333537]">
                                 <button
-                                    onClick={handleAutoSubmit}
+                                    onClick={() => handleAutoSubmit(false)}
                                     disabled={isSubmitting || checkedCount === 0}
                                     className="flex items-center gap-2 bg-[#1a73e8] hover:bg-[#1557b0] disabled:bg-gray-200 disabled:text-gray-400 dark:disabled:bg-[#2b2d2f] dark:disabled:text-gray-500 text-white px-6 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md"
                                 >

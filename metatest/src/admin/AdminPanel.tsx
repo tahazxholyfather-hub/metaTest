@@ -4,6 +4,7 @@ import Header from './Header';
 import Dashboard from './Dashboard';
 import EditQuestions from './EditQuestions';
 import InsertQuestions from './InsertQuestions';
+import PurgeQuestions from './PurgeQuestions';
 import CurriculumManager from './CurriculumManager';
 import PdfLibraryManager from './PdfLibraryManager';
 import DiscountCodesManager from './DiscountCodesManager';
@@ -170,6 +171,7 @@ export default function AdminPanel() {
                                 {activeTab === 'dashboard' && canAccessSection(user, 'dashboard') && <Dashboard />}
                                 {activeTab === 'edit-questions' && canAccessSection(user, 'edit-questions') && <EditQuestions />}
                                 {activeTab === 'insert-questions' && canAccessSection(user, 'insert-questions') && <InsertQuestions />}
+                                {activeTab === 'purge-questions' && canAccessSection(user, 'purge-questions') && <PurgeQuestions />}
                                 {activeTab === 'curriculum' && canAccessSection(user, 'curriculum') && <CurriculumManager user={user} />}
                                 {activeTab === 'pdf-library' && canAccessSection(user, 'pdf-library') && <PdfLibraryManager user={user} />}
                                 {activeTab === 'subscription-plans' && canAccessSection(user, 'subscription-plans') && <SubscriptionManager />}
