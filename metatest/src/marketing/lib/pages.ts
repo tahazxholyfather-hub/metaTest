@@ -1,7 +1,8 @@
-export type MarketingPage = 'home' | 'blog' | 'post' | 'about';
+export type MarketingPage = 'home' | 'blog' | 'post' | 'about' | 'contact';
 
 export function pageOf(pathname: string): MarketingPage {
   if (pathname.startsWith('/about')) return 'about';
+  if (pathname.startsWith('/contact')) return 'contact';
   if (pathname === '/blog' || pathname === '/blog/' || pathname === '/blog/index.html') return 'blog';
   if (pathname.startsWith('/blog')) return 'post';
   return 'home';
@@ -12,4 +13,5 @@ export const PAGE_TITLES: Record<MarketingPage, string> = {
   blog: 'بلاگ آموزشی — متاتست',
   post: 'بلاگ آموزشی — متاتست',
   about: 'درباره متاتست — داستان ما',
+  contact: 'تماس با متاتست',
 };

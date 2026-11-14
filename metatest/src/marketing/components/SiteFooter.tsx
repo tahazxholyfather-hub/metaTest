@@ -65,7 +65,7 @@ export function SiteFooter({ variant, enamadClass = false }: Props) {
             <li><a href="#" className="js-soon">دانلود اپلیکیشن</a></li>
             <li><a href="#">راهنمای شروع</a></li>
             <li><a href="#">قوانین و حریم خصوصی</a></li>
-            <li><a href="#">پشتیبانی</a></li>
+            <li><Link to="/contact/">پشتیبانی</Link></li>
           </ul>
         </div>
         <div>

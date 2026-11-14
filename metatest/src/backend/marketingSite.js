@@ -15,6 +15,8 @@ const PAGE_PATHS = [
     '/about',
     '/about/',
     '/about/index.html',
+    '/contact',
+    '/contact/',
 ];
 
 function isViteAsset(pathname) {

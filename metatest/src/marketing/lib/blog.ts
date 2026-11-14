@@ -47,7 +47,23 @@ export const POST_SAMPLES: Record<string, BlogPost> = {
 };
 
 export function postHref(slug: string) {
-  return `/blog/post.html?slug=${encodeURIComponent(slug)}`;
+  return `/blog/${encodeURIComponent(slug)}`;
+}
+
+export function readingLabel(post: BlogPost) {
+  const raw = (post.readTime || '').trim();
+  if (!raw) return '۱ دقیقه مطالعه';
+  if (raw.includes('مطالعه')) return raw;
+  if (raw.includes('دقیقه')) return `${raw} مطالعه`;
+  return `${raw} دقیقه مطالعه`;
+}
+
+export function readingMinutes(post: BlogPost) {
+  const western = (post.readTime || '').replace(/[۰-۹]/g, (digit) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)));
+  const amount = Number(western.match(/\d+/)?.[0]);
+  if (amount > 0) return amount;
+  const text = `${post.excerpt || ''} ${post.body || ''}`;
+  return Math.max(1, Math.round(text.trim().length / 700) || 1);
 }
 
 export function formatWhen(value?: string | null) {

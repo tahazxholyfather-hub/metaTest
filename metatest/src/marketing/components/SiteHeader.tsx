@@ -2,12 +2,13 @@ import { Link } from 'react-router-dom';
 import { appUrl } from '../lib/appUrl';
 import { DownloadIcon, UserIcon } from './icons';
 
-export type NavKey = 'home' | 'blog' | 'about';
+export type NavKey = 'home' | 'blog' | 'about' | 'contact';
 
 const LINKS: { key: NavKey; href: string; label: string }[] = [
   { key: 'home', href: '/', label: 'صفحه اصلی' },
   { key: 'blog', href: '/blog/', label: 'وبلاگ' },
   { key: 'about', href: '/about/', label: 'درباره ما' },
+  { key: 'contact', href: '/contact/', label: 'تماس' },
 ];
 
 type Props = {

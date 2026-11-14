@@ -6,18 +6,22 @@ import { PAGE_TITLES, pageOf } from './lib/pages';
 import { AboutPage } from './pages/AboutPage';
 import { BlogListPage } from './pages/BlogListPage';
 import { BlogPostPage } from './pages/BlogPostPage';
+import { ContactPage } from './pages/ContactPage';
 import { HomePage } from './pages/HomePage';
 import aboutCss from './styles/about.css?raw';
 import blogCss from './styles/blog.css?raw';
+import cardsCss from './styles/cards.css?raw';
 import fieldCss from './styles/field.css?raw';
 import homeCss from './styles/home.css?raw';
+import pagesCss from './styles/pages.css?raw';
 import postCss from './styles/post.css?raw';
 
 const PAGE_CSS = {
-  home: homeCss,
-  blog: `${fieldCss}\n${blogCss}`,
-  post: postCss,
+  home: `${homeCss}\n${cardsCss}`,
+  blog: `${fieldCss}\n${blogCss}\n${cardsCss}\n${pagesCss}`,
+  post: `${postCss}\n${cardsCss}\n${pagesCss}`,
   about: `${fieldCss}\n${aboutCss}`,
+  contact: `${fieldCss}\n${blogCss}\n${cardsCss}\n${pagesCss}`,
 };
 
 function usePageStyle(css: string) {
@@ -79,6 +83,8 @@ export function MarketingApp() {
           <Route path="/about" element={<AboutPage />} />
           <Route path="/about/" element={<AboutPage />} />
           <Route path="/about/index.html" element={<AboutPage />} />
+          <Route path="/contact" element={<ContactPage />} />
+          <Route path="/contact/" element={<ContactPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

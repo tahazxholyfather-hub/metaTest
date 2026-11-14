@@ -187,6 +187,11 @@ export const adminApi = {
     }),
     deleteBlog: (id: number) => adminRequest<Json>(`/blog/${id}`, { method: 'DELETE' }),
 
+    listContactMessages: (status?: string) => adminRequest<Json>('/contact', { params: { status } }),
+    updateContactMessage: (id: number, status: string) =>
+        adminRequest<Json>(`/contact/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+    deleteContactMessage: (id: number) => adminRequest<Json>(`/contact/${id}`, { method: 'DELETE' }),
+
     listAccess: () => adminRequest<Json>('/access'),
     saveAccess: (id: number, sections: Json) =>
         adminRequest<Json>(`/access/${id}`, { method: 'PUT', body: JSON.stringify({ sections }) }),

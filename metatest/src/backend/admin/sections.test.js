@@ -23,6 +23,7 @@ test('other admins do not publish until blog is granted', () => {
     const sections = resolveSections(4, []);
     assert.equal(sections.blog, false);
     assert.equal(sections.dashboard, true);
+    assert.equal(sections.contact, true);
 });
 
 test('a saved grant turns blog on for that admin only', () => {

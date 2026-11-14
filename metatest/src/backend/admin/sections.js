@@ -18,6 +18,7 @@ const ASSIGNABLE_SECTIONS = [
     { key: 'ai-manager', label: 'مدیریت هوش مصنوعی', defaultAllowed: false },
     { key: 'admins', label: 'ادمین‌ها', defaultAllowed: false },
     { key: 'blog', label: 'بلاگ آموزشی', defaultAllowed: false },
+    { key: 'contact', label: 'پیام‌های تماس', defaultAllowed: true },
 ];
 
 const ASSIGNABLE_KEYS = new Set(ASSIGNABLE_SECTIONS.map((section) => section.key));

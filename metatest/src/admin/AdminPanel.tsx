@@ -19,6 +19,7 @@ import ReportsManager from './ReportsManager';
 import AccessManager from './AccessManager';
 import SubscriptionManager from './SubscriptionManager';
 import BlogManager from './BlogManager';
+import ContactInbox from './ContactInbox';
 import AuthView, { type User } from './AuthView';
 import Spinner from './Spinner';
 import { adminApi } from '../lib/adminApi';
@@ -184,6 +185,7 @@ export default function AdminPanel() {
                                 {activeTab === 'ai-manager' && canAccessSection(user, 'ai-manager') && <AiManager />}
                                 {activeTab === 'admins' && canAccessSection(user, 'admins') && <AdminsManager currentUser={user} />}
                                 {activeTab === 'blog' && canAccessSection(user, 'blog') && <BlogManager />}
+                                {activeTab === 'contact' && canAccessSection(user, 'contact') && <ContactInbox />}
                                 {activeTab === 'access' && canAccessSection(user, 'access') && <AccessManager />}
                             </div>
                         )}

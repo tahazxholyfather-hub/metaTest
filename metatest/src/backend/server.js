@@ -26,7 +26,9 @@ const aiTeacherRoutes = require('./ai-teacher/routes');
 const walletController = require('./controllers/walletController');
 const adminRoutes = require('./routes/adminRoutes');
 const blogRoutes = require('./routes/blogRoutes');
+const contactRoutes = require('./routes/contactRoutes');
 const { ensureBlogSchema } = require('./controllers/blogController');
+const { ensureContactSchema } = require('./controllers/contactController');
 const chemballController = require('./controllers/chemballController');
 const pushService = require('./push/pushService');
 const { ensureAdminSchema } = require('./middleware/adminAuth');
@@ -120,6 +122,7 @@ app.use('/api/ai-teacher', aiTeacherRoutes);
 // Admin panel — independent session (admin_token cookie), not the student JWT
 app.use('/api/admin', adminRoutes);
 app.use('/api/blog', blogRoutes);
+app.use('/api/contact', contactRoutes);
 app.get('/api/chemball/leaderboard', chemballController.handleGetLeaderboard);
 app.post('/api/chemball/score', requireToken, chemballController.handleSaveScore);
 
@@ -577,6 +580,7 @@ app.listen(PORT, () => {
         .catch((err) => console.error('[db] visitor count repair failed:', err.message));
     ensureAdminSchema()
         .then(() => ensureBlogSchema())
+        .then(() => ensureContactSchema())
         .then(() => loadRuntimeOverlayFromDb())
         .then(() => ensureDiamondPlanActive())
         .then(() => pushService.ensureSchema())

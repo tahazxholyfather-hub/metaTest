@@ -120,6 +120,10 @@ export default defineConfig(({ mode }) => {
           target: 'http://localhost:3000',
           changeOrigin: true,
         },
+        '/contact': {
+          target: 'http://localhost:3000',
+          changeOrigin: true,
+        },
       }
     }
   }
