@@ -1,7 +1,7 @@
 import { Search, SlidersHorizontal, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { BLOG_CATEGORIES, fetchCategories, fetchPosts, LIST_SAMPLES, postCategories, readingMinutes, type BlogPost } from '../lib/blog';
+import { Link, useSearchParams } from 'react-router-dom';
+import { BLOG_CATEGORIES, coverStyle, fetchCategories, fetchPosts, formatWhen, LIST_SAMPLES, postCategories, postHref, readingLabel, readingMinutes, type BlogPost } from '../lib/blog';
 import { PostCard } from './PostCard';
 
 type SortId = 'new' | 'old' | 'short';
@@ -153,6 +153,10 @@ export function ArticleBrowser() {
     };
   }, [sheet]);
 
+  const featured = category === 'all' && !query.trim()
+    ? (visible.find((post) => post.featured) || visible[0] || null)
+    : null;
+  const cards = featured ? visible.filter((post) => post.slug !== featured.slug) : visible;
   const filtersActive = (category !== 'all' ? 1 : 0) + (query.trim() ? 1 : 0) + (sort !== 'new' ? 1 : 0);
   const sortLabel = SORTS.find((item) => item.id === sort)?.label ?? 'تازه‌ترین';
   const activeName = categories.find((item) => item.slug === category)?.name || category;
@@ -271,9 +275,10 @@ export function ArticleBrowser() {
               <button type="button" className="btn-fill" onClick={resetAll}>پاک کردن فیلترها</button>
             </div>
           ) : null}
-          {ready && visible.length > 0 ? (
+          {ready && featured ? <FeaturedPost post={featured} /> : null}
+          {ready && cards.length > 0 ? (
             <div className="library-grid">
-              {visible.map((post, index) => (
+              {cards.map((post, index) => (
                 <div key={post.slug} style={{ '--i': index } as CSSProperties}>
                   <PostCard post={post} />
                 </div>
@@ -303,6 +308,23 @@ export function ArticleBrowser() {
         </div>
       </div>
     </div>
+  );
+}
+
+function FeaturedPost({ post }: { post: BlogPost }) {
+  return (
+    <Link className="blog-featured" to={postHref(post.slug)}>
+      <div className="blog-featured-thumb" style={coverStyle(post.coverUrl)} />
+      <div className="blog-featured-body">
+        <span className="eyebrow">مطلب ویژه · {post.categoryName || 'آموزش'}</span>
+        <h2>{post.title}</h2>
+        {post.excerpt ? <p>{post.excerpt}</p> : null}
+        <div className="blog-card-meta">
+          <span>{formatWhen(post.publishedAt)}</span>
+          <span>{readingLabel(post)}</span>
+        </div>
+      </div>
+    </Link>
   );
 }
 
