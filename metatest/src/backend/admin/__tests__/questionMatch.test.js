@@ -123,11 +123,15 @@ test('question ids are unique positive integers', () => {
     assert.equal(parseQuestionIds([0]).error.includes('نامعتبر'), true);
 });
 
-test('only the main admin can purge imported questions', () => {
+test('purge follows the granted section', () => {
     const staff = { id: 4, sections: resolveSections(4, []) };
+    const granted = { id: 4, sections: resolveSections(4, [{ section_key: 'purge-questions', allowed: 1 }]) };
     const main = { id: 1, isSuper: true, sections: resolveSections(1, []) };
+    assert.equal(resolveSections(4, [])['purge-questions'], false);
     assert.equal(isActionAllowed(staff, 'Admin_preview_question_purge'), false);
     assert.equal(isActionAllowed(staff, 'Admin_apply_question_purge'), false);
+    assert.equal(isActionAllowed(granted, 'Admin_preview_question_purge'), true);
+    assert.equal(isActionAllowed(granted, 'Admin_apply_question_purge'), true);
     assert.equal(isActionAllowed(main, 'Admin_preview_question_purge'), true);
     assert.equal(isActionAllowed(main, 'Admin_apply_question_purge'), true);
 });

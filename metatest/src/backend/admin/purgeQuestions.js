@@ -1,7 +1,7 @@
 'use strict';
 
 const pool = require('../db');
-const { isSuperAdmin } = require('../middleware/adminAuth');
+const { sectionAllowed } = require('./sections');
 const {
     questionFingerprint,
     parsePurgeFilters,
@@ -33,14 +33,14 @@ const LOOSE_DELETE_TABLES = [
     'question_mabhas_tam24',
 ];
 
-function requireMainAdmin(req, res) {
+function requirePurgeAdmin(req, res) {
     const id = Number(req.admin?.id);
     if (!Number.isInteger(id) || id <= 0) {
         res.status(401).json({ success: false, message: 'Unauthorized' });
         return null;
     }
-    if (!isSuperAdmin(req.admin)) {
-        res.status(403).json({ success: false, message: 'فقط مدیر اصلی می‌تواند سوال‌های واردشده را پاک کند.' });
+    if (!sectionAllowed(req.admin, 'purge-questions')) {
+        res.status(403).json({ success: false, message: 'به حذف سوالات دسترسی نداری.' });
         return null;
     }
     return id;
@@ -167,7 +167,7 @@ function readUploads(body) {
 
 async function handleAdminPreviewQuestionPurge(req, res) {
     try {
-        if (requireMainAdmin(req, res) === null) return;
+        if (requirePurgeAdmin(req, res) === null) return;
         const filters = parsePurgeFilters(req.body?.filters || {});
         if (filters.error) return res.json({ success: false, message: filters.error });
         const uploads = readUploads(req.body);
@@ -317,7 +317,7 @@ function compactSnapshot(items) {
 }
 
 async function handleAdminApplyQuestionPurge(req, res) {
-    const adminId = requireMainAdmin(req, res);
+    const adminId = requirePurgeAdmin(req, res);
     if (adminId === null) return;
     if (req.body?.confirm !== 'پاکسازی') {
         return res.json({ success: false, message: 'پاکسازی تأیید نشده است.' });

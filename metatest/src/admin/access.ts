@@ -11,7 +11,7 @@ export const ADMIN_NAV: { id: string; label: string; superOnly?: boolean }[] = [
     { id: 'edit-questions', label: 'ویرایش سوال‌ها' },
     { id: 'insert-questions', label: 'افزودن سوال' },
     { id: 'question-display', label: 'نمایش سوالات' },
-    { id: 'purge-questions', label: 'پاکسازی ورود', superOnly: true },
+    { id: 'purge-questions', label: 'حذف سوالات' },
     { id: 'curriculum', label: 'سرفصل‌ها' },
     { id: 'pdf-library', label: 'کتابخانه PDF' },
     { id: 'subscription-plans', label: 'مدیریت اشتراک‌ها', superOnly: true },
@@ -46,7 +46,7 @@ export function canAccessSection(user: User | null | undefined, section: string)
     if (MAIN_ADMIN_ONLY.has(section)) return isMainAdmin;
     if (isMainAdmin) return true;
     if (!user.sections) {
-        return section !== 'ai-manager' && section !== 'admins' && section !== 'announcements' && section !== 'coins' && section !== 'push' && section !== 'blog' && section !== 'question-display';
+        return section !== 'ai-manager' && section !== 'admins' && section !== 'announcements' && section !== 'coins' && section !== 'push' && section !== 'blog' && section !== 'question-display' && section !== 'purge-questions';
     }
     return user.sections[section] === true;
 }

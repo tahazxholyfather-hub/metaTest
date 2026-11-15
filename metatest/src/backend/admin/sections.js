@@ -9,6 +9,7 @@ const ASSIGNABLE_SECTIONS = [
     { key: 'edit-questions', label: 'ویرایش سوال‌ها', defaultAllowed: true },
     { key: 'insert-questions', label: 'افزودن سوال', defaultAllowed: true },
     { key: 'question-display', label: 'نمایش سوالات', defaultAllowed: false },
+    { key: 'purge-questions', label: 'حذف سوالات', defaultAllowed: false },
     { key: 'curriculum', label: 'سرفصل‌ها', defaultAllowed: true },
     { key: 'pdf-library', label: 'کتابخانه PDF', defaultAllowed: true },
     { key: 'word-stats', label: 'فعالیت واژه‌ها', defaultAllowed: true },

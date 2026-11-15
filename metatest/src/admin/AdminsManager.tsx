@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Plus, Trash2, Loader2, AlertCircle, CheckCircle2, RefreshCw, Shield } from 'lucide-react';
 import { adminApi } from '../lib/adminApi';
 import type { User } from './AuthView';
+import type { AdminSection } from './access';
 import { CustomSelect } from './EditQuestions';
 
 interface AdminRow {
@@ -13,6 +14,7 @@ interface AdminRow {
     isSuper?: boolean;
     lastLogin?: string | null;
     createdAt?: string | null;
+    sections?: Record<string, boolean>;
 }
 
 const ROLE_OPTIONS = [
@@ -23,8 +25,16 @@ const ROLE_OPTIONS = [
 
 const EMPTY = { username: '', password: '', fullName: '', role: 'admin' };
 
+function defaultGrants(catalog: AdminSection[]) {
+    return Object.fromEntries(catalog.map((section) => [section.key, Boolean(section.defaultAllowed)]));
+}
+
 export default function AdminsManager({ currentUser }: { currentUser: User }) {
+    const isMain = Boolean(currentUser.isSuper || currentUser.id === 1);
     const [admins, setAdmins] = useState<AdminRow[]>([]);
+    const [catalog, setCatalog] = useState<AdminSection[]>([]);
+    const [grants, setGrants] = useState<Record<string, boolean>>({});
+    const [savingAccessId, setSavingAccessId] = useState<number | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -39,7 +49,17 @@ export default function AdminsManager({ currentUser }: { currentUser: User }) {
         try {
             const res = await adminApi.listAdmins();
             if (!res.success) throw new Error(res.message);
-            setAdmins((res.admins || []) as AdminRow[]);
+            let rows = (res.admins || []) as AdminRow[];
+            if (isMain) {
+                const access = await adminApi.listAccess();
+                if (!access.success) throw new Error(access.message || 'بارگذاری دسترسی‌ها ناموفق بود');
+                const nextCatalog = (access.catalog || []) as AdminSection[];
+                const byId = new Map((access.admins || []).map((row: AdminRow) => [Number(row.id), row.sections || {}]));
+                rows = rows.map((row) => ({ ...row, sections: byId.get(row.id) || {} }));
+                setCatalog(nextCatalog);
+                setGrants((prev) => (Object.keys(prev).length ? prev : defaultGrants(nextCatalog)));
+            }
+            setAdmins(rows);
         } catch (err: any) {
             setError(err.message || 'بارگذاری ادمین‌ها ناموفق بود');
         } finally {
@@ -59,12 +79,19 @@ export default function AdminsManager({ currentUser }: { currentUser: User }) {
         setError(null);
         try {
             const res = await adminApi.createAdmin(form);
-            if (!res.success) throw new Error(res.message);
+            if (!res.success || !res.admin?.id) throw new Error(res.message || 'ساخت ادمین ناموفق بود');
+            if (isMain) {
+                const saved = await adminApi.saveAccess(Number(res.admin.id), grants);
+                if (!saved.success) throw new Error(saved.message || 'ادمین ساخته شد ولی ذخیره دسترسی ناموفق بود');
+            }
             setSuccess(`ادمین ${form.username} ساخته شد`);
             setForm(EMPTY);
             await load();
+            if (isMain) setGrants(defaultGrants(catalog));
         } catch (err: any) {
-            setError(err.message);
+            const message = err.message || 'ساخت ادمین ناموفق بود';
+            await load();
+            setError(message);
         } finally {
             setSaving(false);
         }
@@ -94,6 +121,27 @@ export default function AdminsManager({ currentUser }: { currentUser: User }) {
         setResetPassword('');
     };
 
+    const toggleSection = async (admin: AdminRow, key: string) => {
+        if (!isMain || admin.id === 1 || savingAccessId != null) return;
+        const next = { ...(admin.sections || {}), [key]: !admin.sections?.[key] };
+        const payload: Record<string, boolean> = {};
+        for (const section of catalog) payload[section.key] = Boolean(next[section.key]);
+        setSavingAccessId(admin.id);
+        setError(null);
+        setAdmins((prev) => prev.map((row) => row.id === admin.id ? { ...row, sections: payload } : row));
+        try {
+            const res = await adminApi.saveAccess(admin.id, payload);
+            if (!res.success) throw new Error(res.message || 'ذخیره دسترسی ناموفق بود');
+            setSuccess(`دسترسی ${admin.username} ذخیره شد`);
+        } catch (err: any) {
+            const message = err.message || 'ذخیره دسترسی ناموفق بود';
+            await load();
+            setError(message);
+        } finally {
+            setSavingAccessId(null);
+        }
+    };
+
     const remove = async (admin: AdminRow) => {
         if (admin.id === 1 || admin.id === currentUser.id) return;
         if (!window.confirm(`ادمین «${admin.username}» حذف شود؟ این کار برگشت‌پذیر نیست.`)) return;
@@ -107,7 +155,7 @@ export default function AdminsManager({ currentUser }: { currentUser: User }) {
             <div className="flex flex-wrap items-center justify-between bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl p-4 shadow-sm">
                 <div>
                     <h1 className="text-sm font-bold flex items-center gap-2"><Shield size={16} /> ادمین‌ها</h1>
-                    <p className="text-xs text-[#86868b] mt-0.5">رمزها در پایگاه داده هش می‌شوند. مدیر اصلی مشخص می‌کند هر ادمین کدام بخش‌ها را ببیند.</p>
+                    <p className="text-xs text-[#86868b] mt-0.5">رمزها در پایگاه داده هش می‌شوند. هنگام ساخت، بخش‌هایی که این ادمین می‌بیند را روشن کن؛ حذف سوالات هم همین‌جاست.</p>
                 </div>
                 <button onClick={load} className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746]">
                     <RefreshCw size={14} /> بروزرسانی
@@ -132,10 +180,27 @@ export default function AdminsManager({ currentUser }: { currentUser: User }) {
                     <input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} placeholder="نام کامل" className="admin-input" />
                     <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="رمز (حداقل ۸)" className="admin-input" />
                     <CustomSelect searchable={false} value={form.role} options={ROLE_OPTIONS} onChange={(v) => setForm({ ...form, role: String(v || 'admin') })} />
-                    <button onClick={create} disabled={saving} className="flex items-center justify-center gap-2 bg-[#1a73e8] text-white rounded-xl text-xs font-bold py-3">
+                    <button onClick={create} disabled={saving || loading || (isMain && catalog.length === 0)} className="flex items-center justify-center gap-2 bg-[#1a73e8] text-white rounded-xl text-xs font-bold py-3 disabled:opacity-60">
                         {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} ساخت
                     </button>
                 </div>
+                {isMain && (
+                    <div className="flex flex-wrap gap-2 mt-4">
+                        {catalog.map((section) => {
+                            const on = grants[section.key] === true;
+                            return (
+                                <button
+                                    key={section.key}
+                                    type="button"
+                                    onClick={() => setGrants((prev) => ({ ...prev, [section.key]: !prev[section.key] }))}
+                                    className={`px-3 py-1.5 rounded-full text-[11px] font-bold border ${on ? 'bg-[#e8f0fe] text-[#1a73e8] border-[#1a73e8]' : 'border-[#dadce0] dark:border-[#444746] text-[#86868b]'}`}
+                                >
+                                    {section.label}
+                                </button>
+                            );
+                        })}
+                    </div>
+                )}
             </div>
 
             <div className="bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-[2rem] overflow-hidden shadow-sm">
@@ -157,7 +222,8 @@ export default function AdminsManager({ currentUser }: { currentUser: User }) {
                             </thead>
                             <tbody>
                                 {admins.map((a) => (
-                                    <tr key={a.id} className="border-t border-[#dadce0] dark:border-[#333537]">
+                                    <React.Fragment key={a.id}>
+                                    <tr className="border-t border-[#dadce0] dark:border-[#333537]">
                                         <td className="p-4 font-mono">{a.id}</td>
                                         <td className="p-4 font-semibold">{a.username}{a.id === 1 ? ' · اصلی' : ''}</td>
                                         <td className="p-4">{a.fullName || '—'}</td>
@@ -193,6 +259,29 @@ export default function AdminsManager({ currentUser }: { currentUser: User }) {
                                             )}
                                         </td>
                                     </tr>
+                                    {isMain && a.id !== 1 && (
+                                        <tr className="border-t border-[#dadce0]/60 dark:border-[#333537]">
+                                            <td colSpan={7} className="px-4 pb-4">
+                                                <div className="flex flex-wrap gap-2">
+                                                    {catalog.map((section) => {
+                                                        const on = a.sections?.[section.key] === true;
+                                                        return (
+                                                            <button
+                                                                key={section.key}
+                                                                type="button"
+                                                                disabled={savingAccessId === a.id}
+                                                                onClick={() => toggleSection(a, section.key)}
+                                                                className={`px-3 py-1.5 rounded-full text-[11px] font-bold border disabled:opacity-70 ${on ? 'bg-[#e8f0fe] text-[#1a73e8] border-[#1a73e8]' : 'border-[#dadce0] dark:border-[#444746] text-[#86868b]'}`}
+                                                            >
+                                                                {section.label}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )}
+                                    </React.Fragment>
                                 ))}
                             </tbody>
                         </table>

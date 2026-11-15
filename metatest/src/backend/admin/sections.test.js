@@ -52,6 +52,16 @@ test('question display stays off until it is granted', () => {
     assert.equal(isActionAllowed(blocked, 'get_question_display'), true);
 });
 
+test('purge stays off until the main admin grants it', () => {
+    assert.equal(resolveSections(4, [])['purge-questions'], false);
+    assert.equal(resolveSections(1, [])['purge-questions'], true);
+    const patch = sanitizeSectionPatch({ 'purge-questions': true, access: true });
+    assert.equal(patch['purge-questions'], true);
+    assert.equal(Object.prototype.hasOwnProperty.call(patch, 'access'), false);
+    const granted = { id: 4, sections: resolveSections(4, [{ section_key: 'purge-questions', allowed: 1 }]) };
+    assert.equal(isActionAllowed(granted, 'Admin_apply_question_purge'), true);
+});
+
 test('section patch only keeps known keys', () => {
     const patch = sanitizeSectionPatch({ blog: '1', dashboard: false, nope: true });
     assert.deepEqual(patch.blog, true);
