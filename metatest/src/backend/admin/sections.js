@@ -25,6 +25,32 @@ const ASSIGNABLE_SECTIONS = [
 
 const ASSIGNABLE_KEYS = new Set(ASSIGNABLE_SECTIONS.map((section) => section.key));
 
+// A role only fills the section switches. The main admin can change any
+// section afterward, so the role is a starting pattern, not a locked rank.
+const ROLE_PRESETS = [
+    { key: 'admin', label: 'مدیر', sections: null },
+    { key: 'selector', label: 'سلکتور', sections: ['dashboard', 'edit-questions', 'question-display', 'curriculum', 'reports'] },
+    { key: 'typing', label: 'تایپ', sections: ['dashboard', 'insert-questions', 'edit-questions', 'curriculum'] },
+];
+
+function sectionsForRole(role) {
+    const preset = ROLE_PRESETS.find((item) => item.key === role) || ROLE_PRESETS[0];
+    const picked = preset.sections ? new Set(preset.sections) : null;
+    const sections = {};
+    for (const section of ASSIGNABLE_SECTIONS) {
+        sections[section.key] = picked ? picked.has(section.key) : section.defaultAllowed;
+    }
+    return sections;
+}
+
+function roleCatalog() {
+    return ROLE_PRESETS.map((role) => ({
+        key: role.key,
+        label: role.label,
+        sections: sectionsForRole(role.key),
+    }));
+}
+
 // Flow actions that read shared curriculum lists are allowed from every
 // section that renders those dropdowns. Mutations stay on one section.
 const ACTION_SECTIONS = {
@@ -121,4 +147,7 @@ module.exports = {
     isActionAllowed,
     sanitizeSectionPatch,
     isSuperAdminId,
+    ROLE_PRESETS,
+    sectionsForRole,
+    roleCatalog,
 };

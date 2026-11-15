@@ -14,6 +14,12 @@ interface AccessAdmin {
     sections: Record<string, boolean>;
 }
 
+interface RolePreset {
+    key: string;
+    label: string;
+    sections: Record<string, boolean>;
+}
+
 const ROLE_OPTIONS = [
     { id: 'admin', title: 'مدیر' },
     { id: 'selector', title: 'سلکتور' },
@@ -29,8 +35,10 @@ function defaultGrants(catalog: AdminSection[]) {
 export default function AccessManager() {
     const [admins, setAdmins] = useState<AccessAdmin[]>([]);
     const [catalog, setCatalog] = useState<AdminSection[]>([]);
+    const [roles, setRoles] = useState<RolePreset[]>([]);
     const [loading, setLoading] = useState(true);
     const [savingId, setSavingId] = useState<number | null>(null);
+    const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
     const [creating, setCreating] = useState(false);
     const [form, setForm] = useState(EMPTY_FORM);
     const [grants, setGrants] = useState<Record<string, boolean>>({});
@@ -45,8 +53,11 @@ export default function AccessManager() {
             if (!res.success) throw new Error(res.message || 'بارگذاری دسترسی‌ها ناموفق بود');
             setAdmins((res.admins || []) as AccessAdmin[]);
             const nextCatalog = (res.catalog || []) as AdminSection[];
+            const nextRoles = (res.roles || []) as RolePreset[];
             setCatalog(nextCatalog);
-            setGrants((prev) => (Object.keys(prev).length ? prev : defaultGrants(nextCatalog)));
+            setRoles(nextRoles);
+            const starter = nextRoles.find((role) => role.key === 'admin')?.sections || defaultGrants(nextCatalog);
+            setGrants((prev) => (Object.keys(prev).length ? prev : starter));
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : 'بارگذاری دسترسی‌ها ناموفق بود');
         } finally {
@@ -73,13 +84,27 @@ export default function AccessManager() {
             setSuccess(`ادمین ${form.username} با دسترسی انتخاب‌شده ساخته شد`);
             setForm(EMPTY_FORM);
             await load();
-            setGrants(defaultGrants(catalog));
+            const starter = roles.find((role) => role.key === 'admin')?.sections || defaultGrants(catalog);
+            setGrants(starter);
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : 'ساخت ادمین ناموفق بود';
             await load();
             setError(message);
         } finally {
             setCreating(false);
+        }
+    };
+
+    const remove = async (admin: AccessAdmin) => {
+        setError(null);
+        try {
+            const res = await adminApi.deleteAdmin(admin.id);
+            if (!res.success) throw new Error(res.message || 'حذف ادمین ناموفق بود');
+            setPendingDeleteId(null);
+            setSuccess(`ادمین ${admin.username} حذف شد`);
+            await load();
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'حذف ادمین ناموفق بود');
         }
     };
 
@@ -135,7 +160,17 @@ export default function AccessManager() {
                     <input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} placeholder="نام کاربری" className="access-input" />
                     <input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} placeholder="نام کامل" className="access-input" />
                     <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="رمز (حداقل ۸)" className="access-input" autoComplete="new-password" />
-                    <CustomSelect searchable={false} value={form.role} options={ROLE_OPTIONS} onChange={(v) => setForm({ ...form, role: String(v || 'admin') })} />
+                    <CustomSelect
+                        searchable={false}
+                        value={form.role}
+                        options={roles.length ? roles.map((role) => ({ id: role.key, title: role.label })) : ROLE_OPTIONS}
+                        onChange={(v) => {
+                            const role = String(v || 'admin');
+                            const preset = roles.find((item) => item.key === role);
+                            setForm({ ...form, role });
+                            if (preset) setGrants({ ...preset.sections });
+                        }}
+                    />
                     <button type="button" onClick={create} disabled={creating || loading} className="flex items-center justify-center gap-2 bg-[#1a73e8] text-white rounded-xl text-xs font-bold py-3 disabled:opacity-60">
                         {creating ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} ساخت
                     </button>
@@ -173,7 +208,17 @@ export default function AccessManager() {
                                             {savingId === admin.id ? ' · در حال ذخیره' : ''}
                                         </p>
                                     </div>
-                                    {locked && <span className="text-[11px] font-bold text-[#1a73e8]">دسترسی کامل</span>}
+                                    <div className="flex items-center gap-2">
+                                        {locked && <span className="text-[11px] font-bold text-[#1a73e8]">دسترسی کامل</span>}
+                                        {!locked && (pendingDeleteId === admin.id ? (
+                                            <>
+                                                <button type="button" onClick={() => remove(admin)} className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-[11px] font-bold">بله، حذف شود</button>
+                                                <button type="button" onClick={() => setPendingDeleteId(null)} className="px-3 py-1.5 rounded-lg bg-[#f8f9fa] dark:bg-[#131314] text-[11px] font-bold">انصراف</button>
+                                            </>
+                                        ) : (
+                                            <button type="button" onClick={() => setPendingDeleteId(admin.id)} className="px-3 py-1.5 rounded-lg border border-red-200 text-red-600 text-[11px] font-bold">حذف ادمین</button>
+                                        ))}
+                                    </div>
                                 </div>
                                 <div className="flex flex-wrap gap-2">
                                     {catalog.map((section) => {

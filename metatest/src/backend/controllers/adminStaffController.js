@@ -145,19 +145,45 @@ const handleDeleteAdmin = async (req, res) => {
         if (id === SUPER_ADMIN_ID) {
             return res.json({ success: false, message: 'مدیر اصلی را نمی‌توان حذف کرد.' });
         }
-        if (id === req.admin.id) {
+        if (id === Number(req.admin.id)) {
             return res.json({ success: false, message: 'نمی‌توانی حساب خودت را حذف کنی.' });
         }
-        const [result] = await pool.query(`DELETE FROM tam24_admins WHERE id = ?`, [id]);
-        if (result.affectedRows === 0) {
-            return res.json({ success: false, message: 'ادمین پیدا نشد' });
+
+        const connection = await pool.getConnection();
+        try {
+            await connection.beginTransaction();
+            await runOptional(connection, `DELETE FROM tam24_admin_section_access WHERE admin_id = ?`, [id]);
+            await runOptional(connection, `UPDATE tam24_admin_section_access SET updated_by = NULL WHERE updated_by = ?`, [id]);
+            await runOptional(connection, `UPDATE tam24_admins SET created_by = NULL WHERE created_by = ?`, [id]);
+            const [result] = await connection.query(`DELETE FROM tam24_admins WHERE id = ?`, [id]);
+            await connection.commit();
+            if (result.affectedRows === 0) {
+                return res.json({ success: false, message: 'ادمین پیدا نشد' });
+            }
+            return res.json({ success: true });
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
         }
-        return res.json({ success: true });
     } catch (error) {
         console.error('Delete admin error:', error);
+        if (error && (error.errno === 1451 || error.code === 'ER_ROW_IS_REFERENCED_2' || error.code === 'ER_ROW_IS_REFERENCED')) {
+            return res.json({ success: false, message: 'این ادمین به داده‌های دیگر وصل است و حذف نشد. حساب را غیرفعال کن.' });
+        }
         return res.status(500).json({ success: false, message: 'حذف ادمین ناموفق بود' });
     }
 };
+
+async function runOptional(connection, sql, params) {
+    try {
+        await connection.query(sql, params);
+    } catch (error) {
+        if (error && (error.code === 'ER_NO_SUCH_TABLE' || error.errno === 1146 || error.code === 'ER_BAD_FIELD_ERROR' || error.errno === 1054)) return;
+        throw error;
+    }
+}
 
 module.exports = {
     handleListAdmins,

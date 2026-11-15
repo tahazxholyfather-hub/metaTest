@@ -9,6 +9,8 @@ const {
     isActionAllowed,
     sanitizeSectionPatch,
     sectionAllowed,
+    sectionsForRole,
+    roleCatalog,
 } = require('./sections');
 const { slugify, cleanCoverUrl } = require('../blog/text');
 const { readPlan } = require('../subscription/planInput');
@@ -50,6 +52,22 @@ test('question display stays off until it is granted', () => {
     assert.equal(isActionAllowed(blocked, 'Admin_update_question_display'), false);
     assert.equal(isActionAllowed(granted, 'Admin_get_question_display'), true);
     assert.equal(isActionAllowed(blocked, 'get_question_display'), true);
+});
+
+test('role presets fill sections and leave them editable', () => {
+    const typing = sectionsForRole('typing');
+    assert.equal(typing['insert-questions'], true);
+    assert.equal(typing['purge-questions'], false);
+    assert.equal(typing['admins'], false);
+    const selector = sectionsForRole('selector');
+    assert.equal(selector['edit-questions'], true);
+    assert.equal(selector['insert-questions'], false);
+    const manager = sectionsForRole('admin');
+    assert.equal(manager.dashboard, true);
+    assert.equal(manager['purge-questions'], false);
+    const roles = roleCatalog();
+    assert.equal(roles.length, 3);
+    assert.equal(Object.keys(roles[0].sections).includes('purge-questions'), true);
 });
 
 test('purge stays off until the main admin grants it', () => {

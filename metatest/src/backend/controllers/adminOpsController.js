@@ -4,7 +4,7 @@ const pool = require('../db');
 const { publicAdmin } = require('../middleware/adminAuth');
 const { backfillInsertedWords } = require('../admin/words');
 const { ensureOpsSchema } = require('../admin/schema');
-const { catalog, listAccess, saveSections } = require('../admin/access');
+const { catalog, listAccess, saveSections, roleCatalog } = require('../admin/access');
 const { resolveSections } = require('../admin/sections');
 const { parseDateRange, sqlBounds } = require('../admin/dateRange');
 
@@ -294,6 +294,7 @@ const handleListAccess = async (_req, res) => {
     return res.json({
         success: true,
         catalog: catalog(),
+        roles: roleCatalog(),
         admins: admins.map((row) => {
             const presented = publicAdmin(row);
             presented.sections = resolveSections(row.id, grouped.get(Number(row.id)) || []);

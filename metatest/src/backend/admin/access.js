@@ -8,6 +8,7 @@ const {
     isActionAllowed,
     sanitizeSectionPatch,
     sectionAllowed,
+    roleCatalog,
 } = require('./sections');
 
 async function loadSections(adminId) {
@@ -128,4 +129,5 @@ module.exports = {
     listAccess,
     saveSections,
     catalog,
+    roleCatalog,
 };
