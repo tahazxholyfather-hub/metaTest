@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
     Plus, X, Loader2, AlertCircle, CheckCircle2, Circle, Upload, FileUp,
-    PenLine, FileText, CheckSquare, Square, Send, Trash2
+    PenLine, FileText, CheckSquare, Square, Send, ImagePlus
 } from 'lucide-react';
 import { flowApi } from '../lib/authApi';
 import { CustomSelect, CustomMultiSelect, type SelectOption } from './EditQuestions';
@@ -11,12 +11,21 @@ import { MathRenderer } from '../components/ui/MathRenderer';
 
 
 // --- TYPES ---
+interface ImageSlot {
+    enabled: boolean;
+    dataUrl: string | null;
+    name: string;
+}
+
 interface ParsedQuestion {
     text: string;
     options: string[];
     correct_index: number;
     descriptive: string;
     checked: boolean;
+    stemImage: ImageSlot;
+    optionImages: ImageSlot[];
+    descImage: ImageSlot;
 }
 
 interface CurriculumData {
@@ -34,6 +43,82 @@ interface ManualForm {
 }
 
 const EMPTY_MANUAL: ManualForm = { text: '', options: ['', '', '', ''], correct_index: 1, descriptive: '' };
+const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif';
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+
+const emptyImage = (): ImageSlot => ({ enabled: false, dataUrl: null, name: '' });
+const emptyOptionImages = () => [emptyImage(), emptyImage(), emptyImage(), emptyImage()];
+
+function readImageFile(file: File): Promise<{ dataUrl: string; name: string }> {
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+        return Promise.reject(new Error('فقط jpg، png، webp یا gif مجاز است.'));
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+        return Promise.reject(new Error('حجم هر عکس باید کمتر از ۴ مگابایت باشد.'));
+    }
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve({ dataUrl: String(reader.result || ''), name: file.name });
+        reader.onerror = () => reject(new Error('خواندن عکس ناموفق بود.'));
+        reader.readAsDataURL(file);
+    });
+}
+
+function imagePayload(slot: ImageSlot) {
+    return slot.enabled ? slot.dataUrl : null;
+}
+
+function missingImageMessage(label: string, slot: ImageSlot) {
+    if (slot.enabled && !slot.dataUrl) {
+        return `${label}: سوییچ عکس روشن است. عکس را انتخاب کن یا سوییچ را خاموش کن.`;
+    }
+    return null;
+}
+
+function ImageSwitch({ slot, onChange, onError }: { slot: ImageSlot; onChange: (next: ImageSlot) => void; onError: (message: string) => void }) {
+    return (
+        <div className="mt-2">
+            <div className="inline-flex items-center gap-2">
+                <button
+                    type="button"
+                    role="switch"
+                    aria-checked={slot.enabled}
+                    onClick={() => onChange(slot.enabled ? emptyImage() : { ...slot, enabled: true })}
+                    className={`relative h-5 w-9 rounded-full transition-colors ${slot.enabled ? 'bg-[#1a73e8]' : 'bg-[#dadce0] dark:bg-[#444746]'}`}
+                >
+                    <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${slot.enabled ? 'left-4' : 'left-0.5'}`} />
+                </button>
+                <span className="text-[11px] font-bold text-[#86868b]">عکس دارد</span>
+            </div>
+            {slot.enabled && (
+                <label className="mt-2 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[#dadce0] px-3 py-3 text-[11px] font-bold text-[#86868b] hover:border-[#1a73e8] dark:border-[#444746]">
+                    {slot.dataUrl ? (
+                        <img src={slot.dataUrl} alt="" className="max-h-36 max-w-full rounded-lg object-contain" />
+                    ) : (
+                        <span className="flex items-center gap-2"><ImagePlus size={14} /> برای آپلود عکس کلیک کن</span>
+                    )}
+                    {slot.name && <span className="max-w-full truncate text-[10px]">{slot.name}</span>}
+                    <input
+                        type="file"
+                        accept={IMAGE_ACCEPT}
+                        className="hidden"
+                        onChange={async (e) => {
+                            const selected = e.target.files?.[0];
+                            e.target.value = '';
+                            if (!selected) return;
+                            try {
+                                const picked = await readImageFile(selected);
+                                onChange({ enabled: true, ...picked });
+                            } catch (err) {
+                                onError(err instanceof Error ? err.message : 'خواندن عکس ناموفق بود.');
+                            }
+                        }}
+                    />
+                </label>
+            )}
+        </div>
+    );
+}
 
 const LEVEL_OPTIONS: SelectOption[] = [
     { id: 'آسان', title: 'آسان' },
@@ -52,6 +137,9 @@ export default function InsertQuestions() {
 
     // Manual mode state
     const [manual, setManual] = useState<ManualForm>(EMPTY_MANUAL);
+    const [stemImage, setStemImage] = useState<ImageSlot>(emptyImage);
+    const [optionImages, setOptionImages] = useState<ImageSlot[]>(emptyOptionImages);
+    const [descImage, setDescImage] = useState<ImageSlot>(emptyImage);
     const [meta, setMeta] = useState<{
         subject_id: number | null;
         grade_ids: number[];
@@ -150,6 +238,10 @@ export default function InsertQuestions() {
     const handleManualSubmit = async (confirmDuplicates = false) => {
         if (!manual.text.trim()) { setErrorMessage('متن سوال الزامی است.'); return; }
         if (manual.options.some(o => !o.trim())) { setErrorMessage('هر ۴ گزینه الزامی است.'); return; }
+        const imageError = missingImageMessage('صورت سوال', stemImage)
+            || optionImages.map((slot, index) => missingImageMessage(`گزینه ${index + 1}`, slot)).find(Boolean)
+            || missingImageMessage('پاسخ تشریحی', descImage);
+        if (imageError) { setErrorMessage(imageError); return; }
 
         setIsSavingManual(true);
         setErrorMessage(null);
@@ -172,6 +264,9 @@ export default function InsertQuestions() {
                     options: manual.options.map(o => o.trim()),
                     correct_index: manual.correct_index,
                     descriptive: manual.descriptive.trim(),
+                    image: imagePayload(stemImage),
+                    option_images: optionImages.map(imagePayload),
+                    descriptive_image: imagePayload(descImage),
                 }],
             });
             const res = response.data || response;
@@ -185,6 +280,9 @@ export default function InsertQuestions() {
                 setSuccessMessage(`سوال ثبت شد (شناسه: ${res.inserted_ids?.[0] ?? '—'}). سوال‌های جدید تا بازبینی غیرفعال می‌مانند.`);
                 // Keep metadata selections for faster batch entry, reset the content
                 setManual(EMPTY_MANUAL);
+                setStemImage(emptyImage());
+                setOptionImages(emptyOptionImages());
+                setDescImage(emptyImage());
             } else {
                 setErrorMessage(res.message || 'ثبت سوال ناموفق بود.');
             }
@@ -228,7 +326,13 @@ export default function InsertQuestions() {
             const res = response.data || response;
 
             if (res.success) {
-                setParsed((res.questions || []).map((q: any) => ({ ...q, checked: true })));
+                setParsed((res.questions || []).map((q: any) => ({
+                    ...q,
+                    checked: true,
+                    stemImage: emptyImage(),
+                    optionImages: emptyOptionImages(),
+                    descImage: emptyImage(),
+                })));
                 setParseWarnings(res.errors || []);
                 if ((res.questions || []).length === 0) {
                     setErrorMessage('سوال معتبری از فایل استخراج نشد.');
@@ -259,6 +363,14 @@ export default function InsertQuestions() {
     const handleAutoSubmit = async (confirmDuplicates = false) => {
         const selected = parsed.filter(q => q.checked);
         if (selected.length === 0) { setErrorMessage('سوالی انتخاب نشده.'); return; }
+        for (let index = 0; index < parsed.length; index++) {
+            const q = parsed[index];
+            if (!q.checked) continue;
+            const imageError = missingImageMessage(`سوال ${index + 1}، صورت سوال`, q.stemImage)
+                || q.optionImages.map((slot, optIdx) => missingImageMessage(`سوال ${index + 1}، گزینه ${optIdx + 1}`, slot)).find(Boolean)
+                || missingImageMessage(`سوال ${index + 1}، پاسخ تشریحی`, q.descImage);
+            if (imageError) { setErrorMessage(imageError); return; }
+        }
 
         setIsSubmitting(true);
         setErrorMessage(null);
@@ -282,6 +394,9 @@ export default function InsertQuestions() {
                     options: q.options,
                     correct_index: q.correct_index,
                     descriptive: q.descriptive,
+                    image: imagePayload(q.stemImage),
+                    option_images: q.optionImages.map(imagePayload),
+                    descriptive_image: imagePayload(q.descImage),
                 })),
             });
             const res = response.data || response;
@@ -410,6 +525,7 @@ export default function InsertQuestions() {
                                 className="w-full h-40 bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-xl p-4 text-sm font-medium leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-[#1a73e8] custom-scrollbar text-right"
                                 dir="rtl"
                             />
+                            <ImageSwitch slot={stemImage} onChange={setStemImage} onError={setErrorMessage} />
                         </div>
 
                         {/* Options */}
@@ -425,13 +541,20 @@ export default function InsertQuestions() {
                                                 ? <CheckCircle2 className="text-green-500" />
                                                 : <Circle className="text-gray-300 dark:text-gray-600" />}
                                         </button>
-                                        <textarea
-                                            value={optionText}
-                                            onChange={(e) => handleManualOptionChange(index, e.target.value)}
-                                            placeholder={`گزینه ${index + 1}...`}
-                                            className="w-full h-24 bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-xl p-3 text-xs font-medium resize-y focus:outline-none focus:ring-2 focus:ring-[#1a73e8] custom-scrollbar text-right"
-                                            dir="rtl"
-                                        />
+                                        <div className="w-full">
+                                            <textarea
+                                                value={optionText}
+                                                onChange={(e) => handleManualOptionChange(index, e.target.value)}
+                                                placeholder={`گزینه ${index + 1}...`}
+                                                className="w-full h-24 bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-xl p-3 text-xs font-medium resize-y focus:outline-none focus:ring-2 focus:ring-[#1a73e8] custom-scrollbar text-right"
+                                                dir="rtl"
+                                            />
+                                            <ImageSwitch
+                                                slot={optionImages[index]}
+                                                onChange={(next) => setOptionImages((prev) => prev.map((item, i) => i === index ? next : item))}
+                                                onError={setErrorMessage}
+                                            />
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -447,6 +570,7 @@ export default function InsertQuestions() {
                                 className="w-full h-32 bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-xl p-4 text-sm font-medium leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-[#1a73e8] custom-scrollbar text-right"
                                 dir="rtl"
                             />
+                            <ImageSwitch slot={descImage} onChange={setDescImage} onError={setErrorMessage} />
                         </div>
                     </div>
 
@@ -495,6 +619,9 @@ export default function InsertQuestions() {
                         </div>
                         <p className="text-[10px] text-[#86868b] mt-3 leading-relaxed" dir="ltr">
                             Expected format inside the document: <code className="font-mono">&lt;q&gt;...&lt;/q&gt; &lt;o1&gt;...&lt;/o1&gt; ... &lt;o4&gt;...&lt;/o4&gt; &lt;ans&gt;1-4&lt;/ans&gt; &lt;desc&gt;...&lt;/desc&gt;</code> (desc is optional).
+                        </p>
+                        <p className="mt-2 text-[10px] leading-relaxed text-[#86868b]" dir="rtl">
+                            فایل ورد فقط متن را می‌آورد. اگر سوال، گزینه یا پاسخ تشریحی عکس دارد، بعد از استخراج سوییچ «عکس دارد» را روشن کن و عکس را بگذار.
                         </p>
                     </div>
 
@@ -590,6 +717,11 @@ export default function InsertQuestions() {
                                                 <MathRenderer text={q.text} subject={meta.subject_id ?? undefined} inline dir="rtl" className="text-right" />
                                             </p>
                                         </div>
+                                        <ImageSwitch
+                                            slot={q.stemImage}
+                                            onChange={(next) => setParsed((prev) => prev.map((item, i) => i === index ? { ...item, stemImage: next } : item))}
+                                            onError={setErrorMessage}
+                                        />
 
                                         <div className="extract-options">
                                             {q.options.map((opt, optIdx) => (
@@ -605,7 +737,17 @@ export default function InsertQuestions() {
                                                     {q.correct_index === optIdx + 1
                                                         ? <CheckCircle2 size={14} className="shrink-0 mt-0.5" />
                                                         : <Circle size={14} className="shrink-0 mt-0.5 text-gray-300 dark:text-gray-600" />}
-                                                    <MathRenderer text={opt} subject={meta.subject_id ?? undefined} dir="rtl" className="text-right" />
+                                                    <div className="min-w-0 flex-1">
+                                                        <MathRenderer text={opt} subject={meta.subject_id ?? undefined} dir="rtl" className="text-right" />
+                                                        <ImageSwitch
+                                                            slot={q.optionImages[optIdx]}
+                                                            onChange={(next) => setParsed((prev) => prev.map((item, i) => i === index ? {
+                                                                ...item,
+                                                                optionImages: item.optionImages.map((image, imageIdx) => imageIdx === optIdx ? next : image),
+                                                            } : item))}
+                                                            onError={setErrorMessage}
+                                                        />
+                                                    </div>
                                                 </div>
                                             ))}
                                         </div>
@@ -616,6 +758,14 @@ export default function InsertQuestions() {
                                                 <MathRenderer text={q.descriptive} subject={meta.subject_id ?? undefined} dir="rtl" className="text-right" />
                                             </div>
                                         )}
+                                        <div className="text-right" dir="rtl">
+                                            <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[#86868b]">عکس پاسخ تشریحی</span>
+                                            <ImageSwitch
+                                                slot={q.descImage}
+                                                onChange={(next) => setParsed((prev) => prev.map((item, i) => i === index ? { ...item, descImage: next } : item))}
+                                                onError={setErrorMessage}
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             ))}

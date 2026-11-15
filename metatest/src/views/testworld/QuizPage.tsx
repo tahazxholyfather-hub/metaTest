@@ -116,7 +116,7 @@ const AvatarList: React.FC<{ avatars: AvatarData[] }> = ({ avatars }) => (
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Option = { id: number; text: string; subject_id?: number };
+type Option = { id: number; text: string; subject_id?: number; image?: string | null };
 
 type Question = {
     id: number;
@@ -1375,8 +1375,11 @@ export default function QuizPage({ quizData: initialQuizData, onExit }: QuizPage
                                                                         )}
                                                                     </AnimatePresence>
                                                                 </div>
-                                                                <div className={`text-sm md:text-base flex-1 transition-colors ${isSelected ? 'text-[var(--accent)] font-bold' : 'text-zinc-700 dark:text-zinc-300 font-medium'}`}>
+                                                                <div className={`min-w-0 flex-1 text-sm md:text-base transition-colors ${isSelected ? 'text-[var(--accent)] font-bold' : 'text-zinc-700 dark:text-zinc-300 font-medium'}`}>
                                                                     <MathRenderer text={decodeHtmlEntities(opt.text)} subject={q.subject_id} />
+                                                                    {opt.image && (
+                                                                        <img src={`${baseImageUrl}${opt.image}`} alt="" loading="lazy" className="mt-2 block h-auto max-h-40 w-auto max-w-full rounded-lg object-contain" />
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                         </button>

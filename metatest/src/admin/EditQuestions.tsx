@@ -299,10 +299,10 @@ const FilterSwitch = ({ label, value, options, onChange, disabled = false, wrap 
 
 
 // --- TYPES ---
-interface Option { id: number; text: string; is_correct: boolean; }
+interface Option { id: number; text: string; is_correct: boolean; image?: string | null; }
 interface QuestionData {
     id: number; text: string; options: Option[]; correctOptionId: number | null;
-    descriptiveAnswer: string; images: string[];
+    descriptiveAnswer: string; descriptiveImage?: string | null; images: string[];
     subject: number | null; subject_title: string;
     grade: number | null; grade_title: string;
     chapter: number | null; chapter_title: string;
@@ -548,6 +548,7 @@ export default function EditQuestions({
         options: q.options || [],
         correctOptionId: q.options?.find((o: Option) => o.is_correct)?.id || null,
         descriptiveAnswer: q.descriptiveAnswer || "",
+        descriptiveImage: q.descriptiveImage || null,
         images: q.images || [],
         subject: q.subject || q.subject_id || null,
         subject_title: q.subject_title || '----',
@@ -937,6 +938,9 @@ export default function EditQuestions({
                                                         <MathRenderer text={option.text} subject={question.subject ?? undefined} />
                                                     </div>
                                                 )}
+                                                {option.image && (
+                                                    <img src={`${BASE_URL}${option.image}`} alt="" className="mt-2 max-h-40 w-auto max-w-full rounded-lg border border-[#dadce0] object-contain dark:border-[#444746]" />
+                                                )}
                                             </div>
                                         </div>
                                     ))}
@@ -952,6 +956,9 @@ export default function EditQuestions({
                                     <div className="text-sm font-medium p-4 rounded-xl bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] min-h-[6rem]">
                                         <MathRenderer text={question.descriptiveAnswer} subject={question.subject ?? undefined} />
                                     </div>
+                                )}
+                                {question.descriptiveImage && (
+                                    <img src={`${BASE_URL}${question.descriptiveImage}`} alt="" className="mt-3 max-h-56 w-auto max-w-full rounded-lg border border-[#dadce0] object-contain dark:border-[#444746]" />
                                 )}
                             </div>
                         </div>

@@ -2,6 +2,7 @@ const pool = require('../db');
 const { ensureQuestionTagTables, joinOnTag, matchTagIn, majorityGradeSql, filterTopicsForSelectedGrades, toPositiveIds } = require('../utils/questionTags');
 const entitlements = require('../subscription/entitlements');
 const usage = require('../subscription/usage');
+const { optionImageSql, descriptiveImageSql } = require('../admin/questionImages');
 
 
 
@@ -488,10 +489,10 @@ const buildQuestionFilters = (body) => {
 
 const fetchQuestionOptions = async (questionId) => {
     const [rows] = await pool.query(
-        "SELECT id, option_text FROM options_tam24 WHERE question_id = ? ORDER BY id ASC",
+        `SELECT id, option_text, ${optionImageSql()} FROM options_tam24 WHERE question_id = ? ORDER BY id ASC`,
         [questionId]
     );
-    return rows.map(opt => ({ id: Number(opt.id), text: opt.option_text }));
+    return rows.map(opt => ({ id: Number(opt.id), text: opt.option_text, image: opt.image_name || null }));
 };
 
 const fetchQuestionImages = async (questionId) => {
@@ -936,7 +937,7 @@ const handleCheckAnswer = async (req, res) => {
         }
 
         const [descRows] = await conn.query(
-            "SELECT answer_text FROM descriptive_answers_tam24 WHERE question_id = ? LIMIT 1",
+            `SELECT answer_text, ${descriptiveImageSql()} FROM descriptive_answers_tam24 WHERE question_id = ? LIMIT 1`,
             [questionId]
         );
 
@@ -955,6 +956,7 @@ const handleCheckAnswer = async (req, res) => {
             isCorrect,
             correctOptionId,
             descriptiveText: descRows.length > 0 ? descRows[0].answer_text : null,
+            descriptiveImage: descRows.length > 0 ? (descRows[0].image_name || null) : null,
             subjectTitle: subjectRows[0]?.subject_title,
             subjectId: subjectRows[0]?.subject_id,
             option_stats,
@@ -1006,6 +1008,7 @@ const handleCheckAnswer = async (req, res) => {
         is_correct: checked.isCorrect,
         correct_option_id: checked.correctOptionId,
         descriptive_answer: solutionAccess.allowed ? checked.descriptiveText : null,
+        descriptive_image: solutionAccess.allowed ? (checked.descriptiveImage || null) : null,
         solution_access: {
             locked: solutionAccess.locked,
             allowed: solutionAccess.allowed,

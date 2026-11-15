@@ -195,7 +195,7 @@ export default function PrintResultSheet({ activeUser, questions, lessonsData, q
 
                             {/* Options */}
                             {q.options.length > 0 && (
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: q.description ? 10 : 0 }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: (q.description || q.descriptionImage) ? 10 : 0 }}>
                                     {q.options.map((opt, idx) => {
                                         const isCorrect  = opt.id === q.correctAnswer;
                                         const isSelected = opt.id === q.selected;
@@ -209,6 +209,9 @@ export default function PrintResultSheet({ activeUser, questions, lessonsData, q
                                                 <span style={{ fontWeight: 700, opacity: 0.8 }}>{idx + 1})</span>
                                                 <span style={{ flex: 1 }}>
                                                     <MathRenderer text={String(opt.text || opt.option_text || '')} inline />
+                                                    {opt.image && (
+                                                        <img src={`/images/questions/${opt.image}`} alt="" style={{ display: 'block', maxWidth: '100%', maxHeight: 140, marginTop: 6, objectFit: 'contain' }} />
+                                                    )}
                                                 </span>
                                                 {isCorrect && <span style={{ fontWeight: 900, fontSize: '11pt' }}>✓</span>}
                                                 {isSelected && !isCorrect && <span style={{ fontWeight: 900, fontSize: '11pt' }}>✗</span>}
@@ -219,10 +222,13 @@ export default function PrintResultSheet({ activeUser, questions, lessonsData, q
                             )}
 
                             {/* Description */}
-                            {q.description && (
+                            {(q.description || q.descriptionImage) && (
                                 <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 6, padding: '8px 12px', fontSize: '9pt', color: '#1e40af', lineHeight: 1.6 }}>
                                     <strong style={{ fontWeight: 700 }}>پاسخ تشریحی: </strong>
-                                    <MathRenderer text={String(q.description || '')} inline />
+                                    {q.description && <MathRenderer text={String(q.description || '')} inline />}
+                                    {q.descriptionImage && (
+                                        <img src={`/images/questions/${q.descriptionImage}`} alt="" style={{ display: 'block', maxWidth: '100%', maxHeight: 220, marginTop: 8, objectFit: 'contain' }} />
+                                    )}
                                 </div>
                             )}
                         </div>

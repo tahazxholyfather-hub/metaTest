@@ -33,6 +33,7 @@ const { ensureContactSchema } = require('./controllers/contactController');
 const chemballController = require('./controllers/chemballController');
 const pushService = require('./push/pushService');
 const { ensureAdminSchema } = require('./middleware/adminAuth');
+const { ensureQuestionImageColumns } = require('./admin/questionImages');
 const { loadRuntimeOverlayFromDb } = require('./controllers/adminAiController');
 const { ensureDiamondPlanActive } = require('./controllers/paymentController');
 const app = express();
@@ -586,6 +587,7 @@ app.listen(PORT, () => {
     ensureVisitorCountIds()
         .catch((err) => console.error('[db] visitor count repair failed:', err.message));
     ensureAdminSchema()
+        .then(() => ensureQuestionImageColumns())
         .then(() => ensureBlogSchema())
         .then(() => ensureContactSchema())
         .then(() => loadRuntimeOverlayFromDb())

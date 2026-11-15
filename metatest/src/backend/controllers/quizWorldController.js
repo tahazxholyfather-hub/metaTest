@@ -20,6 +20,7 @@ const {
     filterTopicsForSelectedGrades,
     annotateTopicGrade,
 } = require('../utils/questionTags');
+const { optionImageSql, descriptiveImageSql } = require('../admin/questionImages');
 const entitlements = require('../subscription/entitlements');
 const usage = require('../subscription/usage');
 const { ensureVisitorCountIds } = require('../visitorCounts');
@@ -452,10 +453,10 @@ const generateShareCode = () => {
 
 const fetchQuestionOptions = async (questionId) => {
     const [rows] = await pool.query(
-        "SELECT id, option_text FROM options_tam24 WHERE question_id = ? ORDER BY id ASC",
+        `SELECT id, option_text, ${optionImageSql()} FROM options_tam24 WHERE question_id = ? ORDER BY id ASC`,
         [questionId]
     );
-    return rows.map(opt => ({ id: Number(opt.id), text: opt.option_text }));
+    return rows.map(opt => ({ id: Number(opt.id), text: opt.option_text, image: opt.image_name || null }));
 };
 
 async function attachQuestionImages(connection, questionIds, questionDetailsMap) {
@@ -556,12 +557,12 @@ const handleSearchBankQuestions = async (req, res) => {
             const ids = rows.map((r) => Number(r.id)).filter((n) => n > 0);
             if (ids.length) {
                 const [optRows] = await pool.query(
-                    `SELECT id, question_id, option_text FROM options_tam24 WHERE question_id IN (${ids.map(() => '?').join(',')}) ORDER BY id ASC`,
+                    `SELECT id, question_id, option_text, ${optionImageSql()} FROM options_tam24 WHERE question_id IN (${ids.map(() => '?').join(',')}) ORDER BY id ASC`,
                     ids
                 );
                 for (const opt of optRows) {
                     if (!optionsByQuestion[opt.question_id]) optionsByQuestion[opt.question_id] = [];
-                    optionsByQuestion[opt.question_id].push({ id: Number(opt.id), text: opt.option_text });
+                    optionsByQuestion[opt.question_id].push({ id: Number(opt.id), text: opt.option_text, image: opt.image_name || null });
                 }
             }
         }
@@ -626,14 +627,14 @@ const handleGetBankQuestionAnswer = async (req, res) => {
         }
 
         const [optRows] = await pool.query(
-            `SELECT id, option_text, COALESCE(CAST(is_correct AS UNSIGNED), 0) AS is_correct
+            `SELECT id, option_text, COALESCE(CAST(is_correct AS UNSIGNED), 0) AS is_correct, ${optionImageSql()}
              FROM options_tam24
              WHERE question_id = ?
              ORDER BY id ASC`,
             [questionId]
         );
         const [descRows] = await pool.query(
-            'SELECT answer_text FROM descriptive_answers_tam24 WHERE question_id = ? LIMIT 1',
+            `SELECT answer_text, ${descriptiveImageSql()} FROM descriptive_answers_tam24 WHERE question_id = ? LIMIT 1`,
             [questionId]
         );
 
@@ -641,6 +642,7 @@ const handleGetBankQuestionAnswer = async (req, res) => {
             id: Number(row.id),
             text: row.option_text,
             is_correct: parseIsCorrectFlag(row.is_correct),
+            image: row.image_name || null,
         }));
         const correct = options.find((opt) => opt.is_correct);
 
@@ -650,6 +652,7 @@ const handleGetBankQuestionAnswer = async (req, res) => {
             options,
             correct_option_id: correct ? correct.id : null,
             descriptive_answer: descRows.length > 0 ? descRows[0].answer_text : null,
+            descriptive_image: descRows.length > 0 ? (descRows[0].image_name || null) : null,
         });
     } catch (error) {
         console.error('❌ SQL Error in handleGetBankQuestionAnswer:', error);
@@ -1442,7 +1445,8 @@ const handleGetQuizQuestions = async (req, res) => {
 
                 const options = rawOptions.map((opt) => ({
                     id: opt.id,
-                    text: opt.text || opt.option_text
+                    text: opt.text || opt.option_text,
+                    image: opt.image || null,
                 }));
 
                 return {
@@ -1711,6 +1715,7 @@ async function handleSubmitQuizAnswers(req, res) {
             submittedAnswers: filteredAnswers,
             correctOptionsMap: metadata.correctOptionsMap,
             descriptiveMap: metadata.descriptiveMap,
+            descriptiveImageMap: metadata.descriptiveImageMap,
             questionMetaMap: metadata.questionMetaMap
         });
 
@@ -2009,7 +2014,7 @@ async function getQuizEvaluationMetadata(connection, questionIds, userId) {
     `, questionIds);
 
     const [descriptiveRows] = await connection.query(`
-        SELECT question_id, answer_text
+        SELECT question_id, answer_text, ${descriptiveImageSql()}
         FROM descriptive_answers_tam24
         WHERE question_id IN (${placeholders})
     `, questionIds);
@@ -2037,8 +2042,10 @@ async function getQuizEvaluationMetadata(connection, questionIds, userId) {
     }
 
     const descriptiveMap = {};
+    const descriptiveImageMap = {};
     for (const row of descriptiveRows) {
         descriptiveMap[row.question_id] = row.answer_text;
+        descriptiveImageMap[row.question_id] = row.image_name || null;
     }
 
     const questionMetaMap = {};
@@ -2058,6 +2065,7 @@ async function getQuizEvaluationMetadata(connection, questionIds, userId) {
     return {
         correctOptionsMap,
         descriptiveMap,
+        descriptiveImageMap,
         questionMetaMap,
         existingAnswersMap
     };
@@ -2127,6 +2135,7 @@ function evaluateQuizSubmission({
                                     submittedAnswers,
                                     correctOptionsMap,
                                     descriptiveMap,
+                                    descriptiveImageMap = {},
                                     questionMetaMap
                                 }) {
     let correctCount = 0;
@@ -2197,7 +2206,8 @@ function evaluateQuizSubmission({
         resultData[qId] = {
             correct_option_id: correctOptionId,
             descriptive_answer: {
-                text: descriptiveMap[qId] || null
+                text: descriptiveMap[qId] || null,
+                image: descriptiveImageMap[qId] || null,
             },
             status,
             level,
@@ -2574,6 +2584,7 @@ async function handleInternalGradeQuiz(req, res) {
             submittedAnswers: formattedAnswers,
             correctOptionsMap: metadata.correctOptionsMap,
             descriptiveMap: metadata.descriptiveMap,
+            descriptiveImageMap: metadata.descriptiveImageMap,
             questionMetaMap: metadata.questionMetaMap
         });
 
@@ -2791,7 +2802,8 @@ async function handleGetQuizResult(req, res) {
                     q.id AS question_id,
                     q.question_text,
                     o.id AS option_id,
-                    o.option_text
+                    o.option_text,
+                    ${optionImageSql('o')}
                 FROM questions_tam24 q
                 LEFT JOIN options_tam24 o ON q.id = o.question_id
                 WHERE q.id IN (${placeholders})
@@ -2813,6 +2825,7 @@ async function handleGetQuizResult(req, res) {
                     questionDetailsMap[row.question_id].options.push({
                         id: row.option_id,
                         text: row.option_text,
+                        image: row.image_name || null,
                     });
                 }
             }
@@ -3052,7 +3065,8 @@ const handleGetQuizResultByUserAndQuiz = async (req, res) => {
                     q.id AS question_id,
                     q.question_text,
                     o.id AS option_id,
-                    o.option_text
+                    o.option_text,
+                    ${optionImageSql('o')}
                 FROM questions_tam24 q
                 LEFT JOIN options_tam24 o ON q.id = o.question_id
                 WHERE q.id IN (${placeholders})
@@ -3074,6 +3088,7 @@ const handleGetQuizResultByUserAndQuiz = async (req, res) => {
                     questionDetailsMap[row.question_id].options.push({
                         id: row.option_id,
                         text: row.option_text,
+                        image: row.image_name || null,
                     });
                 }
             }

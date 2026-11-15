@@ -12,6 +12,7 @@ descriptive_answers_tam24	CREATE TABLE `descriptive_answers_tam24` (
  `id` int(11) NOT NULL AUTO_INCREMENT,
  `question_id` int(11) NOT NULL,
  `answer_text` text NOT NULL,
+ `image_name` varchar(255) DEFAULT NULL,
  `created_at` datetime DEFAULT current_timestamp(),
  PRIMARY KEY (`id`),
  KEY `fk_desc_question` (`question_id`),
@@ -66,6 +67,7 @@ options_tam24	CREATE TABLE `options_tam24` (
  `question_id` int(11) NOT NULL,
  `option_text` text NOT NULL,
  `is_correct` tinyint(1) DEFAULT 0,
+ `image_name` varchar(255) DEFAULT NULL,
  PRIMARY KEY (`id`),
  KEY `fk_options_question` (`question_id`),
  CONSTRAINT `fk_options_question` FOREIGN KEY (`question_id`) REFERENCES `questions_tam24` (`id`) ON DELETE CASCADE

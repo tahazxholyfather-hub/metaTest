@@ -31,6 +31,14 @@ const {
 const { withSections } = require('../admin/access');
 const { countWords, recordWordEvent, measureEditDelta } = require('../admin/words');
 const { findExactDuplicates } = require('../admin/purgeQuestions');
+const {
+    validateQuestionImages,
+    ensureQuestionImageColumns,
+    saveQuestionImage,
+    optionImageSql,
+    descriptiveImageSql,
+    questionHasImageSql,
+} = require('../admin/questionImages');
 
 // --- PDF Library upload configuration ---
 // Defaults to the same web root used for avatar uploads in server.js
@@ -117,9 +125,9 @@ const handleGetQuestionForEdit = async (req, res) => {
 
             // Filter by presence/absence of images
             if (filters.has_image === 'with') {
-                sql += ` AND EXISTS (SELECT 1 FROM question_images_tam24 qi WHERE qi.question_id = q.id)`;
+                sql += ` AND ${questionHasImageSql('q')}`;
             } else if (filters.has_image === 'without') {
-                sql += ` AND NOT EXISTS (SELECT 1 FROM question_images_tam24 qi WHERE qi.question_id = q.id)`;
+                sql += ` AND NOT ${questionHasImageSql('q')}`;
             }
 
             // Typists sometimes leave the correct option unmarked.
@@ -170,15 +178,19 @@ const handleGetQuestionForEdit = async (req, res) => {
         const topicTitles = tags.topic_titles.length ? tags.topic_titles : (q.topic_title ? [q.topic_title] : []);
         const chapterTitles = tags.chapter_titles.length ? tags.chapter_titles : (q.chapter_title ? [q.chapter_title] : []);
 
+        await ensureQuestionImageColumns().catch((err) => {
+            console.error('[questions] image columns:', err.message);
+        });
+
         // Fetch Options
         const [options] = await pool.query(
-            "SELECT id, option_text, COALESCE(CAST(is_correct AS UNSIGNED), 0) AS is_correct FROM options_tam24 WHERE question_id = ? ORDER BY id ASC",
+            `SELECT id, option_text, COALESCE(CAST(is_correct AS UNSIGNED), 0) AS is_correct, ${optionImageSql()} FROM options_tam24 WHERE question_id = ? ORDER BY id ASC`,
             [q.id]
         );
 
         // Fetch Descriptive Answer
         const [desc] = await pool.query(
-            "SELECT answer_text FROM descriptive_answers_tam24 WHERE question_id = ?",
+            `SELECT answer_text, ${descriptiveImageSql()} FROM descriptive_answers_tam24 WHERE question_id = ?`,
             [q.id]
         );
 
@@ -193,8 +205,9 @@ const handleGetQuestionForEdit = async (req, res) => {
             question: {
                 id: q.id,
                 text: q.question_text,
-                options: options.map(o => ({ id: o.id, text: o.option_text, is_correct: o.is_correct == 1 })),
+                options: options.map(o => ({ id: o.id, text: o.option_text, is_correct: o.is_correct == 1, image: o.image_name || null })),
                 descriptiveAnswer: desc.length > 0 ? desc[0].answer_text : "",
+                descriptiveImage: desc.length > 0 ? (desc[0].image_name || null) : null,
                 images: images.map(i => i.image_name),
 
                 subject: q.subject_id,
@@ -1056,6 +1069,21 @@ const handleAdminInsertQuestions = async (req, res) => {
             if (!ci || ci < 1 || ci > 4) {
                 return res.json({ success: false, message: `Question ${i + 1}: correct answer index must be 1-4.` });
             }
+            try {
+                validateQuestionImages(q);
+            } catch (imageError) {
+                return res.json({ success: false, message: `سوال ${i + 1}: ${imageError.message}` });
+            }
+        }
+
+        const hasImages = questions.some((q) => q.image || q.descriptive_image || (Array.isArray(q.option_images) && q.option_images.some(Boolean)));
+        if (hasImages) {
+            try {
+                await ensureQuestionImageColumns();
+            } catch (schemaError) {
+                console.error('[questions] image columns:', schemaError);
+                return res.json({ success: false, message: 'ستون عکس روی پایگاه‌داده آماده نشد.' });
+            }
         }
 
         const confirmed = req.body.confirm_duplicates === true || req.body.confirm_duplicates === 1 || req.body.confirm_duplicates === 'true';
@@ -1081,9 +1109,11 @@ const handleAdminInsertQuestions = async (req, res) => {
 
         const insertedIds = [];
         const failed = [];
+        let lastImageError = null;
 
         for (let i = 0; i < questions.length; i++) {
             const q = questions[i];
+            let questionId = null;
             try {
                 const [qResult] = await pool.query(
                     `INSERT INTO questions_tam24
@@ -1102,21 +1132,44 @@ const handleAdminInsertQuestions = async (req, res) => {
                         adminId
                     ]
                 );
-                const questionId = qResult.insertId;
+                questionId = qResult.insertId;
                 await saveQuestionTags(questionId, { gradeIds, topicIds, chapterIds });
 
-                const correctIndex = parseInt(q.correct_index, 10);
-                for (let optIdx = 0; optIdx < 4; optIdx++) {
+                const stemImage = await saveQuestionImage(q.image);
+                if (stemImage) {
                     await pool.query(
-                        "INSERT INTO options_tam24 (question_id, option_text, is_correct) VALUES (?, ?, ?)",
-                        [questionId, String(q.options[optIdx]).trim(), optIdx + 1 === correctIndex ? 1 : 0]
+                        'INSERT INTO question_images_tam24 (question_id, image_name) VALUES (?, ?)',
+                        [questionId, stemImage]
                     );
                 }
 
-                if (q.descriptive && String(q.descriptive).trim() !== '') {
+                const correctIndex = parseInt(q.correct_index, 10);
+                const optionImages = Array.isArray(q.option_images) ? q.option_images : [];
+                for (let optIdx = 0; optIdx < 4; optIdx++) {
+                    const [optResult] = await pool.query(
+                        "INSERT INTO options_tam24 (question_id, option_text, is_correct) VALUES (?, ?, ?)",
+                        [questionId, String(q.options[optIdx]).trim(), optIdx + 1 === correctIndex ? 1 : 0]
+                    );
+                    const optionImage = await saveQuestionImage(optionImages[optIdx]);
+                    if (optionImage) {
+                        await pool.query(
+                            'UPDATE options_tam24 SET image_name = ? WHERE id = ?',
+                            [optionImage, optResult.insertId]
+                        );
+                    }
+                }
+
+                const descriptiveText = q.descriptive == null ? '' : String(q.descriptive).trim();
+                const descriptiveImage = await saveQuestionImage(q.descriptive_image);
+                if (descriptiveImage) {
                     await pool.query(
-                        "INSERT INTO descriptive_answers_tam24 (question_id, answer_text) VALUES (?, ?)",
-                        [questionId, String(q.descriptive).trim()]
+                        'INSERT INTO descriptive_answers_tam24 (question_id, answer_text, image_name) VALUES (?, ?, ?)',
+                        [questionId, descriptiveText, descriptiveImage]
+                    );
+                } else if (descriptiveText) {
+                    await pool.query(
+                        'INSERT INTO descriptive_answers_tam24 (question_id, answer_text) VALUES (?, ?)',
+                        [questionId, descriptiveText]
                     );
                 }
 
@@ -1134,12 +1187,18 @@ const handleAdminInsertQuestions = async (req, res) => {
                 insertedIds.push(questionId);
             } catch (insertError) {
                 console.error(`❌ Failed to insert question ${i + 1}:`, insertError);
+                if (questionId) {
+                    await pool.query('DELETE FROM questions_tam24 WHERE id = ?', [questionId]).catch((cleanupError) => {
+                        console.error('[questions] cleanup failed:', cleanupError.message);
+                    });
+                }
+                if (insertError.statusCode === 400) lastImageError = insertError.message;
                 failed.push(i + 1);
             }
         }
 
         if (insertedIds.length === 0) {
-            return res.json({ success: false, message: "Failed to insert any questions." });
+            return res.json({ success: false, message: lastImageError || 'ثبت سوال‌ها ناموفق بود.' });
         }
 
         res.json({
