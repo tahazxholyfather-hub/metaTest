@@ -48,6 +48,7 @@ export type ActiveQuizState = {
   isCorrect: boolean | null;
   correctOptionId: number | null;
   descriptiveAnswer: string | null;
+  descriptiveImage?: string | null;
   optionStats: unknown[];
 
   isFavorite: boolean;
@@ -157,6 +158,7 @@ const isValidActiveQuizState = (value: unknown): value is ActiveQuizState => {
       (value.isCorrect === null || typeof value.isCorrect === "boolean") &&
       (value.correctOptionId === null || typeof value.correctOptionId === "number") &&
       (value.descriptiveAnswer === null || typeof value.descriptiveAnswer === "string") &&
+      (value.descriptiveImage === undefined || value.descriptiveImage === null || typeof value.descriptiveImage === "string") &&
       Array.isArray(value.optionStats) &&
       typeof value.isFavorite === "boolean" &&
       typeof value.isReviewLater === "boolean" &&

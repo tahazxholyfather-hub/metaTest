@@ -40,17 +40,20 @@ import React from 'react';
 const API_URL = import.meta.env.API_URL;
 const IMAGE_BASE = '/images/questions/';
 
+function questionImageSrc(img: string | null | undefined) {
+    if (!img) return '';
+    if (img.startsWith('http') || img.startsWith('/')) return img;
+    return `${IMAGE_BASE}${img}`;
+}
+
 function questionImageSrcs(images: string[] | undefined) {
-    return (images || []).filter(Boolean).map((img) => {
-        if (img.startsWith('http') || img.startsWith('/')) return img;
-        return `${IMAGE_BASE}${img}`;
-    });
+    return (images || []).filter(Boolean).map((img) => questionImageSrc(img));
 }
 const APP_TOKEN = import.meta.env.APP_TOKEN;
 const MIN_LOAD_DURATION = 500;
 
 // --- Types ---
-type Option = { id: number; text: string };
+type Option = { id: number; text: string; image?: string | null };
 type Question = {
     id: number;
     text: string;
@@ -94,6 +97,7 @@ type HistoryEntry = {
     isCorrect: boolean | null;
     correctOptionId: number | null;
     descriptiveAnswer: string | null;
+    descriptiveImage: string | null;
     solutionLocked?: boolean;
     optionStats: Stats[];
     totalQuestions: number;
@@ -303,6 +307,7 @@ export function QuizView({
     const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
     const [correctOptionId, setCorrectOptionId] = useState<number | null>(null);
     const [descriptiveAnswer, setDescriptiveAnswer] = useState<string | null>(null);
+    const [descriptiveImage, setDescriptiveImage] = useState<string | null>(null);
     const [solutionLocked, setSolutionLocked] = useState(false);
     const [plansOpen, setPlansOpen] = useState(false);
     const [optionStats, setOptionStats] = useState<Stats[]>([]);
@@ -416,6 +421,7 @@ export function QuizView({
         setIsCorrect(entry.isCorrect);
         setCorrectOptionId(entry.correctOptionId);
         setDescriptiveAnswer(entry.descriptiveAnswer);
+        setDescriptiveImage(entry.descriptiveImage ?? null);
         setSolutionLocked(!!entry.solutionLocked);
         setOptionStats(entry.optionStats);
         setTotalQuestions(entry.totalQuestions);
@@ -501,6 +507,7 @@ export function QuizView({
         setIsCorrect(saved.isCorrect ?? null);
         setCorrectOptionId(saved.correctOptionId ?? null);
         setDescriptiveAnswer(saved.descriptiveAnswer ?? null);
+        setDescriptiveImage(saved.descriptiveImage ?? null);
         setSolutionLocked(!!(saved.history?.[saved.historyIndex ?? -1] as HistoryEntry | undefined)?.solutionLocked);
         setOptionStats(saved.optionStats ?? []);
 
@@ -520,6 +527,7 @@ export function QuizView({
         setIsCorrect(null);
         setCorrectOptionId(null);
         setDescriptiveAnswer(null);
+        setDescriptiveImage(null);
         setSolutionLocked(false);
         setOptionStats([]);
         setIsFavorite(false);
@@ -566,6 +574,7 @@ export function QuizView({
                     isCorrect: null,
                     correctOptionId: null,
                     descriptiveAnswer: null,
+                    descriptiveImage: null,
                     solutionLocked: false,
                     optionStats: [],
                     totalQuestions: totalQ,
@@ -705,6 +714,7 @@ export function QuizView({
                 isCorrect,
                 correctOptionId,
                 descriptiveAnswer,
+                descriptiveImage,
                 optionStats,
                 isFavorite,
                 isReviewLater,
@@ -728,6 +738,7 @@ export function QuizView({
         isCorrect,
         correctOptionId,
         descriptiveAnswer,
+        descriptiveImage,
         optionStats,
         isFavorite,
         isReviewLater,
@@ -771,7 +782,10 @@ export function QuizView({
             const fetchedCorrectOptionId = response.correct_option_id == null
                 ? null
                 : Number(response.correct_option_id);
-            const fetchedDescAnswer = response.descriptive_answer ? decodeHtmlEntities(response.descriptive_answer) : null;
+            const fetchedDescImage = response.descriptive_image ? String(response.descriptive_image) : null;
+            const fetchedDescAnswer = response.descriptive_answer
+                ? decodeHtmlEntities(response.descriptive_answer)
+                : (fetchedDescImage ? '' : null);
             const fetchedOptionStats = response.option_stats ?? [];
             const locked = !!response.solution_access?.locked;
 
@@ -779,6 +793,7 @@ export function QuizView({
             setIsCorrect(response.is_correct);
             setCorrectOptionId(fetchedCorrectOptionId);
             setDescriptiveAnswer(fetchedDescAnswer);
+            setDescriptiveImage(fetchedDescImage);
             setSolutionLocked(locked);
             setOptionStats(fetchedOptionStats);
             setIsAnswered(true);
@@ -790,6 +805,7 @@ export function QuizView({
                 isCorrect: response.is_correct,
                 correctOptionId: fetchedCorrectOptionId,
                 descriptiveAnswer: fetchedDescAnswer,
+                descriptiveImage: fetchedDescImage,
                 solutionLocked: locked,
                 optionStats: fetchedOptionStats
             });
@@ -1053,8 +1069,11 @@ export function QuizView({
                         <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold transition-colors duration-300 shrink-0 ${badgeClass}`}>
                             {index + 1}
                         </div>
-                        <span className="font-medium tracking-normal text-[var(--text-primary)] leading-7 md:leading-8 select-none text-[14px] md:text-[15px]">
+                        <span className="min-w-0 flex-1 font-medium tracking-normal text-[var(--text-primary)] leading-7 md:leading-8 select-none text-[14px] md:text-[15px]">
                        <MathRenderer text={option.text} subject={subject} inline={true}/>
+                       {option.image && (
+                           <img src={questionImageSrc(option.image)} alt="" loading="lazy" className="mt-2 block h-auto max-h-40 w-auto max-w-full rounded-lg object-contain" />
+                       )}
                     </span>
                     </div>
 
@@ -1352,7 +1371,7 @@ export function QuizView({
 
                                     {/* Explanation */}
                                     <AnimatePresence>
-                                        {isAnswered && descriptiveAnswer && (
+                                        {isAnswered && (descriptiveAnswer || descriptiveImage) && (
                                             <motion.div
                                                 initial={{ opacity: 0, y: 20 }}
                                                 animate={{ opacity: 1, y: 0 }}
@@ -1363,14 +1382,18 @@ export function QuizView({
                                                     <span className="font-black tracking-tight text-lg">پاسخ تشریحی</span>
                                                 </div>
                                                 <div dir="rtl" className="whitespace-pre-wrap text-[var(--text-primary)] leading-9 md:leading-10 opacity-95 text-justify text-[15px] md:text-[17px] font-medium tracking-[-0.01em]">
-                                                    <MathRenderer text={descriptiveAnswer} inline={true} subject={question.subject_id} />
-
+                                                    {descriptiveAnswer && (
+                                                        <MathRenderer text={descriptiveAnswer} inline={true} subject={question.subject_id} />
+                                                    )}
+                                                    {descriptiveImage && (
+                                                        <img src={questionImageSrc(descriptiveImage)} alt="" loading="lazy" className="mt-4 block h-auto max-h-72 w-auto max-w-full rounded-xl object-contain" />
+                                                    )}
                                                 </div>
                                             </motion.div>
                                         )}
                                     </AnimatePresence>
 
-                                    {isAnswered && solutionLocked && !descriptiveAnswer && (
+                                    {isAnswered && solutionLocked && !descriptiveAnswer && !descriptiveImage && (
                                         <div className="mt-8">
                                             <PremiumUpgrade
                                                 icon={Lock}

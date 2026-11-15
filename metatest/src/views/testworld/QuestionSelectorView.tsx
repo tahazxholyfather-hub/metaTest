@@ -26,7 +26,7 @@ type BankQuestion = {
     topic_title?: string;
     chapter_title?: string;
     image?: string | null;
-    options?: { id: number; text: string }[];
+    options?: { id: number; text: string; image?: string | null }[];
 };
 
 type FilterOption = { id: number | string; title: string };
@@ -904,6 +904,9 @@ export function QuestionSelectorView({
                                                                 <span className="shrink-0 text-[11px] font-black text-[var(--text-muted)]">{fa(optionIndex + 1)}</span>
                                                                 <span className="min-w-0">
                                                                     <MathRenderer text={option.text} inline />
+                                                                    {option.image && (
+                                                                        <img src={`${IMAGE_BASE}${option.image}`} alt="" loading="lazy" className="mt-1 block h-auto max-h-32 w-auto max-w-full rounded-md object-contain" />
+                                                                    )}
                                                                 </span>
                                                             </div>
                                                         ))}

@@ -347,6 +347,7 @@ function mapResultData(data) {
             level: qData.level || 'medium',
             topic: qData.mabhas || '',
             description: qData.descriptive_answer?.text || '',
+            descriptionImage: qData.descriptive_answer?.image || null,
             options: qData.options || [],
             images: Array.isArray(qData.images) ? qData.images : [],
             selected: qData.selected_option_id ?? null,
@@ -1163,7 +1164,7 @@ export default function ResultDashboard() {
 
                                                 <span
                                                     className={cn(
-                                                        'flex-1',
+                                                        'min-w-0 flex-1',
                                                         isCorrect
                                                             ? 'text-[var(--success)] font-bold'
                                                             : isSelected
@@ -1172,6 +1173,9 @@ export default function ResultDashboard() {
                                                     )}
                                                 >
                                                     <MathRenderer text={opt.text} inline={true} />
+                                                    {opt.image && (
+                                                        <img src={`/images/questions/${opt.image}`} alt="" loading="lazy" className="mt-2 block h-auto max-h-40 w-auto max-w-full rounded-lg object-contain" />
+                                                    )}
                                                 </span>
 
                                                 <div className="flex flex-col items-end gap-1">
@@ -1192,17 +1196,22 @@ export default function ResultDashboard() {
                                 </div>
                             </div>
 
-                            {selectedQuestion.description && (
+                            {(selectedQuestion.description || selectedQuestion.descriptionImage) && (
                                 <div className="mt-4 rounded-2xl bg-[color:rgba(59,130,246,0.05)] p-5 border border-[color:rgba(59,130,246,0.2)]">
                                     <h4 className="text-sm font-bold text-[var(--color-primary-500)] mb-3 flex items-center gap-2">
                                         <BookOpenText className="w-4 h-4" />
                                         پاسخ تشریحی
                                     </h4>
-                                    <MathRenderer
-                                        text={selectedQuestion.description}
-                                        className="text-sm font-medium leading-7 text-[var(--text-secondary)]"
-                                        inline={true}
-                                    />
+                                    {selectedQuestion.description && (
+                                        <MathRenderer
+                                            text={selectedQuestion.description}
+                                            className="text-sm font-medium leading-7 text-[var(--text-secondary)]"
+                                            inline={true}
+                                        />
+                                    )}
+                                    {selectedQuestion.descriptionImage && (
+                                        <img src={`/images/questions/${selectedQuestion.descriptionImage}`} alt="" loading="lazy" className="mt-3 block h-auto max-h-72 w-auto max-w-full rounded-xl object-contain" />
+                                    )}
                                 </div>
                             )}
                         </div>
