@@ -5,10 +5,10 @@ import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 /**
- * replyQuality.js lives in the CommonJS backend package so Node require()
- * keeps working. The quiz UI imports normalizeAssistantText as a named ESM
- * export. Vite would otherwise serve module.exports unchanged and the
- * browser module graph fails to start.
+ * replyQuality.js and questionDisplay.js live in the CommonJS backend
+ * package so Node require() keeps working. The quiz UI imports them as
+ * named ESM exports. Vite would otherwise serve module.exports unchanged
+ * and the browser module graph fails to start.
  */
 function exposeReplyQualityEsm(): Plugin {
   return {
@@ -16,7 +16,8 @@ function exposeReplyQualityEsm(): Plugin {
     enforce: 'pre',
     transform(code, id) {
       const clean = id.split('?')[0].replace(/\\/g, '/')
-      if (!clean.endsWith('/ai-teacher/services/replyQuality.js')) return null
+      const shared = ['/ai-teacher/services/replyQuality.js', '/backend/questionDisplay.js']
+      if (!shared.some((suffix) => clean.endsWith(suffix))) return null
       if (/\bexport\s+/.test(code)) return null
       const match = code.match(/module\.exports\s*=\s*\{([\s\S]*?)\}\s*;?\s*$/)
       if (!match || match.index == null) return null

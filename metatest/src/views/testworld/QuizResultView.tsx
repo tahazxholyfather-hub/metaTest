@@ -50,6 +50,7 @@ import { avatarSrc } from '../../runtime';
 import { ResponsiveModal } from '../../components/ResponsiveModal';
 import { clsx } from 'clsx';
 import { flowApi } from '../../lib/authApi';
+import { useQuestionDisplay } from '../../lib/useQuestionDisplay';
 import { twMerge } from 'tailwind-merge';
 
 export function cn(...inputs) {
@@ -416,6 +417,7 @@ export default function ResultDashboard() {
     const [activeMemberId, setActiveMemberId] = useState(null);
     const [loadingMemberId, setLoadingMemberId] = useState(null);
     const [memberError, setMemberError] = useState(null);
+    const reviewStyle = useQuestionDisplay('examReview');
 
     // ─── Leave: navigate to main dashboard ───────────────────────────────────
     const handleLeave = useCallback(() => {
@@ -1064,13 +1066,14 @@ export default function ResultDashboard() {
                     }
                 >
                     {selectedQuestion && (
-                        <div className="space-y-6 pb-4">
+                        <div className="q-display q-stack pb-4" style={reviewStyle}>
                             <div className="rounded-3xl border border-[var(--border)] bg-[var(--bg-elevated)] p-5">
-                                <MathRenderer
-                                    text={selectedQuestion.text}
-                                    className="text-sm md:text-base font-medium leading-8 text-[var(--text-primary)]"
-                                    inline={true}
-                                />
+                                <div className="q-stem text-[var(--text-primary)]">
+                                    <MathRenderer
+                                        text={selectedQuestion.text}
+                                        inline={true}
+                                    />
+                                </div>
                                 {selectedQuestion.images?.length > 0 && (
                                     <div className="mt-4 flex flex-col gap-3">
                                         {selectedQuestion.images.map((name) => (
@@ -1078,7 +1081,7 @@ export default function ResultDashboard() {
                                                 key={name}
                                                 src={`/images/questions/${name}`}
                                                 alt="تصویر سوال"
-                                                className="max-h-80 w-full rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] object-contain"
+                                                className="q-image w-full rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] object-contain"
                                             />
                                         ))}
                                     </div>
@@ -1124,7 +1127,7 @@ export default function ResultDashboard() {
                                 <h4 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
                                     گزینه‌ها
                                 </h4>
-                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <div className="q-options grid gap-3">
                                     {selectedQuestion.options.map((opt) => {
                                         const isSelected = selectedQuestion.selected === opt.id;
                                         const isCorrect = selectedQuestion.correctAnswer === opt.id;
@@ -1163,9 +1166,9 @@ export default function ResultDashboard() {
 
                                                 <span
                                                     className={cn(
-                                                        'flex-1',
+                                                        'q-option flex-1',
                                                         isCorrect
-                                                            ? 'text-[var(--success)] font-bold'
+                                                            ? 'text-[var(--success)]'
                                                             : isSelected
                                                                 ? 'text-[var(--error)]'
                                                                 : 'text-[var(--text-primary)]'
@@ -1198,11 +1201,12 @@ export default function ResultDashboard() {
                                         <BookOpenText className="w-4 h-4" />
                                         پاسخ تشریحی
                                     </h4>
-                                    <MathRenderer
-                                        text={selectedQuestion.description}
-                                        className="text-sm font-medium leading-7 text-[var(--text-secondary)]"
-                                        inline={true}
-                                    />
+                                    <div className="q-explain text-[var(--text-secondary)]">
+                                        <MathRenderer
+                                            text={selectedQuestion.description}
+                                            inline={true}
+                                        />
+                                    </div>
                                 </div>
                             )}
                         </div>

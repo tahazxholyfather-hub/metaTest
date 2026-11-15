@@ -18,6 +18,7 @@ import {
     SocketRequestError,
 } from '../../socket/lobby.socket';
 import type { LobbyState, QuizResult } from '../../socket/types';
+import { useQuestionDisplay } from '../../lib/useQuestionDisplay';
 
 // ─── Avatar Progress Sub-Components ──────────────────────────────────────────
 
@@ -344,6 +345,7 @@ export default function QuizPage({ quizData: initialQuizData, onExit }: QuizPage
     const hashedQuizId = quizId || '';
 
     const { user, isAuthenticated, isAuthLoading } = useUser();
+    const questionStyle = useQuestionDisplay('exam');
     const currentUserId = user?.id ?? null;
 
     const { socket, isConnected, status: socketStatus, error: socketError, connect } = useSocket();
@@ -1305,7 +1307,7 @@ export default function QuizPage({ quizData: initialQuizData, onExit }: QuizPage
 
             <main className="max-w-7xl mx-auto px-4 pt-6 md:pt-12 lg:pt-25 pb-25">
                 <div className="flex flex-col lg:flex-row gap-8 items-start w-full">
-                    <div className="flex-1 min-w-0 w-full animate-none">
+                    <div className="q-display flex-1 min-w-0 w-full animate-none" style={questionStyle}>
                         {!isPrivatePreviewRef.current && !joinedLobby && !isConnected && socketStatus === 'connecting' && (
                             <div className="mb-6 rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 text-amber-700 dark:text-amber-300 text-sm font-bold">
                                 در حال اتصال به لابی...
@@ -1331,29 +1333,29 @@ export default function QuizPage({ quizData: initialQuizData, onExit }: QuizPage
                                     className="w-full relative animate-none"
                                 >
                                     <div className="flex flex-col md:flex-row gap-6 w-full animate-none">
-                                        <div className="flex-1 space-y-6 w-full animate-none">
+                                        <div className="q-stack flex-1 w-full animate-none">
                                             <div className="flex items-start w-full">
-                                                <div className="text-lg md:text-xl flex font-bold leading-relaxed text-zinc-900 dark:text-zinc-100 w-full animate-none">
+                                                <div className="flex w-full animate-none text-zinc-900 dark:text-zinc-100">
                                                     <div className="text-3xl md:text-4xl font-black text-[var(--accent)] tabular-nums leading-none tracking-tighter shrink-0 select-none ml-2">
                                                         {String(index + 1).padStart(2, '0')}
                                                     </div>
-                                                    <div className="mt-1 flex-1 w-full min-w-0">
+                                                    <div className="q-stem mt-1 flex-1 w-full min-w-0">
                                                         <MathRenderer
                                                             text={decodeHtmlEntities(q.text)}
                                                             subject={q.subject_id}
-                                                            className="text-lg md:text-xl font-bold leading-relaxed text-zinc-900 dark:text-zinc-100"
+                                                            className="text-zinc-900 dark:text-zinc-100"
                                                         />
                                                     </div>
                                                 </div>
                                             </div>
 
                                             {q.has_image && q.image_url && (
-                                                <div className="w-full md:w-48 shrink-0 flex justify-center md:justify-start">
-                                                    <img src={`${baseImageUrl}${q.image_url}`} alt="تصویر" className="max-w-[200px] w-full rounded-lg object-contain border border-zinc-200 dark:border-zinc-800" />
+                                                <div className="w-full shrink-0 flex justify-center md:justify-start">
+                                                    <img src={`${baseImageUrl}${q.image_url}`} alt="تصویر" className="q-image w-full rounded-lg object-contain border border-zinc-200 dark:border-zinc-800" />
                                                 </div>
                                             )}
 
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+                                            <div className="q-options grid gap-x-8 gap-y-4">
                                                 {q.options?.map((opt) => {
                                                     const isSelected = answers[q.id] === opt.id;
                                                     return (
@@ -1373,7 +1375,7 @@ export default function QuizPage({ quizData: initialQuizData, onExit }: QuizPage
                                                                         )}
                                                                     </AnimatePresence>
                                                                 </div>
-                                                                <div className={`text-sm md:text-base flex-1 transition-colors ${isSelected ? 'text-[var(--accent)] font-bold' : 'text-zinc-700 dark:text-zinc-300 font-medium'}`}>
+                                                                <div className={`q-option flex-1 transition-colors ${isSelected ? 'text-[var(--accent)]' : 'text-zinc-700 dark:text-zinc-300'}`}>
                                                                     <MathRenderer text={decodeHtmlEntities(opt.text)} subject={q.subject_id} />
                                                                 </div>
                                                             </div>
@@ -1383,7 +1385,7 @@ export default function QuizPage({ quizData: initialQuizData, onExit }: QuizPage
                                             </div>
                                         </div>
                                     </div>
-                                    <hr className="border-zinc-200 dark:border-zinc-800 my-12" />
+                                    <hr className="q-question-gap border-zinc-200 dark:border-zinc-800" />
                                 </motion.section>
                             ))}
                         </AnimatePresence>

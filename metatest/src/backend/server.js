@@ -31,6 +31,8 @@ const contactRoutes = require('./routes/contactRoutes');
 const { ensureBlogSchema } = require('./controllers/blogController');
 const { ensureContactSchema } = require('./controllers/contactController');
 const chemballController = require('./controllers/chemballController');
+const questionDisplayController = require('./controllers/questionDisplayController');
+const { ensureSchema: ensureQuestionDisplaySchema } = require('./questionDisplayStore');
 const pushService = require('./push/pushService');
 const { ensureAdminSchema } = require('./middleware/adminAuth');
 const { loadRuntimeOverlayFromDb } = require('./controllers/adminAiController');
@@ -282,6 +284,9 @@ app.post('/api/flow', requireToken, async (req, res) => {
             case 'get_practice_question':
                 await quizController.handleGetPracticeQuestion(req, res);
                 break;
+            case 'get_question_display':
+                await questionDisplayController.handleGetQuestionDisplay(req, res);
+                break;
             case 'get_specific_question':
                 await quizController.handleGetSpecificQuestion(req, res);
                 break;
@@ -493,6 +498,12 @@ app.post('/api/flow', requireToken, async (req, res) => {
             case 'Admin_update_referral_settings':
                 await adminController.handleAdminUpdateReferralSettings(req, res);
                 break;
+            case 'Admin_get_question_display':
+                await questionDisplayController.handleAdminGetQuestionDisplay(req, res);
+                break;
+            case 'Admin_update_question_display':
+                await questionDisplayController.handleAdminUpdateQuestionDisplay(req, res);
+                break;
             case 'Admin_get_withdrawal_requests':
                 await adminController.handleAdminGetWithdrawalRequests(req, res);
                 break;
@@ -591,6 +602,7 @@ app.listen(PORT, () => {
         .then(() => loadRuntimeOverlayFromDb())
         .then(() => ensureDiamondPlanActive())
         .then(() => pushService.ensureSchema())
+        .then(() => ensureQuestionDisplaySchema())
         .then(() => console.log('[admin] schema ready, AI runtime overlay loaded'))
         .catch((err) => console.error('[admin] bootstrap failed:', err.message));
     try {

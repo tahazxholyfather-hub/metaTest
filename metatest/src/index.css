@@ -1002,6 +1002,75 @@ mjx-container[display="true"] {
     }
 }
 
+/* Question display settings. Sizes come from the admin document; these
+   active variables follow the viewport unless a preview frame overrides them. */
+.q-display {
+    --q-stem-size-active: var(--q-stem-size, 16px);
+    --q-option-size-active: var(--q-option-size, 14px);
+    --q-explain-size-active: var(--q-explain-size, 15px);
+    --q-image-max-h-active: var(--q-image-max-h, 208px);
+    --q-image-max-w-active: var(--q-image-max-w, 448px);
+    --q-stem-gap-active: var(--q-stem-gap, 24px);
+    --q-option-cols-active: 1;
+}
+
+@media (min-width: 768px) {
+    .q-display {
+        --q-stem-size-active: var(--q-stem-size-md, var(--q-stem-size, 16px));
+        --q-option-size-active: var(--q-option-size-md, var(--q-option-size, 14px));
+        --q-explain-size-active: var(--q-explain-size-md, var(--q-explain-size, 15px));
+        --q-image-max-h-active: var(--q-image-max-h-md, var(--q-image-max-h, 288px));
+        --q-image-max-w-active: var(--q-image-max-w-md, var(--q-image-max-w, 576px));
+        --q-stem-gap-active: var(--q-stem-gap-md, var(--q-stem-gap, 24px));
+        --q-option-cols-active: var(--q-option-cols, 2);
+    }
+}
+
+.q-display .q-stem,
+.q-display .q-stem .math-renderer {
+    font-size: var(--q-stem-size-active);
+    font-weight: var(--q-stem-weight, 600);
+    line-height: var(--q-stem-lh, 1.7);
+}
+
+.q-display .q-option,
+.q-display .q-option .math-renderer {
+    font-size: var(--q-option-size-active);
+    font-weight: var(--q-option-weight, 500);
+    line-height: var(--q-option-lh, 1.7);
+}
+
+.q-display .q-explain,
+.q-display .q-explain .math-renderer {
+    font-size: var(--q-explain-size-active);
+    font-weight: var(--q-explain-weight, 500);
+    line-height: var(--q-explain-lh, 1.7);
+}
+
+.q-display .q-image {
+    max-height: var(--q-image-max-h-active);
+    max-width: min(100%, var(--q-image-max-w-active));
+}
+
+.q-display .q-stem-gap {
+    margin-bottom: var(--q-stem-gap-active);
+}
+
+.q-display .q-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--q-stem-gap-active);
+}
+
+.q-display .q-options {
+    grid-template-columns: repeat(var(--q-option-cols-active), minmax(0, 1fr));
+}
+
+.q-display .q-question-gap {
+    margin-top: var(--q-question-gap, 48px);
+    margin-bottom: var(--q-question-gap, 48px);
+}
+
 
 
 
