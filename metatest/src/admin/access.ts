@@ -27,7 +27,6 @@ export const ADMIN_NAV: { id: string; label: string; superOnly?: boolean }[] = [
     { id: 'admins', label: 'ادمین‌ها' },
     { id: 'blog', label: 'بلاگ آموزشی' },
     { id: 'contact', label: 'پیام‌های تماس' },
-    { id: 'access', label: 'دسترسی‌ها', superOnly: true },
 ];
 
 const TITLES = Object.fromEntries(ADMIN_NAV.map((item) => [item.id, item.label]));

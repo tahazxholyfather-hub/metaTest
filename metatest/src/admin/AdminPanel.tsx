@@ -17,7 +17,6 @@ import AnnouncementsManager from './AnnouncementsManager';
 import PushManager from './PushManager';
 import CoinManager from './CoinManager';
 import ReportsManager from './ReportsManager';
-import AccessManager from './AccessManager';
 import SubscriptionManager from './SubscriptionManager';
 import BlogManager from './BlogManager';
 import ContactInbox from './ContactInbox';
@@ -190,7 +189,6 @@ export default function AdminPanel() {
                                 {activeTab === 'admins' && canAccessSection(user, 'admins') && <AdminsManager currentUser={user} />}
                                 {activeTab === 'blog' && canAccessSection(user, 'blog') && <BlogManager />}
                                 {activeTab === 'contact' && canAccessSection(user, 'contact') && <ContactInbox />}
-                                {activeTab === 'access' && canAccessSection(user, 'access') && <AccessManager />}
                             </div>
                         )}
                     </div>
