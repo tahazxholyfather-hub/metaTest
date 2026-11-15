@@ -21,6 +21,7 @@ import AccessManager from './AccessManager';
 import SubscriptionManager from './SubscriptionManager';
 import BlogManager from './BlogManager';
 import ContactInbox from './ContactInbox';
+import QuestionDisplaySettings from './QuestionDisplaySettings';
 import AuthView, { type User } from './AuthView';
 import Spinner from './Spinner';
 import { adminApi } from '../lib/adminApi';
@@ -172,6 +173,7 @@ export default function AdminPanel() {
                                 {activeTab === 'dashboard' && canAccessSection(user, 'dashboard') && <Dashboard />}
                                 {activeTab === 'edit-questions' && canAccessSection(user, 'edit-questions') && <EditQuestions />}
                                 {activeTab === 'insert-questions' && canAccessSection(user, 'insert-questions') && <InsertQuestions />}
+                                {activeTab === 'question-display' && canAccessSection(user, 'question-display') && <QuestionDisplaySettings />}
                                 {activeTab === 'purge-questions' && canAccessSection(user, 'purge-questions') && <PurgeQuestions />}
                                 {activeTab === 'curriculum' && canAccessSection(user, 'curriculum') && <CurriculumManager user={user} />}
                                 {activeTab === 'pdf-library' && canAccessSection(user, 'pdf-library') && <PdfLibraryManager user={user} />}

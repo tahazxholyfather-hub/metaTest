@@ -42,6 +42,16 @@ test('blog actions follow the section catalog', () => {
     assert.equal(sectionAllowed({ id: 1, isSuper: true, sections: {} }, ['blog']), true);
 });
 
+test('question display stays off until it is granted', () => {
+    assert.equal(resolveSections(4, [])['question-display'], false);
+    assert.equal(resolveSections(1, [])['question-display'], true);
+    const granted = { id: 4, sections: resolveSections(4, [{ section_key: 'question-display', allowed: 1 }]) };
+    const blocked = { id: 4, sections: resolveSections(4, []) };
+    assert.equal(isActionAllowed(blocked, 'Admin_update_question_display'), false);
+    assert.equal(isActionAllowed(granted, 'Admin_get_question_display'), true);
+    assert.equal(isActionAllowed(blocked, 'get_question_display'), true);
+});
+
 test('section patch only keeps known keys', () => {
     const patch = sanitizeSectionPatch({ blog: '1', dashboard: false, nope: true });
     assert.deepEqual(patch.blog, true);

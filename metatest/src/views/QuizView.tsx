@@ -32,6 +32,7 @@ import { Met } from '../components/met';
 import { QuizMetPanel } from './met/QuizMetPanel';
 import { PremiumUpgrade } from '../components/PremiumUpgrade';
 import PlanSelectionModal from '../components/PlanSelectionModal';
+import { useQuestionDisplay } from '../lib/useQuestionDisplay';
 
 import React from 'react';
 
@@ -320,6 +321,7 @@ export function QuizView({
     const [showButtons, setShowButtons] = useState(true);
     const [resultState, setResultState] = useState<'correct' | 'wrong' | null>(null);
     const [metOpen, setMetOpen] = useState(false);
+    const questionStyle = useQuestionDisplay('practice');
 
     useEffect(() => {
         if (!isAnswered) setMetOpen(false);
@@ -1069,7 +1071,7 @@ export function QuizView({
                         <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold transition-colors duration-300 shrink-0 ${badgeClass}`}>
                             {index + 1}
                         </div>
-                        <span className="min-w-0 flex-1 font-medium tracking-normal text-[var(--text-primary)] leading-7 md:leading-8 select-none text-[14px] md:text-[15px]">
+                        <span className="q-option min-w-0 flex-1 tracking-normal text-[var(--text-primary)] select-none">
                        <MathRenderer text={option.text} subject={subject} inline={true}/>
                        {option.image && (
                            <img src={questionImageSrc(option.image)} alt="" loading="lazy" className="mt-2 block h-auto max-h-40 w-auto max-w-full rounded-lg object-contain" />
@@ -1323,6 +1325,7 @@ export function QuizView({
                                     transition={{ duration: 0.35, ease: "easeOut" }}
                                     className="w-full max-w-6xl mx-auto p-4 md:p-6"
                                 >
+                                    <div className="q-display" style={questionStyle}>
                                     <QuestionGeneralInfo
                                         isLoading={isLoading}
                                         grade={question?.grade || 'نامشخص'}
@@ -1333,11 +1336,11 @@ export function QuizView({
                                     />
 
                                     {/* Question Text */}
-                                    <div className="relative mb-6 md:mb-8 bg-[var(--bg-card)] border border-[var(--border)]/50 md:border-[var(--border)] shadow-sm md:shadow-md rounded-2xl md:rounded-3xl p-5 md:p-6 overflow-hidden transition-all duration-300">
+                                    <div className="q-stem-gap relative bg-[var(--bg-card)] border border-[var(--border)]/50 md:border-[var(--border)] shadow-sm md:shadow-md rounded-2xl md:rounded-3xl p-5 md:p-6 overflow-hidden transition-all duration-300">
                                         <div className="absolute top-0 right-0 w-1.5 md:w-1.5 h-full bg-gradient-to-b from-[var(--accent)] to-[var(--accent)]/40"></div>
                                         <div className="absolute -top-4 -left-4 w-24 h-24 bg-[var(--accent)]/5 rounded-full blur-2xl md:hidden pointer-events-none"></div>
 
-                                        <div className="text-[16px] md:text-[19px] whitespace-pre-wrap font-semibold tracking-[-0.01em] leading-8 md:leading-10 text-right text-[var(--text-primary)] select-text">
+                                        <div className="q-stem whitespace-pre-wrap tracking-[-0.01em] text-right text-[var(--text-primary)] select-text">
                                             <MathRenderer text={question.text} subject={question.subject_id} inline />
                                         </div>
                                         {question.has_image && questionImageSrcs(question.images).length > 0 && (
@@ -1348,7 +1351,7 @@ export function QuizView({
                                                         src={src}
                                                         alt=""
                                                         loading="lazy"
-                                                        className="mx-auto block h-auto w-auto max-h-52 max-w-[min(100%,28rem)] object-contain md:max-h-72 md:max-w-[min(100%,36rem)]"
+                                                        className="q-image mx-auto block h-auto w-auto object-contain"
                                                     />
                                                 ))}
                                             </div>
@@ -1356,7 +1359,7 @@ export function QuizView({
                                     </div>
 
                                     {/* Options */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="q-options grid gap-4">
                                         {question.options.map((opt, idx) => renderOption(opt, idx, 2))}
                                     </div>
 
@@ -1381,7 +1384,7 @@ export function QuizView({
                                                     <Bookmark size={20} />
                                                     <span className="font-black tracking-tight text-lg">پاسخ تشریحی</span>
                                                 </div>
-                                                <div dir="rtl" className="whitespace-pre-wrap text-[var(--text-primary)] leading-9 md:leading-10 opacity-95 text-justify text-[15px] md:text-[17px] font-medium tracking-[-0.01em]">
+                                                <div dir="rtl" className="q-explain whitespace-pre-wrap text-[var(--text-primary)] opacity-95 text-justify tracking-[-0.01em]">
                                                     {descriptiveAnswer && (
                                                         <MathRenderer text={descriptiveAnswer} inline={true} subject={question.subject_id} />
                                                     )}
@@ -1404,6 +1407,7 @@ export function QuizView({
                                             />
                                         </div>
                                     )}
+                                    </div>
                                 </motion.div>
                             ) : (
                                 <div className="flex items-center justify-center h-full text-[var(--text-muted)] mt-20">خطا در دریافت سوال</div>
