@@ -245,7 +245,7 @@ export function BlogPostPage() {
           ) : null}
         </article>
       </main>
-      <SiteFooter variant="sub" enamadClass />
+      <SiteFooter variant="sub" />
     </div>
   );
 }

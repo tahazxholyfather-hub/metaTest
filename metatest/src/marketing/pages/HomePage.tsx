@@ -96,7 +96,7 @@ export function HomePage() {
             </div>
           </section>
           <HomeBlog />
-          <SiteFooter variant="home" enamadClass />
+          <SiteFooter variant="home" />
         </div>
       </div>
       <button type="button" className="back-to-top" id="back-to-top" aria-label="بازگشت به بالا">

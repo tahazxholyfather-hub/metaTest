@@ -2,13 +2,43 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { InstagramIcon, LinkedinIcon, MailIcon, PhoneIcon, PinIcon, TelegramIcon, YoutubeIcon } from './icons';
 
-function TrustBadge({ src, alt, label, fallback, className }: { src: string; alt: string; label: string; fallback: string; className?: string }) {
+const ENAMAD_CODE = 'fpvQWJ5P6z0ZirS6fqdwLIOwsLymkTM5';
+const ENAMAD_HREF = `https://trustseal.enamad.ir/?id=736512&Code=${ENAMAD_CODE}`;
+const ENAMAD_SRC = `https://trustseal.enamad.ir/logo.aspx?id=736512&Code=${ENAMAD_CODE}`;
+
+function TrustBadge({ src, alt, label, fallback }: { src: string; alt: string; label: string; fallback: string }) {
   const [hide, setHide] = useState(false);
   return (
     <div className="trust-card" aria-label={label}>
-      <img src={src} className={className} alt={alt} style={hide ? { display: 'none' } : undefined} onError={() => setHide(true)} />
+      <img src={src} alt={alt} style={hide ? { display: 'none' } : undefined} onError={() => setHide(true)} />
       <span className="trust-fallback" style={{ display: hide ? 'block' : 'none' }}>{fallback}</span>
     </div>
+  );
+}
+
+function EnamadBadge() {
+  const [hide, setHide] = useState(false);
+  return (
+    <a
+      className="trust-card"
+      href={ENAMAD_HREF}
+      target="_blank"
+      rel="noopener"
+      referrerPolicy="origin"
+      aria-label="نماد اعتماد الکترونیکی"
+      style={{ textDecoration: 'none' }}
+    >
+      <img
+        ref={(node) => node?.setAttribute('code', ENAMAD_CODE)}
+        className="enamad"
+        src={ENAMAD_SRC}
+        alt="نماد اعتماد الکترونیکی"
+        referrerPolicy="origin"
+        style={hide ? { display: 'none' } : { cursor: 'pointer' }}
+        onError={() => setHide(true)}
+      />
+      <span className="trust-fallback" style={{ display: hide ? 'block' : 'none' }}>ای‌نماد</span>
+    </a>
   );
 }
 
@@ -23,9 +53,9 @@ function SocialRow() {
   );
 }
 
-type Props = { variant: 'home' | 'sub'; enamadClass?: boolean };
+type Props = { variant: 'home' | 'sub' };
 
-export function SiteFooter({ variant, enamadClass = false }: Props) {
+export function SiteFooter({ variant }: Props) {
   const logoClass = variant === 'home' ? 'logo-img' : 'logo-img-ft';
   const aceSrc = variant === 'home' ? 'Ace_logo.png' : '/Ace_logo.png';
   return (
@@ -37,7 +67,7 @@ export function SiteFooter({ variant, enamadClass = false }: Props) {
           <img src="https://metatest.app/logo.png" className={logoClass} alt="Metatest Logo" />
           <p className="footer-desc">متاتست نسل جدید یادگیری و ارزیابی است. محیطی سریع، هوشمند و زیبا که به شما اجازه می‌دهد مرزهای پیشرفت خود را جا به جا کنید.</p>
           <div className="trust-badges-container">
-            <TrustBadge src="https://metatest.app/enamad.svg" alt="ای‌نماد" label="ای نماد" fallback="ای‌نماد" className={enamadClass ? 'enamad' : undefined} />
+            <EnamadBadge />
             <TrustBadge src="https://metatest.app/samandehi.png" alt="" label="ستاد ساماندهی" fallback="ساماندهی" />
           </div>
         </div>

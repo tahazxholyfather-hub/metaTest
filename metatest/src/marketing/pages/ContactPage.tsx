@@ -145,7 +145,7 @@ export function ContactPage() {
         </div>
         </div>
       </main>
-      <SiteFooter variant="sub" enamadClass />
+      <SiteFooter variant="sub" />
     </PageField>
   );
 }

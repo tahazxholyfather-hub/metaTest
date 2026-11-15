@@ -10,7 +10,7 @@ export function BlogListPage() {
       <main className="page-wide">
         <ArticleBrowser />
       </main>
-      <SiteFooter variant="sub" enamadClass />
+      <SiteFooter variant="sub" />
     </PageField>
   );
 }
