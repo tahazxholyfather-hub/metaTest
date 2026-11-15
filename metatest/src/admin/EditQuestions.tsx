@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
     Save, Maximize2, Minimize2, Edit2, ChevronLeft, ChevronRight,
-    Filter, CheckCircle2, Circle, X, ChevronDown, Search, Loader2, Image as ImageIcon, AlertCircle
+    Filter, CheckCircle2, Circle, X, ChevronDown, Search, Loader2, Image as ImageIcon, AlertCircle, ImagePlus
 } from 'lucide-react';
 import { flowApi } from '../lib/authApi';
 import { topicMatchesGrades } from './chapterGrades';
@@ -10,6 +10,95 @@ import { topicMatchesGrades } from './chapterGrades';
 // Re-exported so existing imports of MathRenderer from this file keep working.
 // The renderer itself now lives in MathRenderer.tsx (self-hosted MathJax v4).
 import { MathRenderer } from '../components/ui/MathRenderer';
+
+const QUESTION_IMAGE_BASE = 'images/questions/';
+const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif';
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+
+type ImageDraft = {
+    enabled: boolean;
+    preview: string | null;
+    existingName: string | null;
+    dataUrl: string | null;
+};
+
+function existingDraft(name: string | null | undefined): ImageDraft {
+    if (!name) return { enabled: false, preview: null, existingName: null, dataUrl: null };
+    return { enabled: true, preview: `${QUESTION_IMAGE_BASE}${name}`, existingName: name, dataUrl: null };
+}
+
+function readImageFile(file: File): Promise<string> {
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+        return Promise.reject(new Error('فقط jpg، png، webp یا gif مجاز است.'));
+    }
+    if (file.size > MAX_IMAGE_BYTES) return Promise.reject(new Error('حجم هر عکس باید کمتر از ۴ مگابایت باشد.'));
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error('خواندن عکس ناموفق بود.'));
+        reader.readAsDataURL(file);
+    });
+}
+
+function draftPayload(draft: ImageDraft | undefined, existing: string | null | undefined) {
+    const slot = draft ?? existingDraft(existing);
+    if (!slot.enabled) return null;
+    if (slot.dataUrl) return slot.dataUrl;
+    if (slot.existingName) return slot.existingName;
+    return null;
+}
+
+function draftMissing(draft: ImageDraft | undefined) {
+    return !!draft && draft.enabled && !draft.dataUrl && !draft.existingName;
+}
+
+function ImageEditor({ draft, onChange, onError }: { draft: ImageDraft; onChange: (next: ImageDraft) => void; onError: (message: string) => void }) {
+    return (
+        <div className="mt-2">
+            <div className="inline-flex items-center gap-2">
+                <button
+                    type="button"
+                    role="switch"
+                    aria-checked={draft.enabled}
+                    onClick={() => onChange({ ...draft, enabled: !draft.enabled })}
+                    className={`relative h-5 w-9 rounded-full transition-colors ${draft.enabled ? 'bg-[#1a73e8]' : 'bg-[#dadce0] dark:bg-[#444746]'}`}
+                >
+                    <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${draft.enabled ? 'left-4' : 'left-0.5'}`} />
+                </button>
+                <span className="text-[11px] font-bold text-[#86868b]">عکس دارد</span>
+                {(draft.preview || draft.dataUrl) && draft.enabled && (
+                    <button type="button" onClick={() => onChange({ ...draft, enabled: false })} className="text-[11px] font-bold text-red-500">حذف</button>
+                )}
+            </div>
+            {draft.enabled && (
+                <label className="mt-2 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[#dadce0] px-3 py-3 text-[11px] font-bold text-[#86868b] hover:border-[#1a73e8] dark:border-[#444746]">
+                    {draft.preview || draft.dataUrl ? (
+                        <img src={draft.dataUrl || draft.preview || ''} alt="" className="max-h-36 max-w-full rounded-lg object-contain" />
+                    ) : (
+                        <span className="flex items-center gap-2"><ImagePlus size={14} /> برای آپلود عکس کلیک کن</span>
+                    )}
+                    {(draft.preview || draft.dataUrl) && <span>برای تغییر عکس کلیک کن</span>}
+                    <input
+                        type="file"
+                        accept={IMAGE_ACCEPT}
+                        className="hidden"
+                        onChange={async (e) => {
+                            const selected = e.target.files?.[0];
+                            e.target.value = '';
+                            if (!selected) return;
+                            try {
+                                const dataUrl = await readImageFile(selected);
+                                onChange({ enabled: true, preview: dataUrl, existingName: draft.existingName, dataUrl });
+                            } catch (err) {
+                                onError(err instanceof Error ? err.message : 'خواندن عکس ناموفق بود.');
+                            }
+                        }}
+                    />
+                </label>
+            )}
+        </div>
+    );
+}
 
 
 // --- CUSTOM DROPDOWN COMPONENT ---
@@ -299,10 +388,11 @@ const FilterSwitch = ({ label, value, options, onChange, disabled = false, wrap 
 
 
 // --- TYPES ---
-interface Option { id: number; text: string; is_correct: boolean; image?: string | null; }
+interface Option { id: number; text: string; is_correct: boolean; image?: string | null; imageDraft?: ImageDraft; }
 interface QuestionData {
     id: number; text: string; options: Option[]; correctOptionId: number | null;
-    descriptiveAnswer: string; descriptiveImage?: string | null; images: string[];
+    descriptiveAnswer: string; descriptiveImage?: string | null; descriptiveImageDraft?: ImageDraft;
+    images: string[]; stemDrafts?: ImageDraft[];
     subject: number | null; subject_title: string;
     grade: number | null; grade_title: string;
     chapter: number | null; chapter_title: string;
@@ -359,7 +449,7 @@ export default function EditQuestions({
     const [isSearching, setIsSearching] = useState(false);
     const [searchId, setSearchId] = useState('');
     const containerRef = useRef<HTMLDivElement>(null);
-    const BASE_URL = 'images/questions/';
+    const BASE_URL = QUESTION_IMAGE_BASE;
     // --- STATIC OPTIONS ---
     const levelOptions = [
         { id: 'آسان', title: 'آسان' },
@@ -545,11 +635,13 @@ export default function EditQuestions({
     const mapQuestionData = (q: any): QuestionData => ({
         id: q.id,
         text: q.text || q.question_text || "",
-        options: q.options || [],
+        options: (q.options || []).map((option: Option) => ({ ...option, imageDraft: existingDraft(option.image) })),
         correctOptionId: q.options?.find((o: Option) => o.is_correct)?.id || null,
         descriptiveAnswer: q.descriptiveAnswer || "",
         descriptiveImage: q.descriptiveImage || null,
+        descriptiveImageDraft: existingDraft(q.descriptiveImage),
         images: q.images || [],
+        stemDrafts: (q.images || []).map((name: string) => existingDraft(name)),
         subject: q.subject || q.subject_id || null,
         subject_title: q.subject_title || '----',
         grade: q.grade || q.grade_id || (q.grade_ids?.[0] ?? null),
@@ -705,6 +797,10 @@ export default function EditQuestions({
 
     const handleSave = async () => {
         if (!question) return;
+        const imageError = (question.stemDrafts || []).map((draft) => draftMissing(draft) ? 'صورت سوال: سوییچ عکس روشن است. عکس را انتخاب کن یا سوییچ را خاموش کن.' : null).find(Boolean)
+            || question.options.map((option, index) => draftMissing(option.imageDraft) ? `گزینه ${index + 1}: سوییچ عکس روشن است. عکس را انتخاب کن یا سوییچ را خاموش کن.` : null).find(Boolean)
+            || (draftMissing(question.descriptiveImageDraft) ? 'پاسخ تشریحی: سوییچ عکس روشن است. عکس را انتخاب کن یا سوییچ را خاموش کن.' : null);
+        if (imageError) { setErrorMessage(imageError); return; }
         setIsSaving(true);
         setErrorMessage(null);
         try {
@@ -712,8 +808,10 @@ export default function EditQuestions({
                 question_id: question.id,
                 text: question.text,
                 descriptiveAnswer: question.descriptiveAnswer,
+                descriptive_image: draftPayload(question.descriptiveImageDraft, question.descriptiveImage),
                 correct_option_id: question.correctOptionId,
-                options: question.options.map(o => ({ id: o.id, text: o.text })),
+                stem_images: (question.stemDrafts || []).filter((draft) => draft.enabled).map((draft) => draft.dataUrl || draft.existingName).filter((value): value is string => !!value),
+                options: question.options.map(o => ({ id: o.id, text: o.text, image: draftPayload(o.imageDraft, o.image) })),
                 subject_id: question.subject,
                 grade_id: question.grade_ids[0] ?? question.grade,
                 topic_id: question.chapter_ids[0] ?? question.chapter,
@@ -729,6 +827,22 @@ export default function EditQuestions({
             const responseData = response.data || response;
 
             if (responseData.success) {
+                const images = Array.isArray(responseData.images) ? responseData.images : question.images;
+                const descriptiveImage = Object.prototype.hasOwnProperty.call(responseData, 'descriptiveImage')
+                    ? responseData.descriptiveImage
+                    : question.descriptiveImage;
+                setQuestion({
+                    ...question,
+                    images,
+                    stemDrafts: images.map((name: string) => existingDraft(name)),
+                    descriptiveImage,
+                    descriptiveImageDraft: existingDraft(descriptiveImage),
+                    options: question.options.map((option) => {
+                        const saved = (responseData.options || []).find((item: { id: number; image?: string | null }) => Number(item.id) === Number(option.id));
+                        const image = saved && Object.prototype.hasOwnProperty.call(saved, 'image') ? saved.image : option.image;
+                        return { ...option, image, imageDraft: existingDraft(image) };
+                    }),
+                });
                 setIsEditing(false);
             } else {
                 setErrorMessage(responseData.message || "به‌روزرسانی سوال ناموفق بود.");
@@ -919,6 +1033,25 @@ export default function EditQuestions({
                                         <MathRenderer text={question.text} subject={question.subject ?? undefined} />
                                     </div>
                                 )}
+                                {isEditing && (
+                                    <div className="mt-3 flex flex-col gap-3">
+                                        {(question.stemDrafts || []).map((draft, index) => (
+                                            <ImageEditor
+                                                key={`${draft.existingName || 'new'}-${index}`}
+                                                draft={draft}
+                                                onError={setErrorMessage}
+                                                onChange={(next) => handleUpdate('stemDrafts', (question.stemDrafts || []).map((item, itemIndex) => itemIndex === index ? next : item))}
+                                            />
+                                        ))}
+                                        <button
+                                            type="button"
+                                            onClick={() => handleUpdate('stemDrafts', [...(question.stemDrafts || []), { enabled: true, preview: null, existingName: null, dataUrl: null }])}
+                                            className="self-start rounded-xl border border-dashed border-[#dadce0] px-3 py-2 text-[11px] font-bold text-[#1a73e8] dark:border-[#444746]"
+                                        >
+                                            افزودن عکس صورت سوال
+                                        </button>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Options */}
@@ -938,7 +1071,13 @@ export default function EditQuestions({
                                                         <MathRenderer text={option.text} subject={question.subject ?? undefined} />
                                                     </div>
                                                 )}
-                                                {option.image && (
+                                                {isEditing ? (
+                                                    <ImageEditor
+                                                        draft={option.imageDraft || existingDraft(option.image)}
+                                                        onError={setErrorMessage}
+                                                        onChange={(next) => handleUpdate('options', question.options.map((item) => item.id === option.id ? { ...item, imageDraft: next } : item))}
+                                                    />
+                                                ) : option.image && (
                                                     <img src={`${BASE_URL}${option.image}`} alt="" className="mt-2 max-h-40 w-auto max-w-full rounded-lg border border-[#dadce0] object-contain dark:border-[#444746]" />
                                                 )}
                                             </div>
@@ -957,7 +1096,13 @@ export default function EditQuestions({
                                         <MathRenderer text={question.descriptiveAnswer} subject={question.subject ?? undefined} />
                                     </div>
                                 )}
-                                {question.descriptiveImage && (
+                                {isEditing ? (
+                                    <ImageEditor
+                                        draft={question.descriptiveImageDraft || existingDraft(question.descriptiveImage)}
+                                        onError={setErrorMessage}
+                                        onChange={(next) => handleUpdate('descriptiveImageDraft', next)}
+                                    />
+                                ) : question.descriptiveImage && (
                                     <img src={`${BASE_URL}${question.descriptiveImage}`} alt="" className="mt-3 max-h-56 w-auto max-w-full rounded-lg border border-[#dadce0] object-contain dark:border-[#444746]" />
                                 )}
                             </div>
@@ -1022,7 +1167,7 @@ export default function EditQuestions({
                             </div>
 
                             {/* Images Card */}
-                            {question.images && question.images.length > 0 && (
+                            {!isEditing && question.images && question.images.length > 0 && (
                                 <div className="bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl p-6">
                                     <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider mb-4 block">
                                         Images

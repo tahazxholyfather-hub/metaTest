@@ -1,7 +1,6 @@
 const pool = require('../db');
 const fs = require('fs');
 const path = require('path');
-const zlib = require('zlib');
 const crypto = require('crypto');
 const walletController = require('./walletController');
 const notifications = require('../notifications');
@@ -33,12 +32,17 @@ const { countWords, recordWordEvent, measureEditDelta } = require('../admin/word
 const { findExactDuplicates } = require('../admin/purgeQuestions');
 const {
     validateQuestionImages,
+    parseImageDataUrl,
     ensureQuestionImageColumns,
     saveQuestionImage,
     optionImageSql,
     descriptiveImageSql,
     questionHasImageSql,
+    resolveClientImage,
+    removeStoredQuestionImage,
+    safeImageName,
 } = require('../admin/questionImages');
+const { parseDocxQuestions } = require('../admin/docxQuestions');
 
 // --- PDF Library upload configuration ---
 // Defaults to the same web root used for avatar uploads in server.js
@@ -429,6 +433,22 @@ const handleFullUpdateQuestion = async (req, res) => {
         const gradeIds = toPositiveIds(req.body.grade_ids || grade_id);
         const topicIds = toPositiveIds(req.body.topic_ids || topic_id);
         const chapterIds = toPositiveIds(req.body.chapter_ids || req.body.mabhas_ids || chapter_id);
+        const stemImages = Array.isArray(req.body.stem_images) ? req.body.stem_images : null;
+        const hasDescriptiveImage = Object.prototype.hasOwnProperty.call(req.body, 'descriptive_image');
+
+        const imageValues = [];
+        if (stemImages) imageValues.push(...stemImages);
+        if (Array.isArray(options)) options.forEach((opt) => imageValues.push(opt && opt.image));
+        if (hasDescriptiveImage) imageValues.push(req.body.descriptive_image);
+        for (const value of imageValues) {
+            if (typeof value === 'string' && value.startsWith('data:')) parseImageDataUrl(value);
+            else if (value != null && value !== '' && typeof value === 'string' && !value.startsWith('data:') && !safeImageName(value)) {
+                return res.json({ success: false, message: 'عکس نامعتبر است.' });
+            }
+        }
+        if (stemImages && stemImages.length > 12) {
+            return res.json({ success: false, message: 'تعداد عکس‌های صورت سوال زیاد است.' });
+        }
 
         let editedWords = 0;
         try {
@@ -471,25 +491,108 @@ const handleFullUpdateQuestion = async (req, res) => {
             await saveQuestionTags(questionId, { gradeIds, topicIds, chapterIds });
         }
 
+        const touchesImages = stemImages || hasDescriptiveImage || (Array.isArray(options) && options.some((opt) => opt && Object.prototype.hasOwnProperty.call(opt, 'image')));
+        if (touchesImages) await ensureQuestionImageColumns();
+
         // 2. Update Descriptive Answer
-        if (descriptiveAnswer !== undefined) {
-            const [exist] = await pool.query("SELECT question_id FROM descriptive_answers_tam24 WHERE question_id = ?", [questionId]);
+        let descriptiveImageOut = null;
+        if (hasDescriptiveImage || descriptiveAnswer !== undefined) {
+            const [exist] = await pool.query(
+                `SELECT answer_text, ${hasDescriptiveImage ? 'image_name' : 'NULL AS image_name'} FROM descriptive_answers_tam24 WHERE question_id = ?`,
+                [questionId]
+            );
+            const currentImage = exist[0]?.image_name || null;
+            const nextText = descriptiveAnswer !== undefined ? descriptiveAnswer : (exist[0]?.answer_text || '');
+            const nextImage = hasDescriptiveImage ? await resolveClientImage(req.body.descriptive_image, currentImage) : currentImage;
             if (exist.length > 0) {
-                await pool.query("UPDATE descriptive_answers_tam24 SET answer_text = ? WHERE question_id = ?", [descriptiveAnswer, questionId]);
-            } else {
-                await pool.query("INSERT INTO descriptive_answers_tam24 (question_id, answer_text) VALUES (?, ?)", [questionId, descriptiveAnswer]);
+                if (hasDescriptiveImage) {
+                    await pool.query(
+                        'UPDATE descriptive_answers_tam24 SET answer_text = ?, image_name = ? WHERE question_id = ?',
+                        [nextText, nextImage, questionId]
+                    );
+                    if (currentImage && currentImage !== nextImage) await removeStoredQuestionImage(currentImage);
+                } else {
+                    await pool.query('UPDATE descriptive_answers_tam24 SET answer_text = ? WHERE question_id = ?', [nextText, questionId]);
+                }
+            } else if (String(nextText || '').trim() || nextImage) {
+                if (hasDescriptiveImage) {
+                    await pool.query(
+                        'INSERT INTO descriptive_answers_tam24 (question_id, answer_text, image_name) VALUES (?, ?, ?)',
+                        [questionId, nextText || '', nextImage]
+                    );
+                } else {
+                    await pool.query(
+                        'INSERT INTO descriptive_answers_tam24 (question_id, answer_text) VALUES (?, ?)',
+                        [questionId, nextText]
+                    );
+                }
             }
+            descriptiveImageOut = nextImage;
         }
 
         // 3. Update Options & Correct Answer
+        const savedOptions = [];
         if (options && Array.isArray(options)) {
             await pool.query("UPDATE options_tam24 SET is_correct = 0 WHERE question_id = ?", [questionId]);
             for (let opt of options) {
                 await pool.query("UPDATE options_tam24 SET option_text = ? WHERE id = ? AND question_id = ?", [opt.text, opt.id, questionId]);
+                const saved = { id: Number(opt.id) };
+                if (Object.prototype.hasOwnProperty.call(opt, 'image')) {
+                    const [currentRows] = await pool.query(
+                        'SELECT image_name FROM options_tam24 WHERE id = ? AND question_id = ?',
+                        [opt.id, questionId]
+                    );
+                    if (currentRows.length) {
+                        const current = currentRows[0].image_name || null;
+                        const imageName = await resolveClientImage(opt.image, current);
+                        if (imageName !== current) {
+                            await pool.query(
+                                'UPDATE options_tam24 SET image_name = ? WHERE id = ? AND question_id = ?',
+                                [imageName, opt.id, questionId]
+                            );
+                            if (current && current !== imageName) await removeStoredQuestionImage(current);
+                        }
+                        saved.image = imageName;
+                    }
+                }
+                savedOptions.push(saved);
             }
             if (correct_option_id) {
                 await pool.query("UPDATE options_tam24 SET is_correct = 1 WHERE id = ? AND question_id = ?", [correct_option_id, questionId]);
             }
+        }
+
+        let savedStem = null;
+        if (stemImages) {
+            const [rows] = await pool.query(
+                'SELECT id, image_name FROM question_images_tam24 WHERE question_id = ? ORDER BY id ASC',
+                [questionId]
+            );
+            const existing = new Set(rows.map((row) => row.image_name));
+            const keep = [];
+            for (const value of stemImages) {
+                if (value == null || value === '') continue;
+                if (typeof value === 'string' && value.startsWith('data:')) keep.push(await saveQuestionImage(value));
+                else if (existing.has(value)) keep.push(value);
+                else {
+                    const err = new Error('عکس نامعتبر است.');
+                    err.statusCode = 400;
+                    throw err;
+                }
+            }
+            const keepSet = new Set(keep);
+            for (const row of rows) {
+                if (!keepSet.has(row.image_name)) {
+                    await pool.query('DELETE FROM question_images_tam24 WHERE id = ? AND question_id = ?', [row.id, questionId]);
+                    await removeStoredQuestionImage(row.image_name);
+                }
+            }
+            for (const name of keep) {
+                if (!existing.has(name)) {
+                    await pool.query('INSERT INTO question_images_tam24 (question_id, image_name) VALUES (?, ?)', [questionId, name]);
+                }
+            }
+            savedStem = keep;
         }
 
         await recordWordEvent({
@@ -500,11 +603,25 @@ const handleFullUpdateQuestion = async (req, res) => {
             source: 'live',
         });
 
-        res.json({ success: true, message: "Question fully updated successfully!" });
+        if (!savedStem) {
+            const [imgRows] = await pool.query(
+                'SELECT image_name FROM question_images_tam24 WHERE question_id = ? ORDER BY id ASC',
+                [questionId]
+            );
+            savedStem = imgRows.map((row) => row.image_name);
+        }
+
+        res.json({
+            success: true,
+            message: "Question fully updated successfully!",
+            images: savedStem,
+            options: savedOptions,
+            descriptiveImage: descriptiveImageOut,
+        });
 
     } catch (error) {
         console.error("❌ SQL Error in handleFullUpdateQuestion:", error);
-        res.json({ success: false, message: "Database error updating question" });
+        res.json({ success: false, message: error.statusCode === 400 ? error.message : "Database error updating question" });
     }
 };
 
@@ -917,108 +1034,8 @@ const handleAdminDeletePdf = async (req, res) => {
 // INSERT QUESTIONS (Manual + Word/.docx Auto Import)
 // ===============================================
 
-// A .docx file is a ZIP archive; extract word/document.xml using only Node's zlib
-// (no external unzip dependency needed).
-const extractDocxDocumentXml = (buffer) => {
-    // Locate the End Of Central Directory record (signature PK\x05\x06)
-    let eocd = -1;
-    for (let i = buffer.length - 22; i >= 0; i--) {
-        if (buffer.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
-    }
-    if (eocd === -1) throw new Error('The uploaded file is not a valid .docx document.');
-
-    const entryCount = buffer.readUInt16LE(eocd + 10);
-    let offset = buffer.readUInt32LE(eocd + 16);
-
-    for (let i = 0; i < entryCount; i++) {
-        if (buffer.readUInt32LE(offset) !== 0x02014b50) break; // central directory signature
-        const method = buffer.readUInt16LE(offset + 10);
-        const compressedSize = buffer.readUInt32LE(offset + 20);
-        const nameLength = buffer.readUInt16LE(offset + 28);
-        const extraLength = buffer.readUInt16LE(offset + 30);
-        const commentLength = buffer.readUInt16LE(offset + 32);
-        const localHeaderOffset = buffer.readUInt32LE(offset + 42);
-        const name = buffer.toString('utf8', offset + 46, offset + 46 + nameLength);
-
-        if (name === 'word/document.xml') {
-            const localNameLength = buffer.readUInt16LE(localHeaderOffset + 26);
-            const localExtraLength = buffer.readUInt16LE(localHeaderOffset + 28);
-            const dataStart = localHeaderOffset + 30 + localNameLength + localExtraLength;
-            const data = buffer.slice(dataStart, dataStart + compressedSize);
-
-            if (method === 0) return data.toString('utf8');              // stored
-            if (method === 8) return zlib.inflateRawSync(data).toString('utf8'); // deflated
-            throw new Error('Unsupported compression method inside the .docx file.');
-        }
-
-        offset += 46 + nameLength + extraLength + commentLength;
-    }
-
-    throw new Error('word/document.xml not found — please upload a valid .docx file.');
-};
-
-// Convert the raw document XML into plain text (paragraphs -> newlines, entities decoded)
-const docxXmlToText = (xml) => {
-    return xml
-        .replace(/<w:tab[^>]*\/>/g, '\t')
-        .replace(/<w:br[^>]*\/>/g, '\n')
-        .replace(/<\/w:p>/g, '\n')
-        .replace(/<[^>]+>/g, '')
-        .replace(/&laquo;|&#171;/gi, '«')
-        .replace(/&raquo;|&#187;/gi, '»')
-        .replace(/&nbsp;|&#160;/gi, ' ')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&apos;/g, "'")
-        .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
-        .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(parseInt(code, 16)))
-        .replace(/&amp;/g, '&');
-};
-
-// Extract question blocks from plain text using the agreed tag format:
-// <q>..</q>, <o1>..</o1> ... <o4>..</o4>, <ans>1-4</ans>, optional <desc>..</desc>
-const parseQuestionsFromText = (text) => {
-    const questions = [];
-    const errors = [];
-
-    const blocks = text.split(/<q>/i).slice(1); // content following each <q> opening tag
-
-    blocks.forEach((block, index) => {
-        const blockNumber = index + 1;
-        const grabTag = (tag) => {
-            const match = block.match(new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, 'i'));
-            return match ? match[1].trim() : null;
-        };
-
-        const questionMatch = block.match(/^([\s\S]*?)<\/q>/i);
-        const questionText = questionMatch ? questionMatch[1].trim() : null;
-        const options = [grabTag('o1'), grabTag('o2'), grabTag('o3'), grabTag('o4')];
-        const ansRaw = grabTag('ans');
-        const descriptive = grabTag('desc');
-        const correctIndex = parseInt(ansRaw, 10);
-
-        if (!questionText) {
-            errors.push(`Question ${blockNumber}: missing or empty question text (</q> not found).`);
-        } else if (options.some(o => o === null || o === '')) {
-            const missing = options.map((o, i) => (o === null || o === '') ? `o${i + 1}` : null).filter(Boolean).join(', ');
-            errors.push(`Question ${blockNumber}: missing or empty option tag(s): ${missing}.`);
-        } else if (!correctIndex || correctIndex < 1 || correctIndex > 4) {
-            errors.push(`Question ${blockNumber}: <ans> must be a number from 1 to 4 (found: "${ansRaw ?? 'nothing'}").`);
-        } else {
-            questions.push({
-                text: questionText,
-                options,
-                correct_index: correctIndex,
-                descriptive: descriptive || ''
-            });
-        }
-    });
-
-    return { questions, errors };
-};
-
-// Parse an uploaded .docx (base64) and return the extracted questions for review
+// Parse an uploaded .docx (base64) and return the extracted questions for review.
+// Inline pictures inside <q>, <o1>...<o4> and <desc> become that slot's image.
 const handleAdminParseQuestionsDocx = async (req, res) => {
     try {
         const fileData = requirePost(req, res, 'file_data');
@@ -1027,15 +1044,13 @@ const handleAdminParseQuestionsDocx = async (req, res) => {
         const base64 = String(fileData).replace(/^data:.*?;base64,/, '');
         const buffer = Buffer.from(base64, 'base64');
 
-        const xml = extractDocxDocumentXml(buffer);
-        const text = docxXmlToText(xml);
-        const { questions, errors } = parseQuestionsFromText(text);
+        const { questions, errors, warnings } = parseDocxQuestions(buffer);
 
         if (questions.length === 0 && errors.length === 0) {
             return res.json({ success: false, message: 'No <q>...</q> blocks were found in the document.' });
         }
 
-        res.json({ success: true, questions, errors, total_found: questions.length });
+        res.json({ success: true, questions, errors, warnings, total_found: questions.length });
     } catch (error) {
         console.error("❌ Error in handleAdminParseQuestionsDocx:", error);
         res.json({ success: false, message: error.message || "Failed to parse the Word file." });

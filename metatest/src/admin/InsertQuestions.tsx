@@ -68,6 +68,11 @@ function imagePayload(slot: ImageSlot) {
     return slot.enabled ? slot.dataUrl : null;
 }
 
+function slotFromDataUrl(dataUrl: string | null | undefined): ImageSlot {
+    if (!dataUrl) return emptyImage();
+    return { enabled: true, dataUrl, name: 'از فایل ورد' };
+}
+
 function missingImageMessage(label: string, slot: ImageSlot) {
     if (slot.enabled && !slot.dataUrl) {
         return `${label}: سوییچ عکس روشن است. عکس را انتخاب کن یا سوییچ را خاموش کن.`;
@@ -156,6 +161,7 @@ export default function InsertQuestions() {
     const [isParsing, setIsParsing] = useState(false);
     const [parsed, setParsed] = useState<ParsedQuestion[]>([]);
     const [parseWarnings, setParseWarnings] = useState<string[]>([]);
+    const [imageWarnings, setImageWarnings] = useState<string[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -318,6 +324,7 @@ export default function InsertQuestions() {
         setErrorMessage(null);
         setParsed([]);
         setParseWarnings([]);
+        setImageWarnings([]);
         try {
             const response: any = await flowApi.dispatch('Admin_parse_questions_docx', {
                 file_data: file.data,
@@ -329,11 +336,12 @@ export default function InsertQuestions() {
                 setParsed((res.questions || []).map((q: any) => ({
                     ...q,
                     checked: true,
-                    stemImage: emptyImage(),
-                    optionImages: emptyOptionImages(),
-                    descImage: emptyImage(),
+                    stemImage: slotFromDataUrl(q.image),
+                    optionImages: [0, 1, 2, 3].map((index) => slotFromDataUrl(q.option_images?.[index])),
+                    descImage: slotFromDataUrl(q.descriptive_image),
                 })));
                 setParseWarnings(res.errors || []);
+                setImageWarnings(res.warnings || []);
                 if ((res.questions || []).length === 0) {
                     setErrorMessage('سوال معتبری از فایل استخراج نشد.');
                 }
@@ -621,7 +629,7 @@ export default function InsertQuestions() {
                             Expected format inside the document: <code className="font-mono">&lt;q&gt;...&lt;/q&gt; &lt;o1&gt;...&lt;/o1&gt; ... &lt;o4&gt;...&lt;/o4&gt; &lt;ans&gt;1-4&lt;/ans&gt; &lt;desc&gt;...&lt;/desc&gt;</code> (desc is optional).
                         </p>
                         <p className="mt-2 text-[10px] leading-relaxed text-[#86868b]" dir="rtl">
-                            فایل ورد فقط متن را می‌آورد. اگر سوال، گزینه یا پاسخ تشریحی عکس دارد، بعد از استخراج سوییچ «عکس دارد» را روشن کن و عکس را بگذار.
+                            عکس را داخل همان تگ و به‌صورت داخل خط بچسبان: صورت سوال بین <span dir="ltr">&lt;q&gt;</span>، هر گزینه داخل <span dir="ltr">&lt;o1&gt;</span> تا <span dir="ltr">&lt;o4&gt;</span>، و پاسخ تشریحی داخل <span dir="ltr">&lt;desc&gt;</span>. عکس شناور نادیده گرفته می‌شود. اگر یک بخش دو عکس داشته باشد، فقط عکس اول برداشته می‌شود و در بازبینی می‌توانی آن را عوض کنی.
                         </p>
                     </div>
 
@@ -649,6 +657,17 @@ export default function InsertQuestions() {
                     </div>
 
                     {/* Parse warnings */}
+                    {imageWarnings.length > 0 && (
+                        <div className="p-4 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20 rounded-[1rem]">
+                            <div className="flex items-center gap-2 mb-2 text-sm font-bold">
+                                <AlertCircle size={16} /> هشدار عکس‌ها
+                            </div>
+                            <ul className="text-xs font-medium space-y-1 pr-6 list-disc" dir="rtl">
+                                {imageWarnings.map((warning, i) => <li key={i}>{warning}</li>)}
+                            </ul>
+                        </div>
+                    )}
+
                     {parseWarnings.length > 0 && (
                         <div className="p-4 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20 rounded-[1rem]">
                             <div className="flex items-center gap-2 mb-2 text-sm font-bold">

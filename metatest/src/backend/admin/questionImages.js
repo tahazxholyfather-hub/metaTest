@@ -110,7 +110,47 @@ function questionHasImageSql(questionAlias = 'q') {
     const alias = questionAlias && /^[A-Za-z_][A-Za-z0-9_]*$/.test(questionAlias) ? questionAlias : 'q';
     const stem = `EXISTS (SELECT 1 FROM question_images_tam24 qi WHERE qi.question_id = ${alias}.id)`;
     if (!columnsReady) return stem;
-    return `(${stem} OR EXISTS (SELECT 1 FROM options_tam24 oi WHERE oi.question_id = ${questionAlias}.id AND oi.image_name IS NOT NULL AND oi.image_name <> '') OR EXISTS (SELECT 1 FROM descriptive_answers_tam24 di WHERE di.question_id = ${questionAlias}.id AND di.image_name IS NOT NULL AND di.image_name <> ''))`;
+    return `(${stem} OR EXISTS (SELECT 1 FROM options_tam24 oi WHERE oi.question_id = ${alias}.id AND oi.image_name IS NOT NULL AND oi.image_name <> '') OR EXISTS (SELECT 1 FROM descriptive_answers_tam24 di WHERE di.question_id = ${alias}.id AND di.image_name IS NOT NULL AND di.image_name <> ''))`;
+}
+
+function detectImageExt(buffer) {
+    if (matchesMagic('png', buffer)) return 'png';
+    if (matchesMagic('jpg', buffer)) return 'jpg';
+    if (matchesMagic('gif', buffer)) return 'gif';
+    if (matchesMagic('webp', buffer)) return 'webp';
+    return null;
+}
+
+function bufferToDataUrl(buffer) {
+    if (!buffer || !buffer.length) throw imageError('فایل انتخاب‌شده یک تصویر معتبر نیست.');
+    if (buffer.length > MAX_IMAGE_BYTES) throw imageError('حجم هر عکس باید کمتر از ۴ مگابایت باشد.');
+    const ext = detectImageExt(buffer);
+    if (!ext) throw imageError('فایل انتخاب‌شده یک تصویر معتبر نیست.');
+    const mime = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`;
+    return `data:${mime};base64,${buffer.toString('base64')}`;
+}
+
+function safeImageName(name) {
+    if (typeof name !== 'string') return null;
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,180}$/.test(name)) return null;
+    return name;
+}
+
+async function removeStoredQuestionImage(name) {
+    const safe = safeImageName(name);
+    if (!safe) return;
+    const { profile } = require('../runtimeMode');
+    await fs.promises.unlink(path.join(profile.webRoot, 'images', 'questions', safe)).catch(() => {});
+}
+
+async function resolveClientImage(value, currentName) {
+    if (value == null || value === '') return null;
+    if (typeof value !== 'string') throw imageError('فرمت عکس نامعتبر است.');
+    if (value.startsWith('data:')) return saveQuestionImage(value);
+    const safe = safeImageName(value);
+    const current = safeImageName(currentName);
+    if (safe && current && safe === current) return current;
+    throw imageError('عکس نامعتبر است.');
 }
 
 async function saveQuestionImage(dataUrl) {
@@ -133,4 +173,8 @@ module.exports = {
     descriptiveImageSql,
     questionHasImageSql,
     saveQuestionImage,
+    bufferToDataUrl,
+    safeImageName,
+    removeStoredQuestionImage,
+    resolveClientImage,
 };
