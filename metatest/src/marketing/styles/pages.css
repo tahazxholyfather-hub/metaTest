@@ -119,10 +119,14 @@ main.page-footer-rail {
 .contact-trap { position: absolute; left: -10000px; height: 0; overflow: hidden; }
 
 .library { --line: rgba(255, 255, 255, 0.08); display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 28px; align-items: start; }
-.library-aside {
+.library-side {
   position: sticky;
-  top: 16px;
-  max-height: calc(100dvh - 32px);
+  top: calc(var(--hdr, 88px) + 16px);
+  align-self: start;
+  max-height: calc(100dvh - var(--hdr, 88px) - 32px);
+}
+.library-aside {
+  max-height: calc(100dvh - var(--hdr, 88px) - 32px);
   overflow: auto;
   padding: 16px;
   border: 1px solid rgba(196, 181, 253, 0.34);
@@ -215,12 +219,12 @@ main.page-footer-rail {
 .read .article-html { color: #c3bbd6; font-size: 16.5px; line-height: 2; }
 .read-side {
   position: sticky;
-  top: 16px;
+  top: calc(var(--hdr, 88px) + 16px);
   align-self: start;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  max-height: calc(100dvh - 32px);
+  max-height: calc(100dvh - var(--hdr, 88px) - 32px);
   overflow: auto;
   padding: 16px;
   border: 1px solid rgba(196, 181, 253, 0.38);
@@ -310,6 +314,7 @@ main.page-footer-rail {
 @media (max-width: 980px) {
   .library,
   .read-layout { grid-template-columns: 1fr; }
+  .library-side,
   .library-aside,
   .read-side { display: none; }
   .library-mbar { display: block; position: sticky; top: 68px; z-index: 30; padding: 8px 0 10px; }
