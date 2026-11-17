@@ -180,7 +180,7 @@ export function AboutPage() {
         <div className="hero-eyebrow">درباره متاتست</div>
         <h1 className="about-title">متاتست چیه؟</h1>
         <div className="about-copy">
-          <p className="about-lead">ما یه تیم کوچک اما پرانرژی هستیم که به هدف بزرگ داریم: تغییر تجربه یادگیری! باور داریم هر دانش‌آموز، فارغ از اینکه کجا زندگی می‌کنه یا چقدر بودجه داره، باید به بهترین ابزارهای آموزشی دسترسی داشته باشه.</p>
+          <p className="about-lead">ما یه تیم پرانرژی هستیم که به هدف بزرگ داریم: تغییر تجربه یادگیری! باور داریم هر دانش‌آموز، فارغ از اینکه کجا زندگی می‌کنه یا چقدر بودجه داره، باید به بهترین ابزارهای آموزشی دسترسی داشته باشه.</p>
           <p className="about-lead">برای همین متاتست رو ساختیم؛ ترکیبی از هوش مصنوعی، آموزش هوشمند و ابزارهای حرفه‌ای که قراره مسیر درس خوندن رو برات ساده‌تر، جذاب‌تر و پربازده‌تر کنه.</p>
         </div>
         <div className="hero-cta-row">
@@ -191,14 +191,14 @@ export function AboutPage() {
           <a href="#about-features" className="btn-ghost">آشنایی با امکانات</a>
         </div>
       </section>
-      <section className="stats-section">
+      {/* <section className="stats-section">
         <div className="stats-grid">
           <div className="stat-card"><div className="stat-num">+۱۵هزار</div><div className="stat-label">دانش‌آموز فعال که هر روز با متاتست تمرین می‌کنند</div></div>
           <div className="stat-card"><div className="stat-num">+۲۰۰هزار</div><div className="stat-label">سؤال تمرینی در پایه‌ها و دروس مختلف</div></div>
           <div className="stat-card"><div className="stat-num">+۵۰هزار</div><div className="stat-label">آزمون آنلاین رقابتی برگزار شده</div></div>
           <div className="stat-card"><div className="stat-num">۴.۸ ⭐</div><div className="stat-label">میانگین رضایت کاربران بر اساس نظرسنجی‌های ماهانه</div></div>
         </div>
-      </section>
+      </section> */}
       <StorySection />
       <AboutShowcases />
       <section className="values-section">
