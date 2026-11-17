@@ -107,6 +107,7 @@ export function AboutPage() {
           <a href="#about-features" className="btn-ghost">آشنایی با امکانات</a>
         </div>
       </section>
+      {/* آمار فعلاً نمایش داده نمی‌شود
       <section className="stats-section">
         <div className="stats-grid">
           <div className="stat-card"><div className="stat-num">+۱۵هزار</div><div className="stat-label">دانش‌آموز فعال که هر روز با متاتست تمرین می‌کنند</div></div>
@@ -115,6 +116,7 @@ export function AboutPage() {
           <div className="stat-card"><div className="stat-num">۴.۸ ⭐</div><div className="stat-label">میانگین رضایت کاربران بر اساس نظرسنجی‌های ماهانه</div></div>
         </div>
       </section>
+      */}
       <section className="story-section">
         <div className="story-inner">
           <div className="story-visual">
