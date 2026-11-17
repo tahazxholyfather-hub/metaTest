@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, CheckCircle2, Download, Eraser, Loader2, Upload } from 'lucide-react';
 import { flowApi } from '../lib/authApi';
+import { MathRenderer } from '../components/ui/MathRenderer';
 import { adminApi } from '../lib/adminApi';
 
 type History = {
@@ -466,9 +467,11 @@ export default function PurgeQuestions() {
                     <div className="flex flex-col gap-3">
                         {lookup.map((question) => (
                             <article key={question.id} className="bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl p-4">
-                                <p className="text-sm leading-relaxed">{question.text}</p>
+                                <div className="text-sm leading-relaxed">
+                                    <MathRenderer text={question.text} dir="rtl" />
+                                </div>
                                 <ol className="mt-2 text-xs text-[#5f6368] dark:text-[#c4c7c5] list-decimal pr-4 space-y-1">
-                                    {question.options.map((option, index) => <li key={index}>{option}</li>)}
+                                    {question.options.map((option, index) => <li key={index}><MathRenderer text={option} inline dir="rtl" /></li>)}
                                 </ol>
                                 <div className="mt-3 flex flex-col gap-2">
                                     <label className="flex items-start gap-3 rounded-xl px-3 py-2 text-xs bg-[#e8f0fe]/60 dark:bg-[#1a73e8]/10">
@@ -557,9 +560,11 @@ export default function PurgeQuestions() {
                     <div className="flex flex-col gap-3">
                         {filteredGroups.slice(0, visible).map((group) => (
                             <article key={`${group.text}-${group.copies[0]?.id}`} className="bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl p-4">
-                                <p className="text-sm leading-relaxed">{group.text}</p>
+                                <div className="text-sm leading-relaxed">
+                                    <MathRenderer text={group.text} dir="rtl" />
+                                </div>
                                 <ol className="mt-2 text-xs text-[#5f6368] dark:text-[#c4c7c5] list-decimal pr-4 space-y-1">
-                                    {group.options.map((option, index) => <li key={index}>{option}</li>)}
+                                    {group.options.map((option, index) => <li key={index}><MathRenderer text={option} inline dir="rtl" /></li>)}
                                 </ol>
                                 <p className="text-[10px] text-[#86868b] mt-2">
                                     {group.occurrences} بار در فایل · {group.file_names.join('، ')} · {group.copies.length} ردیف در بانک
@@ -594,7 +599,7 @@ export default function PurgeQuestions() {
                     </button>
                     {showUnmatched && report.unmatched.map((item) => (
                         <p key={`${item.file_name}-${item.index}`} className="text-xs leading-relaxed text-[#5f6368]">
-                            {item.file_name} / سوال {item.index}: {item.text}
+                            {item.file_name} / سوال {item.index}: <MathRenderer text={item.text} inline dir="rtl" />
                         </p>
                     ))}
 
@@ -603,7 +608,7 @@ export default function PurgeQuestions() {
                     </button>
                     {showAmbiguous && report.ambiguous.map((item) => (
                         <div key={`${item.file_name}-${item.index}`} className="text-xs leading-relaxed">
-                            <p>{item.file_name} / سوال {item.index}: {item.text}</p>
+                            <p>{item.file_name} / سوال {item.index}: <MathRenderer text={item.text} inline dir="rtl" /></p>
                             {item.candidates.map((candidate) => (
                                 <p key={candidate.id} className="text-[#86868b] pr-3">#{candidate.id} · {candidate.reason} · {candidate.status} · {candidate.created_at}</p>
                             ))}
@@ -666,7 +671,7 @@ export default function PurgeQuestions() {
                                             <span className="font-bold">#{copy.id}</span>
                                             {' · '}{historyLabel(copy.history)}
                                             <br />
-                                            {copy.text}
+                                            <MathRenderer text={copy.text} inline dir="rtl" />
                                         </p>
                                     ))}
                                 </div>

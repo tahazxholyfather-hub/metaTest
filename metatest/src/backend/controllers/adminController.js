@@ -30,6 +30,7 @@ const {
 const { withSections } = require('../admin/access');
 const { countWords, recordWordEvent, measureEditDelta } = require('../admin/words');
 const { findExactDuplicates } = require('../admin/purgeQuestions');
+const { questionFingerprint } = require('../admin/questionMatch');
 const {
     validateQuestionImages,
     parseImageDataUrl,
@@ -1101,9 +1102,31 @@ const handleAdminInsertQuestions = async (req, res) => {
             }
         }
 
+        const seenFingerprints = new Set();
+        const uniqueQuestions = [];
+        let repeatedInFile = 0;
+        for (const question of questions) {
+            const fingerprint = questionFingerprint(question.text, question.options);
+            if (seenFingerprints.has(fingerprint)) {
+                repeatedInFile += 1;
+                continue;
+            }
+            seenFingerprints.add(fingerprint);
+            uniqueQuestions.push(question);
+        }
+
+        const lockConn = await pool.getConnection();
+        let locked = false;
+        try {
+        const [[lockRow]] = await lockConn.query(`SELECT GET_LOCK('metatest_question_insert', 20) AS locked`);
+        locked = Number(lockRow?.locked) === 1;
+        if (!locked) {
+            return res.json({ success: false, message: 'ثبت دیگری در حال انجام است. چند ثانیه بعد دوباره تلاش کن.' });
+        }
+
         const confirmed = req.body.confirm_duplicates === true || req.body.confirm_duplicates === 1 || req.body.confirm_duplicates === 'true';
         if (!confirmed) {
-            const duplicates = await findExactDuplicates(pool, questions);
+            const duplicates = await findExactDuplicates(pool, uniqueQuestions);
             if (duplicates.length > 0) {
                 return res.json({
                     success: false,
@@ -1126,8 +1149,8 @@ const handleAdminInsertQuestions = async (req, res) => {
         const failed = [];
         let lastImageError = null;
 
-        for (let i = 0; i < questions.length; i++) {
-            const q = questions[i];
+        for (let i = 0; i < uniqueQuestions.length; i++) {
+            const q = uniqueQuestions[i];
             let questionId = null;
             try {
                 const [qResult] = await pool.query(
@@ -1216,12 +1239,18 @@ const handleAdminInsertQuestions = async (req, res) => {
             return res.json({ success: false, message: lastImageError || 'ثبت سوال‌ها ناموفق بود.' });
         }
 
+        const repeatNote = repeatedInFile ? ` ${repeatedInFile} سوال تکراری داخل همین فایل دوباره ثبت نشد.` : '';
         res.json({
             success: true,
-            message: `Inserted ${insertedIds.length} question(s) successfully${failed.length > 0 ? `, ${failed.length} failed` : ''}.`,
+            message: `${insertedIds.length} سوال ثبت شد.${repeatNote}${failed.length > 0 ? ` ${failed.length} سوال ثبت نشد.` : ''}`,
             inserted_ids: insertedIds,
-            failed_indexes: failed
+            failed_indexes: failed,
+            repeated_in_file: repeatedInFile,
         });
+        } finally {
+            if (locked) await lockConn.query(`SELECT RELEASE_LOCK('metatest_question_insert')`).catch(() => {});
+            lockConn.release();
+        }
     } catch (error) {
         console.error("❌ SQL Error in handleAdminInsertQuestions:", error);
         res.json({ success: false, message: "Database error inserting questions" });

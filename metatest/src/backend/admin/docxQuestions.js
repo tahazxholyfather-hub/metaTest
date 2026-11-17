@@ -67,6 +67,11 @@ function documentXmlToSequence(xml) {
 
         if (!closing && local === 't' && !selfClosing) {
             const endTag = `</${raw.match(/^<\s*([^\s/>]+)/)[1]}>`;
+            if (stack.includes('Fallback')) {
+                const end = source.indexOf(endTag, close + 1);
+                cursor = end === -1 ? close + 1 : end + endTag.length;
+                continue;
+            }
             const end = source.indexOf(endTag, close + 1);
             if (end === -1) {
                 cursor = close + 1;
