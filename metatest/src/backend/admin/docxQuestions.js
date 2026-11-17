@@ -45,8 +45,21 @@ function documentXmlToSequence(xml) {
     const images = [];
     const stack = [];
     let out = '';
+    let fallbackBuf = '';
+    let fallbackDepth = 0;
     let cursor = 0;
     const source = String(xml || '');
+    const write = (piece) => {
+        if (fallbackDepth > 0) fallbackBuf += piece;
+        else out += piece;
+    };
+    const flushFallback = () => {
+        // A second copy of the whole question lives in the compatibility
+        // fallback. Equation text stored only there, such as {H2O} after \ce,
+        // has to stay or the formula becomes a bare \ce.
+        if (!/<(?:\/)?(?:q|o[1-4]|ans|desc)>/.test(fallbackBuf)) out += fallbackBuf;
+        fallbackBuf = '';
+    };
 
     while (cursor < source.length) {
         const open = source.indexOf('<', cursor);
@@ -58,34 +71,36 @@ function documentXmlToSequence(xml) {
         const closing = raw.startsWith('</');
         const selfClosing = /\/\s*>$/.test(raw);
 
-        if (!closing && (local === 'inline' || local === 'anchor' || local === 'pict' || local === 'Fallback')) {
+        if (!closing && local === 'Fallback') {
+            stack.push(local);
+            fallbackDepth += 1;
+        } else if (!closing && (local === 'inline' || local === 'anchor' || local === 'pict')) {
             stack.push(local);
         }
-        if (closing && (local === 'inline' || local === 'anchor' || local === 'pict' || local === 'Fallback')) {
+        if (closing && local === 'Fallback') {
+            fallbackDepth = Math.max(0, fallbackDepth - 1);
+            if (fallbackDepth === 0) flushFallback();
+            popStack(stack, local);
+        } else if (closing && (local === 'inline' || local === 'anchor' || local === 'pict')) {
             popStack(stack, local);
         }
 
         if (!closing && local === 't' && !selfClosing) {
             const endTag = `</${raw.match(/^<\s*([^\s/>]+)/)[1]}>`;
-            if (stack.includes('Fallback')) {
-                const end = source.indexOf(endTag, close + 1);
-                cursor = end === -1 ? close + 1 : end + endTag.length;
-                continue;
-            }
             const end = source.indexOf(endTag, close + 1);
             if (end === -1) {
                 cursor = close + 1;
                 continue;
             }
-            out += decodeXmlText(source.slice(close + 1, end));
+            write(decodeXmlText(source.slice(close + 1, end)));
             cursor = end + endTag.length;
             continue;
         }
 
         if (!closing && (local === 'tab' || local === 'br' || local === 'cr')) {
-            out += local === 'tab' ? '\t' : '\n';
+            write(local === 'tab' ? '\t' : '\n');
         }
-        if (closing && local === 'p') out += '\n';
+        if (closing && local === 'p') write('\n');
 
         if (!closing && (local === 'blip' || local === 'imagedata') && !stack.includes('Fallback')) {
             const relId = attr(raw, ['embed', 'id']);
