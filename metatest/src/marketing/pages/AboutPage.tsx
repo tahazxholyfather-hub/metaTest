@@ -107,14 +107,14 @@ export function AboutPage() {
           <a href="#about-features" className="btn-ghost">آشنایی با امکانات</a>
         </div>
       </section>
-      <section className="stats-section">
+      {/* <section className="stats-section">
         <div className="stats-grid">
           <div className="stat-card"><div className="stat-num">+۱۵هزار</div><div className="stat-label">دانش‌آموز فعال که هر روز با متاتست تمرین می‌کنند</div></div>
           <div className="stat-card"><div className="stat-num">+۲۰۰هزار</div><div className="stat-label">سؤال تمرینی در پایه‌ها و دروس مختلف</div></div>
           <div className="stat-card"><div className="stat-num">+۵۰هزار</div><div className="stat-label">آزمون آنلاین رقابتی برگزار شده</div></div>
           <div className="stat-card"><div className="stat-num">۴.۸ ⭐</div><div className="stat-label">میانگین رضایت کاربران بر اساس نظرسنجی‌های ماهانه</div></div>
         </div>
-      </section>
+      </section> */}
       <section className="story-section">
         <div className="story-inner">
           <div className="story-visual">
