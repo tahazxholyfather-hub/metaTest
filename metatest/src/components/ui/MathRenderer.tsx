@@ -2,6 +2,7 @@
 
 import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { normalizeAssistantText } from '../../backend/ai-teacher/services/replyQuality.js';
+import { repairDisplayMath } from '../../lib/repairDisplayMath.js';
 
 // =====================================================================
 // MathRenderer — self-contained MathJax v4 renderer (fully local/offline)
@@ -326,7 +327,7 @@ export const MathRenderer: React.FC<MathRendererProps> = ({
         // Digits must become ASCII before Persian text is lifted out of math.
         // Otherwise $L_۱$ is split into $L_$ plus the digit, and MathJax reports
         // a missing subscript.
-        const decoded = asciiDigitsInMath(decodeWordEntities(text));
+        const decoded = asciiDigitsInMath(repairDisplayMath(decodeWordEntities(text)));
         const normalized = normalizeAssistantText(decoded);
         return isChemistrySubject(subject) ? formatChemistryText(normalized) : normalized;
     }, [text, subject]);

@@ -130,6 +130,19 @@ test('fallback text is not registered as a second question', () => {
     assert.equal(parsed.questions[0].text, 'متن');
 });
 
+test('keeps equation text that Word stored only in the fallback', () => {
+    const xml = `
+        <w:p><w:r><w:t>&lt;q&gt;فرمول $\\ce</w:t></w:r>
+        <mc:AlternateContent>
+          <mc:Fallback><w:r><w:t>{H2O}$</w:t></w:r></mc:Fallback>
+        </mc:AlternateContent>
+        <w:r><w:t>&lt;/q&gt;&lt;o1&gt;الف&lt;/o1&gt;&lt;o2&gt;ب&lt;/o2&gt;&lt;o3&gt;پ&lt;/o3&gt;&lt;o4&gt;ت&lt;/o4&gt;&lt;ans&gt;1&lt;/ans&gt;</w:t></w:r></w:p>
+    `;
+    const parsed = parseQuestionsFromText(documentXmlToSequence(xml).text, [], []);
+    assert.equal(parsed.questions.length, 1);
+    assert.equal(parsed.questions[0].text, 'فرمول $\\ce{H2O}$');
+});
+
 test('reads an inline picture out of a docx package', () => {
     const xml = Buffer.from(`
         <w:document><w:body>
