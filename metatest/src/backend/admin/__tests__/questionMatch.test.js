@@ -11,6 +11,7 @@ const {
     classifyUploads,
     planPurge,
     parseQuestionIds,
+    parseIdText,
     hasHistory,
 } = require('../questionMatch');
 
@@ -114,6 +115,8 @@ test('full delete deactivates rows users have touched', () => {
     ]);
     const onlyOff = planPurge([{ id: 1, has_history: false }], 'deactivate');
     assert.equal(onlyOff.plan[0].action, 'deactivate');
+    const forced = planPurge([{ id: 2, has_history: true }], 'delete', { forceUsed: true });
+    assert.equal(forced.plan[0].action, 'delete');
     assert.equal(hasHistory({ answers: 0, quizzes: 1 }), true);
 });
 
@@ -121,6 +124,8 @@ test('question ids are unique positive integers', () => {
     assert.deepEqual(parseQuestionIds([3, '3', 4]).ids, [3, 4]);
     assert.equal(parseQuestionIds([]).error.includes('انتخاب'), true);
     assert.equal(parseQuestionIds([0]).error.includes('نامعتبر'), true);
+    assert.deepEqual(parseIdText('12، 12\n40').ids, [12, 40]);
+    assert.equal(parseIdText('').error.includes('انتخاب'), true);
 });
 
 test('purge follows the granted section', () => {

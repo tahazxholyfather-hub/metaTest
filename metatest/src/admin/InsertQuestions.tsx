@@ -155,6 +155,7 @@ export default function InsertQuestions() {
         subject_id: null, grade_ids: [], topic_ids: [], chapter_ids: [], level: 'متوسط'
     });
     const [isSavingManual, setIsSavingManual] = useState(false);
+    const submitLock = useRef(false);
 
     // Auto mode state
     const [file, setFile] = useState<{ data: string; name: string } | null>(null);
@@ -249,6 +250,8 @@ export default function InsertQuestions() {
             || missingImageMessage('پاسخ تشریحی', descImage);
         if (imageError) { setErrorMessage(imageError); return; }
 
+        if (submitLock.current) return;
+        submitLock.current = true;
         setIsSavingManual(true);
         setErrorMessage(null);
         try {
@@ -296,6 +299,7 @@ export default function InsertQuestions() {
             console.error('Manual insert error:', error);
             setErrorMessage('هنگام ثبت سوال خطایی رخ داد.');
         } finally {
+            submitLock.current = false;
             setIsSavingManual(false);
         }
     };
@@ -380,6 +384,8 @@ export default function InsertQuestions() {
             if (imageError) { setErrorMessage(imageError); return; }
         }
 
+        if (submitLock.current) return;
+        submitLock.current = true;
         setIsSubmitting(true);
         setErrorMessage(null);
         try {
@@ -415,7 +421,8 @@ export default function InsertQuestions() {
             }
             if (res.success) {
                 setDuplicates(null);
-                setSuccessMessage(`${res.inserted_ids?.length ?? selected.length} سوال به‌صورت غیرفعال ثبت شد.`);
+                const repeatNote = res.repeated_in_file ? ` ${res.repeated_in_file} سوال تکراری داخل همین فایل دوباره ثبت نشد.` : '';
+                setSuccessMessage(`${res.inserted_ids?.length ?? selected.length} سوال به‌صورت غیرفعال ثبت شد.${repeatNote}`);
                 // Keep only unchecked questions in the review table
                 setParsed(prev => prev.filter(q => !q.checked));
                 setFile(null);
@@ -427,6 +434,7 @@ export default function InsertQuestions() {
             console.error('Auto insert error:', error);
             setErrorMessage('هنگام ثبت سوال‌ها خطایی رخ داد.');
         } finally {
+            submitLock.current = false;
             setIsSubmitting(false);
         }
     };

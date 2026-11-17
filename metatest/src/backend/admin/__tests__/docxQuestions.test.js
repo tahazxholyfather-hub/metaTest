@@ -117,6 +117,19 @@ test('does not count the fallback copy of the same picture', () => {
     assert.equal(sequence.images.length, 1);
 });
 
+test('fallback text is not registered as a second question', () => {
+    const xml = `
+        <w:p><w:r><w:t>&lt;q&gt;متن&lt;/q&gt;&lt;o1&gt;الف&lt;/o1&gt;&lt;o2&gt;ب&lt;/o2&gt;&lt;o3&gt;پ&lt;/o3&gt;&lt;o4&gt;ت&lt;/o4&gt;&lt;ans&gt;1&lt;/ans&gt;</w:t></w:r>
+        <mc:AlternateContent>
+          <mc:Fallback><w:r><w:t>&lt;q&gt;متن&lt;/q&gt;&lt;o1&gt;الف&lt;/o1&gt;&lt;o2&gt;ب&lt;/o2&gt;&lt;o3&gt;پ&lt;/o3&gt;&lt;o4&gt;ت&lt;/o4&gt;&lt;ans&gt;1&lt;/ans&gt;</w:t></w:r></mc:Fallback>
+        </mc:AlternateContent>
+        </w:p>
+    `;
+    const parsed = parseQuestionsFromText(documentXmlToSequence(xml).text, [], []);
+    assert.equal(parsed.questions.length, 1);
+    assert.equal(parsed.questions[0].text, 'متن');
+});
+
 test('reads an inline picture out of a docx package', () => {
     const xml = Buffer.from(`
         <w:document><w:body>

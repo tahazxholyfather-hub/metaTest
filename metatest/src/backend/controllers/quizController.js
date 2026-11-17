@@ -1091,6 +1091,11 @@ const handleGetSpecificQuestion = async (req, res) => {
         const question = questions[0];
 
         if (!question) {
+            const { loadDeletedQuestionIds, deletedQuestionCard } = require('../admin/purgeQuestions');
+            const removed = await loadDeletedQuestionIds(pool, [questionId]);
+            if (removed.has(questionId)) {
+                return res.json({ success: true, question: deletedQuestionCard(questionId) });
+            }
             return res.json({ success: false, message: "Question not found" });
         }
 

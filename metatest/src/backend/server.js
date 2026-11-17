@@ -477,6 +477,9 @@ app.post('/api/flow', requireToken, async (req, res) => {
             case 'Admin_preview_question_purge':
                 await purgeQuestions.handleAdminPreviewQuestionPurge(req, res);
                 break;
+            case 'Admin_lookup_question_purge':
+                await purgeQuestions.handleAdminLookupQuestionPurge(req, res);
+                break;
             case 'Admin_apply_question_purge':
                 await purgeQuestions.handleAdminApplyQuestionPurge(req, res);
                 break;
