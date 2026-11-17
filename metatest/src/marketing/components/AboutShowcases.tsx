@@ -22,7 +22,7 @@ function PhoneFrame({ src, alt, compact }: { src: string; alt: string; compact?:
 export function AboutShowcases() {
   return (
     <>
-      <section className="showcase-section">
+      <section className="showcase-section" id="about-features">
         <div className="showcase-row">
           <div className="showcase-copy">
             <div className="sec-eyebrow">مت و هوش مصنوعی</div>

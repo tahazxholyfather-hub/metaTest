@@ -1,6 +1,5 @@
-import { Link } from 'react-router-dom';
 import { appUrl } from '../lib/appUrl';
-import { BoltIcon, BookIcon } from '../components/icons';
+import { BoltIcon } from '../components/icons';
 import { AboutShowcases } from '../components/AboutShowcases';
 import { PageField } from '../components/PageField';
 import { SiteFooter } from '../components/SiteFooter';
@@ -16,10 +15,38 @@ const VALUES = [
 ];
 
 const TEAM = [
-  { avatar: 'av1', letter: 'ط', name: 'طاها', role: 'مدیر محصول و توسعه‌دهنده ارشد', bio: 'معمار اصلی متاتست. ترکیب مهندسی و درک عمیق از نیاز دانش‌آموزان.' },
-  { avatar: 'av2', letter: 'م', name: 'محمد', role: 'توسعه‌دهنده Back-end', bio: 'مغز پشت سرورها، دیتابیس و تمام لایه‌های پنهانی که سایت را روان نگه می‌دارند.' },
-  { avatar: 'av3', letter: 'س', name: 'سارا', role: 'طراح محتوا و تجربه کاربری', bio: 'مطمئن می‌شود که هر سؤال دقیق، هر توضیح روشن و هر تعامل لذت‌بخش باشد.' },
-  { avatar: 'av4', letter: 'ع', name: 'علی', role: 'متخصص هوش مصنوعی', bio: 'معلم هوشمند متاتست را آموزش داده و مطمئن شده که پاسخ‌ها دقیق، اخلاقی و مفید باشند.' },
+  {
+    avatar: 'av1',
+    letter: 'ط',
+    name: 'طاها',
+    role: 'بنیان‌گذار، مدیرعامل و مدیر محصول',
+    study: 'دانشجوی دندان‌پزشکی',
+    bio: 'ایده‌پرداز و هدایت‌کننده مسیر متاتست؛ کسی که با ترکیب نگاه کسب‌وکاری، شناخت نیازهای دانش‌آموزان و علاقه به تکنولوژی، مسیر توسعه متاتست رو شکل می‌ده.',
+  },
+  {
+    avatar: 'av2',
+    letter: 'ا',
+    name: 'امیرحسین',
+    role: 'مدیر تیم فنی و توسعه‌دهنده نرم‌افزار',
+    study: 'دانشجوی مهندسی کامپیوتر',
+    bio: 'مسئول تبدیل ایده‌های متاتست به یک محصول واقعی و کاربردی. از معماری فنی گرفته تا توسعه و بهینه‌سازی پلتفرم، تمرکزش روی ساخت تجربه‌ای سریع، پایدار و قابل اعتماد برای کاربرانه.',
+  },
+  {
+    avatar: 'av3',
+    letter: 'م',
+    name: 'مهدی',
+    role: 'مدیر منابع انسانی و مسئول محتوای آموزشی',
+    study: 'دانشجوی پزشکی | دبیر برتر زیست‌شناسی',
+    bio: 'پل ارتباطی بین دنیای آموزش و تیم متاتست. مسئولیت مدیریت منابع انسانی و نظارت بر محتوای آموزشی رو بر عهده داره تا مطمئن بشیم کیفیت آموزش، یکی از اصلی‌ترین استانداردهای متاتست باقی می‌مونه.',
+  },
+  {
+    avatar: 'av4',
+    letter: 'ا',
+    name: 'امین',
+    role: 'مدیر مالی و مدیر بازاریابی',
+    study: '',
+    bio: 'مسئول برنامه‌ریزی مالی، مدیریت منابع و توسعه بازار متاتست. تمرکزش روی ایجاد مسیرهای رشد، گسترش همکاری‌ها و تبدیل متاتست به یک برند شناخته‌شده در فضای آموزش کشوره.',
+  },
 ];
 
 const TIMELINE = [
@@ -66,18 +93,18 @@ export function AboutPage() {
     <PageField>
       <SiteHeader active="about" />
       <section className="about-hero">
-        <div className="hero-eyebrow">داستان ما</div>
-        <h1 className="about-title">متاتست چیست؟</h1>
-        <p className="about-lead">ما یک تیم کوچک اما پرشور هستیم که باور داریم هر دانش‌آموزی — صرف‌نظر از شهر، مدرسه یا بودجه‌اش — حق دارد به بهترین ابزارهای یادگیری دسترسی داشته باشد.</p>
+        <div className="hero-eyebrow">درباره متاتست</div>
+        <h1 className="about-title">متاتست چیه؟</h1>
+        <div className="about-copy">
+          <p className="about-lead">ما یه تیم کوچک اما پرانرژی هستیم که به هدف بزرگ داریم: تغییر تجربه یادگیری! باور داریم هر دانش‌آموز، فارغ از اینکه کجا زندگی می‌کنه یا چقدر بودجه داره، باید به بهترین ابزارهای آموزشی دسترسی داشته باشه.</p>
+          <p className="about-lead">برای همین متاتست رو ساختیم؛ ترکیبی از هوش مصنوعی، آموزش هوشمند و ابزارهای حرفه‌ای که قراره مسیر درس خوندن رو برات ساده‌تر، جذاب‌تر و پربازده‌تر کنه.</p>
+        </div>
         <div className="hero-cta-row">
           <a href={href} className="btn-primary js-app">
             <BoltIcon />
             همین الان امتحان کن
           </a>
-          <Link to="/blog/" className="btn-ghost">
-            <BookIcon />
-            بلاگ آموزشی
-          </Link>
+          <a href="#about-features" className="btn-ghost">آشنایی با امکانات</a>
         </div>
       </section>
       <section className="stats-section">
@@ -102,9 +129,14 @@ export function AboutPage() {
           </div>
           <div>
             <div className="sec-eyebrow">داستان شروع</div>
-            <h2 className="sec-title">جرقه یک ایده</h2>
-            <p className="sec-body">همه‌چیز از یک سؤال شروع شد! طاها، بنیان‌گذار متاتست، با بررسی چالش‌های دانش‌آموزان در مسیر یادگیری به یک ایده رسید: چرا هر دانش‌آموز نباید یک معلم خصوصی هوشمند و یک مجموعه کامل از ابزارهای آموزشی رو همیشه در دسترس داشته باشه؟</p>
-            <p className="sec-body" style={{ marginTop: 16 }}>ایده‌ای که در ابتدا فقط یک دغدغه بود، کم‌کم به چشم‌انداز ساخت یک پلتفرم آموزشی متفاوت تبدیل شد.</p>
+            <h2 className="sec-title">از یک دغدغه ساده تا یک ایده بزرگ!</h2>
+            <p className="sec-body">همه‌چیز از یک سؤال ساده شروع شد:</p>
+            <p className="story-quote">چرا با وجود این همه پیشرفت تکنولوژی، هنوز یادگیری برای خیلی از دانش‌آموزها به کتاب، جزوه و کلاس محدود شده؟</p>
+            <p className="sec-body">ما از نزدیک با دنیای آموزش آشنا بودیم. می‌دیدیم دانش‌آموزها ساعت‌ها برای حل یک سؤال وقت می‌ذارن، گاهی به جواب سؤالاتشون نمی‌رسن و برای رفع کوچک‌ترین اشکالاتشون به معلم یا کلاس خصوصی وابسته می‌شن.</p>
+            <p className="sec-body">طاها، بنیان‌گذار متاتست، با همین دغدغه تصمیم گرفت ایده‌ای رو دنبال کنه که بتونه تجربه یادگیری دانش‌آموزها رو متحول کنه؛ پلتفرمی که در اون تکنولوژی فقط یک ابزار جانبی نباشه، بلکه به بخشی از فرآیند یادگیری تبدیل بشه.</p>
+            <p className="sec-body">این ایده کم‌کم به یک تیم تبدیل شد؛ تیمی متشکل از دانشجویان حوزه پزشکی، دندان‌پزشکی و کامپیوتر که هر کدوم از زاویه تخصص خودشون برای ساختن یک تجربه آموزشی متفاوت کنار هم قرار گرفتن.</p>
+            <p className="sec-body">امروز متاتست فقط یک بانک سؤال نیست؛ ما داریم بستری می‌سازیم که در اون هوش مصنوعی نقش یک معلم خصوصی همیشه در دسترس رو بازی می‌کنه، دانش‌آموز می‌تونه هر سؤالی رو مطرح کنه و یادگیری رو با سرعت و روش خودش پیش ببره.</p>
+            <p className="sec-body">ما هنوز اول راهیم؛ اما برای ساختن آینده‌ای بهتر برای آموزش، جدی هستیم.</p>
           </div>
         </div>
       </section>
@@ -126,8 +158,8 @@ export function AboutPage() {
       </section>
       <section className="team-section">
         <div className="section-head" style={{ marginBottom: 60 }}>
-          <div className="sec-eyebrow">تیم سازنده</div>
-          <h2 className="sec-title">کی‌ها پشت متاتست هستند؟</h2>
+          <div className="sec-eyebrow">تیم متاتست</div>
+          <h2 className="sec-title">معرفی تیم متاتست</h2>
         </div>
         <div className="team-grid">
           {TEAM.map((person) => (
@@ -135,6 +167,7 @@ export function AboutPage() {
               <div className={`team-avatar ${person.avatar}`}>{person.letter}</div>
               <div className="team-name">{person.name}</div>
               <div className="team-role">{person.role}</div>
+              {person.study ? <div className="team-study">{person.study}</div> : null}
               <p className="team-bio">{person.bio}</p>
             </div>
           ))}
@@ -161,12 +194,11 @@ export function AboutPage() {
       </section>
       <section className="cta-section">
         <div className="cta-card">
-          <div className="cta-eyebrow">با ما بمان</div>
-          <h2 className="cta-title">آماده‌ای بهتر شوی؟</h2>
-          <p className="cta-desc">به هزاران دانش‌آموزی بپیوند که هر روز با متاتست تمرین می‌کنند و نتایج واقعی می‌گیرند.</p>
+          <h2 className="cta-title">آینده یادگیری از همین‌جا شروع می‌شه!</h2>
+          <p className="cta-desc">ما متاتست رو ساختیم تا یادگیری محدود به زمان کلاس و حضور معلم نباشه. حالا نوبت توئه که با کمک ابزارهای هوشمند، مسیر پیشرفتت رو متفاوت بسازی.</p>
           <a href={href} className="btn-primary js-app" style={{ display: 'inline-flex', margin: '0 auto' }}>
             <BoltIcon />
-            شروع رایگان
+            به خانواده متاتست بپیوند!
           </a>
         </div>
       </section>

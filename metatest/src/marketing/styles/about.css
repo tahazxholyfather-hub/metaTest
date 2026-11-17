@@ -64,7 +64,9 @@
       padding: 0.06em 0.04em 0.18em;
       color: #EDE7FF;
     }
-    .about-lead { color: var(--text-mid); font-size: clamp(16px, 2vw, 20px); line-height: 2; max-width: 700px; margin: 0 auto 40px; }
+    .about-copy { max-width: 760px; margin: 0 auto 40px; }
+    .about-lead { color: var(--text-mid); font-size: clamp(16px, 2vw, 20px); line-height: 2; max-width: 760px; margin: 0 auto 18px; }
+    .about-copy .about-lead:last-child { margin-bottom: 0; }
     .hero-cta-row { display: flex; align-items: center; gap: 16px; justify-content: center; flex-wrap: wrap; }
     .btn-primary {
       display: inline-flex; align-items: center; gap: 10px; height: 52px; padding: 0 30px; border-radius: 14px;
@@ -95,7 +97,9 @@
 
     /* STORY */
     .story-section { padding: 80px 56px; }
-    .story-inner { max-width: 1120px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center; }
+    .story-inner { max-width: 1120px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: start; }
+    .story-quote { color: var(--text); font-size: 18px; font-weight: 700; line-height: 1.9; margin: 14px 0 18px; }
+    .sec-body + .sec-body { margin-top: 16px; }
     .story-visual {
       border-radius: 28px; overflow: hidden; position: relative; height: 440px;
       background: linear-gradient(135deg, #110d24 0%, #1a1030 50%, #0d0920 100%);
@@ -202,7 +206,8 @@
     .av3 { background: linear-gradient(135deg, #065F46, #047857); }
     .av4 { background: linear-gradient(135deg, #9A3412, #C2410C); }
     .team-name { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
-    .team-role { color: var(--accent2); font-size: 13px; font-weight: 600; margin-bottom: 12px; }
+    .team-role { color: var(--accent2); font-size: 13px; font-weight: 600; margin-bottom: 6px; line-height: 1.7; }
+    .team-study { color: var(--text-mid); font-size: 12.5px; line-height: 1.7; margin-bottom: 12px; }
     .team-bio { color: var(--text-dim); font-size: 13px; line-height: 1.9; }
 
     /* TIMELINE */
