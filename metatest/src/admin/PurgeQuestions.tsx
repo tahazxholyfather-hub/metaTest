@@ -390,6 +390,7 @@ export default function PurgeQuestions() {
                     </div>
                 )}
                 {entry === 'file' && (
+                <>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mt-5">
                     <label className="text-[10px] font-bold text-[#86868b] flex flex-col gap-1">
                         از تاریخ
@@ -446,6 +447,7 @@ export default function PurgeQuestions() {
                 {files.length > 0 && (
                     <p className="text-[11px] text-[#86868b] mt-3">{files.map((file) => file.name).join('، ')}</p>
                 )}
+                </>
                 )}
             </div>
 
