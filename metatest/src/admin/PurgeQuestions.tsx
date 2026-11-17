@@ -58,6 +58,21 @@ type Report = {
     ambiguous: { file_name: string; index: number; text: string; candidates: { id: number; status: string; reason: string; created_at: string }[] }[];
 };
 
+type LookupQuestion = {
+    id: number;
+    text: string;
+    options: string[];
+    status: string;
+    insert_type: string;
+    created_at: string;
+    admin_id: number | null;
+    admin_name?: string;
+    has_history: boolean;
+    history: History;
+    copies: Copy[];
+    similar: { id: number; status: string; reason: string; created_at: string }[];
+};
+
 type AdminRow = { id: number; username: string; fullName?: string };
 
 const EMPTY_FILTERS = { from: '', to: '', adminId: '', insertType: 'اتوماتیک' };
@@ -109,6 +124,11 @@ export default function PurgeQuestions() {
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
     const [confirmMode, setConfirmMode] = useState<'delete' | 'deactivate' | null>(null);
+    const [confirmWord, setConfirmWord] = useState('');
+    const [entry, setEntry] = useState<'file' | 'ids'>('file');
+    const [idText, setIdText] = useState('');
+    const [lookup, setLookup] = useState<LookupQuestion[]>([]);
+    const [missingIds, setMissingIds] = useState<number[]>([]);
     const [busy, setBusy] = useState(false);
 
     useEffect(() => {
@@ -129,9 +149,40 @@ export default function PurgeQuestions() {
     }, [report, query]);
 
     const chosenCopies = useMemo(() => {
+        if (entry === 'ids') {
+            const rows: (Copy & { text: string })[] = [];
+            for (const question of lookup) {
+                if (selectedSet.has(question.id)) {
+                    rows.push({
+                        id: question.id,
+                        status: question.status,
+                        insert_type: question.insert_type,
+                        created_at: question.created_at,
+                        admin_id: question.admin_id,
+                        admin_name: question.admin_name,
+                        edit_status: '',
+                        in_scope: true,
+                        has_history: question.has_history,
+                        history: question.history,
+                        subject_id: null,
+                        grade_id: null,
+                        topic_id: null,
+                        chapter_id: null,
+                        difficulty_level: '',
+                        text: question.text,
+                    });
+                }
+                for (const copy of question.copies) {
+                    if (selectedSet.has(copy.id)) rows.push({ ...copy, text: question.text });
+                }
+            }
+            return rows;
+        }
         if (!report) return [];
-        return report.groups.flatMap((group) => group.copies.filter((copy) => selectedSet.has(copy.id)));
-    }, [report, selectedSet]);
+        return report.groups.flatMap((group) => group.copies
+            .filter((copy) => selectedSet.has(copy.id))
+            .map((copy) => ({ ...copy, text: group.text })));
+    }, [entry, lookup, report, selectedSet]);
 
     const toggle = (id: number) => {
         setSelected((prev) => prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]);
@@ -225,15 +276,45 @@ export default function PurgeQuestions() {
         }
     };
 
-    const handleApply = async () => {
-        if (!confirmMode || selected.length === 0) return;
+    const handleLookup = async () => {
+        setBusy(true);
+        setErrorMessage(null);
+        setSuccessMessage(null);
+        setLookup([]);
+        setMissingIds([]);
+        try {
+            const response: any = await flowApi.dispatch('Admin_lookup_question_purge', { text: idText });
+            const res = response.data || response;
+            if (!res.success) {
+                setErrorMessage(res.message || 'بررسی شناسه‌ها ناموفق بود.');
+                return;
+            }
+            const questions = (res.questions || []) as LookupQuestion[];
+            setLookup(questions);
+            setMissingIds(res.missing || []);
+            setSelected(questions.map((question) => question.id));
+        } catch (error: any) {
+            setErrorMessage(error?.message || 'هنگام بررسی شناسه‌ها خطایی رخ داد.');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const selectExactCopies = () => {
+        const ids = lookup.flatMap((question) => [question.id, ...question.copies.map((copy) => copy.id)]);
+        setSelected([...new Set(ids)]);
+    };
+
+    const handleApply = async (forceUsed = false, ids = selected) => {
+        if (!confirmMode || ids.length === 0) return;
         setBusy(true);
         setErrorMessage(null);
         try {
             const response: any = await flowApi.dispatch('Admin_apply_question_purge', {
                 mode: confirmMode,
                 confirm: 'پاکسازی',
-                question_ids: selected,
+                force_used: forceUsed,
+                question_ids: ids,
             });
             const res = response.data || response;
             if (!res.success) {
@@ -249,7 +330,10 @@ export default function PurgeQuestions() {
             });
             setSuccessMessage(res.message || 'پاکسازی انجام شد. فایل پشتیبان دانلود شد.');
             setConfirmMode(null);
+            setConfirmWord('');
             setReport(null);
+            setLookup([]);
+            setMissingIds([]);
             setSelected([]);
         } catch (error: any) {
             setErrorMessage(error?.message || 'هنگام پاکسازی خطایی رخ داد.');
@@ -258,19 +342,53 @@ export default function PurgeQuestions() {
         }
     };
 
-    const willDeactivate = confirmMode === 'deactivate'
-        ? chosenCopies.length
-        : chosenCopies.filter((copy) => copy.has_history).length;
-    const willDelete = confirmMode === 'delete' ? chosenCopies.length - willDeactivate : 0;
+    const usedCopies = confirmMode === 'delete' ? chosenCopies.filter((copy) => copy.has_history) : [];
+    const unusedCopies = confirmMode === 'delete' ? chosenCopies.filter((copy) => !copy.has_history) : [];
+    const wordReady = confirmWord.trim() === 'پاکسازی';
 
     return (
         <div className="flex flex-col gap-6" dir="rtl">
             <div className="bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl p-6">
-                <h2 className="text-sm font-bold text-[#1f1f1f] dark:text-[#e3e3e3]">پاکسازی سوال‌های واردشده از ورد</h2>
+                <h2 className="text-sm font-bold text-[#1f1f1f] dark:text-[#e3e3e3]">حذف سوالات</h2>
                 <p className="text-xs text-[#86868b] mt-2 leading-relaxed">
-                    فایل‌ها را آپلود کن تا سوال و هر چهار گزینه‌اش با بانک مقایسه شود. ردیف‌های داخل بازه یا متعلق به ادمین انتخاب‌شده از قبل تیک می‌خورند.
-                    کپی‌های قدیمی‌تر همان سوال جدا می‌مانند. حذف کامل فقط ردیفی را پاک می‌کند که هیچ پاسخ، یادداشت، گزارش، علاقه‌مندی یا آزمونی به آن وصل نباشد؛ بقیه غیرفعال می‌شوند.
+                    از فایل ورد یا با شناسه سوال را پیدا کن. نسخه‌های عین هم را می‌توانی همراهش انتخاب کنی.
+                    اگر دانش‌آموز از سوال استفاده کرده باشد، حذف کامل فقط بعد از دیدن شناسه‌ها و نوشتن «پاکسازی» انجام می‌شود. نمره آزمون قبلی می‌ماند و جای سوال می‌نویسد «این سوال حذف شده است».
                 </p>
+                <div className="flex gap-2 mt-4">
+                    <button type="button" onClick={() => { setEntry('file'); setSelected([]); setConfirmMode(null); }} className={`px-3 py-1.5 rounded-full text-xs font-bold ${entry === 'file' ? 'bg-[#1a73e8] text-white' : 'bg-[#f8f9fa] dark:bg-[#131314]'}`}>از فایل ورد</button>
+                    <button type="button" onClick={() => { setEntry('ids'); setSelected([]); setConfirmMode(null); }} className={`px-3 py-1.5 rounded-full text-xs font-bold ${entry === 'ids' ? 'bg-[#1a73e8] text-white' : 'bg-[#f8f9fa] dark:bg-[#131314]'}`}>با شناسه</button>
+                </div>
+                {entry === 'ids' && (
+                    <div className="mt-5 flex flex-col gap-3">
+                        <textarea
+                            value={idText}
+                            onChange={(event) => setIdText(event.target.value)}
+                            placeholder="شناسه‌ها را با کاما، فاصله یا هر کدام در یک خط بنویس"
+                            className="admin-input min-h-24"
+                            dir="ltr"
+                        />
+                        <div className="flex flex-wrap gap-2">
+                            <button
+                                type="button"
+                                onClick={handleLookup}
+                                disabled={busy || !idText.trim()}
+                                className="flex items-center justify-center gap-2 bg-[#1a73e8] disabled:bg-gray-200 disabled:text-gray-400 text-white px-5 py-3 rounded-xl text-xs font-bold"
+                            >
+                                {busy && entry === 'ids' && !confirmMode ? <Loader2 size={16} className="animate-spin" /> : <Eraser size={16} />}
+                                بررسی شناسه‌ها
+                            </button>
+                            {lookup.length > 0 && (
+                                <button type="button" onClick={selectExactCopies} className="px-3 py-2 rounded-xl bg-[#e8f0fe] text-[#1a73e8] text-xs font-bold">
+                                    انتخاب نسخه‌های عین هم
+                                </button>
+                            )}
+                        </div>
+                        {missingIds.length > 0 && (
+                            <p className="text-xs text-amber-700">این شناسه‌ها در بانک نیستند: {missingIds.join('، ')}</p>
+                        )}
+                    </div>
+                )}
+                {entry === 'file' && (
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mt-5">
                     <label className="text-[10px] font-bold text-[#86868b] flex flex-col gap-1">
                         از تاریخ
@@ -327,6 +445,7 @@ export default function PurgeQuestions() {
                 {files.length > 0 && (
                     <p className="text-[11px] text-[#86868b] mt-3">{files.map((file) => file.name).join('، ')}</p>
                 )}
+                )}
             </div>
 
             {errorMessage && (
@@ -342,6 +461,52 @@ export default function PurgeQuestions() {
                 </div>
             )}
 
+            {entry === 'ids' && lookup.length > 0 && (
+                <>
+                    <div className="flex flex-col gap-3">
+                        {lookup.map((question) => (
+                            <article key={question.id} className="bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl p-4">
+                                <p className="text-sm leading-relaxed">{question.text}</p>
+                                <ol className="mt-2 text-xs text-[#5f6368] dark:text-[#c4c7c5] list-decimal pr-4 space-y-1">
+                                    {question.options.map((option, index) => <li key={index}>{option}</li>)}
+                                </ol>
+                                <div className="mt-3 flex flex-col gap-2">
+                                    <label className="flex items-start gap-3 rounded-xl px-3 py-2 text-xs bg-[#e8f0fe]/60 dark:bg-[#1a73e8]/10">
+                                        <input type="checkbox" checked={selectedSet.has(question.id)} onChange={() => toggle(question.id)} className="mt-0.5" />
+                                        <span>
+                                            <span className="font-bold">#{question.id}</span>
+                                            {' · '}{question.status || '—'}
+                                            {' · '}{question.insert_type || '—'}
+                                            {' · '}{question.created_at || 'بدون تاریخ'}
+                                            {' · '}{question.admin_name || (question.admin_id ? `ادمین ${question.admin_id}` : 'بدون ادمین')}
+                                            {question.has_history ? ` · سابقه: ${historyLabel(question.history)}` : ' · بدون سابقه کاربر'}
+                                        </span>
+                                    </label>
+                                    {question.copies.map((copy) => (
+                                        <label key={copy.id} className="flex items-start gap-3 rounded-xl px-3 py-2 text-xs bg-[#f8f9fa] dark:bg-[#131314]">
+                                            <input type="checkbox" checked={selectedSet.has(copy.id)} onChange={() => toggle(copy.id)} className="mt-0.5" />
+                                            <span>
+                                                <span className="font-bold">نسخه #{copy.id}</span>
+                                                {' · '}{copy.status || '—'}
+                                                {' · '}{copy.created_at || 'بدون تاریخ'}
+                                                {copy.has_history ? ` · سابقه: ${historyLabel(copy.history)}` : ' · بدون سابقه کاربر'}
+                                            </span>
+                                        </label>
+                                    ))}
+                                    {question.similar.map((item) => (
+                                        <p key={item.id} className="text-[11px] text-[#86868b] pr-3">شبیه و انتخاب‌نشده: #{item.id} · {item.reason} · {item.status}</p>
+                                    ))}
+                                </div>
+                            </article>
+                        ))}
+                    </div>
+                    <div className="sticky bottom-4 flex flex-wrap gap-2 bg-white/90 dark:bg-[#1e1f20]/90 border border-[#dadce0] dark:border-[#333537] rounded-2xl p-3 backdrop-blur">
+                        <button disabled={busy || selected.length === 0} onClick={() => { setConfirmWord(''); setConfirmMode('deactivate'); }} className="px-4 py-2 rounded-xl bg-[#f8f9fa] dark:bg-[#131314] text-xs font-bold disabled:opacity-40">غیرفعال کردن {selected.length} سوال</button>
+                        <button disabled={busy || selected.length === 0} onClick={() => { setConfirmWord(''); setConfirmMode('delete'); }} className="px-4 py-2 rounded-xl bg-red-600 text-white text-xs font-bold disabled:opacity-40">حذف کامل {selected.length} سوال</button>
+                    </div>
+                </>
+            )}
+
             {parseNotes.length > 0 && (
                 <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 rounded-2xl p-4 text-xs leading-relaxed">
                     {parseNotes.map((note) => (
@@ -350,7 +515,7 @@ export default function PurgeQuestions() {
                 </div>
             )}
 
-            {report && (
+            {entry === 'file' && report && (
                 <>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         {[
@@ -448,14 +613,14 @@ export default function PurgeQuestions() {
                     <div className="sticky bottom-4 flex flex-wrap gap-2 bg-white/90 dark:bg-[#1e1f20]/90 border border-[#dadce0] dark:border-[#333537] rounded-2xl p-3 backdrop-blur">
                         <button
                             disabled={busy || selected.length === 0}
-                            onClick={() => setConfirmMode('deactivate')}
+                            onClick={() => { setConfirmWord(''); setConfirmMode('deactivate'); }}
                             className="px-4 py-2 rounded-xl bg-[#f8f9fa] dark:bg-[#131314] text-xs font-bold disabled:opacity-40"
                         >
                             غیرفعال کردن {selected.length} سوال
                         </button>
                         <button
                             disabled={busy || selected.length === 0}
-                            onClick={() => setConfirmMode('delete')}
+                            onClick={() => { setConfirmWord(''); setConfirmMode('delete'); }}
                             className="px-4 py-2 rounded-xl bg-red-600 text-white text-xs font-bold disabled:opacity-40"
                         >
                             حذف کامل {selected.length} سوال
@@ -478,19 +643,56 @@ export default function PurgeQuestions() {
             `}</style>
             {confirmMode && (
                 <div className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-[#1e1f20] rounded-2xl p-6 max-w-md w-full" dir="rtl">
+                    <div className="bg-white dark:bg-[#1e1f20] rounded-2xl p-6 max-w-lg w-full max-h-[85vh] overflow-y-auto" dir="rtl">
                         <h3 className="font-bold text-sm">{confirmMode === 'delete' ? 'حذف کامل' : 'غیرفعال کردن'}</h3>
-                        <p className="text-xs leading-relaxed mt-3 text-[#444746] dark:text-[#c4c7c5]">
-                            {confirmMode === 'delete' && willDelete > 0 ? `${willDelete} سوال حذف می‌شود. ` : ''}
-                            {confirmMode === 'delete' && willDeactivate > 0 ? `${willDeactivate} سوال چون سابقه کاربر، آزمون یا یادداشت دارد فقط غیرفعال می‌شود. ` : ''}
-                            {confirmMode === 'deactivate' ? `${chosenCopies.length} سوال غیرفعال می‌شود و در آزمون جدید نمی‌آید. ` : ''}
-                            بعد از اجرا فایل پشتیبان دانلود می‌شود و یک نسخه هم در لاگ سرور می‌ماند.
-                        </p>
-                        <div className="flex gap-2 mt-5">
-                            <button onClick={handleApply} disabled={busy} className="px-4 py-2 rounded-xl bg-red-600 text-white text-xs font-bold disabled:opacity-40">
-                                {busy ? 'در حال اجرا...' : 'تأیید پاکسازی'}
-                            </button>
-                            <button onClick={() => setConfirmMode(null)} disabled={busy} className="px-4 py-2 rounded-xl bg-[#f8f9fa] dark:bg-[#131314] text-xs font-bold">
+                        {confirmMode === 'deactivate' && (
+                            <p className="text-xs leading-relaxed mt-3 text-[#444746] dark:text-[#c4c7c5]">
+                                {chosenCopies.length} سوال غیرفعال می‌شود و در آزمون جدید نمی‌آید. سابقه دانش‌آموز می‌ماند.
+                            </p>
+                        )}
+                        {confirmMode === 'delete' && usedCopies.length === 0 && (
+                            <p className="text-xs leading-relaxed mt-3 text-[#444746] dark:text-[#c4c7c5]">
+                                {unusedCopies.length} سوال سابقه دانش‌آموز ندارد و حذف می‌شود.
+                            </p>
+                        )}
+                        {confirmMode === 'delete' && usedCopies.length > 0 && (
+                            <div className="mt-3 flex flex-col gap-3">
+                                <p className="text-xs leading-relaxed text-[#444746] dark:text-[#c4c7c5]">
+                                    {unusedCopies.length} سوال بدون استفاده حذف می‌شود. {usedCopies.length} سوال را دانش‌آموز استفاده کرده است. دکمه اول همان شناسه‌ها را در بانک نگه می‌دارد. حذف کامل نمره آزمون قبلی را عوض نمی‌کند.
+                                </p>
+                                <div className="max-h-52 overflow-y-auto flex flex-col gap-2">
+                                    {usedCopies.map((copy) => (
+                                        <p key={copy.id} className="text-xs leading-relaxed bg-red-50 dark:bg-red-500/10 rounded-xl px-3 py-2">
+                                            <span className="font-bold">#{copy.id}</span>
+                                            {' · '}{historyLabel(copy.history)}
+                                            <br />
+                                            {copy.text}
+                                        </p>
+                                    ))}
+                                </div>
+                                <label className="text-[10px] font-bold text-[#86868b] flex flex-col gap-1">
+                                    برای حذف همین شناسه‌ها بنویس پاکسازی
+                                    <input value={confirmWord} onChange={(event) => setConfirmWord(event.target.value)} className="admin-input" />
+                                </label>
+                            </div>
+                        )}
+                        <div className="flex flex-wrap gap-2 mt-5">
+                            {confirmMode === 'deactivate' && (
+                                <button onClick={() => handleApply(false, chosenCopies.map((copy) => copy.id))} disabled={busy || chosenCopies.length === 0} className="px-4 py-2 rounded-xl bg-red-600 text-white text-xs font-bold disabled:opacity-40">
+                                    {busy ? 'در حال اجرا...' : 'تأیید غیرفعال کردن'}
+                                </button>
+                            )}
+                            {confirmMode === 'delete' && unusedCopies.length > 0 && (
+                                <button onClick={() => handleApply(false, unusedCopies.map((copy) => copy.id))} disabled={busy} className="px-4 py-2 rounded-xl bg-[#f8f9fa] dark:bg-[#131314] text-xs font-bold disabled:opacity-40">
+                                    {usedCopies.length ? 'فقط سوال‌های بدون استفاده حذف شوند' : (busy ? 'در حال اجرا...' : 'تأیید پاکسازی')}
+                                </button>
+                            )}
+                            {confirmMode === 'delete' && usedCopies.length > 0 && (
+                                <button onClick={() => handleApply(true, chosenCopies.map((copy) => copy.id))} disabled={busy || !wordReady} className="px-4 py-2 rounded-xl bg-red-600 text-white text-xs font-bold disabled:opacity-40">
+                                    این شناسه‌ها هم حذف کامل شوند
+                                </button>
+                            )}
+                            <button onClick={() => { setConfirmMode(null); setConfirmWord(''); }} disabled={busy} className="px-4 py-2 rounded-xl bg-[#f8f9fa] dark:bg-[#131314] text-xs font-bold">
                                 انصراف
                             </button>
                         </div>

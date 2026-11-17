@@ -1470,6 +1470,18 @@ const handleGetQuizQuestions = async (req, res) => {
             })
         );
 
+        const foundIds = new Set(formattedQuestions.map((item) => Number(item.id)));
+        const missingIds = questionIds.map(Number).filter((id) => Number.isInteger(id) && id > 0 && !foundIds.has(id));
+        if (missingIds.length) {
+            const { loadDeletedQuestionIds, deletedQuestionCard } = require('../admin/purgeQuestions');
+            const removed = await loadDeletedQuestionIds(pool, missingIds);
+            for (const id of missingIds) {
+                if (removed.has(id)) formattedQuestions.push(deletedQuestionCard(id));
+            }
+        }
+        const order = new Map(questionIds.map((id, index) => [Number(id), index]));
+        formattedQuestions.sort((left, right) => (order.get(Number(left.id)) ?? 0) - (order.get(Number(right.id)) ?? 0));
+
         return res.json({
             success: true,
             questions: formattedQuestions

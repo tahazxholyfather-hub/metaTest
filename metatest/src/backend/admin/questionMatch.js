@@ -333,17 +333,23 @@ function attachHistory(report, historyById) {
     return summarize(report, { scoped: report.summary?.scoped });
 }
 
-function planPurge(rows, mode) {
+function planPurge(rows, mode, options = {}) {
     if (mode !== 'delete' && mode !== 'deactivate') {
         return { error: 'نوع پاکسازی نامعتبر است.' };
     }
+    const forceUsed = options.forceUsed === true;
     return {
         error: null,
         plan: rows.map((row) => ({
             id: Number(row.id),
-            action: mode === 'deactivate' || row.has_history ? 'deactivate' : 'delete',
+            action: mode === 'deactivate' || (row.has_history && !forceUsed) ? 'deactivate' : 'delete',
         })),
     };
+}
+
+function parseIdText(value) {
+    const parts = String(value ?? '').split(/[^0-9]+/).filter(Boolean);
+    return parseQuestionIds(parts);
 }
 
 function parseQuestionIds(value) {
@@ -379,4 +385,5 @@ module.exports = {
     summarize,
     planPurge,
     parseQuestionIds,
+    parseIdText,
 };

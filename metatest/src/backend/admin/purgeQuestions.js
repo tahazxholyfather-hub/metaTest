@@ -11,6 +11,8 @@ const {
     hasHistory,
     planPurge,
     parseQuestionIds,
+    parseIdText,
+    normalizeQuestionText,
     sqlDateTime,
     clip,
 } = require('./questionMatch');
@@ -261,12 +263,80 @@ async function clearLooseRefs(executor, ids) {
     }
 }
 
-async function deleteQuestions(executor, ids) {
+const DELETED_QUESTION_TEXT = 'این سوال حذف شده است';
+
+async function ensureDeletedTable(executor) {
+    await executor.query(`
+        CREATE TABLE IF NOT EXISTS tam24_deleted_questions (
+            question_id INT NOT NULL,
+            question_text TEXT NULL,
+            options_json TEXT NULL,
+            deleted_by INT NULL,
+            deleted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (question_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+    `);
+}
+
+async function releaseAnswerCascade(executor) {
+    const rows = await queryOptional(
+        executor,
+        `SELECT CONSTRAINT_NAME AS name
+         FROM information_schema.REFERENTIAL_CONSTRAINTS
+         WHERE CONSTRAINT_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'tam24_user_answers'
+           AND REFERENCED_TABLE_NAME = 'questions_tam24'
+           AND DELETE_RULE = 'CASCADE'`
+    );
+    for (const row of rows) {
+        const name = String(row.name || '');
+        if (!/^[A-Za-z0-9_]+$/.test(name)) continue;
+        await executor.query(`ALTER TABLE tam24_user_answers DROP FOREIGN KEY \`${name}\``);
+    }
+}
+
+async function stripWaitingQuizIds(executor, ids) {
+    const drop = new Set(ids);
+    const sources = [
+        ['quizzes', 'question_ids', `status = 'waiting'`],
+        ['quizzes_tam24', 'question_ids', `status = 'waiting'`],
+        ['bank_selections', 'question_ids_json', '1 = 1'],
+    ];
+    for (const [table, column, where] of sources) {
+        const rows = await queryOptional(executor, `SELECT id, \`${column}\` AS ids FROM \`${table}\` WHERE ${where}`);
+        for (const row of rows) {
+            const list = parseIdList(row.ids);
+            const next = list.filter((id) => !drop.has(id));
+            if (next.length === list.length) continue;
+            await queryOptional(
+                executor,
+                `UPDATE \`${table}\` SET \`${column}\` = ? WHERE id = ?`,
+                [JSON.stringify(next), row.id]
+            );
+        }
+    }
+}
+
+async function deleteQuestions(executor, ids, tombstone) {
     const deleted = [];
     const blocked = [];
     for (const id of ids) {
         await executor.query('SAVEPOINT purge_one');
         try {
+            const item = tombstone?.byId?.get(id);
+            if (item) {
+                const options = (item.options || []).map((option) => option.text || option);
+                await executor.query(
+                    `INSERT INTO tam24_deleted_questions (question_id, question_text, options_json, deleted_by)
+                     VALUES (?, ?, ?, ?)
+                     ON DUPLICATE KEY UPDATE
+                        question_text = VALUES(question_text),
+                        options_json = VALUES(options_json),
+                        deleted_by = VALUES(deleted_by),
+                        deleted_at = CURRENT_TIMESTAMP`,
+                    [id, clip(item.question_text, 500), JSON.stringify(options), tombstone.adminId || null]
+                );
+            }
             await clearLooseRefs(executor, [id]);
             await executor.query(`DELETE FROM questions_tam24 WHERE id = ?`, [id]);
             deleted.push(id);
@@ -277,6 +347,28 @@ async function deleteQuestions(executor, ids) {
         }
     }
     return { deleted, blocked };
+}
+
+function deletedQuestionCard(id) {
+    return {
+        id: Number(id),
+        text: DELETED_QUESTION_TEXT,
+        options: [],
+        has_image: false,
+        images: [],
+        deleted: true,
+    };
+}
+
+async function loadDeletedQuestionIds(executor, ids) {
+    const wanted = [...new Set(ids.map(Number).filter((id) => Number.isInteger(id) && id > 0))];
+    if (!wanted.length) return new Set();
+    const rows = await queryOptional(
+        executor,
+        `SELECT question_id FROM tam24_deleted_questions WHERE question_id IN (${wanted.map(() => '?').join(',')})`,
+        wanted
+    );
+    return new Set(rows.map((row) => Number(row.question_id)));
 }
 
 async function deactivateQuestions(executor, ids, adminId) {
@@ -323,9 +415,13 @@ async function handleAdminApplyQuestionPurge(req, res) {
         return res.json({ success: false, message: 'پاکسازی تأیید نشده است.' });
     }
     const mode = req.body?.mode === 'delete' ? 'delete' : req.body?.mode === 'deactivate' ? 'deactivate' : '';
+    const forceUsed = req.body?.force_used === true;
     const parsedIds = parseQuestionIds(req.body?.question_ids);
     if (parsedIds.error) return res.json({ success: false, message: parsedIds.error });
     if (!mode) return res.json({ success: false, message: 'نوع پاکسازی نامعتبر است.' });
+    if (forceUsed && mode !== 'delete') {
+        return res.json({ success: false, message: 'حذف سوال‌های استفاده‌شده فقط با حذف کامل ممکن است.' });
+    }
 
     const connection = await pool.getConnection();
     let started = false;
@@ -338,15 +434,22 @@ async function handleAdminApplyQuestionPurge(req, res) {
             item.history = itemHistory;
             item.has_history = hasHistory(itemHistory);
         }
-        const planned = planPurge(snapshots, mode);
+        const planned = planPurge(snapshots, mode, { forceUsed });
         if (planned.error) return res.json({ success: false, message: planned.error });
         const actionById = new Map(planned.plan.map((item) => [item.id, item.action]));
+        const deleteIds = planned.plan.filter((item) => item.action === 'delete').map((item) => item.id);
+        const deactivateIds = planned.plan.filter((item) => item.action === 'deactivate').map((item) => item.id);
+        const usedDelete = forceUsed && deleteIds.some((id) => snapshots.some((item) => item.id === id && item.has_history));
+        if (deleteIds.length) await ensureDeletedTable(connection);
+        if (usedDelete) await releaseAnswerCascade(connection);
 
         await connection.beginTransaction();
         started = true;
-        const deleteIds = planned.plan.filter((item) => item.action === 'delete').map((item) => item.id);
-        const deactivateIds = planned.plan.filter((item) => item.action === 'deactivate').map((item) => item.id);
-        const removed = await deleteQuestions(connection, deleteIds);
+        if (usedDelete) await stripWaitingQuizIds(connection, deleteIds);
+        const removed = await deleteQuestions(connection, deleteIds, {
+            adminId,
+            byId: new Map(snapshots.map((item) => [item.id, item])),
+        });
         const fallback = removed.blocked.filter((id) => !deactivateIds.includes(id));
         const deactivatedIds = [...deactivateIds, ...fallback];
         if (deactivatedIds.length) await deactivateQuestions(connection, deactivatedIds, adminId);
@@ -375,16 +478,20 @@ async function handleAdminApplyQuestionPurge(req, res) {
                 `INSERT INTO tam24_question_purge_log
                     (admin_id, mode, deleted_count, deactivated_count, snapshot_json)
                  VALUES (?, ?, ?, ?, ?)`,
-                [adminId, mode, removed.deleted.length, deactivatedIds.length, stored]
+                [adminId, forceUsed ? 'delete-used' : mode, removed.deleted.length, deactivatedIds.length, stored]
             );
             logId = logged.insertId;
         } catch (logError) {
             console.error('purge log failed:', logError.message);
         }
 
+        const forcedCount = removed.deleted.filter((id) => snapshots.some((item) => item.id === id && item.has_history)).length;
+        const message = forcedCount
+            ? `${removed.deleted.length} سوال حذف شد، از جمله ${forcedCount} سوال که دانش‌آموز استفاده کرده بود. پاسخ‌ها برای نمره آزمون ماند و ${deactivatedIds.length} سوال غیرفعال شد.`
+            : `${removed.deleted.length} سوال حذف شد و ${deactivatedIds.length} سوال غیرفعال شد.`;
         return res.json({
             success: true,
-            message: `${removed.deleted.length} سوال حذف شد و ${deactivatedIds.length} سوال غیرفعال شد.`,
+            message,
             log_id: logId,
             snapshot: snapshots,
             ...payload,
@@ -395,6 +502,88 @@ async function handleAdminApplyQuestionPurge(req, res) {
         return res.json({ success: false, message: 'پاکسازی سوال‌ها ناموفق بود.' });
     } finally {
         connection.release();
+    }
+}
+
+async function handleAdminLookupQuestionPurge(req, res) {
+    try {
+        if (requirePurgeAdmin(req, res) === null) return;
+        const parsed = Array.isArray(req.body?.question_ids)
+            ? parseQuestionIds(req.body.question_ids)
+            : parseIdText(req.body?.ids ?? req.body?.text ?? '');
+        if (parsed.error) return res.json({ success: false, message: parsed.error });
+
+        const rows = await loadMatchRows(pool);
+        const byId = new Map(rows.map((row) => [row.id, row]));
+        const byFp = new Map();
+        const byStem = new Map();
+        for (const row of rows) {
+            const stem = normalizeQuestionText(row.question_text);
+            const options = (row.options || []).map((option) => normalizeQuestionText(option));
+            row.fp = `${stem}\n${options.join('\n')}`;
+            row.stem = stem;
+            const copies = byFp.get(row.fp) || [];
+            copies.push(row);
+            byFp.set(row.fp, copies);
+            if (stem.length >= 48) {
+                const stems = byStem.get(stem) || [];
+                stems.push(row);
+                byStem.set(stem, stems);
+            }
+        }
+
+        const found = parsed.ids.map((id) => byId.get(id)).filter(Boolean);
+        const related = new Set(found.map((row) => row.id));
+        for (const row of found) {
+            for (const copy of byFp.get(row.fp) || []) related.add(copy.id);
+        }
+        const history = await countHistory(pool, [...related]);
+        const admins = await queryOptional(pool, `SELECT id, username, full_name FROM tam24_admins`);
+        const names = new Map(admins.map((admin) => [Number(admin.id), admin.full_name || admin.username || '']));
+
+        const present = (item) => {
+            const itemHistory = history.get(item.id) || emptyHistory();
+            return {
+                id: item.id,
+                status: item.status || '',
+                insert_type: item.insert_type || '',
+                created_at: sqlDateTime(item.created_at),
+                admin_id: item.admin_id == null ? null : Number(item.admin_id),
+                admin_name: names.get(Number(item.admin_id)) || '',
+                has_history: hasHistory(itemHistory),
+                history: itemHistory,
+            };
+        };
+
+        const questions = found.map((row) => {
+            const similar = [];
+            for (const other of byStem.get(row.stem) || []) {
+                if (other.id === row.id || other.fp === row.fp) continue;
+                similar.push({
+                    id: other.id,
+                    status: other.status || '',
+                    created_at: sqlDateTime(other.created_at),
+                    reason: 'متن سوال یکی است و گزینه‌ها فرق دارد',
+                });
+                if (similar.length >= 5) break;
+            }
+            return {
+                ...present(row),
+                text: row.question_text,
+                options: row.options || [],
+                copies: (byFp.get(row.fp) || []).filter((copy) => copy.id !== row.id).map(present),
+                similar,
+            };
+        });
+
+        return res.json({
+            success: true,
+            questions,
+            missing: parsed.ids.filter((id) => !byId.has(id)),
+        });
+    } catch (error) {
+        console.error('Admin_lookup_question_purge error:', error);
+        return res.json({ success: false, message: 'بررسی شناسه‌ها ناموفق بود.' });
     }
 }
 
@@ -464,6 +653,10 @@ async function findExactDuplicates(executor, questions) {
 
 module.exports = {
     handleAdminPreviewQuestionPurge,
+    handleAdminLookupQuestionPurge,
     handleAdminApplyQuestionPurge,
     findExactDuplicates,
+    deletedQuestionCard,
+    loadDeletedQuestionIds,
+    DELETED_QUESTION_TEXT,
 };
