@@ -97,9 +97,11 @@ function StorySection() {
   const photoRef = useRef<HTMLDivElement>(null);
   const headRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const followRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [bodyLimit, setBodyLimit] = useState(0);
   const [bodyHeight, setBodyHeight] = useState(0);
+  const [followHeight, setFollowHeight] = useState(0);
 
   useLayoutEffect(() => {
     const measure = () => {
@@ -122,6 +124,19 @@ function StorySection() {
     if (photoRef.current) observer.observe(photoRef.current);
     if (headRef.current) observer.observe(headRef.current);
     if (bodyRef.current) observer.observe(bodyRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  useLayoutEffect(() => {
+    const follow = followRef.current;
+    if (!follow) return;
+    const measure = () => {
+      const next = Math.ceil(follow.scrollHeight);
+      setFollowHeight((current) => (current === next ? current : next));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(follow);
     return () => observer.disconnect();
   }, []);
 
@@ -154,21 +169,29 @@ function StorySection() {
               <p className="sec-body">ما از نزدیک با دنیای آموزش آشنا بودیم. می‌دیدیم دانش‌آموزها ساعت‌ها برای حل یک سؤال وقت می‌ذارن، گاهی به جواب سؤالاتشون نمی‌رسن و برای رفع کوچک‌ترین اشکالاتشون به معلم یا کلاس خصوصی وابسته می‌شن.</p>
             </div>
           </div>
-          <div className="story-more-row">
-            <button type="button" className="story-more" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
-              <span>{open ? 'بستن متن' : 'ادامه متن'}</span>
-              {open ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
-            </button>
-          </div>
+          {!open ? (
+            <div className="story-more-row">
+              <button type="button" className="story-more" aria-expanded={false} onClick={() => setOpen(true)}>
+                <span>ادامه متن</span>
+                <ChevronDown aria-hidden="true" />
+              </button>
+            </div>
+          ) : null}
         </div>
       </div>
-      {open ? (
-        <div className="story-follow">
+      <div className={open ? 'story-follow is-open' : 'story-follow'} style={{ maxHeight: open ? followHeight : 0 }} aria-hidden={!open} inert={open ? undefined : true}>
+        <div className="story-follow-grid" ref={followRef}>
           <div className="story-rest">
             <p className="sec-body">طاها، بنیان‌گذار متاتست، با همین دغدغه تصمیم گرفت ایده‌ای رو دنبال کنه که بتونه تجربه یادگیری دانش‌آموزها رو متحول کنه؛ پلتفرمی که در اون تکنولوژی فقط یک ابزار جانبی نباشه، بلکه به بخشی از فرآیند یادگیری تبدیل بشه.</p>
             <p className="sec-body">این ایده کم‌کم به یک تیم تبدیل شد؛ تیمی متشکل از دانشجویان حوزه پزشکی، دندان‌پزشکی و کامپیوتر که هر کدوم از زاویه تخصص خودشون برای ساختن یک تجربه آموزشی متفاوت کنار هم قرار گرفتن.</p>
             <p className="sec-body">امروز متاتست فقط یک بانک سؤال نیست؛ ما داریم بستری می‌سازیم که در اون هوش مصنوعی نقش یک معلم خصوصی همیشه در دسترس رو بازی می‌کنه، دانش‌آموز می‌تونه هر سؤالی رو مطرح کنه و یادگیری رو با سرعت و روش خودش پیش ببره.</p>
             <p className="sec-body">ما هنوز اول راهیم؛ اما برای ساختن آینده‌ای بهتر برای آموزش، جدی هستیم.</p>
+            <div className="story-more-row">
+              <button type="button" className="story-more" aria-expanded={true} onClick={() => setOpen(false)}>
+                <span>بستن متن</span>
+                <ChevronUp aria-hidden="true" />
+              </button>
+            </div>
           </div>
           <div className="story-side">
             <img
@@ -180,7 +203,7 @@ function StorySection() {
             />
           </div>
         </div>
-      ) : null}
+      </div>
     </section>
   );
 }
