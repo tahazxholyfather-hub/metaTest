@@ -126,25 +126,15 @@ function StorySection() {
   }, []);
 
   const overflows = bodyLimit > 0 && bodyHeight > bodyLimit + 8;
-  const collapsed = overflows && !open;
 
   return (
     <section className="story-section">
-      <div className={open ? 'story-inner is-open' : 'story-inner'}>
+      <div className="story-inner">
         <div className="story-visual" ref={photoRef}>
           <img
             className="story-photo"
             src={storyPhoto}
             alt="میز مطالعه با کتاب باز، مداد و گوی نورانی"
-            width={1152}
-            height={864}
-          />
-        </div>
-        <div className="story-side">
-          <img
-            className="story-photo"
-            src={storyPhotoOpen}
-            alt="میز مطالعه با کتاب‌ها، مداد و اتم نورانی"
             width={1152}
             height={864}
           />
@@ -155,29 +145,42 @@ function StorySection() {
             <h2 className="sec-title">از یک دغدغه ساده تا یک ایده بزرگ!</h2>
           </div>
           <div
-            className={collapsed ? 'story-copy-body is-clamped' : 'story-copy-body'}
-            style={overflows ? { maxHeight: collapsed ? bodyLimit : bodyHeight } : undefined}
+            className={overflows ? 'story-copy-body is-clamped' : 'story-copy-body'}
+            style={overflows ? { maxHeight: bodyLimit } : undefined}
           >
             <div ref={bodyRef}>
               <p className="sec-body">همه‌چیز از یک سؤال ساده شروع شد:</p>
               <p className="story-quote">چرا با وجود این همه پیشرفت تکنولوژی، هنوز یادگیری برای خیلی از دانش‌آموزها به کتاب، جزوه و کلاس محدود شده؟</p>
               <p className="sec-body">ما از نزدیک با دنیای آموزش آشنا بودیم. می‌دیدیم دانش‌آموزها ساعت‌ها برای حل یک سؤال وقت می‌ذارن، گاهی به جواب سؤالاتشون نمی‌رسن و برای رفع کوچک‌ترین اشکالاتشون به معلم یا کلاس خصوصی وابسته می‌شن.</p>
-              <p className="sec-body">طاها، بنیان‌گذار متاتست، با همین دغدغه تصمیم گرفت ایده‌ای رو دنبال کنه که بتونه تجربه یادگیری دانش‌آموزها رو متحول کنه؛ پلتفرمی که در اون تکنولوژی فقط یک ابزار جانبی نباشه، بلکه به بخشی از فرآیند یادگیری تبدیل بشه.</p>
-              <p className="sec-body">این ایده کم‌کم به یک تیم تبدیل شد؛ تیمی متشکل از دانشجویان حوزه پزشکی، دندان‌پزشکی و کامپیوتر که هر کدوم از زاویه تخصص خودشون برای ساختن یک تجربه آموزشی متفاوت کنار هم قرار گرفتن.</p>
-              <p className="sec-body">امروز متاتست فقط یک بانک سؤال نیست؛ ما داریم بستری می‌سازیم که در اون هوش مصنوعی نقش یک معلم خصوصی همیشه در دسترس رو بازی می‌کنه، دانش‌آموز می‌تونه هر سؤالی رو مطرح کنه و یادگیری رو با سرعت و روش خودش پیش ببره.</p>
-              <p className="sec-body">ما هنوز اول راهیم؛ اما برای ساختن آینده‌ای بهتر برای آموزش، جدی هستیم.</p>
             </div>
           </div>
-          {overflows ? (
-            <div className="story-more-row">
-              <button type="button" className="story-more" aria-expanded={!collapsed} onClick={() => setOpen((value) => !value)}>
-                <span>{collapsed ? 'ادامه متن' : 'بستن متن'}</span>
-                {collapsed ? <ChevronDown aria-hidden="true" /> : <ChevronUp aria-hidden="true" />}
-              </button>
-            </div>
-          ) : null}
+          <div className="story-more-row">
+            <button type="button" className="story-more" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+              <span>{open ? 'بستن متن' : 'ادامه متن'}</span>
+              {open ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
+            </button>
+          </div>
         </div>
       </div>
+      {open ? (
+        <div className="story-follow">
+          <div className="story-rest">
+            <p className="sec-body">طاها، بنیان‌گذار متاتست، با همین دغدغه تصمیم گرفت ایده‌ای رو دنبال کنه که بتونه تجربه یادگیری دانش‌آموزها رو متحول کنه؛ پلتفرمی که در اون تکنولوژی فقط یک ابزار جانبی نباشه، بلکه به بخشی از فرآیند یادگیری تبدیل بشه.</p>
+            <p className="sec-body">این ایده کم‌کم به یک تیم تبدیل شد؛ تیمی متشکل از دانشجویان حوزه پزشکی، دندان‌پزشکی و کامپیوتر که هر کدوم از زاویه تخصص خودشون برای ساختن یک تجربه آموزشی متفاوت کنار هم قرار گرفتن.</p>
+            <p className="sec-body">امروز متاتست فقط یک بانک سؤال نیست؛ ما داریم بستری می‌سازیم که در اون هوش مصنوعی نقش یک معلم خصوصی همیشه در دسترس رو بازی می‌کنه، دانش‌آموز می‌تونه هر سؤالی رو مطرح کنه و یادگیری رو با سرعت و روش خودش پیش ببره.</p>
+            <p className="sec-body">ما هنوز اول راهیم؛ اما برای ساختن آینده‌ای بهتر برای آموزش، جدی هستیم.</p>
+          </div>
+          <div className="story-side">
+            <img
+              className="story-photo"
+              src={storyPhotoOpen}
+              alt="میز مطالعه با کتاب‌ها، مداد و اتم نورانی"
+              width={1152}
+              height={864}
+            />
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

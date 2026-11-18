@@ -97,25 +97,17 @@
 
     /* STORY */
     .story-section { padding: 80px 56px; }
-    .story-inner { max-width: 1120px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: start; }
-    .story-inner.is-open {
-      column-gap: 80px; row-gap: 28px;
-      grid-template-areas:
-        "visual side"
-        "copy side";
-    }
+    .story-inner { max-width: 1120px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: stretch; }
+    .story-follow { max-width: 1120px; margin: 56px auto 0; display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: start; }
     .story-quote { color: var(--text); font-size: 18px; font-weight: 700; line-height: 1.9; margin: 14px 0 18px; }
     .sec-body + .sec-body { margin-top: 16px; }
-    .story-visual {
-      border-radius: 28px; overflow: hidden; position: relative;
+    .story-visual, .story-side {
+      border-radius: 28px; overflow: hidden; position: relative; align-self: start;
       background: #110d24; border: 1px solid rgba(139,92,246,0.2);
     }
-    .story-inner.is-open .story-visual { grid-area: visual; }
-    .story-inner.is-open .story-copy { grid-area: copy; }
-    .story-side { display: none; border-radius: 28px; overflow: hidden; background: #110d24; border: 1px solid rgba(139,92,246,0.2); }
-    .story-inner.is-open .story-side { display: block; grid-area: side; align-self: start; }
     .story-photo { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; }
-    .story-copy { min-width: 0; direction: rtl; }
+    .story-copy, .story-rest { min-width: 0; direction: rtl; }
+    .story-copy { display: flex; flex-direction: column; }
     .story-head .sec-title { margin-bottom: 16px; }
     .story-copy-body { overflow: hidden; transition: max-height 0.35s ease; }
     .story-copy-body.is-clamped {
@@ -124,7 +116,7 @@
     }
     .story-more-row {
       display: flex; direction: ltr; justify-content: flex-end;
-      margin-top: 14px;
+      margin-top: auto; padding-top: 12px;
     }
     .story-more {
       display: inline-flex; align-items: center; gap: 6px; direction: rtl;
@@ -390,10 +382,8 @@
       .phone-stage, .phone-stage.compact { width: 260px; }
       .phone-frame, .phone-stage.compact .phone-frame { width: 100%; height: auto; }
       .stats-grid { grid-template-columns: repeat(2, 1fr); }
-      .story-inner, .story-inner.is-open {
-        grid-template-columns: 1fr; gap: 28px; direction: rtl;
-        grid-template-areas: "visual" "copy" "side";
-      }
+      .story-inner, .story-follow { grid-template-columns: 1fr; gap: 28px; }
+      .story-follow .story-side { order: -1; }
       .values-grid { grid-template-columns: 1fr; }
       .team-grid { grid-template-columns: 1fr; }
       .timeline::before { right: 18px; left: auto; transform: none; }
