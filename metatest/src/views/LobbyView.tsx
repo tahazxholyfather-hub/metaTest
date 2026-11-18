@@ -8,6 +8,7 @@ import {
 import { toast } from 'sonner';
 import { ResponsiveModal } from '../components/ResponsiveModal';
 import { flowApi } from '../lib/authApi';
+import { publicAppUrl } from '../lib/publicAppPath';
 import { useUser } from '../context/UserContext';
 import { QuizCountdown } from '../components/QuizCountdown';
 import {
@@ -116,7 +117,7 @@ export const LobbyView: React.FC = () => {
     // Track whether we have existing lobby state (for rejoin detection)
     const hasLobbyStateRef = useRef(false);
 
-    const shareLink = `${window.location.origin}/join/${shareCode}`;
+    const shareLink = shareCode ? publicAppUrl(`/lobby/${encodeURIComponent(shareCode)}`) : '';
 
     useEffect(() => {
         lobbyUsersRef.current = lobbyUsers;

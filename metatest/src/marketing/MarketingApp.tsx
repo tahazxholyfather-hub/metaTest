@@ -3,6 +3,7 @@ import { BrowserRouter, Outlet, Route, Routes, useLocation } from 'react-router-
 import { SoonModal } from './components/SoonModal';
 import { startChrome } from './lib/chrome';
 import { PAGE_TITLES, pageOf } from './lib/pages';
+import { AppHandoff } from './components/AppHandoff';
 import { AboutPage } from './pages/AboutPage';
 import { BlogListPage } from './pages/BlogListPage';
 import { BlogPostPage } from './pages/BlogPostPage';
@@ -70,6 +71,8 @@ export function MarketingApp() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/invite/:code" element={<AppHandoff kind="invite" />} />
+        <Route path="/join/:code" element={<AppHandoff kind="join" />} />
         <Route element={<MarketingLayout />}>
           <Route path="/" element={<HomePage />} />
           <Route path="/index.html" element={<HomePage />} />

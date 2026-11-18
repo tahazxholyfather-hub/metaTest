@@ -17,6 +17,7 @@ import {
 import { useUser } from '../context/UserContext';
 import { ResponsiveModal } from '../components/ResponsiveModal';
 import { flowApi } from '../lib/authApi';
+import { publicAppUrl } from '../lib/publicAppPath';
 import { useTour, type TourStep } from '../context/TourContext';
 import { toast } from 'sonner';
 
@@ -741,7 +742,7 @@ export function DashboardView({
     // Generate simple, shorter encrypted parameters for safety and UX
     const obfuscatedCode = useMemo(() => encryptPhoneNumber(user?.phone || user?.username || ''), [user]);
     const inviteCode = referralCode || obfuscatedCode;
-    const inviteLink = `${window.location.origin}/invite/${inviteCode}`;
+    const inviteLink = inviteCode ? publicAppUrl(`/invite/${encodeURIComponent(inviteCode)}`) : '';
 
     const handleCopy = () => {
         navigator.clipboard.writeText(inviteLink);

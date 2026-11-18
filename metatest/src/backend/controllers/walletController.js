@@ -7,6 +7,8 @@
 // Idempotency is guaranteed by the UNIQUE key on tam24_referral_rewards.payment_id.
 const db = require('../db');
 const crypto = require('crypto');
+const { profile } = require('../runtimeMode');
+const { inviteUrlForCode } = require('../referralUrl');
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -75,11 +77,6 @@ async function listInviterKeys(conn, userId) {
     if (!rows.length) return [];
     const { phone, username, referral_code } = rows[0];
     return [...new Set([phone, username, referral_code].map((v) => String(v || '').trim()).filter(Boolean))];
-}
-
-function inviteUrlForCode(code) {
-    const base = String(process.env.FRONTEND_URL || 'https://metatest.app').replace(/\/+$/, '');
-    return `${base}/invite/${code}`;
 }
 
 async function getTomanWallet(conn, userId, forUpdate = false) {
@@ -285,7 +282,7 @@ const handleGetMyReferralCode = async (req, res) => {
                 success: true,
                 data: {
                     referralCode: code,
-                    inviteUrl: code ? inviteUrlForCode(code) : null,
+                    inviteUrl: code ? inviteUrlForCode(code, process.env, profile.localhost) : null,
                 },
             });
         } catch (e) {

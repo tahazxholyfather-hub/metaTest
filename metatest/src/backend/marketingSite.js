@@ -19,6 +19,10 @@ const PAGE_PATHS = [
     '/contact/',
 ];
 
+function isAppHandoff(pathname) {
+    return /^\/(?:invite|join)\/[^/?#]+\/?$/.test(String(pathname || ''));
+}
+
 function isViteAsset(pathname) {
     return pathname.startsWith('/src/')
         || pathname.startsWith('/@')
@@ -75,6 +79,10 @@ async function installMarketing(app, { profile }) {
     }
 
     app.get(PAGE_PATHS, sendMarketing);
+    app.get(['/invite/:code', '/join/:code'], (req, res, next) => {
+        if (!isAppHandoff(req.path)) return next();
+        return sendMarketing(req, res, next);
+    });
     app.get('/blog/:slug', (req, res, next) => {
         const slug = String(req.params.slug || '');
         if (slug.includes('.')) return next();
@@ -82,4 +90,4 @@ async function installMarketing(app, { profile }) {
     });
 }
 
-module.exports = { installMarketing };
+module.exports = { installMarketing, isAppHandoff };

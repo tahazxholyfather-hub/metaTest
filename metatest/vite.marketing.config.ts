@@ -10,7 +10,8 @@ function spaFallback(): Plugin {
     const queryAt = raw.indexOf('?');
     const url = queryAt >= 0 ? raw.slice(0, queryAt) : raw;
     const search = queryAt >= 0 ? raw.slice(queryAt) : '';
-    if (url === '/' || url.startsWith('/blog') || url.startsWith('/about') || url.startsWith('/contact') || url === '/index.html' || url === '/landing.html') {
+    const handoff = /^\/(?:invite|join)\/[^/?#]+\/?$/.test(url);
+    if (handoff || url === '/' || url.startsWith('/blog') || url.startsWith('/about') || url.startsWith('/contact') || url === '/index.html' || url === '/landing.html') {
       req.url = `/marketing.html${search}`;
     }
   };

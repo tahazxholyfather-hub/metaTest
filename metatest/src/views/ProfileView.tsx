@@ -11,6 +11,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { useUser } from "../context/UserContext";
 import { flowApi } from '../lib/authApi';
+import { publicAppUrl } from '../lib/publicAppPath';
 import { getCookie } from '../lib/cookies.ts';
 import { getCroppedImg } from "../lib/cropImage";
 import { avatarSrc } from "../lib/asset";
@@ -401,7 +402,7 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
     }, []);
 
     const inviteLink = referralCode
-        ? `${window.location.origin}/invite/${referralCode}`
+        ? publicAppUrl(`/invite/${encodeURIComponent(referralCode)}`)
         : inviteUrl;
 
     const copyInviteLink = async () => {
