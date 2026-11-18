@@ -133,14 +133,16 @@ function StorySection() {
       <div className={open ? 'story-inner is-open' : 'story-inner'}>
         <div className="story-visual" ref={photoRef}>
           <img
-            className={open ? 'story-photo is-hidden' : 'story-photo'}
+            className="story-photo"
             src={storyPhoto}
             alt="میز مطالعه با کتاب باز، مداد و گوی نورانی"
             width={1152}
             height={864}
           />
+        </div>
+        <div className="story-side">
           <img
-            className={open ? 'story-photo' : 'story-photo is-hidden'}
+            className="story-photo"
             src={storyPhotoOpen}
             alt="میز مطالعه با کتاب‌ها، مداد و اتم نورانی"
             width={1152}
