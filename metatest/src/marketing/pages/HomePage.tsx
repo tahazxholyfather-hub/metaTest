@@ -52,7 +52,7 @@ export function HomePage() {
                     </div>
                   ))}
                 </div>
-                <a href={href} className="btn-uiverse js-app">شروع کنید</a>
+                <a href={href} className="btn-uiverse js-app">رایگان شروع کنید</a>
                 <div className="slider-dots">
                   {SLIDES.map((slide, index) => (
                     <button key={slide.desc} type="button" className={index === 0 ? 'dot active' : 'dot'} data-index={index} aria-label={`اسلاید ${['۱', '۲', '۳'][index]}`} />
