@@ -98,6 +98,7 @@
     /* STORY */
     .story-section { padding: 80px 56px; }
     .story-inner { max-width: 1120px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: start; }
+    .story-inner.is-open { direction: ltr; }
     .story-quote { color: var(--text); font-size: 18px; font-weight: 700; line-height: 1.9; margin: 14px 0 18px; }
     .sec-body + .sec-body { margin-top: 16px; }
     .story-visual {
@@ -105,15 +106,21 @@
       background: #110d24; border: 1px solid rgba(139,92,246,0.2);
     }
     .story-photo { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; }
-    .story-copy { min-width: 0; }
+    .story-photo.is-hidden { display: none; }
+    .story-copy { min-width: 0; direction: rtl; }
     .story-head .sec-title { margin-bottom: 16px; }
     .story-copy-body { overflow: hidden; transition: max-height 0.35s ease; }
     .story-copy-body.is-clamped {
       -webkit-mask-image: linear-gradient(to bottom, #000 68%, transparent 100%);
       mask-image: linear-gradient(to bottom, #000 68%, transparent 100%);
     }
+    .story-more-row {
+      display: flex; direction: ltr; justify-content: flex-end;
+      margin-top: 26px;
+    }
+    .story-inner:not(.is-open) .story-more-row { transform: translateX(40px); }
     .story-more {
-      margin-top: 10px; display: inline-flex; align-items: center; gap: 6px;
+      display: inline-flex; align-items: center; gap: 6px; direction: rtl;
       padding: 0; border: 0; background: transparent; cursor: pointer;
       color: var(--accent2); font-family: inherit; font-size: 14.5px; font-weight: 800;
     }
@@ -376,8 +383,8 @@
       .phone-stage, .phone-stage.compact { width: 260px; }
       .phone-frame, .phone-stage.compact .phone-frame { width: 100%; height: auto; }
       .stats-grid { grid-template-columns: repeat(2, 1fr); }
-      .story-inner { grid-template-columns: 1fr; gap: 40px; }
-      .story-inner { gap: 28px; }
+      .story-inner, .story-inner.is-open { grid-template-columns: 1fr; gap: 28px; direction: rtl; }
+      .story-more-row { transform: none; }
       .values-grid { grid-template-columns: 1fr; }
       .team-grid { grid-template-columns: 1fr; }
       .timeline::before { right: 18px; left: auto; transform: none; }

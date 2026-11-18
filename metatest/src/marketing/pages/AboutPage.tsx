@@ -7,6 +7,7 @@ import { PageField } from '../components/PageField';
 import { SiteFooter } from '../components/SiteFooter';
 import { SiteHeader } from '../components/SiteHeader';
 import storyPhoto from '../assets/covers/desk-orb.jpg';
+import storyPhotoOpen from '../assets/story-atom.jpg';
 
 const VALUES = [
   { icon: 'vi1', title: 'سرعت و لذت', desc: 'یادگیری باید سریع، جذاب و انگیزه‌بخش باشد. ما هر چیزی که تجربه را کند یا کسل‌کننده کند حذف می‌کنیم.', svg: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg> },
@@ -90,10 +91,10 @@ const TIMELINE = [
   },
 ];
 
-const STORY_BUTTON_SPACE = 44;
+const STORY_BUTTON_SPACE = 56;
 
 function StorySection() {
-  const photoRef = useRef<HTMLImageElement>(null);
+  const photoRef = useRef<HTMLDivElement>(null);
   const headRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -129,13 +130,19 @@ function StorySection() {
 
   return (
     <section className="story-section">
-      <div className="story-inner">
-        <div className="story-visual">
+      <div className={open ? 'story-inner is-open' : 'story-inner'}>
+        <div className="story-visual" ref={photoRef}>
           <img
-            ref={photoRef}
-            className="story-photo"
+            className={open ? 'story-photo is-hidden' : 'story-photo'}
             src={storyPhoto}
             alt="میز مطالعه با کتاب باز، مداد و گوی نورانی"
+            width={1152}
+            height={864}
+          />
+          <img
+            className={open ? 'story-photo' : 'story-photo is-hidden'}
+            src={storyPhotoOpen}
+            alt="میز مطالعه با کتاب‌ها، مداد و اتم نورانی"
             width={1152}
             height={864}
           />
@@ -160,10 +167,12 @@ function StorySection() {
             </div>
           </div>
           {overflows ? (
-            <button type="button" className="story-more" aria-expanded={!collapsed} onClick={() => setOpen((value) => !value)}>
-              <span>{collapsed ? 'ادامه متن' : 'بستن متن'}</span>
-              {collapsed ? <ChevronDown aria-hidden="true" /> : <ChevronUp aria-hidden="true" />}
-            </button>
+            <div className="story-more-row">
+              <button type="button" className="story-more" aria-expanded={!collapsed} onClick={() => setOpen((value) => !value)}>
+                <span>{collapsed ? 'ادامه متن' : 'بستن متن'}</span>
+                {collapsed ? <ChevronDown aria-hidden="true" /> : <ChevronUp aria-hidden="true" />}
+              </button>
+            </div>
           ) : null}
         </div>
       </div>
