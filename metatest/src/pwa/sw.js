@@ -8,6 +8,37 @@ import { CacheableResponsePlugin } from 'workbox-cacheable-response';
 self.skipWaiting();
 clientsClaim();
 
+function isAppPage(url) {
+    let path = '';
+    try {
+        path = new URL(url).pathname;
+    } catch {
+        return false;
+    }
+    if (path.startsWith('/blog') || path.startsWith('/about') || path.startsWith('/api')) return false;
+    const base = import.meta.env.BASE_URL || '/';
+    if (base !== '/') return path.startsWith(base);
+    return true;
+}
+
+// The page that is already open was loaded by the previous worker. After a
+// deploy, one ordinary refresh installs this worker; reloading that page from
+// here opens the new copy without a second refresh.
+self.addEventListener('activate', (event) => {
+    event.waitUntil((async () => {
+        await self.clients.claim();
+        const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        await Promise.all(windows.map(async (client) => {
+            if (!isAppPage(client.url) || typeof client.navigate !== 'function') return;
+            try {
+                await client.navigate(client.url);
+            } catch {
+                // The page also reloads itself when its controller changes.
+            }
+        }));
+    })());
+});
+
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
 

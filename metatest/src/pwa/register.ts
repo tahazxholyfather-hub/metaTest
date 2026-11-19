@@ -7,11 +7,28 @@ function urlBase64ToUint8Array(value: string) {
     return output;
 }
 
+let watchingForUpdate = false;
+
 export function registerAppServiceWorker() {
     if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return;
     const url = `${import.meta.env.BASE_URL}sw.js`;
-    navigator.serviceWorker.register(url, { scope: '/' }).catch(() => {
-        navigator.serviceWorker.register(url).catch(() => undefined);
+
+    // The open page is still the previous copy when a deploy arrives. The new
+    // worker takes over during that visit; reloading once then opens the new
+    // copy. A first install has no controller yet, so it must not reload.
+    if (!watchingForUpdate && navigator.serviceWorker.controller) {
+        watchingForUpdate = true;
+        let reloading = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (reloading) return;
+            reloading = true;
+            window.location.reload();
+        });
+    }
+
+    const options: RegistrationOptions = { scope: '/', updateViaCache: 'none' };
+    navigator.serviceWorker.register(url, options).catch(() => {
+        navigator.serviceWorker.register(url, { updateViaCache: 'none' }).catch(() => undefined);
     });
 }
 
