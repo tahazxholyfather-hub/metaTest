@@ -278,7 +278,7 @@ const toAsciiDigits = (value: string) => value.replace(/[۰-۹٠-٩]/g, (ch) => 
 // whole formula with "Missing superscript or subscript argument".
 const cleanMathChunk = (chunk: string) => {
     const digits = toAsciiDigits(chunk);
-    return digits.replace(/([_^])[\s\u200c\u200d\u200e\u200f\ufeff]+/g, '$1');
+    return digits.replace(/([_^])[\s\u200b\u200c\u200d\u200e\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff\u00ad\u180e]+/g, '$1');
 };
 
 const asciiDigitsInMath = (text: string) => text.replace(

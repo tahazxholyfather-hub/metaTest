@@ -26,7 +26,22 @@ test('a command split in the middle is joined before MathJax paints it red', () 
         repairDisplayMath('$(O = 16g\\cdo\u200ct mol^{-1})$'),
         '$(O = 16g\\cdot mol^{-1})$',
     );
+    assert.equal(repairDisplayMath('$\\cdo\u202at$'), '$\\cdot$');
+    assert.equal(repairDisplayMath('$\\sin\u200cx$'), '$\\sin x$');
+    assert.equal(repairDisplayMath('$\\c d o t$'), '$\\cdot$');
+    assert.equal(repairDisplayMath('$\\cdo ts$'), '$\\cdots$');
+    assert.equal(repairDisplayMath('$\\fra c{1}{2}$'), '$\\frac{1}{2}$');
+    assert.equal(repairDisplayMath('$\\sqr t{2}$'), '$\\sqrt{2}$');
+    assert.equal(repairDisplayMath('$\\right arrow$'), '$\\rightarrow$');
+    assert.equal(repairDisplayMath('$\\in fty$'), '$\\infty$');
+    assert.equal(repairDisplayMath('$\\time s$'), '$\\times$');
+    assert.equal(repairDisplayMath('$\\mathr m{H}$'), '$H$');
+    assert.equal(repairDisplayMath('$H_\u200c2$'), '$H_2$');
+    assert.equal(repairDisplayMath('$H_\u2060{2}$'), '$H_{2}$');
+    assert.equal(repairDisplayMath('$\\ce\u200c{H2O}$'), '$\\ce{H2O}$');
     assert.equal(repairDisplayMath('$\\celsius$'), '$\\celsius$');
     assert.equal(repairDisplayMath('$x \\in t$'), '$x \\in t$');
     assert.equal(repairDisplayMath('$\\sin x$'), '$\\sin x$');
+    assert.equal(repairDisplayMath('$\\to p$'), '$\\to p$');
+    assert.equal(repairDisplayMath('$\\alpha \\beta$'), '$\\alpha \\beta$');
 });
