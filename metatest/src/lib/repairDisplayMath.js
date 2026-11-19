@@ -2,6 +2,8 @@
 // \text{H} shows up as the command itself until it is unwrapped. A \ce with
 // no {formula} is the yellow "Missing argument for \ce" box.
 // A command split across Word runs, such as \cdo + t, is drawn in red.
+// So is a finished command glued to the next word with no gap, such as
+// \cdotmol. MathJax reads that as one unknown name and paints it red.
 
 const INVISIBLE = '\\u200b\\u200c\\u200d\\u200e\\u200f\\u202a\\u202b\\u202c\\u202d\\u202e\\u2060\\u2066\\u2067\\u2068\\u2069\\ufeff\\u00ad\\u180e';
 const GAP = `[${INVISIBLE}\\s]+`;
@@ -84,6 +86,22 @@ function rejoinSplitCommands(text) {
     });
 }
 
+// Word writes the dot and the unit in neighboring runs and the extractor
+// concatenates them, so the stored text is \cdotmol with no gap at all.
+// The space ends the command. TeX ignores it when drawing, so \cdot mol
+// is the dot and then the letters mol.
+function separateGluedCommands(text) {
+    return text.replace(/\\([A-Za-z]+)/g, (match, name) => {
+        if (TEX_COMMANDS.has(name)) return match;
+        let best = 0;
+        for (let n = 1; n < name.length; n += 1) {
+            if (TEX_COMMANDS.has(name.slice(0, n))) best = n;
+        }
+        if (!best) return match;
+        return `\\${name.slice(0, best)} ${name.slice(best)}`;
+    });
+}
+
 function flattenWordMacros(text) {
     const pattern = /\\(?:text|mathrm|mbox|operatorname|textbf|textit|textrm)\{([^{}]*)\}/g;
     let out = text;
@@ -96,7 +114,7 @@ function flattenWordMacros(text) {
 }
 
 function repairDisplayMath(text) {
-    let out = rejoinSplitCommands(String(text || ''));
+    let out = separateGluedCommands(rejoinSplitCommands(String(text || '')));
     // A zero-width mark between a command and its brace is not an argument.
     out = out.replace(
         new RegExp(`(\\\\[A-Za-z]+)[${INVISIBLE}]+(?=[{\\[])`, 'g'),

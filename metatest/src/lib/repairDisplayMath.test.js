@@ -44,4 +44,19 @@ test('a command split in the middle is joined before MathJax paints it red', () 
     assert.equal(repairDisplayMath('$\\sin x$'), '$\\sin x$');
     assert.equal(repairDisplayMath('$\\to p$'), '$\\to p$');
     assert.equal(repairDisplayMath('$\\alpha \\beta$'), '$\\alpha \\beta$');
+    assert.equal(
+        repairDisplayMath('$0/024mol^{-1}\\cdotmin^{-1}$'),
+        '$0/024mol^{-1}\\cdot min^{-1}$',
+    );
+    assert.equal(
+        repairDisplayMath('$(C = 12, O = 16 : g)\\cdotmol^{-1}$'),
+        '$(C = 12, O = 16 : g)\\cdot mol^{-1}$',
+    );
+    assert.equal(repairDisplayMath('$g\\cdotmol^{-1}$'), '$g\\cdot mol^{-1}$');
+    assert.equal(repairDisplayMath('$\\cdots$'), '$\\cdots$');
+    assert.equal(repairDisplayMath('$\\cdotp$'), '$\\cdotp$');
+    assert.equal(repairDisplayMath('$\\timesmol$'), '$\\times mol$');
+    assert.equal(repairDisplayMath('$\\DeltaH$'), '$\\Delta H$');
+    assert.equal(repairDisplayMath('$\\int$'), '$\\int$');
+    assert.equal(repairDisplayMath('$\\infty$'), '$\\infty$');
 });
