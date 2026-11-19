@@ -16,3 +16,17 @@ test('a bare ce command is removed so MathJax does not draw the yellow error', (
 test('display math stays intact', () => {
     assert.equal(repairDisplayMath('$$H_2O$$'), '$$H_2O$$');
 });
+
+test('a command split in the middle is joined before MathJax paints it red', () => {
+    assert.equal(
+        repairDisplayMath('$(O = 16g\\cdo tmol^{-1})$'),
+        '$(O = 16g\\cdot mol^{-1})$',
+    );
+    assert.equal(
+        repairDisplayMath('$(O = 16g\\cdo\u200ct mol^{-1})$'),
+        '$(O = 16g\\cdot mol^{-1})$',
+    );
+    assert.equal(repairDisplayMath('$\\celsius$'), '$\\celsius$');
+    assert.equal(repairDisplayMath('$x \\in t$'), '$x \\in t$');
+    assert.equal(repairDisplayMath('$\\sin x$'), '$\\sin x$');
+});
