@@ -65,4 +65,8 @@ test('a command split in the middle is joined before MathJax paints it red', () 
     );
     assert.equal(repairDisplayMath('$10cal\\cdot\\circC^{-1}$'), '$10cal\\cdot\\circ C^{-1}$');
     assert.equal(repairDisplayMath('$^{\\circC}$'), '$^{\\circ C}$');
+    assert.equal(
+        repairDisplayMath('$\\Delta H = +11\\text{ kJ}\\cdot\\text{mol}^{-1}$'),
+        '$\\Delta H = +11 kJ\\cdot mol^{-1}$',
+    );
 });

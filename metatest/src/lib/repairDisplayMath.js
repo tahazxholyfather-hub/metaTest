@@ -88,8 +88,9 @@ function rejoinSplitCommands(text) {
 
 // Word writes the dot and the unit in neighboring runs and the extractor
 // concatenates them, so the stored text is \cdotmol with no gap at all.
-// The space ends the command. TeX ignores it when drawing, so \cdot mol
-// is the dot and then the letters mol.
+// Unwrapping \text{mol} after \cdot does the same thing: \cdot\text{mol}
+// becomes \cdotmol. The space ends the command. TeX ignores it when
+// drawing, so \cdot mol is the dot and then the letters mol.
 function separateGluedCommands(text) {
     return text.replace(/\\([A-Za-z]+)/g, (match, name) => {
         if (TEX_COMMANDS.has(name)) return match;
@@ -114,13 +115,15 @@ function flattenWordMacros(text) {
 }
 
 function repairDisplayMath(text) {
-    let out = separateGluedCommands(rejoinSplitCommands(String(text || '')));
+    let out = rejoinSplitCommands(String(text || ''));
     // A zero-width mark between a command and its brace is not an argument.
     out = out.replace(
         new RegExp(`(\\\\[A-Za-z]+)[${INVISIBLE}]+(?=[{\\[])`, 'g'),
         '$1',
     );
-    out = flattenWordMacros(out);
+    // Unwrap first. \cdot\text{mol} becomes \cdotmol, and that glued name
+    // is what MathJax paints red. Splitting has to happen after the unwrap.
+    out = separateGluedCommands(flattenWordMacros(out));
     // The same mark between _ or ^ and the digit is the red missing-script box.
     out = out.replace(new RegExp(`([_^])[${INVISIBLE}\\s]+`, 'g'), '$1');
     out = out.replace(/(?<!\$)\$\s*\\ce\s*\$(?!\$)/g, '');
