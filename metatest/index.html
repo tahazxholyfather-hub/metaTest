@@ -24,6 +24,27 @@
 </head>
 
 <body>
+<script>
+// A deploy installs a new worker while this page is the previous copy.
+// Reload once the new worker takes over. The first install has no controller.
+(function () {
+  if (!('serviceWorker' in navigator)) return;
+  try { sessionStorage.removeItem('mt-sw-reload'); } catch (e) {}
+  if (!navigator.serviceWorker.controller) return;
+  var reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    window.setTimeout(function () {
+      if (reloading) return;
+      try {
+        if (sessionStorage.getItem('mt-sw-reload') === '1') return;
+        sessionStorage.setItem('mt-sw-reload', '1');
+      } catch (e) {}
+      reloading = true;
+      window.location.reload();
+    }, 2000);
+  });
+})();
+</script>
 <div id="root"></div>
 
 <script type="module" src="/src/main.tsx"></script>

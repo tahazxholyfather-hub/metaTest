@@ -21,21 +21,33 @@ function isAppPage(url) {
     return true;
 }
 
-// The page that is already open was loaded by the previous worker. After a
-// deploy, one ordinary refresh installs this worker; reloading that page from
-// here opens the new copy without a second refresh.
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// The refresh that discovers a deploy is still being answered by the previous
+// worker, from its saved copy of the app. navigate() throws while that
+// navigation is in progress, so a single try leaves the old page on screen.
+// Retry until the open app page actually loads this copy.
+async function reloadOpenApp() {
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    await Promise.all(windows.map(async (client) => {
+        if (!isAppPage(client.url) || typeof client.navigate !== 'function') return;
+        for (let attempt = 0; attempt < 8; attempt += 1) {
+            try {
+                const loaded = await client.navigate(client.url);
+                if (loaded) return;
+            } catch {
+                // The installing refresh has not finished yet.
+            }
+            await wait(400);
+        }
+    }));
+}
+
 self.addEventListener('activate', (event) => {
     event.waitUntil((async () => {
         await self.clients.claim();
-        const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-        await Promise.all(windows.map(async (client) => {
-            if (!isAppPage(client.url) || typeof client.navigate !== 'function') return;
-            try {
-                await client.navigate(client.url);
-            } catch {
-                // The page also reloads itself when its controller changes.
-            }
-        }));
+        await wait(500);
+        await reloadOpenApp();
     })());
 });
 
@@ -43,9 +55,21 @@ precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
 
 const shell = createHandlerBoundToURL(`${import.meta.env.BASE_URL}index.html`);
+// A normal refresh must read the shell from the network. The saved copy is
+// only for when the phone is offline; otherwise a deploy stays invisible.
+const freshShell = async ({ request, url }) => {
+    try {
+        const response = await fetch(url.href, { cache: 'no-store', credentials: 'same-origin' });
+        const type = response?.headers?.get('content-type') || '';
+        if (response && response.ok && type.includes('text/html')) return response;
+    } catch {
+        // Offline: open the shell saved when this worker was installed.
+    }
+    return shell({ request });
+};
 // The worker stays registered at "/" so push still arrives, but only /app
 // navigations should open the app shell. "/" , /blog and /about are the landing.
-registerRoute(new NavigationRoute(shell, {
+registerRoute(new NavigationRoute(freshShell, {
     allowlist: [/^\/app(?:\/|$|\?)/],
     denylist: [/^\/api\//, /\/socket\.io\//, /^\/avatars\//, /^\/images\//],
 }));

@@ -13,16 +13,24 @@ export function registerAppServiceWorker() {
     if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return;
     const url = `${import.meta.env.BASE_URL}sw.js`;
 
-    // The open page is still the previous copy when a deploy arrives. The new
-    // worker takes over during that visit; reloading once then opens the new
-    // copy. A first install has no controller yet, so it must not reload.
+    // Fallback for a browser that cannot navigate clients from the worker.
+    // The worker reloads the open page itself; this waits so the two do not
+    // reload the same visit twice. A first install has no controller yet.
     if (!watchingForUpdate && navigator.serviceWorker.controller) {
         watchingForUpdate = true;
         let reloading = false;
         navigator.serviceWorker.addEventListener('controllerchange', () => {
-            if (reloading) return;
-            reloading = true;
-            window.location.reload();
+            window.setTimeout(() => {
+                if (reloading) return;
+                try {
+                    if (sessionStorage.getItem('mt-sw-reload') === '1') return;
+                    sessionStorage.setItem('mt-sw-reload', '1');
+                } catch {
+                    // Private mode can block sessionStorage; reload once anyway.
+                }
+                reloading = true;
+                window.location.reload();
+            }, 2000);
         });
     }
 

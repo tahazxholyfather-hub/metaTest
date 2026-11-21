@@ -59,4 +59,10 @@ test('a command split in the middle is joined before MathJax paints it red', () 
     assert.equal(repairDisplayMath('$\\DeltaH$'), '$\\Delta H$');
     assert.equal(repairDisplayMath('$\\int$'), '$\\int$');
     assert.equal(repairDisplayMath('$\\infty$'), '$\\infty$');
+    assert.equal(
+        repairDisplayMath('$1 cal = \\frac{4}{18} J\\cdotg^{-1}\\cdot\\circC^{-1}$'),
+        '$1 cal = \\frac{4}{18} J\\cdot g^{-1}\\cdot\\circ C^{-1}$',
+    );
+    assert.equal(repairDisplayMath('$10cal\\cdot\\circC^{-1}$'), '$10cal\\cdot\\circ C^{-1}$');
+    assert.equal(repairDisplayMath('$^{\\circC}$'), '$^{\\circ C}$');
 });
