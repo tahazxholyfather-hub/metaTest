@@ -1,0 +1,31 @@
+---
+description: Mandatory security engineering rules for the entire project.
+alwaysApply: true
+---
+
+# Global Security Rules
+
+- Follow OWASP ASVS 5.0.
+- Use TypeScript conventions already present in the project.
+- Never expose secrets.
+- Never modify production data.
+- Never deploy automatically.
+- Never execute uploaded files.
+- Never perform destructive security tests.
+- Never assume vulnerabilities without evidence.
+- Preserve existing application functionality.
+
+# Workflow
+
+1. Read-only discovery.
+2. Security assessment.
+3. Findings consolidation.
+4. Human approval.
+5. Remediation.
+6. Regression testing.
+7. Independent verification.
+
+Do not modify files before explicit approval
+of the initial security assessment.
+
+Require human approval for high-impact changes.

@@ -1,0 +1,24 @@
+---
+description: Security requirements for Next.js application code.
+globs: **/*.{ts,tsx,js,jsx}
+---
+
+# Next.js Security
+
+Audit:
+- App Router
+- Pages Router
+- Route Handlers
+- Server Actions
+- Middleware
+- Server Components
+- Client Components
+- SSR
+- Authentication
+- Authorization
+- Cache isolation
+
+Never expose server-only secrets to client code.
+
+Validate authorization on the server,
+not only in the frontend.

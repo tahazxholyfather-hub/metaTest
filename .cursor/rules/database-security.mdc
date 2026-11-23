@@ -1,0 +1,15 @@
+---
+description: Security requirements for MySQL and database access.
+globs: **/*.{ts,js,sql,prisma}
+---
+
+# MySQL Security
+
+- Use parameterized queries.
+- Avoid unsafe raw SQL.
+- Follow least privilege.
+- Never expose database credentials.
+- Protect sensitive records.
+- Review transaction boundaries.
+- Audit authorization at data access level.
+- Never use production data for destructive tests.

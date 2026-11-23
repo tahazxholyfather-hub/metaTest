@@ -1,0 +1,24 @@
+---
+description: Security requirements for Node.js backend and file handling.
+globs: **/*.{ts,js,mjs,cjs}
+---
+
+# Node.js Security
+
+Review:
+- File system operations
+- Path traversal
+- child_process
+- eval
+- Dynamic imports
+- Unsafe deserialization
+- Request parsing
+- Input validation
+- File uploads
+- Error handling
+
+Never allow untrusted input to become
+an executable command or code.
+
+Uploaded files must never be treated as
+trusted application code.
