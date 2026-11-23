@@ -103,13 +103,18 @@ function separateGluedCommands(text) {
     });
 }
 
+const PERSIAN_LETTER = /[\u0600-\u06FF]/;
+
 function flattenWordMacros(text) {
     const pattern = /\\(?:text|mathrm|mbox|operatorname|textbf|textit|textrm)\{([^{}]*)\}/g;
     let out = text;
     let previous = '';
     while (out !== previous) {
         previous = out;
-        out = out.replace(pattern, '$1');
+        // A Persian label, such as \text{درصد جرمی } inside \frac, must stay
+        // wrapped. Unwrapping it lets the next step pull the words out of the
+        // fraction and leave \frac with no argument.
+        out = out.replace(pattern, (all, body) => (PERSIAN_LETTER.test(body) ? all : body));
     }
     return out;
 }

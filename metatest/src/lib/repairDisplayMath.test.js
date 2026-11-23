@@ -5,6 +5,10 @@ import { repairDisplayMath } from './repairDisplayMath.js';
 test('word text macros become the formula letters', () => {
     assert.equal(repairDisplayMath('$\\text{H}_{2}\\text{O}$'), '$H_{2}O$');
     assert.equal(repairDisplayMath('فرمول \\text{C}-\\text{H}'), 'فرمول C-H');
+    assert.equal(
+        repairDisplayMath('$\\frac{\\text{درصد جرمی } O}{\\text{درصد جرمی } H}$'),
+        '$\\frac{\\text{درصد جرمی } O}{\\text{درصد جرمی } H}$',
+    );
 });
 
 test('a bare ce command is removed so MathJax does not draw the yellow error', () => {

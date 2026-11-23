@@ -180,52 +180,89 @@ function polishPersianRun(run) {
         .replace(/[ \t]{2,}/g, ' ');
 }
 
+const TEXT_MACRO = /^\\(?:mathrm|text|mbox|operatorname|textbf|textit|textrm|ce)\{/;
+
+// \text{درصد جرمی } is a fraction label and has to stay inside the formula.
+// \mathrm{تری\!-\!گلیسرید + 3NaOH} is a whole equation wrapped by Word and
+// still has to be opened so the Persian words can leave the math.
+function isPersianLabel(body) {
+    const bare = String(body || '')
+        .replace(/\\[!,:; ]/g, '')
+        .replace(/[\s\u200c~،.؛:!?؟«»\-–—]+/g, '');
+    return bare.length > 0 && /^[\u0600-\u06FF]+$/.test(bare);
+}
+
+function readMacro(text, i) {
+    const match = text.slice(i).match(TEXT_MACRO);
+    if (!match) return null;
+    const start = i + match[0].length;
+    let depth = 1;
+    let j = start;
+    for (; j < text.length && depth > 0; j += 1) {
+        if (text[j] === '{' && text[j - 1] !== '\\') depth += 1;
+        else if (text[j] === '}' && text[j - 1] !== '\\') depth -= 1;
+    }
+    if (depth > 0) return null;
+    return { end: j, body: text.slice(start, j - 1), raw: text.slice(i, j) };
+}
+
 function unwrapPersianWrappers(source) {
     const text = String(source || '');
     let out = '';
     for (let i = 0; i < text.length; i += 1) {
-        const match = text.slice(i).match(/^\\(?:mathrm|text|mbox|operatorname|ce)\{/);
-        if (!match) {
+        const macro = readMacro(text, i);
+        if (!macro) {
             out += text[i];
             continue;
         }
-        const start = i + match[0].length;
-        let depth = 1;
-        let j = start;
-        for (; j < text.length && depth > 0; j += 1) {
-            if (text[j] === '{' && text[j - 1] !== '\\') depth += 1;
-            else if (text[j] === '}' && text[j - 1] !== '\\') depth -= 1;
-        }
-        if (depth > 0) {
-            out += text[i];
-            continue;
-        }
-        const body = text.slice(start, j - 1);
-        if (PERSIAN_RE.test(body)) {
-            out += unwrapPersianWrappers(body);
-            i = j - 1;
+        if (PERSIAN_RE.test(macro.body) && !isPersianLabel(macro.body)) {
+            out += unwrapPersianWrappers(macro.body);
+            i = macro.end - 1;
         } else {
-            out += text[i];
+            out += macro.raw;
+            i = macro.end - 1;
         }
     }
     return out;
 }
 
+function maskTextMacros(source) {
+    const slots = [];
+    let out = '';
+    for (let i = 0; i < source.length; i += 1) {
+        const macro = readMacro(source, i);
+        if (!macro) {
+            out += source[i];
+            continue;
+        }
+        slots.push(macro.raw);
+        out += `\u0000${slots.length - 1}\u0000`;
+        i = macro.end - 1;
+    }
+    return { out, slots };
+}
+
+function restoreTextMacros(value, slots) {
+    return String(value || '').replace(/\u0000(\d+)\u0000/g, (_, index) => slots[Number(index)] || '');
+}
+
 function splitPersianRuns(source) {
-    const text = String(source || '');
+    const masked = maskTextMacros(String(source || ''));
+    const text = masked.out;
+    const restore = (value) => restoreTextMacros(value, masked.slots);
     // LaTeX writes the hyphen in تری\!-\!گلیسرید as \! - \! (two thin spaces around a hyphen).
     const run = new RegExp(`${PERSIAN_CHAR}+(?:(?:\\\\!-\\\\!|\\\\!|\\\\[,;:]|~|\\s*-\\s*)${PERSIAN_CHAR}+)*`, 'g');
     const parts = [];
     let last = 0;
     for (const match of text.matchAll(run)) {
         const index = match.index ?? 0;
-        const math = text.slice(last, index).trim();
+        const math = restore(text.slice(last, index).trim());
         if (math) parts.push({ type: 'math', value: math });
         const words = polishPersianRun(match[0]).trim();
         if (words) parts.push({ type: 'text', value: words });
         last = index + match[0].length;
     }
-    const tail = text.slice(last).trim();
+    const tail = restore(text.slice(last).trim());
     if (tail) parts.push({ type: 'math', value: tail });
     return parts;
 }
