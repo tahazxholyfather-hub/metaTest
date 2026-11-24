@@ -1,7 +1,9 @@
 # Verification report
 
-Date: 2026-11-23.
-Phase: pre-remediation. No security fix has been claimed, so nothing is marked Verified Fixed.
+Date of the first pass: 2026-11-23.
+Claim re-checked: 2026-11-24. A report that the RCE issue was fixed was compared with the tree on `cursor/security-audit-aaa7` at `f5a82b9c` and with `origin/beforMain` at `b26d0e95`.
+
+Phase: the claimed fix is not in this repository. Nothing is marked Verified Fixed.
 
 Verifier stance: the Lead re-opened the cited lines for the confirmed items below. Specialist reports were not accepted on citation alone when the finding is critical.
 
@@ -36,6 +38,26 @@ This pass ran `npm audit` once. Semgrep, Gitleaks, Trivy, OSV-Scanner, Dependenc
 ## Functionality
 
 No runtime regression test was executed against the quiz UI. The application was not modified, so existing behavior is unchanged and also unproven by a fresh test run in this workspace.
+
+## Claim received on 2026-11-24: the RCE issue is fixed
+
+Independent check of the upload path. No webshell was uploaded and production was not contacted.
+
+| Check | Result |
+| --- | --- |
+| `metatest/src/backend/server.js` lines 80–94 | Still `diskStorage`. The stored name is `avatar-` + time + `Math.random` + `path.extname(file.originalname)`. Comment on line 86 still says the original extension is kept. |
+| `fileFilter`, magic bytes, or `sharp` on `POST /api/upload_avatar` | Absent. `grep` of `server.js` has no `fileFilter`. |
+| `express.static` on `/avatars` | Still line 116. Saved files stay on the public web root. |
+| `.htaccess` denying PHP | Only `metatest/public/.htaccess`, which rewrites `/app/` to the SPA. No rule for `avatars/`. |
+| New commits on `beforMain` or `main` after the audit | None. `origin/beforMain` is still `b26d0e95`. `server.js` history on GitHub does not contain an upload-hardening commit. |
+| Handler passes the saved path to `child_process` or `eval` | Still no. Node itself still does not execute the file. |
+
+Classification:
+
+- UP-001: **Not Fixed.** A client can still choose `.php`, `.phtml`, `.html`, `.svg`, or `.htaccess`.
+- UP-002: **Unable to Verify.** This tree cannot show whether LiteSpeed executes PHP in `public_html/avatars`. A hosting change outside git would not appear here. The application still writes the dangerous file, so the reported condition is still present in code.
+
+Rejecting names that end in `.php` would also fail this check. That rejection is not in the code either.
 
 ## Remaining attack surface after a future UP-001 patch
 

@@ -1,6 +1,7 @@
 # Remediation log
 
-Date: 2026-11-23.
+Date of the initial log: 2026-11-23.
+Re-checked against a fix claim: 2026-11-24.
 
 | Change | Status |
 | --- | --- |
@@ -31,6 +32,10 @@ The assessment instructions require a human approval after the initial report, b
 - `httpOnly` cookies (AUTH-004) require the server to read the cookie. The browser can no longer copy it into `x-app-token`.
 - Answer-key and cross-user result restrictions change practice mode and the avatar-click result UI.
 - Avatar URLs for new uploads may change extension (`.jpg` to `.webp`) if WebP is chosen. Existing URLs stay valid.
+
+## Claim on 2026-11-24 that the RCE issue was fixed
+
+Checked `server.js` lines 80–94, the static mount on line 116, and `.htaccess`. The avatar handler is the same code the audit described. No upload regression test exists. `origin/beforMain` has no newer commit. Recorded in `verification-report.md` as UP-001 Not Fixed and UP-002 Unable to Verify.
 
 ## Explicitly not a remediation
 

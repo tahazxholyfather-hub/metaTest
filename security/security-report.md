@@ -86,7 +86,7 @@ Dynamic testing against `metatest.app` was not performed.
 - Recommended remediation: Allow JPEG, PNG, and WebP only. Sniff magic bytes, re-encode with `sharp`, and store `crypto.randomBytes` names. Never use the client filename.
 - Verification method: Regression tests in `file-upload-security.md`. A text file named `.php` is rejected and is absent from the avatar directory.
 - Responsible agent: web-security
-- Current status: open, awaiting approval.
+- Current status: open. Re-checked 2026-11-24 after a fix claim. Lines 80–94 are unchanged. See `verification-report.md`.
 
 ### IDOR-001 — `checkAnswer` writes progress for a client-supplied user id
 
@@ -373,7 +373,7 @@ Dynamic testing against `metatest.app` was not performed.
 - Recommended remediation: On the server, confirm a harmless `.txt` file renamed in a private check is not executed. Disable script handlers on upload directories. Apply the UP-001 re-encode regardless.
 - Verification method: A file whose body is the text `not-php` and whose name ends in `.php` is either rejected by the app or returned as `text/plain` / download by the web server, never as a PHP result.
 - Responsible agent: infrastructure-security
-- Current status: suspected. Needs a human with panel access. Do not upload a webshell to check.
+- Current status: suspected. Re-checked 2026-11-24. No hosting config landed in git, so execution is still unverified. Do not upload a webshell to check.
 
 ### CSRF-001 — Admin cookie `SameSite=Lax` on cookie-authenticated actions
 
