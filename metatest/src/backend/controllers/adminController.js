@@ -83,6 +83,7 @@ function adminCookieOptions(req, extra = {}) {
 // (path.resolve(serverRoot, '../../public')). Adjust via env vars if needed.
 const PDF_UPLOAD_DIR = process.env.PDF_UPLOAD_DIR || path.resolve(__dirname, '..', '..', '..', 'public', 'files', 'pdfs');
 const PDF_PUBLIC_PATH = process.env.PDF_PUBLIC_PATH || 'files/pdfs/';
+const { sniffPdf, randomStoredName, assertInside } = require('../utils/uploadSniff');
 
 // Helper: Extract the logged-in admin id from the signed HttpOnly cookie.
 const getAdminIdFromRequest = (req) => {
@@ -747,20 +748,17 @@ const savePdfFile = (fileData, originalName) => {
     // Strip a possible data-url prefix (data:application/pdf;base64,....)
     const base64 = String(fileData).replace(/^data:.*?;base64,/, '');
     const buffer = Buffer.from(base64, 'base64');
-    if (buffer.length < 5 || buffer.slice(0, 5).toString('ascii') !== '%PDF-') {
+    if (!sniffPdf(buffer)) {
         const err = new Error('INVALID_PDF');
         err.code = 'INVALID_PDF';
         throw err;
     }
 
-    const safeName = String(originalName || 'document.pdf')
-        .replace(/[^a-zA-Z0-9آ-ی_.-]+/g, '_')
-        .replace(/\.pdf$/i, '')
-        .slice(0, 80);
-    const fileName = path.basename(`${Date.now()}_${safeName}.pdf`);
+    const fileName = randomStoredName('.pdf');
+    const dest = assertInside(PDF_UPLOAD_DIR, fileName);
 
     fs.mkdirSync(PDF_UPLOAD_DIR, { recursive: true });
-    fs.writeFileSync(path.join(PDF_UPLOAD_DIR, fileName), buffer);
+    fs.writeFileSync(dest, buffer);
 
     return {
         publicUrl: `${PDF_PUBLIC_PATH}${fileName}`,

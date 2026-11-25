@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { flowApi } from '../lib/authApi';
+import { sanitizeQuestionHtml } from '../lib/sanitizeQuestionHtml';
 import { toast } from 'sonner';
 import { ResponsiveModal } from '../components/ResponsiveModal'; // مسیر ایمپورت خود را چک کنید
 
@@ -201,7 +202,7 @@ export function NotesView({ onBack }: NotesViewProps) {
                                         <div className="min-h-[3rem]">
                                             <div
                                                 className="text-sm font-bold text-[var(--text-primary)] leading-loose line-clamp-3"
-                                                dangerouslySetInnerHTML={{ __html: note.questionText || 'متن سوال' }}
+                                                dangerouslySetInnerHTML={{ __html: sanitizeQuestionHtml(note.questionText || 'متن سوال') }}
                                             />
                                         </div>
 
@@ -287,7 +288,7 @@ export function NotesView({ onBack }: NotesViewProps) {
                         <div className="bg-[var(--bg-element)]/30 rounded-2xl p-5 border border-[var(--border)]/50">
                             <div
                                 className="text-base sm:text-lg font-bold text-[var(--text-primary)] leading-loose"
-                                dangerouslySetInnerHTML={{ __html: selectedNote.questionText }}
+                                dangerouslySetInnerHTML={{ __html: sanitizeQuestionHtml(selectedNote.questionText) }}
                             />
                         </div>
 
@@ -327,7 +328,7 @@ export function NotesView({ onBack }: NotesViewProps) {
                                     >
                                         <span
                                             className="text-sm sm:text-base font-medium leading-relaxed ml-4"
-                                            dangerouslySetInnerHTML={{ __html: option }}
+                                            dangerouslySetInnerHTML={{ __html: sanitizeQuestionHtml(option) }}
                                         />
                                         <div className="shrink-0 flex items-center gap-3">
                                             {isCorrect && (
@@ -354,7 +355,7 @@ export function NotesView({ onBack }: NotesViewProps) {
                                     </h4>
                                     <div
                                         className="text-sm sm:text-base text-[var(--text-primary)] leading-loose"
-                                        dangerouslySetInnerHTML={{ __html: selectedNote.descriptiveAnswer }}
+                                        dangerouslySetInnerHTML={{ __html: sanitizeQuestionHtml(selectedNote.descriptiveAnswer) }}
                                     />
                                 </div>
                             </div>

@@ -2,6 +2,7 @@
 require('dotenv').config();
 const jwt = require('jsonwebtoken');
 const db = require('../db');
+const { clearSessionCookie } = require('../utils/sessionCookie');
 
 /**
  * Single-device session check.
@@ -47,8 +48,12 @@ const requireToken = async (req, res, next) => {
 
     // 3. EXTRACT TOKEN
     let token = req.headers['authorization'] || req.headers['x-app-token'];
+    if (!token || token === 'null' || token === 'undefined') {
+        token = req.cookies?.auth_token || '';
+    }
 
     if (!token) {
+        clearSessionCookie(req, res);
         return res.status(401).json({ success: false, message: 'Missing authentication token' });
     }
 
@@ -69,6 +74,7 @@ const requireToken = async (req, res, next) => {
 
         // 4.1 Single-device enforcement: reject tokens superseded by a newer login
         if (await isSessionReplaced(decoded)) {
+            clearSessionCookie(req, res);
             return res.status(401).json({
                 success: false,
                 code: 'SESSION_REPLACED',
@@ -82,6 +88,7 @@ const requireToken = async (req, res, next) => {
 
     } catch (err) {
         console.log("Token Auth Failed:", err.message);
+        clearSessionCookie(req, res);
         return res.status(401).json({
             success: false,
             message: err.name === 'TokenExpiredError' ? 'نشست شما منقضی شده است. لطفاً دوباره وارد شوید.' : 'توکن نامعتبر است.'

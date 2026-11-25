@@ -2,7 +2,6 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const crypto = require('crypto');
 // const router = express.Router();
 const multer = require('multer');
 const path = require('path');
@@ -10,6 +9,8 @@ const fs = require('fs');
 const cookieParser = require('cookie-parser');
 // const jwt = require('jsonwebtoken');
 const { requireToken } = require('./middleware/auth');
+const { requireInternalService } = require('./middleware/internalAuth');
+const { sniffImage, IMAGE_EXT, randomStoredName, assertInside } = require('./utils/uploadSniff');
 const quizController = require('./controllers/quizController');
 const userController = require('./controllers/userController');
 const adminController = require('./controllers/adminController');
@@ -22,30 +23,6 @@ const PORT = process.env.PORT || 3000;
 
 
 
-function keysMatch(provided, expected) {
-    if (!provided || !expected) return false;
-    const a = Buffer.from(String(provided));
-    const b = Buffer.from(String(expected));
-    if (a.length !== b.length) return false;
-    return crypto.timingSafeEqual(a, b);
-}
-
-function requireInternalService(req, res, next) {
-    const configuredKey = process.env.INTERNAL_SERVICE_KEY;
-    const providedKey = req.get('x-internal-service-key') || req.get('X-Internal-Service-Key');
-
-    if (!keysMatch(providedKey, configuredKey)) {
-        return res.status(401).json({
-            success: false,
-            error: {
-                code: 'UNAUTHORIZED_INTERNAL_REQUEST',
-                message: 'Unauthorized internal service request'
-            }
-        });
-    }
-
-    next();
-}
 
 
 
@@ -73,31 +50,11 @@ if (!fs.existsSync(uploadDir)){
     fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// 2. Use diskStorage to save directly to the fixed path
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, uploadDir);
-    },
-    filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        const ext = path.extname(file.originalname || '').toLowerCase();
-        const safeExt = ['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(ext) ? ext : '';
-        cb(null, 'avatar-' + uniqueSuffix + safeExt);
-    }
-});
-
-const AVATAR_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
-
+// Bytes are held in memory until magic-byte sniffing accepts them. The client
+// filename and MIME type are ignored (SEC-007).
 const upload = multer({
-    storage: storage,
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit to mitigate lack of compression
-    fileFilter: (req, file, cb) => {
-        const ext = path.extname(file.originalname || '').toLowerCase();
-        if (!AVATAR_MIME.has(file.mimetype) || !['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(ext)) {
-            return cb(new Error('UNSUPPORTED_AVATAR_TYPE'));
-        }
-        cb(null, true);
-    }
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 },
 });
 // ----------------------------
 
@@ -129,13 +86,39 @@ app.use('/api/ai-teacher', aiTeacherRoutes);
 // 3. Route updated to just use the fixed multer upload
 function avatarUpload(req, res, next) {
     upload.single('avatar')(req, res, (err) => {
-        if (!err) return next();
-        return res.status(400).json({
-            success: false,
-            message: 'فقط تصویر PNG، JPG، WEBP یا GIF پذیرفته می‌شود.',
-        });
+        if (err) {
+            return res.status(400).json({
+                success: false,
+                message: 'فقط تصویر PNG، JPG، WEBP یا GIF پذیرفته می‌شود.',
+            });
+        }
+        if (!req.file || !req.file.buffer) return next();
+        const mime = sniffImage(req.file.buffer);
+        const ext = mime && IMAGE_EXT[mime];
+        if (!ext) {
+            return res.status(400).json({
+                success: false,
+                message: 'فقط تصویر PNG، JPG، WEBP یا GIF پذیرفته می‌شود.',
+            });
+        }
+        try {
+            const filename = randomStoredName(ext);
+            const dest = assertInside(uploadDir, filename);
+            fs.writeFileSync(dest, req.file.buffer);
+            req.file.filename = filename;
+            req.file.path = dest;
+            return next();
+        } catch (writeErr) {
+            console.error('Avatar store failed:', writeErr.message);
+            return res.status(400).json({
+                success: false,
+                message: 'فقط تصویر PNG، JPG، WEBP یا GIF پذیرفته می‌شود.',
+            });
+        }
     });
 }
+
+app.get('/api/realtime-token', requireToken, userController.handleRealtimeToken);
 
 app.post(
     '/api/upload_avatar',
@@ -149,35 +132,20 @@ app.post(
     userController.handleResetAvatar
 );
 
-app.get(
-    '/internal/quizzes/:quizId/metadata',
-    requireInternalService,
-    quizWorldController.handleGetQuizMetadata
-);
+function mountInternalRoutes(prefix) {
+    const router = express.Router();
+    router.use(requireInternalService);
+    router.get('/quizzes/:quizId/metadata', quizWorldController.handleGetQuizMetadata);
+    router.post('/quizzes/:quizId/members', quizWorldController.handleAddQuizMember);
+    router.post('/quizzes/:quizId/grade', quizWorldController.handleInternalGradeQuiz);
+    router.post('/quizzes/:quizId/finish', quizWorldController.handleInternalFinishQuiz);
+    router.post('/results', quizWorldController.handleInternalSaveQuizResult);
+    app.use(prefix, router);
+}
 
-app.post(
-    '/internal/quizzes/:quizId/members',
-    requireInternalService,
-    quizWorldController.handleAddQuizMember
-);
-
-app.post(
-    '/internal/quizzes/:quizId/grade',
-    requireInternalService, // Ensure this endpoint is protected
-    quizWorldController.handleInternalGradeQuiz
-);
-
-app.post(
-    '/internal/quizzes/:quizId/finish',
-    requireInternalService, // Ensure this endpoint is protected
-    quizWorldController.handleInternalFinishQuiz
-);
-
-app.post(
-    '/internal/results',
-    requireInternalService, // Ensure this endpoint is protected
-    quizWorldController.handleInternalSaveQuizResult
-);
+// SEC-037: the public vhost proxies /api/internal/ onto this process.
+mountInternalRoutes('/internal');
+mountInternalRoutes('/api/internal');
 
 
 // Ensure ONLY POST is allowed (similar to PHP behavior)

@@ -1,0 +1,374 @@
+{
+  "schema": "metatest-gate1-tasks",
+  "tasks": [
+    {
+      "id": "TASK-001",
+      "finding_id": "SEC-001",
+      "title": "Gate 1 decision: Live secrets committed to the public git history",
+      "phase": "gate-1",
+      "status": "remediated_pending_owner",
+      "pr55": "Deletes the files and adds examples. Does not rotate or purge history.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-002",
+      "finding_id": "SEC-002",
+      "title": "Gate 1 decision: Production database dump committed",
+      "phase": "gate-1",
+      "status": "remediated_pending_owner",
+      "pr55": "Deletes the file from the branch tip.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-003",
+      "finding_id": "SEC-003",
+      "title": "Gate 1 decision: Admin passwords are Admin@ plus the account number",
+      "phase": "gate-1",
+      "status": "remediated",
+      "pr55": "Replaces the hardcoded password. Breaking until env is set.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-004",
+      "finding_id": "SEC-004",
+      "title": "Gate 1 decision: Admin session cookie is an unsigned id",
+      "phase": "gate-1",
+      "status": "remediated",
+      "pr55": "Signs the cookie.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-005",
+      "finding_id": "SEC-005",
+      "title": "Gate 1 decision: Admin actions do not check the admin cookie",
+      "phase": "gate-1",
+      "status": "remediated",
+      "pr55": "Adds requireAdmin to the handlers that lacked it.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-006",
+      "finding_id": "SEC-006",
+      "title": "Gate 1 decision: Authentication accepts a forged base64 token or the app token as admin",
+      "phase": "gate-1",
+      "status": "remediated",
+      "pr55": "Removes both fallbacks. Old guest tokens die.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-007",
+      "finding_id": "SEC-007",
+      "title": "Gate 1 decision: Profile upload writes the client extension, including .php, under public/ (exploited Nov 2026)",
+      "phase": "gate-1",
+      "status": "remediated_pending_deploy",
+      "pr55": "Partial. Rejects non-images. Does not re-encode, move storage, or disable PHP. Does not clean the host.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-008",
+      "finding_id": "SEC-008",
+      "title": "Gate 1 decision: Client user_id overrides the session on answers and activity",
+      "phase": "gate-1",
+      "status": "remediated",
+      "pr55": "Session id only on these handlers.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-009",
+      "finding_id": "SEC-009",
+      "title": "Gate 1 decision: Quiz result can be read without being a member",
+      "phase": "gate-1",
+      "status": "remediated",
+      "pr55": "Membership check added.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-010",
+      "finding_id": "SEC-010",
+      "title": "Gate 1 decision: Four-digit OTP with no rate limit",
+      "phase": "gate-1",
+      "status": "remediated_partial",
+      "pr55": "Partial. Rate limit only.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-011",
+      "finding_id": "SEC-011",
+      "title": "Gate 1 decision: Live document response has no security headers",
+      "phase": "gate-1",
+      "status": "remediated_pending_deploy",
+      "pr55": "Partial. Express only.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-012",
+      "finding_id": "SEC-012",
+      "title": "Gate 1 decision: HTTP returns 500 instead of redirecting to HTTPS",
+      "phase": "gate-1",
+      "status": "remediated_pending_deploy",
+      "pr55": "None.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-013",
+      "finding_id": "SEC-013",
+      "title": "Gate 1 decision: Question and note HTML is inserted as HTML",
+      "phase": "gate-1",
+      "status": "remediated",
+      "pr55": "None.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-014",
+      "finding_id": "SEC-014",
+      "title": "Gate 1 decision: Student session cookie is readable by script",
+      "phase": "gate-1",
+      "status": "remediated",
+      "pr55": "Partial. Flags only.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-015",
+      "finding_id": "SEC-015",
+      "title": "Gate 1 decision: Internal quiz routes fail open and accept the key on the user header",
+      "phase": "gate-1",
+      "status": "remediated",
+      "pr55": "Requires the key on the internal header only.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-016",
+      "finding_id": "SEC-016",
+      "title": "Gate 1 decision: Replaced sessions stay valid when the database check errors",
+      "phase": "gate-1",
+      "status": "awaiting_owner",
+      "pr55": "None.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-017",
+      "finding_id": "SEC-017",
+      "title": "Gate 1 decision: JWTs last 30 days",
+      "phase": "gate-1",
+      "status": "awaiting_owner",
+      "pr55": "None.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-018",
+      "finding_id": "SEC-018",
+      "title": "Gate 1 decision: 50 MB JSON body and no global rate limit",
+      "phase": "gate-1",
+      "status": "awaiting_owner",
+      "pr55": "None.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-019",
+      "finding_id": "SEC-019",
+      "title": "Gate 1 decision: AI uploads are stored on the public web root",
+      "phase": "gate-1",
+      "status": "awaiting_owner",
+      "pr55": "None.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-020",
+      "finding_id": "SEC-020",
+      "title": "Gate 1 decision: Payment callback does not bind the stored authority",
+      "phase": "gate-1",
+      "status": "awaiting_owner",
+      "pr55": "Binds authority and removes the hardcoded fallback.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-021",
+      "finding_id": "SEC-021",
+      "title": "Gate 1 decision: Coupon use count can pass its maximum under concurrency",
+      "phase": "gate-1",
+      "status": "awaiting_owner",
+      "pr55": "None.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-022",
+      "finding_id": "SEC-022",
+      "title": "Gate 1 decision: Expired plans still receive paid AI coins",
+      "phase": "gate-1",
+      "status": "awaiting_owner",
+      "pr55": "None.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-023",
+      "finding_id": "SEC-023",
+      "title": "Gate 1 decision: Manual task progress has no upper bound",
+      "phase": "gate-1",
+      "status": "awaiting_owner",
+      "pr55": "None.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-024",
+      "finding_id": "SEC-024",
+      "title": "Gate 1 decision: Practice finish stats are taken from the client",
+      "phase": "gate-1",
+      "status": "awaiting_owner",
+      "pr55": "None. PR #55 only fixes which user id is written.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-025",
+      "finding_id": "SEC-025",
+      "title": "Gate 1 decision: npm audit reports critical and high advisories on main",
+      "phase": "gate-1",
+      "status": "remediated_partial",
+      "pr55": "Partial. Non-breaking fixes only.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-026",
+      "finding_id": "SEC-026",
+      "title": "Gate 1 decision: node_modules is tracked and the backend package is incomplete",
+      "phase": "gate-1",
+      "status": "awaiting_owner",
+      "pr55": "Untracks node_modules and gitignores it.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-027",
+      "finding_id": "SEC-027",
+      "title": "Gate 1 decision: SQL error text is returned to the client",
+      "phase": "gate-1",
+      "status": "awaiting_owner",
+      "pr55": "Generic messages.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-028",
+      "finding_id": "SEC-028",
+      "title": "Gate 1 decision: Lobby JWT secret defaults to a public string",
+      "phase": "gate-1",
+      "status": "awaiting_owner",
+      "pr55": "Removes the default.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-029",
+      "finding_id": "SEC-029",
+      "title": "Gate 1 decision: Password comparison is not constant-time",
+      "phase": "gate-1",
+      "status": "awaiting_owner",
+      "pr55": "timingSafeEqual.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-030",
+      "finding_id": "SEC-030",
+      "title": "Gate 1 decision: Some session cookies are set without Secure or SameSite",
+      "phase": "gate-1",
+      "status": "awaiting_owner",
+      "pr55": "Adds the flags.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-031",
+      "finding_id": "SEC-031",
+      "title": "Gate 1 decision: CORS allow-list is localhost only",
+      "phase": "gate-1",
+      "status": "awaiting_owner",
+      "pr55": "Env override, same default.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-033",
+      "finding_id": "SEC-033",
+      "title": "Gate 1 decision: guest_login is not a public action",
+      "phase": "gate-1",
+      "status": "awaiting_owner",
+      "pr55": "None. New guest tokens, if the action is reached, would be JWTs.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-034",
+      "finding_id": "SEC-034",
+      "title": "Gate 1 decision: DEV_MODE skips authentication",
+      "phase": "gate-1",
+      "status": "awaiting_owner",
+      "pr55": "Loopback only.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-035",
+      "finding_id": "SEC-035",
+      "title": "Gate 1 decision: ORDER BY FIELD interpolates stored question ids",
+      "phase": "gate-1",
+      "status": "awaiting_owner",
+      "pr55": "Integer coercion.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-036",
+      "finding_id": "SEC-036",
+      "title": "Gate 1 decision: PDF library does not check that the bytes are a PDF",
+      "phase": "gate-1",
+      "status": "awaiting_owner",
+      "pr55": "Magic-byte check, plus the admin gate from SEC-005.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-037",
+      "finding_id": "SEC-037",
+      "title": "Gate 1 decision: public_html/.htaccess proxies /api/internal/ to 127.0.0.1:3000",
+      "phase": "gate-1",
+      "status": "remediated_pending_owner",
+      "pr55": "None. cPanel edit only.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-901",
+      "finding_id": "SEC-901",
+      "title": "Gate 1 decision: False positive: Next.js framework advisories",
+      "phase": "gate-1",
+      "status": "reject_as_false_positive",
+      "pr55": "None.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-902",
+      "finding_id": "SEC-902",
+      "title": "Gate 1 decision: False positive: Redis pipeline.exec is a shell",
+      "phase": "gate-1",
+      "status": "reject_as_false_positive",
+      "pr55": "None.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-903",
+      "finding_id": "SEC-903",
+      "title": "Gate 1 decision: False positive: PDF upload is PHP remote code execution",
+      "phase": "gate-1",
+      "status": "reject_as_false_positive",
+      "pr55": "Also adds a %PDF- check.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-904",
+      "finding_id": "SEC-904",
+      "title": "Gate 1 decision: False positive: curriculum table name is SQL injection",
+      "phase": "gate-1",
+      "status": "reject_as_false_positive",
+      "pr55": "None for injection. Admin check added under SEC-005.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-STAGING",
+      "finding_id": null,
+      "title": "Create a non-production cPanel staging host before Phase 7",
+      "phase": "phase-7-prerequisite",
+      "status": "awaiting_owner",
+      "pr55": "None. There is no staging environment today.",
+      "blocks_phase_7": true
+    }
+  ]
+}

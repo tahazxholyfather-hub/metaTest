@@ -9,7 +9,6 @@ import {
 } from "lucide-react";
 import { useUser } from "../context/UserContext";
 import { flowApi } from '../lib/authApi';
-import { getCookie } from '../lib/cookies.ts';
 import { getCroppedImg } from "../lib/cropImage";
 
 // --- FIX 2: Import your custom ResponsiveModal component ---
@@ -266,14 +265,9 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
             const file = new File([croppedBlob as Blob], "avatar.jpg", { type: "image/jpeg" });
             const formData = new FormData();
             formData.append('avatar', file);
-            const token = getCookie('token');
-
             const response = await fetch('/api/upload_avatar', {
                 method: 'POST',
                 credentials: 'include',
-                headers: {
-                    'x-app-token': `${token}`
-                },
                 body: formData,
             });
 
@@ -301,11 +295,10 @@ export default function ProfileView({ onLogout, onStateChange }: ProfileViewProp
     const handleResetAvatar = async () => {
         setIsResettingAvatar(true);
         try {
-            const token = getCookie('token');
             const response = await fetch('/api/reset-avatar', {
                 method: 'POST',
+                credentials: 'include',
                 headers: {
-                    'x-app-token': `${token}`,
                     'Content-Type': 'application/json'
                 }
             });

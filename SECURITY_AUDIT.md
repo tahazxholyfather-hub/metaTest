@@ -329,3 +329,56 @@ Not changed, on purpose:
 5. Add the H4 headers and the port-80 redirect on Pingora. Check with `curl -sI https://metatest.app` and `curl -sI http://metatest.app`.
 6. Purge `quiz_app(full_Database).txt` and the `.env` blobs from history, then tell GitHub Support. Plan on the data already being copied.
 7. After deploy, sign in as a student (OTP and password), open a quiz, and sign in to the admin panel with the new password. Old admin cookies and old `Admin@N` passwords will not work.
+
+## Phase 5 (Gate 1 approved for critical and high only)
+
+Branch `cursor/phase5-critical-high-a3a9`. Not deployed. Production was already breached; see `security/incident-2026-11.md`.
+
+| ID | Status | What changed |
+| --- | --- | --- |
+| SEC-001 | Remediated in the tree, rotation still required | Secrets stay in environment variables only. The November shell read the live files, so rotation is mandatory. |
+| SEC-002 | Removed from the tree | History purge is still the owner's job. |
+| SEC-003 | Remediated | Admin passwords come from `ADMIN_<id>_PASSWORD` or `ADMIN_PASSWORDS`. |
+| SEC-004 | Remediated | Admin cookie is an HMAC. |
+| SEC-005 | Remediated | Admin actions check that cookie. |
+| SEC-006 | Remediated | Only a verified JWT is a session. |
+| SEC-007 | Remediated in code, host file still to copy | Avatar, PDF, and AI audio names come from magic bytes and `crypto.randomBytes`. Client filename and MIME are ignored. Templates in `deploy/cpanel/` are not installed automatically. |
+| SEC-008 | Remediated | Answers and activity use the session id. |
+| SEC-009 | Remediated | Quiz results require membership. |
+| SEC-010 | Partial | OTP sends and checks are rate limited. Codes are still four digits because the login screen has four boxes. |
+| SEC-011 | Template only | `deploy/cpanel/public_html.htaccess` sets the security headers. |
+| SEC-012 | Template only | The same file redirects HTTP to HTTPS. |
+| SEC-013 | Remediated | Question HTML is stripped of scripts and event handlers before display. |
+| SEC-014 | Remediated | The long-lived session cookie is HttpOnly. The lobby asks `/api/realtime-token` for a 15-minute token. |
+| SEC-015 | Remediated | Internal routes require `INTERNAL_SERVICE_KEY` (at least 16 characters). |
+| SEC-025 | Partial | Non-breaking `npm audit fix` is on the parent branch. Breaking upgrades were not applied. |
+| SEC-037 | Remediated in code, proxy still on the server | `/internal` and `/api/internal` accept only a loopback connection plus the env key. Delete or lock the public rewrite in `public_html/.htaccess`. |
+
+### Follow-ups (medium and low, not in this pass)
+
+SEC-016 fail-open session check, SEC-017 30-day JWT, SEC-018 50 MB body, SEC-019 AI files on the public disk, SEC-020 payment authority binding is already on the parent branch, SEC-021 coupon race, SEC-022 plan expiry ignored for AI coins, SEC-023 unbounded task progress, SEC-024 client-supplied practice stats, SEC-026 tracked `node_modules` is already removed on the parent, SEC-027 generic SQL errors are already on the parent, SEC-028 lobby JWT default is already removed on the parent, SEC-029 constant-time compare is already on the parent, SEC-030 cookie flags, SEC-031 CORS list, SEC-033 guest login not public, SEC-034 DEV_MODE localhost-only is already on the parent, SEC-035 integer `ORDER BY` is already on the parent, SEC-036 PDF magic check is already on the parent. Six-digit OTP remains with SEC-010.
+
+### Environment variables to set in cPanel → Setup Node.js App
+
+Placeholders only. Generate new values. Do not reuse anything read by the webshell or committed in git.
+
+`JWT_SECRET`, `SOCKET_JWT_SECRET` (same JWT secret on the lobby app), `ADMIN_SESSION_SECRET`, `ADMIN_1_PASSWORD` (and any other admin id you still use), `INTERNAL_SERVICE_KEY` (at least 16 characters, use 32), `PAYMENT_RESULT_SECRET`, `OPENAI_API_KEY` or `AI_API_KEY`, `SMS_USERNAME`, `SMS_PASSWORD`, `SMS_SENDER_LINE`, `ZARINPAL_MERCHANT_ID`, `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `NODE_ENV=production`.
+
+### Breaking changes
+
+- Old JWTs stop working when `JWT_SECRET` changes. Students sign in again.
+- `Admin@1` through `Admin@20` stop working. Set `ADMIN_1_PASSWORD` first.
+- Existing admin cookies stop working.
+- Unsigned guest tokens stop working.
+- Internal calls fail unless they come from 127.0.0.1 (or `::1`) and send `x-internal-service-key`. The lobby's call through the local proxy still looks like loopback. A call from another machine directly to port 3000 will be refused.
+- A key shorter than 16 characters is refused.
+- Avatar and PDF stored names change. Old avatar URLs keep working until the user uploads again.
+- Voice notes whose bytes do not match wav, ogg, webm, mp3, or m4a are rejected.
+- The browser no longer keeps the long-lived token in `document.cookie`.
+
+### cPanel deploy steps (do this yourself, not from this agent)
+
+1. In File Manager, delete `public_html/avatars/avatar-1793964090912-103811333.php`, `public_html/shell.php`, and `public_html/favicon-1024x1024.php` if they are still there. Keep the PHP-deny `.htaccess` you already put in `avatars/`.
+2. Copy the files from `deploy/cpanel/public_html/` into the matching folders. Copy `deploy/cpanel/public_html.htaccess` onto `public_html/.htaccess` only after you read the current file. Remove the `/api/internal/` proxy to `127.0.0.1:3000`, or leave it only if you accept that the env key is the lock. If "Force HTTPS" is already enabled, delete the rewrite block in the template so the site does not loop. If port 80 still returns 500, open the error log before expecting the redirect to run.
+3. Paste the new secrets into Setup Node.js App. Restart the app from that screen.
+4. Do not test a `.php` upload on the live site. Use a staging subdomain when you have one.

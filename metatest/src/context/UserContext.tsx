@@ -1,7 +1,7 @@
 // src/context/UserContext.tsx
 
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-import { getCookie, removeCookie } from "../lib/cookies"; // setCookie حذف شد چون اینجا استفاده نمی‌شود
+import { removeCookie } from "../lib/cookies";
 import { flowApi } from '../lib/authApi';
 
 // Updated to match your exact backend response
@@ -44,11 +44,8 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     const isAuthenticated = !!user;
 
     useEffect(() => {
-        const token = getCookie("auth_token");
-
-        if (token) {
-            setIsAuthLoading(true);
-            flowApi.getUserInfo()
+        setIsAuthLoading(true);
+        flowApi.getUserInfo()
                 .then(response => {
                     if (response.success && response.data) {
                         setUser(response.data);
@@ -66,10 +63,6 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                 .finally(() => {
                     setIsAuthLoading(false);
                 });
-        } else {
-            setUser(null);
-            setIsAuthLoading(false);
-        }
     }, []);
 
     const updateUserRewards = (addedTrophies: number, addedXp: number) => {
