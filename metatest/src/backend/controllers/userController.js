@@ -12,6 +12,7 @@ const { encodeResultId } = require('../utils/hash');
 const walletController = require('./walletController');
 const policy = require('../subscription/policy');
 const { reportError } = require('../reportError');
+const { sanitizeQuestionHtml } = require('../utils/sanitizeQuestionHtml');
 
 function readSocialLinks(value) {
     if (value == null || value === '') return {};
@@ -846,7 +847,8 @@ const handleAddNote = async (req, res) => {
         }
         const userId = req.user.id;
         const questionId = req.body.question_id;
-        const noteText = req.body.note_text;
+        const rawNote = req.body.note_text;
+        const noteText = typeof rawNote === 'string' ? sanitizeQuestionHtml(rawNote) : rawNote;
 
         if (!questionId || !noteText || String(noteText).trim() === '') {
             return res.json({ success: false, message: 'شناسه سوال و متن یادداشت الزامی است.' });

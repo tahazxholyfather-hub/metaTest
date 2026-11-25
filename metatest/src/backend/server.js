@@ -18,6 +18,7 @@ const cookieParser = require('cookie-parser');
 const { requireToken } = require('./middleware/auth');
 const { requireInternalService } = require('./middleware/internalAuth');
 const { sniffImage, IMAGE_EXT, randomStoredName, assertInside } = require('./utils/uploadSniff');
+const { sanitizeApiBody } = require('./utils/sanitizeQuestionHtml');
 const quizController = require('./controllers/quizController');
 const userController = require('./controllers/userController');
 const adminController = require('./controllers/adminController');
@@ -43,6 +44,14 @@ const { loadRuntimeOverlayFromDb } = require('./controllers/adminAiController');
 const { ensureDiamondPlanActive } = require('./controllers/paymentController');
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Question and note HTML is stored as markup. Strip scripts before any JSON
+// response so a row saved earlier cannot be returned raw (SEC-013).
+app.use((req, res, next) => {
+    const sendJson = res.json.bind(res);
+    res.json = (body) => sendJson(sanitizeApiBody(body));
+    next();
+});
 
 
 
