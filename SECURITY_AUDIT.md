@@ -381,4 +381,29 @@ Placeholders only. Generate new values. Do not reuse anything read by the webshe
 1. In File Manager, delete `public_html/avatars/avatar-1793964090912-103811333.php`, `public_html/shell.php`, and `public_html/favicon-1024x1024.php` if they are still there. Keep the PHP-deny `.htaccess` you already put in `avatars/`.
 2. Copy the files from `deploy/cpanel/public_html/` into the matching folders. Copy `deploy/cpanel/public_html.htaccess` onto `public_html/.htaccess` only after you read the current file. Remove the `/api/internal/` proxy to `127.0.0.1:3000`, or leave it only if you accept that the env key is the lock. If "Force HTTPS" is already enabled, delete the rewrite block in the template so the site does not loop. If port 80 still returns 500, open the error log before expecting the redirect to run.
 3. Paste the new secrets into Setup Node.js App. Restart the app from that screen.
-4. Do not test a `.php` upload on the live site. Use a staging subdomain when you have one.
+4. Do not test a `.php` upload on the live site. Use a staging subdomain when you have one. The steps are in `security/staging-setup.md`.
+
+## Phase 5b and Phase 6
+
+Branch `cursor/phase5b-medium-low-a3a9`, pull request targeting `beforMain`. Not merged. Not deployed. Local `npm run build` passed. `node --test` on the backend regression files passed.
+
+| ID | Phase 6 | What was checked |
+| --- | --- | --- |
+| SEC-010 | VERIFIED for six digits and the existing attempt limits | Generator, regex, and the six-box login screen. Send and verify limits were already in the code. |
+| SEC-016 | VERIFIED | A database error in the single-device check now rejects the token. |
+| SEC-017 | VERIFIED | New sessions last 12 hours. `POST /api/refresh-session` issues a fresh cookie with the same device stamp. The app calls it after loading the user. |
+| SEC-018 | VERIFIED | JSON is 1 MB except `POST /api/flow` and `/api/admin`, which stay at 50 MB so PDF import still works. |
+| SEC-019 | PARTIAL | New AI files are written beside the web root in `private-ai` and are served only to the owning user at `/api/ai-teacher/files/...`. Files already in `public/uploads/ai` are still on disk until you move or delete them. |
+| SEC-021 | VERIFIED | A coupon update that changes no row rolls the payment back. |
+| SEC-022 | VERIFIED | `isPaidPlan` already treats an expired date as free, and the coin snapshot uses that helper. The existing unit test covers it. |
+| SEC-023 | VERIFIED | Manual task progress increases by 1 per request. |
+| SEC-024 | VERIFIED | Correct and answered counts are read from `tam24_user_answers` for the current day. Client time is capped at eight hours. |
+| SEC-007, SEC-013, SEC-014, SEC-037 | VERIFIED against the code now on `beforMain` | Re-read with the medium fixes. Upload sniff tests, internal-auth tests, and the HTML sanitizer test passed. |
+
+No database migration was required. No new npm package was added.
+
+### Needs your approval before anyone changes it
+
+- `firebase` / `@grpc/grpc-js`: the audit fix npm offers is a breaking move to Firebase 9.
+- `sharp`: the audit fix npm offers is a breaking major. The app already depends on it for AI image processing.
+- `zod` inside `shadcn`: the audit fix npm offers is shadcn 4, which is a dev-tool upgrade, not the student app.
