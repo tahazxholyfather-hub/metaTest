@@ -10,6 +10,8 @@
  */
 
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
 const router = express.Router();
 const { requireToken } = require('../middleware/auth');
 const controller = require('./controller');
@@ -19,6 +21,30 @@ const { chatLimiter, uploadLimiter, voiceLimiter, requireAi, requireFeature } = 
 const { FILE_LIMITS } = require('./config');
 
 router.use(requireToken);
+
+router.get('/files/:folder/:name', async (req, res) => {
+    const folder = String(req.params.folder || '');
+    const allowed = new Set(['images', 'audio', 'pdfs', 'generated']);
+    const name = path.basename(String(req.params.name || ''));
+    if (!allowed.has(folder) || !name) return res.status(404).end();
+    try {
+        const db = require('../db');
+        const [[row]] = await db.query(
+            `SELECT kind, mime_type, stored_name, user_id FROM tam24_ai_files WHERE stored_name = ? LIMIT 1`,
+            [name]
+        );
+        if (!row || Number(row.user_id) !== Number(req.user.id)) return res.status(404).end();
+        const abs = fileStorage.absolutePathFor(row.kind, name);
+        if (!abs || !fs.existsSync(abs)) return res.status(404).end();
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('Content-Type', row.mime_type || 'application/octet-stream');
+        if (row.kind === 'pdf') res.setHeader('Content-Disposition', 'attachment');
+        fs.createReadStream(abs).pipe(res);
+    } catch (err) {
+        console.error('[met] file read', err.message);
+        res.status(500).end();
+    }
+});
 
 // Availability + config (works even when AI is off — the UI needs it to render the unavailable state)
 router.get('/bootstrap', controller.getBootstrap);

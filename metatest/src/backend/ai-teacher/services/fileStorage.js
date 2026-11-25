@@ -24,8 +24,9 @@ const { sniffAudio } = require('../../utils/uploadSniff');
 const WEB_ROOT = FILE_LIMITS.uploadRoot
     ? path.resolve(FILE_LIMITS.uploadRoot)
     : require('../../runtimeMode').profile.webRoot;
-const BASE_DIR = path.join(WEB_ROOT, 'uploads', 'ai');
-const PUBLIC_PREFIX = '/uploads/ai';
+// New files stay outside the web root. Older files may still sit under public/uploads/ai.
+const BASE_DIR = path.resolve(path.dirname(WEB_ROOT), 'private-ai');
+const LEGACY_DIR = path.join(WEB_ROOT, 'uploads', 'ai');
 
 const KIND_DIRS = Object.freeze({
     image: 'images',
@@ -61,7 +62,8 @@ function dirFor(kind) {
 }
 
 function publicUrlFor(kind, storedName) {
-    return `${PUBLIC_PREFIX}/${KIND_DIRS[kind]}/${storedName}`;
+    const folder = KIND_DIRS[kind] || 'images';
+    return `/api/ai-teacher/files/${folder}/${encodeURIComponent(path.basename(String(storedName || '')))}`;
 }
 
 function uniqueName(prefix, ext) {
@@ -200,7 +202,14 @@ async function getFileForUser(db, fileId, userId) {
 }
 
 function absolutePathFor(kind, storedName) {
-    return path.join(dirFor(kind), path.basename(String(storedName || '')));
+    const name = path.basename(String(storedName || ''));
+    const next = path.join(dirFor(kind), name);
+    if (fs.existsSync(next)) return next;
+    const folder = KIND_DIRS[kind];
+    if (!folder) return next;
+    const legacy = path.join(LEGACY_DIR, folder, name);
+    if (fs.existsSync(legacy)) return legacy;
+    return next;
 }
 
 /**
@@ -219,7 +228,7 @@ function publicFile(row) {
         fileId: row.id,
         kind: row.kind,
         type: row.kind === 'pdf' ? 'pdf' : row.kind.includes('audio') ? 'audio' : 'image',
-        url: row.public_url,
+        url: publicUrlFor(row.kind, row.stored_name),
         mimeType: row.mime_type,
         sizeBytes: row.size_bytes == null ? null : Number(row.size_bytes),
         width: row.width,
@@ -258,7 +267,6 @@ function handleUpload(middleware, { tooLarge, unsupported }) {
 
 module.exports = {
     BASE_DIR,
-    PUBLIC_PREFIX,
     KIND_DIRS,
     IMAGE_MIME,
     AUDIO_MIME,
