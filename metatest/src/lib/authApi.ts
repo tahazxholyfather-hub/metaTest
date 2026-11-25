@@ -55,8 +55,8 @@ export function getCookie(name: string): string | null {
     return null;
 }
 
-export function setAuthCookie(token: string) {
-    document.cookie = `auth_token=${token}; path=/; max-age=86400; secure; samesite=strict`;
+export function setAuthCookie(_token: string) {
+    // SEC-014: the API sets an HttpOnly auth_token. Do not copy it into a script-readable cookie.
 }
 
 export function clearAuthCookie() {

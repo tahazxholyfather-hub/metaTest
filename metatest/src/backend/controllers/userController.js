@@ -7,6 +7,7 @@ const { markManualTask } = require('./taskController');
 const jwt = require('jsonwebtoken');
 
 const { sendOtpSms } = require('../utils/sms');
+const { setSessionCookie } = require('../utils/sessionCookie');
 const { encodeResultId } = require('../utils/hash');
 
 // ===================== Native Crypto Password Helpers =====================
@@ -243,6 +244,7 @@ const handleGuestLogin = async (req, res) => {
 
         const guestId = result.insertId;
         const guestToken = await issueSessionToken(guestId, 'guest', ip);
+        setSessionCookie(req, res, guestToken);
 
         res.json({
             success: true,
@@ -285,6 +287,7 @@ const handlePasswordLogin = async (req, res) => {
 
         // Single-session JWT: stamps last_login and invalidates older sessions
         const token = await issueSessionToken(user.id, user.role, ip);
+        setSessionCookie(req, res, token);
 
         res.json({ success: true, token, data: { id: user.id, phone, role: user.role } });
     } catch (error) {
@@ -378,6 +381,7 @@ const handleVerifyOtp = async (req, res) => {
 
         // Single-session JWT: stamps last_login and invalidates older sessions
         const token = await issueSessionToken(userId, role, ip);
+        setSessionCookie(req, res, token);
 
         res.json({ success: true, isComplete: true, token, data: { id: userId, phone, role } });
     } catch (error) {
@@ -1154,8 +1158,21 @@ const handleGetMyInvites = async (req, res) => {
     }
 };
 
+const handleRealtimeToken = (req, res) => {
+    if (!process.env.JWT_SECRET) {
+        return res.status(500).json({ success: false, message: 'Server configuration error' });
+    }
+    const token = jwt.sign(
+        { id: req.user.id, role: req.user.role, loginAt: req.user.loginAt },
+        process.env.JWT_SECRET,
+        { expiresIn: '15m' }
+    );
+    return res.json({ success: true, token });
+};
+
 module.exports = {
     handleGetUserInfo,
+    handleRealtimeToken,
     handleGuestLogin,
     handleVerifyOtp,
     handleSendOtp,

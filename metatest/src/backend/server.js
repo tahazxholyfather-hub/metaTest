@@ -118,6 +118,8 @@ function avatarUpload(req, res, next) {
     });
 }
 
+app.get('/api/realtime-token', requireToken, userController.handleRealtimeToken);
+
 app.post(
     '/api/upload_avatar',
     requireToken,
