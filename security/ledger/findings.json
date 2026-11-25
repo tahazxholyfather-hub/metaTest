@@ -298,9 +298,9 @@
       "found_by": "static-review-20261125",
       "retest_count": 1,
       "duplicates": [],
-      "status": "VERIFIED",
+      "status": "RISK ACCEPTED",
       "phase5": "Send and verify are rate limited. Six-digit codes are a follow-up because the login screen is four boxes.",
-      "phase6": "Static re-read and local tests on cursor/phase5b-medium-low-a3a9. No production probe."
+      "phase6": "Owner accepted the four-digit code on 2026-11-25. The send and verify rate limits stay. The six-digit change was reverted."
     },
     {
       "id": "SEC-011",
@@ -499,8 +499,8 @@
       "found_by": "static-review-20261125",
       "retest_count": 1,
       "duplicates": [],
-      "status": "VERIFIED",
-      "phase6": "Static re-read and local tests on cursor/phase5b-medium-low-a3a9. No production probe."
+      "status": "RISK ACCEPTED",
+      "phase6": "Owner accepted the 30-day session on 2026-11-25. The 12-hour lifetime and the refresh cookie were reverted."
     },
     {
       "id": "SEC-018",
