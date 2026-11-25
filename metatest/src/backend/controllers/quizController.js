@@ -1032,13 +1032,23 @@ const handleCheckAnswer = async (req, res) => {
 const handleFinishQuiz = async (req, res) => {
     try {
         const userId = sessionUserId(req);
-        const practiceSeconds = Number(req.body.practice_seconds) || 0;
-        const questionsAnswered = Number(req.body.questions_answered) || 0;
-        const correctAnswers = Number(req.body.correct_answers) || 0;
+        const requestedSeconds = Number(req.body.practice_seconds) || 0;
+        const practiceSeconds = Math.min(Math.max(0, requestedSeconds), 8 * 60 * 60);
 
         if (!userId) {
             return res.json({ success: false, message: 'Invalid user ID' });
         }
+
+        const [statRows] = await pool.query(
+            `SELECT
+                COALESCE(SUM(status = 'correct'), 0) AS correct_answers,
+                COUNT(*) AS questions_answered
+             FROM tam24_user_answers
+             WHERE user_id = ? AND updated_at >= CURDATE()`,
+            [userId]
+        );
+        const questionsAnswered = Number(statRows[0]?.questions_answered) || 0;
+        const correctAnswers = Number(statRows[0]?.correct_answers) || 0;
 
         await pool.query(
             `INSERT INTO tam24_user_activity
