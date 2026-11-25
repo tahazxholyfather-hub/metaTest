@@ -7,7 +7,7 @@
       "title": "Live secrets committed to the public git history",
       "category": "ASVS 5.0 V14 Data Protection / CWE-798",
       "severity": "CRITICAL",
-      "severity_justification": "Anyone can read the API key, JWT signing keys, SMS password, and payment secrets from the public repository.",
+      "severity_justification": "The same secrets were in the public repository and were read from the live server by the November 2026 webshell.",
       "cvss": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:N",
       "confidence": "CONFIRMED",
       "files": [
@@ -28,14 +28,14 @@
           "lines": "6-16"
         }
       ],
-      "explanation": "Tracked .env files hold the GapGPT key, JWT secrets, SMS username and password, Zarinpal merchant id, payment HMAC, internal service key, and APP_TOKEN. .gitignore did not exclude them. NODE_ENV=development and ZARINPAL_SANDBOX=true are in the same files.",
-      "impact": "Forged student sessions, SMS at the owner's expense, AI spend, and internal quiz-grade calls. Minors' accounts are the users of this app.",
-      "evidence": "Files are tracked on main. Values are not copied. See the masked table on PR #55 SECURITY_AUDIT.md.",
-      "remediation": "Rotate every value. Store new values in the cPanel Node.js App environment. PR #55 only deletes the files from the tree.",
-      "verification_method": "git ls-files | grep env on main still lists the files. After a history purge, git log -S on the key prefix is empty. Confirm with the provider that the old key is revoked.",
-      "pr55": "Deletes the files and adds examples. Does not rotate or purge history.",
+      "explanation": "Tracked .env files hold the GapGPT key, JWT secrets, SMS username and password, Zarinpal merchant id, payment HMAC, internal service key, and APP_TOKEN. .gitignore did not exclude them. NODE_ENV=development and ZARINPAL_SANDBOX=true are in the same files. Apache SSL logs (UTC+0330) show the November 2026 webshell read the live backend/.env on Nov 6, 13, 15, 16, and 17, and also read app/.env, www/.env, and football/.env. Values are not copied here.",
+      "impact": "Exfiltration is confirmed, not only disclosure in git. Whoever holds those files can forge student sessions, spend SMS and AI credit, and call internal quiz routes until every value is rotated. The users are minors.",
+      "evidence": "Files are tracked on main. Owner Apache SSL access logs, summarized in security/incident-2026-11.md. No secret values are recorded in this ledger.",
+      "remediation": "Treat every value in those files as stolen. Rotate cPanel, database, SSH, SMS, AI, JWT, payment, and internal keys. Store new values only in the cPanel Node.js App environment. PR #55 only deletes the files from the tree.",
+      "verification_method": "Providers show the old keys revoked. A request signed with the pre-incident JWT secret is rejected. git history purge is separate and still required.",
+      "pr55": "Deletes the files and adds examples. Does not rotate or purge history. Does not undo the exfiltration.",
       "found_by": "static-review-20261125",
-      "retest_count": 1,
+      "retest_count": 2,
       "duplicates": [],
       "status": "open"
     },
@@ -177,25 +177,25 @@
       "title": "Profile upload writes the client extension, including .php, under public/",
       "category": "ASVS 5.0 V5 File Handling / CWE-434",
       "severity": "CRITICAL",
-      "severity_justification": "On this shared cPanel plan PHP is enabled, and the upload stores a caller-chosen extension in the web root the app is built around.",
+      "severity_justification": "Apache logs show a .php file uploaded through this route was executed as a webshell for about two weeks.",
       "cvss": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
-      "confidence": "LIKELY",
+      "confidence": "CONFIRMED",
       "files": [
         {
           "path": "metatest/src/backend/server.js",
           "lines": "57-78,93,102-106"
         }
       ],
-      "explanation": "Multer has no fileFilter. The filename keeps path.extname(originalname). Destination is metatest/public/avatars. express.static serves public/ and does not execute PHP. There is no child_process or eval of the path. The host is shared cPanel at Pars Web Server, Apache or LiteSpeed, PHP handlers on, Node via Passenger. Those servers execute .php in the document root before Passenger. Whether public/ is that document root is not in the repo, so execution is not CONFIRMED. It is the normal layout, so it is LIKELY. .html and .svg in the same function are stored XSS even if PHP is off. Path traversal is not shown: only the extension is copied.",
-      "impact": "If the directory is web-served by Apache/LiteSpeed, anonymous callers (SEC-006) can run code as the cPanel account: read the database, the env screen is not in the same file but the app's .env on disk is, and student PII goes with it.",
-      "evidence": "evidence/upload-trace.md and evidence/hosting.md. No upload was performed.",
-      "remediation": "cPanel .htaccess in the upload dirs now (infrastructure-audit.md). Then allow-list JPEG/PNG/WebP by ext, magic, and sharp decode; re-encode; random name; store outside the web root; nosniff; rate limit. PR #55 only does ext+magic and still writes public/avatars. Not sufficient.",
-      "verification_method": "Staging only. A .php file whose body is the text FIXTURE with no PHP tags must return 403. 200 with that text means the PHP handler ran.",
-      "pr55": "Partial. Rejects non-images. Does not re-encode, move storage, or disable PHP.",
+      "explanation": "Multer has no fileFilter. The filename keeps path.extname(originalname). Destination is metatest/public/avatars, which on this cPanel account is public_html/avatars. Node does not execute PHP. Apache or LiteSpeed did. Owner SSL access logs (UTC+0330) show POST /api/upload_avatar on 6 Nov 2026, then about 480 requests with ?cmd= to public_html/avatars/avatar-1793964090912-103811333.php from about 15 addresses through 18-19 Nov 2026. The owner has since replaced avatars/.htaccess with a PHP-deny block. That does not remove other dropped files and does not fix the upload code.",
+      "impact": "Confirmed compromise of the cPanel account: secrets read, archives downloaded, student voice files copied, database login attempted, extra webshells written. See security/incident-2026-11.md.",
+      "evidence": "Code path in server.js. Owner Apache SSL access logs. Filenames and the attacker address 168.222.78.23 are in the incident note. No command output and no secret values are stored here.",
+      "remediation": "Keep the PHP-deny .htaccess on every upload directory. Remove the dropped shells. Rotate every credential the shell could read. Then change the app: allow-list JPEG/PNG/WebP by extension, magic bytes, and a sharp decode; re-encode; random server name; store outside the web root. PR #55 only does the extension and magic-byte check and still writes under public/. Not sufficient.",
+      "verification_method": "On staging, a file named with .php whose body is the text FIXTURE and contains no PHP tags must return 403. Confirm the November shell filenames are gone from public_html.",
+      "pr55": "Partial. Rejects non-images. Does not re-encode, move storage, or disable PHP. Does not clean the host.",
       "found_by": "static-review-20261125",
-      "retest_count": 1,
+      "retest_count": 2,
       "duplicates": [],
-      "status": "open"
+      "status": "exploited"
     },
     {
       "id": "SEC-008",
@@ -930,6 +930,31 @@
       "verification_method": "Staging: base64 of the text FIXTURE is rejected. A small real PDF is stored.",
       "pr55": "Magic-byte check, plus the admin gate from SEC-005.",
       "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": [],
+      "status": "open"
+    },
+    {
+      "id": "SEC-037",
+      "title": "public_html/.htaccess proxies /api/internal/ to the local Node port",
+      "category": "ASVS 5.0 V13 Configuration / CWE-441",
+      "severity": "CRITICAL",
+      "severity_justification": "The public web server forwards /api/internal/ to 127.0.0.1:3000, so the internet can reach the API that was meant to be local, including routes that grade quizzes.",
+      "cvss": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N",
+      "confidence": "CONFIRMED",
+      "files": [
+        {
+          "path": "public_html/.htaccess",
+          "lines": "on the server, not in git"
+        }
+      ],
+      "explanation": "The owner reports that public_html/.htaccess on the cPanel account reverse-proxies /api/internal/ to 127.0.0.1:3000. That file is not in this repository. The Node process listens on port 3000 (server.js). Its /internal/quizzes and /internal/results routes grade and store exam results and, on main, accept a key that the webshell read from backend/.env (SEC-001, SEC-015). Publishing the proxy makes that port reachable on the site hostname. The November webshell is tracked as exploited SEC-007; this finding is the separate configuration that exposes the API.",
+      "impact": "Anyone who can call https://metatest.app/api/internal/ is talking to the Node app. With the stolen internal key they can grade quizzes and write results. The proxy also tells an attacker exactly where the app listens.",
+      "evidence": "Owner description of public_html/.htaccess. The rule text is not pasted here. Incident timeline: security/incident-2026-11.md.",
+      "remediation": "Remove the proxy, or restrict it to localhost and require the internal header at the web server. Do not leave /internal reachable on the public hostname. Rotate INTERNAL_SERVICE_KEY. This is a cPanel edit, not a change in PR #55.",
+      "verification_method": "From outside the server, GET https://metatest.app/api/internal/ returns 404 or 403 and does not hit port 3000. A request from the lobby host with the new key still works.",
+      "pr55": "None. PR #55 tightens the Node check (SEC-015) and does not edit the server .htaccess.",
+      "found_by": "owner-apache-ssl-logs-20261125",
       "retest_count": 1,
       "duplicates": [],
       "status": "open"

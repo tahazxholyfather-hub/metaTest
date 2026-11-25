@@ -58,10 +58,10 @@
     {
       "id": "TASK-007",
       "finding_id": "SEC-007",
-      "title": "Gate 1 decision: Profile upload writes the client extension, including .php, under public/",
+      "title": "Gate 1 decision: Profile upload writes the client extension, including .php, under public/ (exploited Nov 2026)",
       "phase": "gate-1",
       "status": "awaiting_owner",
-      "pr55": "Partial. Rejects non-images. Does not re-encode, move storage, or disable PHP.",
+      "pr55": "Partial. Rejects non-images. Does not re-encode, move storage, or disable PHP. Does not clean the host.",
       "blocks_phase_7": false
     },
     {
@@ -314,6 +314,15 @@
       "phase": "gate-1",
       "status": "awaiting_owner",
       "pr55": "Magic-byte check, plus the admin gate from SEC-005.",
+      "blocks_phase_7": false
+    },
+    {
+      "id": "TASK-037",
+      "finding_id": "SEC-037",
+      "title": "Gate 1 decision: public_html/.htaccess proxies /api/internal/ to 127.0.0.1:3000",
+      "phase": "gate-1",
+      "status": "awaiting_owner",
+      "pr55": "None. cPanel edit only.",
       "blocks_phase_7": false
     },
     {

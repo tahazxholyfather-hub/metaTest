@@ -4,9 +4,9 @@ Phase 2 of the 2026-11-25 program. Static review only. Nothing was uploaded to m
 
 ## Verdict
 
-**LIKELY remote code execution. Not a false positive.**
+**CONFIRMED remote code execution. It was exploited.**
 
-The profile upload accepts the client’s file extension and writes the bytes under `public/avatars`. On this host (shared cPanel at Pars Web Server, Apache or LiteSpeed, PHP handlers enabled, Node via Passenger) a `.php` file in a directory the web server serves is executed by PHP, not by Node. Node has no PHP runtime and no `eval` of the uploaded path. The missing proof is the vhost map: this repository does not show that `metatest/public` is the cPanel document root. The owner’s description of the plan makes that map the normal case. Execution was not demonstrated, so the finding is LIKELY, severity CRITICAL (SEC-007).
+The profile upload accepts the client’s file extension and writes the bytes under `public/avatars`. Owner Apache SSL logs show a `.php` upload on 6 Nov 2026 was executed from `public_html/avatars/` through 18–19 Nov 2026. Node did not run it. The cPanel PHP handler did. SEC-007. Timeline: `incident-2026-11.md`.
 
 Rejecting `.php` in application code is not the fix by itself. The target control is all of:
 
@@ -55,7 +55,7 @@ PDF save and the Word parser do not check the admin cookie (SEC-005).
 
 | Claim | Result |
 | --- | --- |
-| “.php upload leads to RCE” | LIKELY on this cPanel plan if `public/` is web-served by Apache/LiteSpeed. Not observed. Not a false positive |
+| “.php upload leads to RCE” | CONFIRMED. Webshell `avatar-1793964090912-103811333.php` executed `?cmd=` (SEC-007, `incident-2026-11.md`) |
 | Unrestricted upload | CONFIRMED |
 | Stored XSS via `.html` / `.svg` | CONFIRMED code path, independent of PHP |
 | Path traversal / arbitrary overwrite | Not shown. Filename is server-built |

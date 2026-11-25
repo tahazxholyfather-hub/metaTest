@@ -2,9 +2,9 @@
 
 These are the items that can take the server, the admin panel, or the student database before any other work. Detail and PR #55 mapping are in `security-report.md` and `ledger/findings.json`. Line numbers are `main` at `0ac668a`.
 
-## SEC-007 — `.php` upload on this cPanel account (LIKELY, CRITICAL)
+## SEC-007 — `.php` upload on this cPanel account (CONFIRMED, exploited)
 
-`server.js` lines 68–71 save `path.extname(file.originalname)` under `public/avatars`. There is no type check. Shared cPanel at Pars Web Server runs Apache or LiteSpeed with PHP handlers, and Node via Passenger. A `.php` file in a directory that web server serves will run. Node will not run it. The document-root mapping is not in the repo, so this is not marked CONFIRMED execution. It is not a false positive.
+`server.js` lines 68–71 save `path.extname(file.originalname)` under `public/avatars`. Apache SSL logs show that path was used: `public_html/avatars/avatar-1793964090912-103811333.php` ran `?cmd=` from 6 Nov 2026 through 18–19 Nov 2026. See `incident-2026-11.md`. The owner’s new `avatars/.htaccess` deny is containment, not a code fix.
 
 PR #55 blocks non-image extensions and checks magic bytes. It still stores files in `public/` and does not disable the PHP handler. Not sufficient. The `.htaccess` in `infrastructure-audit.md` is required even after that PR merges.
 

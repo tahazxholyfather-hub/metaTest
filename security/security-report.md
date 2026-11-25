@@ -8,9 +8,9 @@ The earlier code audit is reused here. Each of its findings was re-read on `main
 
 metatest.app is a Vite student app and an Express API on shared cPanel at Pars Web Server, with PHP enabled and Node probably under Passenger. There is no staging site.
 
-The most urgent code defect is the profile upload: it stores the caller’s file extension under `public/avatars`. On this host that is a likely PHP shell, not a theoretical one, and not a false positive. It is not proven, because the document root is not in the repository and production was not probed (SEC-007).
+The profile upload stored a caller-chosen `.php` file under `public_html/avatars`, and Apache logs show that file ran as a webshell from 6 November through 18–19 November 2026 (SEC-007, now CONFIRMED and exploited). The same logs show `backend/.env` was read on five days, so the secrets in SEC-001 were taken from the live server, not only from git. Timeline and the cleanup list are in `incident-2026-11.md`. `public_html/.htaccess` also proxies `/api/internal/` to `127.0.0.1:3000` (SEC-037).
 
-Independently, the public git history contains live API keys, the SMS password, JWT secrets, and a database dump of student phones, one-time codes, payments, and AI chats (SEC-001, SEC-002). Admin login is `Admin@1` through `Admin@20` with an unsigned cookie, and several admin actions never check that cookie (SEC-003, SEC-004, SEC-005). A base64 blob is accepted as a session (SEC-006). Those four make SEC-007 reachable without an account.
+The public git history still contains those keys and a database dump of student phones, one-time codes, payments, and AI chats (SEC-001, SEC-002). Admin login is `Admin@1` through `Admin@20` with an unsigned cookie, and several admin actions never check that cookie (SEC-003, SEC-004, SEC-005). A base64 blob is accepted as a session (SEC-006). Those four make SEC-007 reachable without an account.
 
 PR #55 fixes the authentication and authorization bugs in code and deletes the secret files from the tree. It does not rotate anything, does not purge history, and does not meet the upload design. The cPanel `.htaccess` files in `infrastructure-audit.md` are still required.
 
@@ -18,15 +18,17 @@ Do not start Phase 7 until a staging cPanel host exists. There is not one today.
 
 ## RCE investigation
 
-**Verdict: LIKELY remote code execution. Not confirmed. Not a false positive.**
+**Verdict: CONFIRMED remote code execution. It was used.**
 
-Evidence, all static:
+Owner Apache SSL logs (UTC+0330) show `POST /api/upload_avatar` on 6 Nov 2026 and then about 480 `?cmd=` requests to `public_html/avatars/avatar-1793964090912-103811333.php` through 18–19 Nov 2026. Full timeline: `incident-2026-11.md`. The code path below is why that request succeeded. Production was not probed again for this update.
+
+Evidence:
 
 - `metatest/src/backend/server.js` lines 57–71 and 75–78. Multer disk storage, no `fileFilter`. The stored name is `avatar-<time>-<rand>` plus `path.extname(file.originalname)`. A body part named `photo.php` is written as `avatar-….php`.
 - The directory is `path.resolve(__dirname, '../../public/avatars')` → `metatest/public/avatars`.
 - `express.static('public')` (line 93) serves files. Node does not execute PHP. There is no `child_process`, no `eval`, and no PHP file in the repo.
 - Owner, this program: shared cPanel, Apache or LiteSpeed, PHP handlers on, Node via “Setup Node.js App” / Passenger. On that stack the web server handles `.php` itself when the file sits in the document root.
-- The document-root mapping is not in git. If `public/` is that root, or is under `public_html`, the file runs. That is the normal cPanel layout for this app. It was not observed.
+- The logs place the executed file at `public_html/avatars/`, so this account’s document root does serve that directory with PHP. The owner has since put a PHP-deny `.htaccess` in `avatars/` only.
 
 Stored XSS via `.html` or `.svg` in the same function is confirmed and does not need PHP (same finding).
 
@@ -34,7 +36,7 @@ PR #55 adds an image allow-list and magic-byte check. It still writes into `publ
 
 ## Confirmed
 
-Critical: SEC-001 secrets, SEC-002 dump, SEC-003 admin passwords, SEC-004 forgeable admin cookie, SEC-005 admin actions without an admin check, SEC-006 forged session.
+Critical: SEC-001 secrets, confirmed exfiltrated from the live server, SEC-002 dump, SEC-003 admin passwords, SEC-004 forgeable admin cookie, SEC-005 admin actions without an admin check, SEC-006 forged session, SEC-007 `.php` upload exploited 6–19 Nov 2026, SEC-037 public `.htaccess` proxies `/api/internal/` to `127.0.0.1:3000`.
 
 High: SEC-008 body `user_id` overrides the session, SEC-009 quiz result without membership, SEC-010 OTP and SMS pumping, SEC-011 no security headers on the live document, SEC-012 HTTP 500 instead of HTTPS redirect, SEC-013 question HTML injected into the page, SEC-014 session cookie readable by script, SEC-015 internal routes fail open when the key is empty and also accept that key on `x-app-token`, SEC-025 known-vulnerable dependencies (npm audit).
 
@@ -46,7 +48,7 @@ Informational: SEC-031 CORS is localhost unless configured, SEC-033 `guest_login
 
 ## Suspected
 
-SEC-007, above. The write is confirmed. Execution is likely and not observed.
+SEC-007 is no longer in this list. Execution is confirmed by the November access logs.
 
 SEC-035. `ORDER BY FIELD(q.id, ${ids})` interpolates a JSON list. The only writer found stores ids the server selected. Attacker control of that string was not shown.
 
@@ -72,7 +74,8 @@ Approve or reject each row. The PR is not merged.
 | SEC-004 | HMAC admin cookie | Yes. Breaking: current admin cookies die |
 | SEC-005 | `requireAdmin` on the admin handlers that lacked it | Yes, once SEC-004 is in |
 | SEC-006 | JWT only. Guest login issues a JWT | Yes. Breaking: old base64 guest tokens die |
-| SEC-007 | Image extension and magic bytes | **No.** See the upload document |
+| SEC-007 | Image extension and magic bytes | **No.** Host already compromised. See `incident-2026-11.md` |
+| SEC-037 | Nothing. The proxy is only on the server | No |
 | SEC-008 | Session id, not body `user_id` | Yes for the handlers it edits |
 | SEC-009 | Both users must be quiz members | Yes. Members can still open each other’s result |
 | SEC-010 | Rate limit. Still 4 digits | Partial |

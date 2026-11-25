@@ -42,4 +42,4 @@ No `child_process`, no `eval(`, no `new Function`, no `<?php`, and no `.php` app
 
 ## RCE conclusion used by SEC-007
 
-The write of a `.php` file into `public/avatars` is confirmed from the code. Whether Apache/LiteSpeed then executes it is not proven, because the vhost document root is not in the repo and production was not probed. Given shared cPanel with PHP handlers and Passenger, that execution is likely if `public/` is under the account document root. It is not a false positive.
+The write of a `.php` file into `public/avatars` is confirmed from the code. Execution is confirmed by the owner’s Apache SSL logs: `public_html/avatars/avatar-1793964090912-103811333.php` served `?cmd=` after `POST /api/upload_avatar` on 6 Nov 2026. See `incident-2026-11.md`. No new upload was sent during this update.
