@@ -387,6 +387,191 @@ const FilterSwitch = ({ label, value, options, onChange, disabled = false, wrap 
 );
 
 
+// --- QUESTION TEXT SEARCH ---
+// Button opens a panel with the query and three on/off scopes. The scopes
+// combine into 8 search modes (question text, options, descriptive answer).
+type SearchFieldKey = 'search_in_text' | 'search_in_options' | 'search_in_answer';
+
+const SEARCH_FIELDS: { key: SearchFieldKey; label: string; short: string }[] = [
+    { key: 'search_in_text', label: 'جستجو در صورت سوال', short: 'صورت سوال' },
+    { key: 'search_in_options', label: 'جستجو در گزینه‌ها', short: 'گزینه‌ها' },
+    { key: 'search_in_answer', label: 'جستجو در پاسخ تشریحی', short: 'پاسخ تشریحی' },
+];
+
+interface QuestionSearchState {
+    search_text: string;
+    search_in_text: boolean;
+    search_in_options: boolean;
+    search_in_answer: boolean;
+}
+
+const QuestionSearch = ({
+    filters,
+    disabled = false,
+    onText,
+    onField,
+    onSearch,
+    onClear,
+}: {
+    filters: QuestionSearchState;
+    disabled?: boolean;
+    onText: (value: string) => void;
+    onField: (key: SearchFieldKey, value: boolean) => void;
+    onSearch: () => void;
+    onClear: () => void;
+}) => {
+    const [open, setOpen] = useState(false);
+    const [growRight, setGrowRight] = useState(true);
+    const panelRef = useRef<HTMLDivElement>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    const toggleOpen = () => {
+        if (!open && panelRef.current) {
+            const rect = panelRef.current.getBoundingClientRect();
+            const spaceRight = window.innerWidth - rect.left;
+            setGrowRight(spaceRight >= 340 || spaceRight >= rect.right);
+        }
+        setOpen((value) => !value);
+    };
+
+    useEffect(() => {
+        if (!open) return;
+        const onDoc = (event: MouseEvent) => {
+            if (panelRef.current && !panelRef.current.contains(event.target as Node)) setOpen(false);
+        };
+        const onKey = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') setOpen(false);
+        };
+        document.addEventListener('mousedown', onDoc);
+        document.addEventListener('keydown', onKey);
+        return () => {
+            document.removeEventListener('mousedown', onDoc);
+            document.removeEventListener('keydown', onKey);
+        };
+    }, [open]);
+
+    useEffect(() => {
+        if (open) requestAnimationFrame(() => inputRef.current?.focus());
+    }, [open]);
+
+    const enabled = SEARCH_FIELDS.filter((field) => filters[field.key]);
+    const hasQuery = filters.search_text.trim() !== '';
+    const scopeTitle = enabled.length ? enabled.map((field) => field.short).join('، ') : 'هیچ بخشی انتخاب نشده';
+
+    const runSearch = () => {
+        onSearch();
+        setOpen(false);
+    };
+
+    return (
+        <div className="relative" ref={panelRef}>
+            <button
+                type="button"
+                disabled={disabled}
+                aria-expanded={open}
+                aria-haspopup="dialog"
+                title={scopeTitle}
+                onClick={toggleOpen}
+                className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold border transition-all disabled:opacity-50 ${
+                    open || hasQuery
+                        ? 'bg-[#e8f0fe] text-[#1a73e8] border-[#1a73e8]/30 dark:bg-[#1a73e8]/20 dark:text-[#8ab4f8] dark:border-[#8ab4f8]/30'
+                        : 'bg-[#f8f9fa] dark:bg-[#131314] text-[#86868b] border-[#dadce0] dark:border-[#444746] hover:text-gray-700 dark:hover:text-gray-200'
+                }`}
+            >
+                <Search size={14} />
+                <span className="max-w-[160px] truncate">{hasQuery ? filters.search_text : 'جستجو'}</span>
+                <span className="flex items-center gap-1" aria-hidden="true">
+                    {SEARCH_FIELDS.map((field) => (
+                        <span
+                            key={field.key}
+                            className={`w-1.5 h-1.5 rounded-full ${filters[field.key] ? 'bg-[#1a73e8]' : 'bg-[#dadce0] dark:bg-[#5f6368]'}`}
+                        />
+                    ))}
+                </span>
+                <ChevronDown size={14} className={`transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+            </button>
+
+            {open && (
+                <div
+                    role="dialog"
+                    aria-label="جستجو در سوال"
+                    className={`absolute top-[calc(100%+8px)] w-[min(340px,calc(100vw-2rem))] bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl p-4 shadow-2xl z-[100] animate-in slide-in-from-top-2 ${growRight ? 'left-0' : 'right-0'}`}
+                >
+                    <div className="flex items-center justify-between mb-3">
+                        <span className="text-[11px] font-bold text-[#86868b]">جستجو در سوال</span>
+                        <button type="button" onClick={() => setOpen(false)} className="p-1.5 bg-gray-100 dark:bg-[#2d3748] rounded-full hover:text-red-500 transition-colors">
+                            <X size={14} />
+                        </button>
+                    </div>
+
+                    <input
+                        ref={inputRef}
+                        type="text"
+                        value={filters.search_text}
+                        onChange={(e) => onText(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') runSearch(); }}
+                        placeholder="متن جستجو..."
+                        dir="auto"
+                        className="w-full bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-xl px-3 py-2.5 text-xs font-medium outline-none focus:border-[#1a73e8] transition-all mb-3"
+                    />
+
+                    <div className="flex flex-col gap-2 mb-3">
+                        {SEARCH_FIELDS.map((field) => {
+                            const on = filters[field.key];
+                            return (
+                                <button
+                                    key={field.key}
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={on}
+                                    onClick={() => onField(field.key, !on)}
+                                    className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] text-xs font-bold text-gray-700 dark:text-gray-200"
+                                >
+                                    <span>{field.label}</span>
+                                    <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${on ? 'bg-[#1a73e8]' : 'bg-[#dadce0] dark:bg-[#444746]'}`}>
+                                        <span
+                                            className="absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all"
+                                            style={{ insetInlineStart: on ? 18 : 2 }}
+                                        />
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    {hasQuery && enabled.length === 0 && (
+                        <p className="text-[11px] leading-relaxed text-amber-600 dark:text-amber-400 mb-3">
+                            هیچ بخشی روشن نیست؛ این جستجو نتیجه‌ای برنمی‌گرداند.
+                        </p>
+                    )}
+
+                    <div className="flex gap-2">
+                        <button
+                            type="button"
+                            onClick={runSearch}
+                            disabled={disabled}
+                            className="flex-1 flex items-center justify-center gap-2 bg-[#1a73e8] hover:bg-[#1557b0] text-white py-2.5 rounded-xl text-xs font-bold transition-all disabled:opacity-50"
+                        >
+                            <Search size={14} />
+                            جستجو
+                        </button>
+                        {hasQuery && (
+                            <button
+                                type="button"
+                                onClick={() => { onClear(); setOpen(false); }}
+                                className="px-3 py-2.5 rounded-xl text-xs font-bold text-gray-500 border border-[#dadce0] dark:border-[#444746] hover:text-red-500 transition-colors"
+                            >
+                                پاک کردن
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+
 // --- TYPES ---
 interface Option { id: number; text: string; is_correct: boolean; image?: string | null; imageDraft?: ImageDraft; }
 interface QuestionData {
@@ -429,7 +614,13 @@ export default function EditQuestions({
         has_image: string | null;
         has_answer: string | null;
         search_text: string;
-    }>({ subject_id: null, grade_id: null, topic_id: null, chapter_id: null, status: null, has_image: null, has_answer: null, search_text: '' });
+        search_in_text: boolean;
+        search_in_options: boolean;
+        search_in_answer: boolean;
+    }>({
+        subject_id: null, grade_id: null, topic_id: null, chapter_id: null, status: null, has_image: null, has_answer: null,
+        search_text: '', search_in_text: true, search_in_options: true, search_in_answer: true,
+    });
     const [lists, setLists] = useState<{ subjects: SelectOption[], grades: SelectOption[], chapters: SelectOption[], mabahes: SelectOption[] }>({ subjects: [], grades: [], chapters: [], mabahes: [] });
     const [curriculum, setCurriculum] = useState<{
         subjects: { id: number; title: string }[];
@@ -758,7 +949,7 @@ export default function EditQuestions({
             // Numeric input: direct lookup by question ID
             id = await getQuestion({ question_id: Number(query) });
         } else {
-            // Text input: search within the question text (combined with active filters)
+            // Text input: same field scopes as the search panel (question, options, answer)
             const newFilters = { ...filters, search_text: query };
             setFilters(newFilters);
             id = await getQuestion({ filters: newFilters, resetHistory: true });
@@ -947,7 +1138,7 @@ export default function EditQuestions({
             </div>
 
             {/* QUICK FILTERS BAR (Status / Images switches + text search) */}
-            {!embedded && <div className={`flex flex-wrap items-center justify-between gap-4 bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl px-4 py-3 shadow-sm ${isEditing ? 'opacity-50 pointer-events-none' : ''}`}>
+            {!embedded && <div className={`relative z-30 flex flex-wrap items-center justify-between gap-4 bg-white dark:bg-[#1e1f20] border border-[#dadce0] dark:border-[#333537] rounded-2xl px-4 py-3 shadow-sm ${isEditing ? 'opacity-50 pointer-events-none' : ''}`}>
                 <div className="flex flex-wrap items-center gap-4 md:gap-6">
                     <FilterSwitch
                         label="وضعیت"
@@ -972,34 +1163,18 @@ export default function EditQuestions({
                     />
                 </div>
 
-                <div className="flex items-center gap-2 flex-1 md:flex-none md:w-72 min-w-[200px]">
-                    <div className="relative flex-1">
-                        <input
-                            type="text"
-                            value={filters.search_text}
-                            onChange={(e) => handleFilterChange('search_text', e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleTextSearchApply()}
-                            placeholder="جستجو در متن سوال..."
-                            className="w-full bg-[#f8f9fa] dark:bg-[#131314] border border-[#dadce0] dark:border-[#444746] rounded-xl pr-4 pl-9 py-2.5 text-xs font-medium outline-none focus:border-[#1a73e8] transition-all"
-                            dir="auto"
-                        />
-                        {filters.search_text && (
-                            <button
-                                onClick={() => { const newFilters = { ...filters, search_text: '' }; setFilters(newFilters); getQuestion({ filters: newFilters, resetHistory: true }); }}
-                                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 transition-colors"
-                            >
-                                <X size={14} />
-                            </button>
-                        )}
-                    </div>
-                    <button
-                        onClick={handleTextSearchApply}
-                        disabled={isLoading}
-                        className="p-2.5 bg-[#1a73e8] hover:bg-[#1557b0] text-white rounded-xl transition-all shadow-sm disabled:opacity-50 shrink-0"
-                    >
-                        <Search size={14} />
-                    </button>
-                </div>
+                <QuestionSearch
+                    filters={filters}
+                    disabled={isLoading}
+                    onText={(value) => handleFilterChange('search_text', value)}
+                    onField={(key, value) => handleFilterChange(key, value)}
+                    onSearch={handleTextSearchApply}
+                    onClear={() => {
+                        const newFilters = { ...filters, search_text: '' };
+                        setFilters(newFilters);
+                        getQuestion({ filters: newFilters, resetHistory: true });
+                    }}
+                />
             </div>}
 
             {/* ERROR / MESSAGE DISPLAY */}

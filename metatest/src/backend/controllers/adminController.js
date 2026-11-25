@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const walletController = require('./walletController');
 const notifications = require('../notifications');
 const { parsePlanIds } = require('../admin/discounts');
+const { buildQuestionTextSearch } = require('./questionSearch');
 const {
     ensureQuestionTagTables,
     saveQuestionTags,
@@ -142,11 +143,10 @@ const handleGetQuestionForEdit = async (req, res) => {
                 sql += ` AND NOT EXISTS (SELECT 1 FROM options_tam24 oc WHERE oc.question_id = q.id AND oc.is_correct = 1)`;
             }
 
-            // Free-text search within the question text
-            if (filters.search_text && String(filters.search_text).trim() !== '') {
-                sql += ` AND q.question_text LIKE ?`;
-                params.push(`%${String(filters.search_text).trim()}%`);
-            }
+            // Free-text search across the fields the editor toggled on
+            const textSearch = buildQuestionTextSearch(filters);
+            sql += textSearch.sql;
+            params.push(...textSearch.params);
         }
 
         // --- Logic for Search, Next, Previous, or Random ---
