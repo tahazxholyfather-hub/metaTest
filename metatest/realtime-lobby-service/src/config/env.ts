@@ -9,7 +9,7 @@ const envSchema = z.object({
 
     CORS_ORIGIN: z.string().default('http://localhost:5173'),
 
-    JWT_SECRET: z.string().min(10).default('super-secret-change-me'),
+    JWT_SECRET: z.string().min(32),
     JWT_AUDIENCE: z.string().optional(),
     JWT_ISSUER: z.string().optional(),
 

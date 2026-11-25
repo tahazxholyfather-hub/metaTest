@@ -60,7 +60,11 @@ function calculateNewPlanExpiry(planDays) {
 
 
 function getPaymentResultSecret() {
-    return process.env.PAYMENT_RESULT_SECRET || process.env.JWT_SECRET || 'change-me-payment-result-secret';
+    const secret = process.env.PAYMENT_RESULT_SECRET || process.env.JWT_SECRET;
+    if (!secret) {
+        throw new Error('PAYMENT_RESULT_SECRET is not configured');
+    }
+    return secret;
 }
 
 function base64UrlEncode(value) {
@@ -552,6 +556,16 @@ exports.handleZarinpalCallback = async (req, res) => {
         }
 
         if (payment.status === 'paid') {
+            return redirectToResult(paymentId);
+        }
+
+        if (payment.authority && authorityFromCb && String(authorityFromCb) !== String(payment.authority)) {
+            await connection.execute(
+                `UPDATE payments
+                 SET status = 'failed', callback_payload = ?, updated_at = NOW()
+                 WHERE id = ? AND status = 'pending'`,
+                [JSON.stringify(req.query), paymentId]
+            );
             return redirectToResult(paymentId);
         }
 

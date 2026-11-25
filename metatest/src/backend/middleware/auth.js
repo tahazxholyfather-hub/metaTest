@@ -37,8 +37,10 @@ const requireToken = async (req, res, next) => {
         return next();
     }
 
-    // 2. DEVELOPER MODE BYPASS
-    if (process.env.DEV_MODE === 'true') {
+    // 2. DEVELOPER MODE BYPASS — local loopback only, never on a public host.
+    const remoteAddr = req.socket?.remoteAddress || '';
+    const isLoopback = remoteAddr === '127.0.0.1' || remoteAddr === '::1' || remoteAddr === '::ffff:127.0.0.1';
+    if (process.env.DEV_MODE === 'true' && process.env.NODE_ENV !== 'production' && isLoopback) {
         req.user = { id: 999, role: 'developer' };
         return next();
     }
@@ -79,29 +81,6 @@ const requireToken = async (req, res, next) => {
         return next();
 
     } catch (err) {
-        // If JWT fails, check if it's your legacy Base64 Guest Token or APP_TOKEN
-
-        // Base64 Fallback Check
-        try {
-            // JWTs have 2 dots. If no dots, it might be your old base64 token.
-            if (!token.includes('.')) {
-                const decodedPayload = JSON.parse(Buffer.from(token, 'base64').toString('utf-8'));
-                if (decodedPayload && decodedPayload.id) {
-                    req.user = { id: decodedPayload.id, role: decodedPayload.role || 'guest' };
-                    return next();
-                }
-            }
-        } catch (base64Err) {
-            // Base64 parsing failed, continue to standard error
-        }
-
-        // APP_TOKEN Fallback
-        if (token === process.env.APP_TOKEN) {
-            req.user = { id: 1, role: 'admin' };
-            return next();
-        }
-
-        // If all validations fail, return appropriate error
         console.log("Token Auth Failed:", err.message);
         return res.status(401).json({
             success: false,

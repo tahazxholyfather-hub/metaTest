@@ -22,12 +22,28 @@ const hashPassword = (password) => {
 
 const comparePassword = (password, storedHash) => {
     return new Promise((resolve, reject) => {
-        const [salt, key] = storedHash.split(':');
+        if (!storedHash || !String(storedHash).includes(':')) return resolve(false);
+        const [salt, key] = String(storedHash).split(':');
+        const expected = Buffer.from(key, 'hex');
         crypto.scrypt(password, salt, 64, (err, derivedKey) => {
             if (err) reject(err);
-            resolve(key === derivedKey.toString('hex'));
+            if (expected.length !== derivedKey.length) return resolve(false);
+            resolve(crypto.timingSafeEqual(expected, derivedKey));
         });
     });
+};
+
+const otpBuckets = new Map();
+const allowOtpAttempt = (key, limit, windowMs) => {
+    const now = Date.now();
+    const fresh = (otpBuckets.get(key) || []).filter((ts) => now - ts < windowMs);
+    if (fresh.length >= limit) {
+        otpBuckets.set(key, fresh);
+        return false;
+    }
+    fresh.push(now);
+    otpBuckets.set(key, fresh);
+    return true;
 };
 
 // ===================== Helpers =====================
@@ -226,9 +242,7 @@ const handleGuestLogin = async (req, res) => {
         );
 
         const guestId = result.insertId;
-        const guestToken = Buffer.from(JSON.stringify({ id: guestId, role: 'guest' })).toString('base64');
-
-        await db.query('UPDATE tam24_users SET last_login = NOW() WHERE id = ?', [guestId]);
+        const guestToken = await issueSessionToken(guestId, 'guest', ip);
 
         res.json({
             success: true,
@@ -285,10 +299,15 @@ const handleSendOtp = async (req, res) => {
     const { phone } = req.body;
     if (!phone) return res.json({ success: false, message: 'شماره موبایل الزامی است.' });
 
+    const ip = getClientIp(req) || 'unknown';
+    const phoneKey = String(phone).trim();
+    if (!allowOtpAttempt(`send:${phoneKey}`, 5, 15 * 60 * 1000) || !allowOtpAttempt(`send-ip:${ip}`, 20, 15 * 60 * 1000)) {
+        return res.json({ success: false, message: 'درخواست‌های زیادی ارسال شد. چند دقیقه دیگر دوباره تلاش کنید.' });
+    }
+
     try {
         const code = generateOtp();
         const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-        const ip = getClientIp(req);
 
         await db.query(`
                     INSERT INTO tam24_otps (phone, code, expires_at, ip)
@@ -315,6 +334,14 @@ const handleSendOtp = async (req, res) => {
 
 const handleVerifyOtp = async (req, res) => {
     const { phone, code, password} = req.body;
+    const phoneKey = String(phone || '').trim();
+    if (!phoneKey || !/^\d{4}$/.test(String(code || ''))) {
+        return res.json({ success: false, message: 'کد وارد شده اشتباه یا منقضی شده است.' });
+    }
+    if (!allowOtpAttempt(`verify:${phoneKey}`, 8, 15 * 60 * 1000)) {
+        await db.query('DELETE FROM tam24_otps WHERE phone = ?', [phoneKey]);
+        return res.json({ success: false, message: 'تلاش‌های زیاد. کد را دوباره درخواست کنید.' });
+    }
 
     try {
         const [otps] = await db.query(
@@ -780,7 +807,17 @@ const handleUploadAvatar = async (req, res) => {
             return res.json({ success: false, message: "فایلی برای آپلود یافت نشد." });
         }
 
-        const avatarUrl = `/avatars/${file.filename}`;
+        const header = fs.readFileSync(file.path).subarray(0, 12);
+        const isPng = header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4e && header[3] === 0x47;
+        const isJpeg = header[0] === 0xff && header[1] === 0xd8 && header[2] === 0xff;
+        const isGif = header.slice(0, 4).toString('ascii') === 'GIF8';
+        const isWebp = header.slice(0, 4).toString('ascii') === 'RIFF' && header.slice(8, 12).toString('ascii') === 'WEBP';
+        if (!isPng && !isJpeg && !isGif && !isWebp) {
+            fs.unlink(file.path, () => {});
+            return res.json({ success: false, message: "فقط تصویر PNG، JPG، WEBP یا GIF پذیرفته می‌شود." });
+        }
+
+        const avatarUrl = `/avatars/${path.basename(file.filename)}`;
 
         const [result] = await db.query(
             'UPDATE tam24_users SET avatar_url = ? WHERE id = ?',
@@ -858,11 +895,12 @@ const handleResetAvatar = async (req, res) => {
 };
 // --- Save/Update User Activity (Daily Time Spent) ---
 const saveUserActivity = async (req, res) => {
-    // Get user ID and the amount of active seconds in the current interval from the client
-    const { user_id, seconds } = req.body;
+    // Always attribute activity to the authenticated session, never a client-supplied id.
+    const user_id = Number(req.user && req.user.id);
+    const seconds = Number(req.body.seconds);
 
     if (!user_id || !seconds) {
-        return res.status(400).json({ success: false, message: "user_id and seconds are required" });
+        return res.status(400).json({ success: false, message: "seconds are required" });
     }
 
     try {

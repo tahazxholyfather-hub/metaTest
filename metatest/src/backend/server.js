@@ -2,6 +2,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const crypto = require('crypto');
 // const router = express.Router();
 const multer = require('multer');
 const path = require('path');
@@ -21,22 +22,19 @@ const PORT = process.env.PORT || 3000;
 
 
 
+function keysMatch(provided, expected) {
+    if (!provided || !expected) return false;
+    const a = Buffer.from(String(provided));
+    const b = Buffer.from(String(expected));
+    if (a.length !== b.length) return false;
+    return crypto.timingSafeEqual(a, b);
+}
+
 function requireInternalService(req, res, next) {
     const configuredKey = process.env.INTERNAL_SERVICE_KEY;
+    const providedKey = req.get('x-internal-service-key') || req.get('X-Internal-Service-Key');
 
-    // Development convenience: if no key is configured, allow internal calls.
-    // In production, always set INTERNAL_SERVICE_KEY.
-    if (!configuredKey && process.env.NODE_ENV !== 'production') {
-        return next();
-    }
-
-    const providedKey =
-        req.get('x-internal-service-key') ||
-        req.get('X-Internal-Service-Key') ||
-        req.get('x-app-token') ||
-        req.get('X-APP-TOKEN');
-
-    if (!configuredKey || providedKey !== configuredKey) {
+    if (!keysMatch(providedKey, configuredKey)) {
         return res.status(401).json({
             success: false,
             error: {
@@ -53,6 +51,21 @@ function requireInternalService(req, res, next) {
 
 app.use(cookieParser());
 
+// API responses. The public HTML document is served by the edge proxy, which
+// must set the same headers on document responses (see SECURITY_AUDIT.md).
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(self), geolocation=()');
+    res.setHeader('X-DNS-Prefetch-Control', 'off');
+    const proto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim().toLowerCase();
+    if (proto === 'https' || req.secure) {
+        res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
+    }
+    next();
+});
+
 
 const uploadDir = path.resolve(__dirname, '../../public/avatars');
 
@@ -67,19 +80,34 @@ const storage = multer.diskStorage({
     },
     filename: function (req, file, cb) {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        // Keep the original extension (e.g., .jpg, .png)
-        cb(null, 'avatar-' + uniqueSuffix + path.extname(file.originalname));
+        const ext = path.extname(file.originalname || '').toLowerCase();
+        const safeExt = ['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(ext) ? ext : '';
+        cb(null, 'avatar-' + uniqueSuffix + safeExt);
     }
 });
 
+const AVATAR_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+
 const upload = multer({
     storage: storage,
-    limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit to mitigate lack of compression
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit to mitigate lack of compression
+    fileFilter: (req, file, cb) => {
+        const ext = path.extname(file.originalname || '').toLowerCase();
+        if (!AVATAR_MIME.has(file.mimetype) || !['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(ext)) {
+            return cb(new Error('UNSUPPORTED_AVATAR_TYPE'));
+        }
+        cb(null, true);
+    }
 });
 // ----------------------------
 
+const corsOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
 app.use(cors({
-    origin: 'http://localhost:5173', // <-- MUST BE YOUR ACTUAL FRONTEND URL (No trailing slash)
+    origin: corsOrigins,
     credentials: true,               // <-- REQUIRED FOR COOKIES
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-APP-TOKEN']
@@ -99,10 +127,20 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/ai-teacher', aiTeacherRoutes);
 
 // 3. Route updated to just use the fixed multer upload
+function avatarUpload(req, res, next) {
+    upload.single('avatar')(req, res, (err) => {
+        if (!err) return next();
+        return res.status(400).json({
+            success: false,
+            message: 'فقط تصویر PNG، JPG، WEBP یا GIF پذیرفته می‌شود.',
+        });
+    });
+}
+
 app.post(
     '/api/upload_avatar',
     requireToken,
-    upload.single('avatar'),
+    avatarUpload,
     userController.handleUploadAvatar
 );
 app.post(

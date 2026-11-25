@@ -1,0 +1,24 @@
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+**/.env
+!**/.env.example
+
+# Dependencies
+node_modules/
+
+# Database dumps and exports (may contain user data)
+*.sql
+quiz_app*.txt
+
+# Build output
+dist/
+dist-ssr/
+
+# Logs and OS/editor noise
+logs/
+*.log
+.DS_Store
+.idea/
+.vscode/
