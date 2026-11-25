@@ -10,7 +10,7 @@ function sessionCookieOptions(req, extra = {}) {
         secure,
         sameSite: 'lax',
         path: '/',
-        maxAge: 12 * 60 * 60,
+        maxAge: 30 * 24 * 60 * 60,
         ...extra,
     };
 }

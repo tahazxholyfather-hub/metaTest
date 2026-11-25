@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { removeCookie } from "../lib/cookies";
-import { authApi, flowApi } from '../lib/authApi';
+import { flowApi } from '../lib/authApi';
 
 // Updated to match your exact backend response
 export type UserData = {
@@ -57,7 +57,6 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                 .then(response => {
                     if (response.success && response.data) {
                         setUser(response.data);
-                        authApi.refreshSession().catch(() => {});
                         // No need to set isAuthenticated manually anymore
                     } else {
                         removeCookie("auth_token");
