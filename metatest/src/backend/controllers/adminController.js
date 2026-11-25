@@ -2,10 +2,10 @@ const crypto = require('crypto');
 const pool = require('../db');
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
 const walletController = require('./walletController');
 const notifications = require('../notifications');
 const { parsePlanIds } = require('../admin/discounts');
+const { sanitizeQuestionHtml } = require('../utils/sanitizeQuestionHtml');
 const { buildQuestionTextSearch } = require('./questionSearch');
 const {
     ensureQuestionTagTables,
@@ -530,9 +530,23 @@ const handleFullUpdateQuestion = async (req, res) => {
             return res.json({ success: false, message: 'تعداد عکس‌های صورت سوال زیاد است.' });
         }
 
+        const storedText = sanitizeQuestionHtml(text);
+        const storedDescriptive = sanitizeQuestionHtml(descriptiveAnswer);
+        const storedOptions = Array.isArray(options)
+            ? options.map((opt) => (
+                opt && typeof opt === 'object'
+                    ? Object.assign({}, opt, { text: sanitizeQuestionHtml(opt.text) })
+                    : opt
+            ))
+            : options;
+
         let editedWords = 0;
         try {
-            editedWords = await measureEditDelta(questionId, { text, options, descriptiveAnswer });
+            editedWords = await measureEditDelta(questionId, {
+                text: storedText,
+                options: storedOptions,
+                descriptiveAnswer: storedDescriptive,
+            });
         } catch (err) {
             console.error('word delta failed:', err.message);
         }
@@ -541,7 +555,7 @@ const handleFullUpdateQuestion = async (req, res) => {
         let updateFields = [];
         let updateParams = [];
 
-        if (text !== undefined) { updateFields.push("question_text = ?"); updateParams.push(text); }
+        if (text !== undefined) { updateFields.push("question_text = ?"); updateParams.push(storedText); }
         if (subject_id !== undefined) { updateFields.push("subject_id = ?"); updateParams.push(subject_id); }
         if (gradeIds.length || grade_id !== undefined) {
             updateFields.push("grade_id = ?");
@@ -576,13 +590,13 @@ const handleFullUpdateQuestion = async (req, res) => {
 
         // 2. Update Descriptive Answer
         let descriptiveImageOut = null;
-        if (hasDescriptiveImage || descriptiveAnswer !== undefined) {
+        if (hasDescriptiveImage || storedDescriptive !== undefined) {
             const [exist] = await pool.query(
                 `SELECT answer_text, ${hasDescriptiveImage ? 'image_name' : 'NULL AS image_name'} FROM descriptive_answers_tam24 WHERE question_id = ?`,
                 [questionId]
             );
             const currentImage = exist[0]?.image_name || null;
-            const nextText = descriptiveAnswer !== undefined ? descriptiveAnswer : (exist[0]?.answer_text || '');
+            const nextText = storedDescriptive !== undefined ? storedDescriptive : sanitizeQuestionHtml(exist[0]?.answer_text || '');
             const nextImage = hasDescriptiveImage ? await resolveClientImage(req.body.descriptive_image, currentImage) : currentImage;
             if (exist.length > 0) {
                 if (hasDescriptiveImage) {
@@ -612,9 +626,9 @@ const handleFullUpdateQuestion = async (req, res) => {
 
         // 3. Update Options & Correct Answer
         const savedOptions = [];
-        if (options && Array.isArray(options)) {
+        if (storedOptions && Array.isArray(storedOptions)) {
             await pool.query("UPDATE options_tam24 SET is_correct = 0 WHERE question_id = ?", [questionId]);
-            for (let opt of options) {
+            for (let opt of storedOptions) {
                 await pool.query("UPDATE options_tam24 SET option_text = ? WHERE id = ? AND question_id = ?", [opt.text, opt.id, questionId]);
                 const saved = { id: Number(opt.id) };
                 if (Object.prototype.hasOwnProperty.call(opt, 'image')) {
@@ -1194,6 +1208,16 @@ const handleAdminInsertQuestions = async (req, res) => {
             } catch (schemaError) {
                 console.error('[questions] image columns:', schemaError);
                 return res.json({ success: false, message: 'ستون عکس روی پایگاه‌داده آماده نشد.' });
+            }
+        }
+
+        for (const question of questions) {
+            question.text = sanitizeQuestionHtml(question.text);
+            if (Array.isArray(question.options)) {
+                question.options = question.options.map((option) => sanitizeQuestionHtml(option));
+            }
+            if (typeof question.descriptive === 'string') {
+                question.descriptive = sanitizeQuestionHtml(question.descriptive);
             }
         }
 
