@@ -987,7 +987,8 @@ const handleAddQuizMember = async (req, res) => {
 
 const handleCheckUserMember = async (req, res) => {
     try {
-        const { userId, quizId } = req.body;
+        const quizId = req.body.quizId;
+        const userId = Number(req.user && req.user.id);
 
         if (!userId || !quizId) {
             return res.status(400).json({
@@ -1403,7 +1404,11 @@ const handleGetQuizQuestions = async (req, res) => {
 
         await connection.commit();
 
-        if (!Array.isArray(questionIds) || questionIds.length === 0) {
+        const orderedQuestionIds = (Array.isArray(questionIds) ? questionIds : [])
+            .map((id) => Number(id))
+            .filter((id) => Number.isInteger(id) && id > 0);
+
+        if (orderedQuestionIds.length === 0) {
             return res.json({
                 success: true,
                 questions: []
@@ -1432,10 +1437,10 @@ const handleGetQuizQuestions = async (req, res) => {
                      LEFT JOIN chapters_tam24 c ON q.chapter_id = c.id
                      LEFT JOIN grades_tam24 g ON q.grade_id = g.id
             WHERE q.id IN (?)
-            ORDER BY FIELD(q.id, ${questionIds.join(',')})
+            ORDER BY FIELD(q.id, ${orderedQuestionIds.join(',')})
         `;
 
-        const [questions] = await pool.query(sql, [questionIds]);
+        const [questions] = await pool.query(sql, [orderedQuestionIds]);
 
         // 4. ساخت خروجی نهایی
         const formattedQuestions = await Promise.all(
@@ -2997,7 +3002,21 @@ const handleGetQuizResultByUserAndQuiz = async (req, res) => {
             return res.status(400).json({ error: "اطلاعات ارسالی نامعتبر است." });
         }
 
+        const requesterId = Number(req.user && req.user.id);
+        if (!requesterId) {
+            return res.status(401).json({ error: "Unauthorized" });
+        }
+
         connection = await pool.getConnection();
+
+        const [memberRows] = await connection.query(
+            `SELECT user_id FROM quiz_members WHERE quiz_id = ? AND user_id IN (?, ?)`,
+            [decodedQuizId, requesterId, targetUserId]
+        );
+        const memberIds = new Set(memberRows.map((row) => Number(row.user_id)));
+        if (!memberIds.has(requesterId) || !memberIds.has(targetUserId)) {
+            return res.status(403).json({ error: "اجازه مشاهده این نتیجه را ندارید." });
+        }
 
         // Retrieve quiz result record by quiz and user
         const [rows] = await connection.query(`

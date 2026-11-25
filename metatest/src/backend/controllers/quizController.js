@@ -4,6 +4,11 @@ const entitlements = require('../subscription/entitlements');
 const usage = require('../subscription/usage');
 const { optionImageSql, descriptiveImageSql } = require('../admin/questionImages');
 
+function sessionUserId(req) {
+    const id = Number(req.user && req.user.id);
+    return Number.isInteger(id) && id > 0 ? id : 0;
+}
+
 
 
 
@@ -165,7 +170,7 @@ const requirePost = (req, res, key) => {
 
 const handleGetSubjects = async (req, res) => {
     try {
-        const userId = req.user?.id || req.body.user_id || null;
+        const userId = sessionUserId(req) || null;
 
         const sql = `
             SELECT 
@@ -222,7 +227,7 @@ const handleGetGradesBySubject = async (req, res) => {
         const subjectId = requirePost(req, res, 'subject_id');
         if (subjectId === null) return;
 
-        const userId = req.user?.id || req.body.user_id || null;
+        const userId = sessionUserId(req) || null;
 
         const sql = `
             SELECT 
@@ -283,7 +288,7 @@ const handleGetChaptersBySubject = async (req, res) => {
         const subjectId = requirePost(req, res, 'subject_id');
         if (subjectId === null) return;
 
-        const userId = req.user?.id || req.body.user_id || null;
+        const userId = sessionUserId(req) || null;
         const gradeId = req.body.grade_id;
 
         let sql = `
@@ -368,7 +373,7 @@ const handleGetMabahesByChapter = async (req, res) => {
         const topicId = requirePost(req, res, 'topic_id');
         if (topicId === null) return;
 
-        const userId = req.user?.id || req.body.user_id || null;
+        const userId = sessionUserId(req) || null;
 
         const topicIds = toPositiveIds(topicId);
         if (!topicIds.length) return res.json({ success: true, mabahes: [] });
@@ -513,7 +518,7 @@ const handleGetPracticeQuestion = async (req, res) => {
         const USE_MOCK_PERCENTAGES = true;
 
         const sessionId = Number(req.body.session_id) || 0;
-        const userId = Number(req.body.user_id) || (req.user && req.user.id) || 0;
+        const userId = sessionUserId(req);
         if (sessionId <= 0) {
             return res.json({ success: false, message: 'Invalid session' });
         }
@@ -704,7 +709,7 @@ const handleCheckAnswer = async (req, res) => {
 
         const questionId = Number(req.body.question_id) || 0;
         const optionId   = Number(req.body.option_id)   || 0;
-        const userId     = Number(req.body.user_id) || (req.user && req.user.id);
+        const userId     = sessionUserId(req);
 
         if (questionId <= 0 || optionId <= 0) {
             return res.json({ success: false, message: 'Invalid parameters' });
@@ -1026,7 +1031,7 @@ const handleCheckAnswer = async (req, res) => {
 
 const handleFinishQuiz = async (req, res) => {
     try {
-        const userId = Number(req.body.user_id) || (req.user && req.user.id);
+        const userId = sessionUserId(req);
         const practiceSeconds = Number(req.body.practice_seconds) || 0;
         const questionsAnswered = Number(req.body.questions_answered) || 0;
         const correctAnswers = Number(req.body.correct_answers) || 0;

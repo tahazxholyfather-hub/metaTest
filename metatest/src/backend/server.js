@@ -15,6 +15,8 @@ const { ensureVisitorCountIds } = require('./visitorCounts');
 const cookieParser = require('cookie-parser');
 // const jwt = require('jsonwebtoken');
 const { requireToken } = require('./middleware/auth');
+const { requireInternalService } = require('./middleware/internalAuth');
+const { sniffImage, IMAGE_EXT, randomStoredName, assertInside } = require('./utils/uploadSniff');
 const quizController = require('./controllers/quizController');
 const userController = require('./controllers/userController');
 const adminController = require('./controllers/adminController');
@@ -43,54 +45,32 @@ const PORT = process.env.PORT || 3000;
 
 
 
-function requireInternalService(req, res, next) {
-    const configuredKey = process.env.INTERNAL_SERVICE_KEY;
-
-    // Development convenience: if no key is configured, allow internal calls.
-    // In production, always set INTERNAL_SERVICE_KEY.
-    if (!configuredKey && process.env.NODE_ENV !== 'production') {
-        return next();
-    }
-
-    const providedKey =
-        req.get('x-internal-service-key') ||
-        req.get('X-Internal-Service-Key') ||
-        req.get('x-app-token') ||
-        req.get('X-APP-TOKEN');
-
-    if (!configuredKey || providedKey !== configuredKey) {
-        return res.status(401).json({
-            success: false,
-            error: {
-                code: 'UNAUTHORIZED_INTERNAL_REQUEST',
-                message: 'Unauthorized internal service request'
-            }
-        });
-    }
-
-    next();
-}
 
 
 
 app.use(cookieParser());
 
-
-// 2. Use diskStorage to save directly to the fixed path
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, uploadDir);
-    },
-    filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        // Keep the original extension (e.g., .jpg, .png)
-        cb(null, 'avatar-' + uniqueSuffix + path.extname(file.originalname));
+// API responses. The public HTML document is served by the edge proxy, which
+// must set the same headers on document responses (see SECURITY_AUDIT.md).
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(self), geolocation=()');
+    res.setHeader('X-DNS-Prefetch-Control', 'off');
+    const proto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim().toLowerCase();
+    if (proto === 'https' || req.secure) {
+        res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
     }
+    next();
 });
 
+
+// Bytes are held in memory until magic-byte sniffing accepts them. The client
+// filename and MIME type are ignored (SEC-007).
 const upload = multer({
-    storage: storage,
-    limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit to mitigate lack of compression
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 },
 });
 // ----------------------------
 
@@ -131,10 +111,46 @@ app.get('/api/chemball/leaderboard', chemballController.handleGetLeaderboard);
 app.post('/api/chemball/score', requireToken, chemballController.handleSaveScore);
 
 // 3. Route updated to just use the fixed multer upload
+function avatarUpload(req, res, next) {
+    upload.single('avatar')(req, res, (err) => {
+        if (err) {
+            return res.status(400).json({
+                success: false,
+                message: 'فقط تصویر PNG، JPG، WEBP یا GIF پذیرفته می‌شود.',
+            });
+        }
+        if (!req.file || !req.file.buffer) return next();
+        const mime = sniffImage(req.file.buffer);
+        const ext = mime && IMAGE_EXT[mime];
+        if (!ext) {
+            return res.status(400).json({
+                success: false,
+                message: 'فقط تصویر PNG، JPG، WEBP یا GIF پذیرفته می‌شود.',
+            });
+        }
+        try {
+            const filename = randomStoredName(ext);
+            const dest = assertInside(uploadDir, filename);
+            fs.writeFileSync(dest, req.file.buffer);
+            req.file.filename = filename;
+            req.file.path = dest;
+            return next();
+        } catch (writeErr) {
+            console.error('Avatar store failed:', writeErr.message);
+            return res.status(400).json({
+                success: false,
+                message: 'فقط تصویر PNG، JPG، WEBP یا GIF پذیرفته می‌شود.',
+            });
+        }
+    });
+}
+
+app.get('/api/realtime-token', requireToken, userController.handleRealtimeToken);
+
 app.post(
     '/api/upload_avatar',
     requireToken,
-    upload.single('avatar'),
+    avatarUpload,
     userController.handleUploadAvatar
 );
 app.post(

@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { Socket } from 'socket.io-client';
 import { connectSocket, destroySocket } from './client';
-import { getAccessToken } from './token';
+import { fetchRealtimeToken, getAccessToken } from './token';
 import { SOCKET_EVENTS } from './events';
 
 export type SocketConnectionStatus =
@@ -96,13 +96,14 @@ export function SocketProvider({
             return;
         }
 
-        const accessToken = getAccessToken();
-
-        if (!accessToken) {
-            return;
-        }
-
-        connect(accessToken);
+        let cancelled = false;
+        fetchRealtimeToken().then((accessToken) => {
+            if (cancelled || !accessToken) return;
+            connect(accessToken);
+        }).catch(() => {});
+        return () => {
+            cancelled = true;
+        };
     }, [autoConnect, connect]);
 
     useEffect(() => {
