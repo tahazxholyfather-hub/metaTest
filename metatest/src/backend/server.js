@@ -2,7 +2,6 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const crypto = require('crypto');
 // const router = express.Router();
 const multer = require('multer');
 const path = require('path');
@@ -10,6 +9,7 @@ const fs = require('fs');
 const cookieParser = require('cookie-parser');
 // const jwt = require('jsonwebtoken');
 const { requireToken } = require('./middleware/auth');
+const { requireInternalService } = require('./middleware/internalAuth');
 const { sniffImage, IMAGE_EXT, randomStoredName, assertInside } = require('./utils/uploadSniff');
 const quizController = require('./controllers/quizController');
 const userController = require('./controllers/userController');
@@ -23,30 +23,6 @@ const PORT = process.env.PORT || 3000;
 
 
 
-function keysMatch(provided, expected) {
-    if (!provided || !expected) return false;
-    const a = Buffer.from(String(provided));
-    const b = Buffer.from(String(expected));
-    if (a.length !== b.length) return false;
-    return crypto.timingSafeEqual(a, b);
-}
-
-function requireInternalService(req, res, next) {
-    const configuredKey = process.env.INTERNAL_SERVICE_KEY;
-    const providedKey = req.get('x-internal-service-key') || req.get('X-Internal-Service-Key');
-
-    if (!keysMatch(providedKey, configuredKey)) {
-        return res.status(401).json({
-            success: false,
-            error: {
-                code: 'UNAUTHORIZED_INTERNAL_REQUEST',
-                message: 'Unauthorized internal service request'
-            }
-        });
-    }
-
-    next();
-}
 
 
 
@@ -154,35 +130,20 @@ app.post(
     userController.handleResetAvatar
 );
 
-app.get(
-    '/internal/quizzes/:quizId/metadata',
-    requireInternalService,
-    quizWorldController.handleGetQuizMetadata
-);
+function mountInternalRoutes(prefix) {
+    const router = express.Router();
+    router.use(requireInternalService);
+    router.get('/quizzes/:quizId/metadata', quizWorldController.handleGetQuizMetadata);
+    router.post('/quizzes/:quizId/members', quizWorldController.handleAddQuizMember);
+    router.post('/quizzes/:quizId/grade', quizWorldController.handleInternalGradeQuiz);
+    router.post('/quizzes/:quizId/finish', quizWorldController.handleInternalFinishQuiz);
+    router.post('/results', quizWorldController.handleInternalSaveQuizResult);
+    app.use(prefix, router);
+}
 
-app.post(
-    '/internal/quizzes/:quizId/members',
-    requireInternalService,
-    quizWorldController.handleAddQuizMember
-);
-
-app.post(
-    '/internal/quizzes/:quizId/grade',
-    requireInternalService, // Ensure this endpoint is protected
-    quizWorldController.handleInternalGradeQuiz
-);
-
-app.post(
-    '/internal/quizzes/:quizId/finish',
-    requireInternalService, // Ensure this endpoint is protected
-    quizWorldController.handleInternalFinishQuiz
-);
-
-app.post(
-    '/internal/results',
-    requireInternalService, // Ensure this endpoint is protected
-    quizWorldController.handleInternalSaveQuizResult
-);
+// SEC-037: the public vhost proxies /api/internal/ onto this process.
+mountInternalRoutes('/internal');
+mountInternalRoutes('/api/internal');
 
 
 // Ensure ONLY POST is allowed (similar to PHP behavior)
