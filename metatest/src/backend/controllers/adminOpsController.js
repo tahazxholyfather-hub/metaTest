@@ -75,32 +75,18 @@ const handleWordStats = async (req, res) => {
         );
         questionCounts = new Map(counts.map((row) => [Number(row.admin_id), Number(row.questions_inserted)]));
 
-        let edits;
-        if (range.active) {
-            const lastEditAt = sqlBounds('last_edit_date', range);
-            const eventAt = sqlBounds('created_at', range);
-            [edits] = await pool.query(
-                `SELECT admin_id, COUNT(DISTINCT question_id) AS questions_edited
-                 FROM (
-                    SELECT last_edit_by AS admin_id, id AS question_id
-                    FROM questions_tam24
-                    WHERE last_edit_by IS NOT NULL AND last_edit_by > 0 AND ${lastEditAt.sql}
-                    UNION
-                    SELECT admin_id, question_id
-                    FROM tam24_admin_word_events
-                    WHERE action = 'edit' AND question_id IS NOT NULL AND ${eventAt.sql}
-                 ) activity
-                 GROUP BY admin_id`,
-                [...lastEditAt.params, ...eventAt.params]
-            );
-        } else {
-            [edits] = await pool.query(
-                `SELECT last_edit_by AS admin_id, COUNT(*) AS questions_edited
-                 FROM questions_tam24
-                 WHERE last_edit_by IS NOT NULL AND last_edit_by > 0
-                 GROUP BY last_edit_by`
-            );
-        }
+        // Same edits as words_edited: a text/option/explanation change.
+        // last_edit_by also moves when a selector only picks the correct
+        // option or a question is deactivated, which made this column
+        // disagree with the word total.
+        const questionEditedAt = sqlBounds('created_at', range);
+        const [edits] = await pool.query(
+            `SELECT admin_id, COUNT(DISTINCT question_id) AS questions_edited
+             FROM tam24_admin_word_events
+             WHERE action = 'edit' AND word_count > 0 AND question_id IS NOT NULL AND ${questionEditedAt.sql}
+             GROUP BY admin_id`,
+            questionEditedAt.params
+        );
         editCounts = new Map(edits.map((row) => [Number(row.admin_id), Number(row.questions_edited)]));
     } catch (err) {
         console.error('question counts unavailable:', err.message);
