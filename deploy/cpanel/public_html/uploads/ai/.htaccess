@@ -1,0 +1,29 @@
+# Deploy artifact for SEC-007. Copy to public_html/uploads/ai/.
+# Images in this folder are displayed in chat, so they are not forced to download.
+# Script handlers stay denied.
+Options -Indexes -ExecCGI
+
+<IfModule mod_php.c>
+  php_flag engine off
+</IfModule>
+<IfModule lsapi_module>
+  php_flag engine off
+</IfModule>
+
+RemoveHandler .php .phtml .php3 .php4 .php5 .php7 .php8 .phar .phps .cgi .pl .l33t
+RemoveType .php .phtml .phar .phps .l33t
+
+<FilesMatch "(?i)\.(php|phtml|php[0-9]|phar|phps|cgi|pl|py|asp|aspx|shtml|htaccess|l33t)$">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Deny from all
+  </IfModule>
+</FilesMatch>
+
+<IfModule mod_headers.c>
+  Header set X-Content-Type-Options "nosniff"
+</IfModule>
+
+SetHandler none
