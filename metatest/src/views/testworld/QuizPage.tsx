@@ -7,6 +7,7 @@ import { QuestionCounter } from '../../components/QuestionCounter';
 import { CountdownTimer } from '../../components/QuizTimerCountDown';
 import { ResponsiveModal } from '../../components/ResponsiveModal';
 import { flowApi } from '../../lib/authApi';
+import { decodeHtmlEntities } from '../../lib/sanitizeQuestionHtml';
 import { useUser } from '../../context/UserContext';
 import { useSocket } from '../../socket/useSocket';
 import { useLobbyEvents } from '../../socket/useLobbyEvents';
@@ -166,16 +167,6 @@ interface QuizPageProps {
 
 const butteryEase = [0.22, 1, 0.36, 1];
 
-const decodeHtmlEntities = (text: string) => {
-    if (!text) return '';
-    const txt = document.createElement('textarea');
-    txt.innerHTML = text;
-    return txt.value
-        .replace(/\u200c|\u200d|\u200e|\u200f|\ufeff/g, '')
-        .replace(/&zwnj;|&zwj;|&lrm;|&rlm;|&nbsp;/gi, ' ')
-        .replace(/[ \t]+/g, ' ')
-        .trim();
-};
 
 function getErrorMessage(err: unknown, fallback = 'خطای نامشخص رخ داد.') {
     if (typeof err === 'object' && err !== null && 'message' in err && typeof (err as any).message === 'string') {

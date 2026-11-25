@@ -1,5 +1,10 @@
 const pool = require('../db');
 
+function sessionUserId(req) {
+    const id = Number(req.user && req.user.id);
+    return Number.isInteger(id) && id > 0 ? id : 0;
+}
+
 // ==========================================
 // CONFIGURATION
 // ==========================================
@@ -342,7 +347,7 @@ const updateUserStats = async (conn, userId, trophyDelta, xpDelta) => {
  */
 const handleCheckUserQuestionStatus = async (req, res) => {
     try {
-        const userId = Number(req.body.user_id) || (req.user && req.user.id) || 0;
+        const userId = sessionUserId(req);
         const questionId = Number(req.body.question_id) || 0;
 
         if (userId <= 0 || questionId <= 0) {
@@ -394,7 +399,7 @@ const handleSubmitAnswerWithReward = async (req, res) => {
     let conn;
 
     try {
-        const userId = Number(req.body.user_id) || (req.user && req.user.id) || 0;
+        const userId = sessionUserId(req);
         const questionId = Number(req.body.question_id) || 0;
         const optionId = Number(req.body.option_id) || 0;
         const answerTimeMs = req.body.answer_time_ms !== undefined ? Number(req.body.answer_time_ms) : null;
@@ -581,7 +586,7 @@ const handleSubmitAnswerWithReward = async (req, res) => {
  */
 const handleGetUserRewardStats = async (req, res) => {
     try {
-        const userId = Number(req.body.user_id) || (req.user && req.user.id) || 0;
+        const userId = sessionUserId(req);
 
         if (userId <= 0) {
             return res.json({ success: false, message: 'Invalid user ID' });

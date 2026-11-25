@@ -5,6 +5,7 @@ const path = require('path');
 const crypto = require('crypto');
 const multer = require('multer');
 const { FILE_LIMITS } = require('../config');
+const { sniffAudio } = require('../../utils/uploadSniff');
 
 /**
  * File storage abstraction for everything the AI subsystem persists:
@@ -97,8 +98,9 @@ function assertContent(kind, buffer, declaredMime) {
         return 'application/pdf';
     }
     if (kind === 'audio') {
-        if (!AUDIO_MIME.has(declared)) throw Object.assign(new Error('UNSUPPORTED_FILE_TYPE'), { code: 'UNSUPPORTED_FILE_TYPE' });
-        return declared;
+        const real = sniffAudio(buffer);
+        if (!real || !AUDIO_MIME.has(real)) throw Object.assign(new Error('UNSUPPORTED_FILE_TYPE'), { code: 'UNSUPPORTED_FILE_TYPE' });
+        return real;
     }
     return declared;
 }
@@ -240,7 +242,7 @@ const mimeFilter = (allowed) => (req, file, cb) => {
 };
 
 const imageUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: mb(FILE_LIMITS.imageMb) }, fileFilter: mimeFilter(IMAGE_MIME) }).single('image');
-const audioUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: mb(FILE_LIMITS.audioMb) }, fileFilter: mimeFilter(AUDIO_MIME) }).single('audio');
+const audioUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: mb(FILE_LIMITS.audioMb) } }).single('audio');
 const pdfUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: mb(FILE_LIMITS.pdfMb) }, fileFilter: mimeFilter(PDF_MIME) }).single('pdf');
 
 /** Wrap a multer middleware so upload failures become clean Persian API errors. */

@@ -61,9 +61,6 @@ export default function AuthView({ onSuccess }: AuthViewProps) {
     const phoneInputRef = useRef<HTMLInputElement>(null);
 
     const handleLoginSuccess = (token: string) => {
-        const date = new Date();
-        date.setTime(date.getTime() + (365 * 24 * 60 * 60 * 1000));
-        document.cookie = `token=${token};expires=${date.toUTCString()};path=/`;
         onSuccess(token);
     };
 

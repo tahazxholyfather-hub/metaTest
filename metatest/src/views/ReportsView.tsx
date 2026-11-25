@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { flowApi } from '../lib/authApi'; // Added API import
+import { sanitizeQuestionHtml } from '../lib/sanitizeQuestionHtml';
 
 // --- Types ---
 type ReportStatus = 'pending' | 'resolved' | 'rejected' | 'investigating'; // Added investigating just in case your DB uses it
@@ -214,7 +215,7 @@ export function ReportsView({ onBack }: ReportsViewProps) {
                                                         {/* Using dangerouslySetInnerHTML avoids React and MathJax DOM mismatch crashes */}
                                                         <p
                                                             className="text-sm font-semibold text-[var(--text-primary)] leading-relaxed line-clamp-2"
-                                                            dangerouslySetInnerHTML={{ __html: report.questionText || 'متن سوال در دسترس نیست' }}
+                                                            dangerouslySetInnerHTML={{ __html: sanitizeQuestionHtml(report.questionText || 'متن سوال در دسترس نیست') }}
                                                         />
                                                     </td>
                                                     <td className="px-6 py-5 align-top min-w-[300px] max-w-sm">

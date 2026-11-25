@@ -2,6 +2,7 @@
 require('dotenv').config();
 const jwt = require('jsonwebtoken');
 const db = require('../db');
+const { clearSessionCookie } = require('../utils/sessionCookie');
 
 /**
  * Single-device session check.
@@ -37,16 +38,22 @@ const requireToken = async (req, res, next) => {
         return next();
     }
 
-    // 2. DEVELOPER MODE BYPASS
-    if (process.env.DEV_MODE === 'true') {
+    // 2. DEVELOPER MODE BYPASS — local loopback only, never on a public host.
+    const remoteAddr = req.socket?.remoteAddress || '';
+    const isLoopback = remoteAddr === '127.0.0.1' || remoteAddr === '::1' || remoteAddr === '::ffff:127.0.0.1';
+    if (process.env.DEV_MODE === 'true' && process.env.NODE_ENV !== 'production' && isLoopback) {
         req.user = { id: 999, role: 'developer' };
         return next();
     }
 
     // 3. EXTRACT TOKEN
     let token = req.headers['authorization'] || req.headers['x-app-token'];
+    if (!token || token === 'null' || token === 'undefined') {
+        token = req.cookies?.auth_token || '';
+    }
 
     if (!token) {
+        clearSessionCookie(req, res);
         return res.status(401).json({ success: false, message: 'Missing authentication token' });
     }
 
@@ -67,6 +74,7 @@ const requireToken = async (req, res, next) => {
 
         // 4.1 Single-device enforcement: reject tokens superseded by a newer login
         if (await isSessionReplaced(decoded)) {
+            clearSessionCookie(req, res);
             return res.status(401).json({
                 success: false,
                 code: 'SESSION_REPLACED',
@@ -79,30 +87,8 @@ const requireToken = async (req, res, next) => {
         return next();
 
     } catch (err) {
-        // If JWT fails, check if it's your legacy Base64 Guest Token or APP_TOKEN
-
-        // Base64 Fallback Check
-        try {
-            // JWTs have 2 dots. If no dots, it might be your old base64 token.
-            if (!token.includes('.')) {
-                const decodedPayload = JSON.parse(Buffer.from(token, 'base64').toString('utf-8'));
-                if (decodedPayload && decodedPayload.id) {
-                    req.user = { id: decodedPayload.id, role: decodedPayload.role || 'guest' };
-                    return next();
-                }
-            }
-        } catch (base64Err) {
-            // Base64 parsing failed, continue to standard error
-        }
-
-        // APP_TOKEN Fallback
-        if (token === process.env.APP_TOKEN) {
-            req.user = { id: 1, role: 'admin' };
-            return next();
-        }
-
-        // If all validations fail, return appropriate error
         console.log("Token Auth Failed:", err.message);
+        clearSessionCookie(req, res);
         return res.status(401).json({
             success: false,
             message: err.name === 'TokenExpiredError' ? 'نشست شما منقضی شده است. لطفاً دوباره وارد شوید.' : 'توکن نامعتبر است.'

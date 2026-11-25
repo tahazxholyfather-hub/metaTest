@@ -1,31 +1,109 @@
+const crypto = require('crypto');
 const pool = require('../db');
 const cookie = require('cookie');
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
 
+const ADMIN_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+function adminSessionSecret() {
+    return process.env.ADMIN_SESSION_SECRET || process.env.JWT_SECRET || '';
+}
+
+function safeEqualString(left, right) {
+    const a = Buffer.from(String(left));
+    const b = Buffer.from(String(right));
+    if (a.length !== b.length) return false;
+    return crypto.timingSafeEqual(a, b);
+}
+
+function signAdminToken(adminId) {
+    const secret = adminSessionSecret();
+    if (!secret) {
+        throw new Error('ADMIN_SESSION_SECRET or JWT_SECRET is not configured');
+    }
+    const exp = Date.now() + ADMIN_SESSION_TTL_MS;
+    const payload = Buffer.from(JSON.stringify({ id: adminId, exp })).toString('base64url');
+    const sig = crypto.createHmac('sha256', secret).update(payload).digest('base64url');
+    return `${payload}.${sig}`;
+}
+
+function readSignedAdminId(token) {
+    const secret = adminSessionSecret();
+    if (!secret || typeof token !== 'string' || !token.includes('.')) return null;
+    const dot = token.lastIndexOf('.');
+    const payload = token.slice(0, dot);
+    const sig = token.slice(dot + 1);
+    if (!payload || !sig) return null;
+    const expected = crypto.createHmac('sha256', secret).update(payload).digest('base64url');
+    if (!safeEqualString(sig, expected)) return null;
+    let body;
+    try {
+        body = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    } catch {
+        return null;
+    }
+    const adminId = parseInt(body.id, 10);
+    if (!Number.isInteger(adminId) || adminId < 1 || adminId > 20) return null;
+    if (!body.exp || Date.now() > Number(body.exp)) return null;
+    return adminId;
+}
+
+/** Per-admin password from ADMIN_<id>_PASSWORD or a JSON ADMIN_PASSWORDS map. No built-in default. */
+function expectedAdminPassword(adminId) {
+    const specific = process.env[`ADMIN_${adminId}_PASSWORD`];
+    if (specific) return String(specific);
+    if (process.env.ADMIN_PASSWORDS) {
+        try {
+            const map = JSON.parse(process.env.ADMIN_PASSWORDS);
+            const value = map[String(adminId)];
+            if (value) return String(value);
+        } catch {
+            return null;
+        }
+    }
+    return null;
+}
+
+function adminCookieOptions(req, extra = {}) {
+    const proto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim().toLowerCase();
+    const secure = proto === 'https' || process.env.NODE_ENV === 'production';
+    return {
+        httpOnly: true,
+        secure,
+        sameSite: 'strict',
+        path: '/',
+        ...extra,
+    };
+}
+
 // --- PDF Library upload configuration ---
 // Defaults to the same web root used for avatar uploads in server.js
 // (path.resolve(serverRoot, '../../public')). Adjust via env vars if needed.
 const PDF_UPLOAD_DIR = process.env.PDF_UPLOAD_DIR || path.resolve(__dirname, '..', '..', '..', 'public', 'files', 'pdfs');
 const PDF_PUBLIC_PATH = process.env.PDF_PUBLIC_PATH || 'files/pdfs/';
+const { sniffPdf, randomStoredName, assertInside } = require('../utils/uploadSniff');
 
-// Helper: Extract the logged-in admin id from the HttpOnly cookie token (ADMIN-<id>-<timestamp>)
+// Helper: Extract the logged-in admin id from the signed HttpOnly cookie.
 const getAdminIdFromRequest = (req) => {
     const cookies = cookie.parse(req.headers.cookie || '');
-    const token = cookies.admin_token;
-    if (!token) return null;
-    const parts = token.split('-');
-    if (parts[0] === 'ADMIN' && parts[1]) {
-        const adminId = parseInt(parts[1], 10);
-        return Number.isNaN(adminId) ? null : adminId;
+    return readSignedAdminId(cookies.admin_token);
+};
+
+const requireAdmin = (req, res) => {
+    const adminId = getAdminIdFromRequest(req);
+    if (!adminId) {
+        res.json({ success: false, message: "No valid admin session found." });
+        return null;
     }
-    return null;
+    return adminId;
 };
 
 // Helper: Only admin with id 1 is allowed to delete records
 const requireSuperAdmin = (req, res) => {
-    const adminId = getAdminIdFromRequest(req);
+    const adminId = requireAdmin(req, res);
+    if (adminId === null) return null;
     if (adminId !== 1) {
         res.json({ success: false, message: "Only the main admin (id 1) can delete records." });
         return null;
@@ -47,6 +125,7 @@ const requirePost = (req, res, key) => {
 // ===============================================
 const handleGetQuestionForEdit = async (req, res) => {
     try {
+        if (requireAdmin(req, res) === null) return;
         const { question_id, direction, current_id, filters } = req.body;
 
         // Base SQL query
@@ -187,6 +266,7 @@ const handleGetQuestionForEdit = async (req, res) => {
 
 const handleAdminGetSubjects = async (req, res) => {
     try {
+        if (requireAdmin(req, res) === null) return;
         const sql = `
             SELECT id, title
             FROM subjects_tam24
@@ -196,12 +276,13 @@ const handleAdminGetSubjects = async (req, res) => {
         res.json({ success: true, subjects: rows });
     } catch (error) {
         console.error("Error in handleAdminGetSubjects:", error);
-        res.json({ success: false, message: error.message });
+        res.json({ success: false, message: "Database error fetching subjects" });
     }
 };
 
 const handleAdminGetGradesBySubject = async (req, res) => {
     try {
+        if (requireAdmin(req, res) === null) return;
         // grades_tam24 has no subject_id, so we return all grades
         const sql = `
             SELECT id, title
@@ -212,12 +293,13 @@ const handleAdminGetGradesBySubject = async (req, res) => {
         res.json({ success: true, grades: rows });
     } catch (error) {
         console.error("Error in handleAdminGetGradesBySubject:", error);
-        res.json({ success: false, message: error.message });
+        res.json({ success: false, message: "Database error fetching grades" });
     }
 };
 
 const handleAdminGetChaptersBySubject = async (req, res) => {
     try {
+        if (requireAdmin(req, res) === null) return;
         const { subject_id } = req.body; // grade_id is ignored because topics_tam24 has no grade_id
         if (!subject_id || subject_id === 'null') {
             return res.json({ success: true, chapters: [] });
@@ -233,12 +315,13 @@ const handleAdminGetChaptersBySubject = async (req, res) => {
         res.json({ success: true, chapters: rows });
     } catch (error) {
         console.error("Error in handleAdminGetChaptersBySubject:", error);
-        res.json({ success: false, message: error.message });
+        res.json({ success: false, message: "Database error fetching chapters" });
     }
 };
 
 const handleAdminGetMabahesByChapter = async (req, res) => {
     try {
+        if (requireAdmin(req, res) === null) return;
         const { topic_id } = req.body;
         if (!topic_id || topic_id === 'null') {
             return res.json({ success: true, mabahes: [] });
@@ -254,7 +337,7 @@ const handleAdminGetMabahesByChapter = async (req, res) => {
         res.json({ success: true, mabahes: rows });
     } catch (error) {
         console.error("Error in handleAdminGetMabahesByChapter:", error);
-        res.json({ success: false, message: error.message });
+        res.json({ success: false, message: "Database error fetching chapters" });
     }
 };
 
@@ -301,29 +384,27 @@ const handleAdminLogin = async (req, res) => {
         const adminId = parseInt(match[1], 10);
 
         if (adminId >= 1 && adminId <= 20) {
-            const expectedPassword = `Admin@${adminId}`;
+            const expectedPassword = expectedAdminPassword(adminId);
 
-            if (password === expectedPassword) {
-                // --- NEW: Create a user object ---
+            if (expectedPassword && safeEqualString(password, expectedPassword)) {
                 const user = {
                     id: adminId,
                     username: `admin${adminId}`,
-                    role: 'admin' // The role is static in this case
+                    role: 'admin'
                 };
 
-                // Create a token (can be a JWT for more security, but this is simple)
-                const token = `ADMIN-${user.id}-${Date.now()}`;
+                let token;
+                try {
+                    token = signAdminToken(user.id);
+                } catch (err) {
+                    console.error('Admin session secret is not configured:', err.message);
+                    return res.json({ success: false, message: "Admin login is not configured" });
+                }
 
-                // --- NEW: Set a secure cookie ---
-                res.setHeader('Set-Cookie', cookie.serialize('admin_token', token, {
-                    httpOnly: true, // The browser cannot access this cookie via JavaScript
-                    secure: process.env.NODE_ENV !== 'development', // Use secure in production
-                    maxAge: 60 * 60 * 24 * 7, // 1 week
-                    sameSite: 'strict',
-                    path: '/',
-                }));
+                res.setHeader('Set-Cookie', cookie.serialize('admin_token', token, adminCookieOptions(req, {
+                    maxAge: Math.floor(ADMIN_SESSION_TTL_MS / 1000),
+                })));
 
-                // --- NEW: Return the user object in the response body ---
                 return res.json({ success: true, user });
             }
         }
@@ -337,36 +418,28 @@ const handleAdminVerify = async (req, res) => {
     const cookies = cookie.parse(req.headers.cookie || '');
     const token = cookies.admin_token;
 
-    if (!token) {
-        return res.json({ success: false, message: "No session found." });
+    const adminId = readSignedAdminId(token);
+    if (!adminId) {
+        return res.json({ success: false, message: "Invalid session." });
     }
 
-    // Very basic token validation (in a real app, use JWT)
-    const parts = token.split('-');
-    if (parts[0] === 'ADMIN' && parts[1]) {
-        const adminId = parseInt(parts[1], 10);
-        const user = {
+    return res.json({
+        success: true,
+        user: {
             id: adminId,
             username: `admin${adminId}`,
             role: 'admin'
-        };
-        return res.json({ success: true, user });
-    }
-
-    return res.json({ success: false, message: "Invalid session." });
+        }
+    });
 };
 
 
 // --- NEW: Function to handle logout ---
 const handleAdminLogout = async (req, res) => {
     // Clear the cookie by setting its expiration date to the past
-    res.setHeader('Set-Cookie', cookie.serialize('admin_token', '', {
-        httpOnly: true,
-        secure: process.env.NODE_ENV !== 'development',
-        expires: new Date(0), // Set to a past date
-        sameSite: 'strict',
-        path: '/',
-    }));
+    res.setHeader('Set-Cookie', cookie.serialize('admin_token', '', adminCookieOptions(req, {
+        expires: new Date(0),
+    })));
 
     res.json({ success: true, message: "Logged out" });
 };
@@ -437,6 +510,7 @@ const handleFullUpdateQuestion = async (req, res) => {
 
 const getQuestionsByFilters = async (req, res) => {
     try {
+        if (requireAdmin(req, res) === null) return;
         // Extract filters from the request query
         const {
             subject_id,
@@ -549,6 +623,7 @@ const CURRICULUM_TABLES = {
 // Fetch ALL curriculum entities in one call (not only the ones used by questions)
 const handleAdminGetCurriculum = async (req, res) => {
     try {
+        if (requireAdmin(req, res) === null) return;
         const [subjects] = await pool.query("SELECT id, title, icon FROM subjects_tam24 ORDER BY id ASC");
         const [grades] = await pool.query("SELECT id, title FROM grades_tam24 ORDER BY id ASC");
         const [topics] = await pool.query("SELECT id, subject_id, title FROM topics_tam24 ORDER BY id ASC");
@@ -564,6 +639,7 @@ const handleAdminGetCurriculum = async (req, res) => {
 // Create or update a curriculum item ({ type, id?, title, parent_id?, icon? })
 const handleAdminSaveCurriculumItem = async (req, res) => {
     try {
+        if (requireAdmin(req, res) === null) return;
         const { type, id, title, parent_id, icon } = req.body;
 
         const config = CURRICULUM_TABLES[type];
@@ -672,14 +748,17 @@ const savePdfFile = (fileData, originalName) => {
     // Strip a possible data-url prefix (data:application/pdf;base64,....)
     const base64 = String(fileData).replace(/^data:.*?;base64,/, '');
     const buffer = Buffer.from(base64, 'base64');
+    if (!sniffPdf(buffer)) {
+        const err = new Error('INVALID_PDF');
+        err.code = 'INVALID_PDF';
+        throw err;
+    }
 
-    const safeName = String(originalName || 'document.pdf')
-        .replace(/[^a-zA-Z0-9آ-ی_.-]+/g, '_')
-        .replace(/\.pdf$/i, '');
-    const fileName = `${Date.now()}_${safeName}.pdf`;
+    const fileName = randomStoredName('.pdf');
+    const dest = assertInside(PDF_UPLOAD_DIR, fileName);
 
     fs.mkdirSync(PDF_UPLOAD_DIR, { recursive: true });
-    fs.writeFileSync(path.join(PDF_UPLOAD_DIR, fileName), buffer);
+    fs.writeFileSync(dest, buffer);
 
     return {
         publicUrl: `${PDF_PUBLIC_PATH}${fileName}`,
@@ -690,6 +769,7 @@ const savePdfFile = (fileData, originalName) => {
 // List all PDFs (admin view includes inactive ones), with optional search / category filter
 const handleAdminGetPdfs = async (req, res) => {
     try {
+        if (requireAdmin(req, res) === null) return;
         const { search, category } = req.body || {};
 
         let sql = `
@@ -724,6 +804,7 @@ const handleAdminGetPdfs = async (req, res) => {
 // (required on create, optional on edit to replace the existing file).
 const handleAdminSavePdf = async (req, res) => {
     try {
+        if (requireAdmin(req, res) === null) return;
         const {
             id, title, description, category, category_label,
             subject, grade, pages, is_active, file_data, file_name
@@ -744,7 +825,14 @@ const handleAdminSavePdf = async (req, res) => {
 
         let fileInfo = null;
         if (file_data) {
-            fileInfo = savePdfFile(file_data, file_name);
+            try {
+                fileInfo = savePdfFile(file_data, file_name);
+            } catch (err) {
+                if (err.code === 'INVALID_PDF') {
+                    return res.json({ success: false, message: "Only PDF files are accepted." });
+                }
+                throw err;
+            }
         }
 
         if (id) {
@@ -950,6 +1038,7 @@ const parseQuestionsFromText = (text) => {
 // Parse an uploaded .docx (base64) and return the extracted questions for review
 const handleAdminParseQuestionsDocx = async (req, res) => {
     try {
+        if (requireAdmin(req, res) === null) return;
         const fileData = requirePost(req, res, 'file_data');
         if (fileData === null) return;
 
@@ -967,7 +1056,7 @@ const handleAdminParseQuestionsDocx = async (req, res) => {
         res.json({ success: true, questions, errors, total_found: questions.length });
     } catch (error) {
         console.error("❌ Error in handleAdminParseQuestionsDocx:", error);
-        res.json({ success: false, message: error.message || "Failed to parse the Word file." });
+        res.json({ success: false, message: "Failed to parse the Word file." });
     }
 };
 
