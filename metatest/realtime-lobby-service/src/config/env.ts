@@ -127,7 +127,7 @@ const envSchema = z.object({
         .string()
         .default('http://localhost:5173,http://127.0.0.1:5173,https://metatest.app,https://www.metatest.app'),
 
-    JWT_SECRET: z.string().min(16),
+    JWT_SECRET: z.string().min(32),
     JWT_AUDIENCE: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
     JWT_ISSUER: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
 

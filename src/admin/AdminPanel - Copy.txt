@@ -1,0 +1,109 @@
+import React, { useState, useEffect } from 'react';
+import Sidebar from './Sidebar';
+import Header from './Header';
+import Dashboard from './Dashboard';
+import EditQuestions from './EditQuestions';
+import AuthView from './AuthView';
+import Spinner from './Spinner';
+
+export default function AdminPanel() {
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [activeTab, setActiveTab] = useState('dashboard');
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [isDarkMode, setIsDarkMode] = useState(true);
+    const [isBooting, setIsBooting] = useState(true);
+    const [isLoadingView, setIsLoadingView] = useState(false);
+
+    useEffect(() => {
+        if (isDarkMode) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    }, [isDarkMode]);
+
+    useEffect(() => {
+        const bootTimer = setTimeout(() => {
+            setIsBooting(false);
+        }, 1800);
+        return () => clearTimeout(bootTimer);
+    }, []);
+
+    const handleTabChange = (tab: string) => {
+        setIsLoadingView(true);
+        setActiveTab(tab);
+        // Simulate content loading delay
+        setTimeout(() => {
+            setIsLoadingView(false);
+        }, 600);
+    };
+
+    if (isBooting) {
+        return (
+            <div className="flex h-screen w-full flex-col items-center justify-center bg-white text-black dark:bg-black dark:text-white" dir="rtl">
+                <Spinner />
+                <div className="mt-6 text-sm font-medium tracking-widest text-neutral-500 dark:text-neutral-400 animate-pulse">
+                    در حال راه اندازی سیستم...
+                </div>
+            </div>
+        );
+    }
+
+    if (!isAuthenticated) {
+        return <AuthView onLogin={() => setIsAuthenticated(true)} />;
+    }
+
+    return (
+        <div className="flex h-screen w-full bg-neutral-50 dark:bg-neutral-950 text-black dark:text-white font-sans overflow-hidden" dir="rtl">
+
+            {/* Mobile Sidebar Overlay */}
+            {isSidebarOpen && (
+                <div
+                    className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden transition-opacity"
+                    onClick={() => setIsSidebarOpen(false)}
+                />
+            )}
+
+            {/* Sidebar */}
+                <Sidebar
+                    activeTab={activeTab}
+                    setActiveTab={handleTabChange}
+                    closeSidebar={() => setIsSidebarOpen(false)}
+                />
+
+
+            {/* Main Content wrapper */}
+            <div className="flex-1 flex flex-col min-w-0 h-full">
+                <Header
+                    toggleSidebar={() => setIsSidebarOpen(true)}
+                    isDarkMode={isDarkMode}
+                    toggleDarkMode={() => setIsDarkMode(!isDarkMode)}
+                />
+
+                {/* Relative wrapper for the fade overlay and scrollable area */}
+                <div className="relative flex-1 flex flex-col overflow-hidden">
+
+                    {/* Fade Mask Overlay (Fixed the scroll handler issue) */}
+                    <div className="pointer-events-none absolute top-0 left-0 right-0 z-10 h-8 bg-gradient-to-b from-neutral-50 to-transparent dark:from-neutral-950 dark:to-transparent" />
+
+                    {/* Scrollable Main Area with Hover-only Scrollbar */}
+                    <main className="flex-1 overflow-x-hidden overflow-y-auto pb-12 scrollbar-hide">
+                        <div className="p-6 md:p-8 pt-10">
+                            {isLoadingView ? (
+                                <div className="flex h-[60vh] w-full items-center justify-center">
+                                    <Spinner />
+                                </div>
+                            ) : (
+                                <>
+                                    {activeTab === 'dashboard' && <Dashboard />}
+                                    {activeTab === 'edit-questions' && <EditQuestions />}
+                                </>
+                            )}
+                        </div>
+                    </main>
+
+                </div>
+            </div>
+        </div>
+    );
+}

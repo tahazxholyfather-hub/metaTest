@@ -1,0 +1,1080 @@
+{
+  "schema": "metatest-gate1-20261125",
+  "commit": "0ac668a",
+  "findings": [
+    {
+      "id": "SEC-001",
+      "title": "Live secrets committed to the public git history",
+      "category": "ASVS 5.0 V14 Data Protection / CWE-798",
+      "severity": "CRITICAL",
+      "severity_justification": "The same secrets were in the public repository and were read from the live server by the November 2026 webshell.",
+      "cvss": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:N",
+      "confidence": "CONFIRMED",
+      "files": [
+        {
+          "path": "src/backend/.env",
+          "lines": "7-45"
+        },
+        {
+          "path": "metatest/src/backend/.env",
+          "lines": "7-45"
+        },
+        {
+          "path": "src/backend/ai-teacher/.env",
+          "lines": "23"
+        },
+        {
+          "path": "metatest/realtime-lobby-service/.env",
+          "lines": "6-16"
+        }
+      ],
+      "explanation": "Tracked .env files hold the GapGPT key, JWT secrets, SMS username and password, Zarinpal merchant id, payment HMAC, internal service key, and APP_TOKEN. .gitignore did not exclude them. NODE_ENV=development and ZARINPAL_SANDBOX=true are in the same files. Apache SSL logs (UTC+0330) show the November 2026 webshell read the live backend/.env on Nov 6, 13, 15, 16, and 17, and also read app/.env, www/.env, and football/.env. Values are not copied here.",
+      "impact": "Exfiltration is confirmed, not only disclosure in git. Whoever holds those files can forge student sessions, spend SMS and AI credit, and call internal quiz routes until every value is rotated. The users are minors.",
+      "evidence": "Files are tracked on main. Owner Apache SSL access logs, summarized in security/incident-2026-11.md. No secret values are recorded in this ledger.",
+      "remediation": "Treat every value in those files as stolen. Rotate cPanel, database, SSH, SMS, AI, JWT, payment, and internal keys. Store new values only in the cPanel Node.js App environment. PR #55 only deletes the files from the tree.",
+      "verification_method": "Providers show the old keys revoked. A request signed with the pre-incident JWT secret is rejected. git history purge is separate and still required.",
+      "pr55": "Deletes the files and adds examples. Does not rotate or purge history. Does not undo the exfiltration.",
+      "found_by": "static-review-20261125",
+      "retest_count": 2,
+      "duplicates": [],
+      "status": "remediated_pending_owner",
+      "phase5": "Code reads secrets from the environment only. Live values were stolen and must still be rotated. History still contains the old files."
+    },
+    {
+      "id": "SEC-002",
+      "title": "Production database dump committed",
+      "category": "ASVS 5.0 V14 Data Protection / CWE-200",
+      "severity": "CRITICAL",
+      "severity_justification": "A phpMyAdmin dump of the live database, including student phones and chat text, is in the public tree.",
+      "cvss": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+      "confidence": "CONFIRMED",
+      "files": [
+        {
+          "path": "quiz_app(full_Database).txt",
+          "lines": "1-40"
+        }
+      ],
+      "explanation": "MariaDB dump generated 2026-09-13. Rows exist for tam24_users (phone), tam24_otps (plaintext codes), tam24_admins (20 hashes), payments, tam24_ai_messages, tam24_ai_student_memory, and notes. About 12,600 questions are included.",
+      "impact": "Minors' phone numbers, one-time codes, payment records, and private tutor chats are world-readable.",
+      "evidence": "Schema and row presence were counted locally. No row values were copied into this ledger.",
+      "remediation": "Remove the blob from history. Notify affected users as required. Do not restore the dump onto a public host. PR #55 deletes the file from the tip only.",
+      "verification_method": "git log -- quiz_app(full_Database).txt is non-empty on main. After filter-repo, the path is absent from every commit.",
+      "pr55": "Deletes the file from the branch tip.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": [],
+      "status": "remediated_pending_owner",
+      "phase5": "Dump removed from the tree. History purge is still required."
+    },
+    {
+      "id": "SEC-003",
+      "title": "Admin passwords are Admin@ plus the account number",
+      "category": "ASVS 5.0 V6 Authentication / CWE-521",
+      "severity": "CRITICAL",
+      "severity_justification": "The admin password is a public pattern, and admin_login is an unauthenticated action.",
+      "cvss": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+      "confidence": "CONFIRMED",
+      "files": [
+        {
+          "path": "metatest/src/backend/controllers/adminController.js",
+          "lines": "293-333"
+        }
+      ],
+      "explanation": "handleAdminLogin accepts username adminN for N in 1..20 when the password equals Admin@N. tam24_admins is not read.",
+      "impact": "Full admin panel: answer keys, question bank, curriculum, PDF writes, and from there stored XSS into every student page.",
+      "evidence": "Source assignment of expectedPassword from the admin id. No network login was attempted.",
+      "remediation": "Passwords only from ADMIN_<id>_PASSWORD. PR #55 does this and will lock admins out until the new values are set in cPanel.",
+      "verification_method": "On staging, admin_login with Admin@1 returns success:false. Login with the env password returns success and a signed cookie.",
+      "pr55": "Replaces the hardcoded password. Breaking until env is set.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": [],
+      "status": "remediated",
+      "phase5": "Addressed on cursor/phase5-critical-high-a3a9 or its parent."
+    },
+    {
+      "id": "SEC-004",
+      "title": "Admin session cookie is an unsigned id",
+      "category": "ASVS 5.0 V7 Session Management / CWE-345",
+      "severity": "CRITICAL",
+      "severity_justification": "The cookie ADMIN-<id>-<timestamp> is trusted with no signature.",
+      "cvss": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+      "confidence": "CONFIRMED",
+      "files": [
+        {
+          "path": "metatest/src/backend/controllers/adminController.js",
+          "lines": "14-23,315"
+        }
+      ],
+      "explanation": "getAdminIdFromRequest splits the cookie on '-' and accepts any id whose first token is ADMIN. The cookie is HttpOnly and SameSite=Strict, and Secure only when NODE_ENV is not development. The committed env is development.",
+      "impact": "Whoever can send the cookie acts as that admin, including admin 1 who may delete rows.",
+      "evidence": "Parser in getAdminIdFromRequest. Not sent to production.",
+      "remediation": "HMAC with ADMIN_SESSION_SECRET. PR #55 does this. Old cookies stop working.",
+      "verification_method": "On staging, Cookie admin_token=ADMIN-1-1 is rejected. A cookie from a real login verifies.",
+      "pr55": "Signs the cookie.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": [],
+      "status": "remediated",
+      "phase5": "Addressed on cursor/phase5-critical-high-a3a9 or its parent."
+    },
+    {
+      "id": "SEC-005",
+      "title": "Admin actions do not check the admin cookie",
+      "category": "ASVS 5.0 V8 Authorization / API1 BFLA / CWE-862",
+      "severity": "CRITICAL",
+      "severity_justification": "Answer keys, curriculum writes, and PDF upload run for any caller who passes the student token check.",
+      "cvss": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N",
+      "confidence": "CONFIRMED",
+      "files": [
+        {
+          "path": "metatest/src/backend/controllers/adminController.js",
+          "lines": "48,565,725,951"
+        },
+        {
+          "path": "metatest/src/backend/server.js",
+          "lines": "157-397"
+        }
+      ],
+      "explanation": "handleGetQuestionForEdit returns is_correct. handleAdminSaveCurriculumItem writes subjects and chapters. handleAdminSavePdf writes public/files/pdfs. handleAdminParseQuestionsDocx has no admin check. /api/flow only runs requireToken.",
+      "impact": "Any student session, or anyone using SEC-006, can read the exam key and change the question bank.",
+      "evidence": "Handlers listed above do not call getAdminIdFromRequest. Compared with handleUpdateQuestion, which does.",
+      "remediation": "requireAdmin on every Admin_* action except login. PR #55 adds those checks.",
+      "verification_method": "Student token calling Admin_get_question_for_edit returns success:false. Admin cookie still succeeds.",
+      "pr55": "Adds requireAdmin to the handlers that lacked it.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": [],
+      "status": "remediated",
+      "phase5": "Addressed on cursor/phase5-critical-high-a3a9 or its parent."
+    },
+    {
+      "id": "SEC-006",
+      "title": "Authentication accepts a forged base64 token or the app token as admin",
+      "category": "ASVS 5.0 V6 Authentication / CWE-287",
+      "severity": "CRITICAL",
+      "severity_justification": "A token that is not a JWT is still accepted, and one of the accepted values was published in git.",
+      "cvss": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+      "confidence": "CONFIRMED",
+      "files": [
+        {
+          "path": "metatest/src/backend/middleware/auth.js",
+          "lines": "81-101"
+        },
+        {
+          "path": "metatest/src/backend/controllers/userController.js",
+          "lines": "229"
+        }
+      ],
+      "explanation": "If JWT verification throws and the token has no dot, base64 JSON with an id becomes that user and role. If the token equals APP_TOKEN, the user is id 1 role admin. Guest login issues the same unsigned base64 tokens, which is why the fallback exists. APP_TOKEN is in the committed env (SEC-001).",
+      "impact": "Anonymous admin and arbitrary student impersonation, including the upload in SEC-007.",
+      "evidence": "auth.js fallback after jwt.verify. No live request was made.",
+      "remediation": "Accept only a verified JWT. Issue JWTs for guests. PR #55 does both.",
+      "verification_method": "On staging, x-app-token set to base64 of {id:1,role:admin} returns 401.",
+      "pr55": "Removes both fallbacks. Old guest tokens die.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": [],
+      "status": "remediated",
+      "phase5": "Addressed on cursor/phase5-critical-high-a3a9 or its parent."
+    },
+    {
+      "id": "SEC-007",
+      "title": "Profile upload writes the client extension, including .php, under public/",
+      "category": "ASVS 5.0 V5 File Handling / CWE-434",
+      "severity": "CRITICAL",
+      "severity_justification": "Apache logs show a .php file uploaded through this route was executed as a webshell for about two weeks.",
+      "cvss": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+      "confidence": "CONFIRMED",
+      "files": [
+        {
+          "path": "metatest/src/backend/server.js",
+          "lines": "57-78,93,102-106"
+        }
+      ],
+      "explanation": "Multer has no fileFilter. The filename keeps path.extname(originalname). Destination is metatest/public/avatars, which on this cPanel account is public_html/avatars. Node does not execute PHP. Apache or LiteSpeed did. Owner SSL access logs (UTC+0330) show POST /api/upload_avatar on 6 Nov 2026, then about 480 requests with ?cmd= to public_html/avatars/avatar-1793964090912-103811333.php from about 15 addresses through 18-19 Nov 2026. The owner has since replaced avatars/.htaccess with a PHP-deny block. That does not remove other dropped files and does not fix the upload code.",
+      "impact": "Confirmed compromise of the cPanel account: secrets read, archives downloaded, student voice files copied, database login attempted, extra webshells written. See security/incident-2026-11.md.",
+      "evidence": "Code path in server.js. Owner Apache SSL access logs. Filenames and the attacker address 168.222.78.23 are in the incident note. No command output and no secret values are stored here.",
+      "remediation": "Keep the PHP-deny .htaccess on every upload directory. Remove the dropped shells. Rotate every credential the shell could read. Then change the app: allow-list JPEG/PNG/WebP by extension, magic bytes, and a sharp decode; re-encode; random server name; store outside the web root. PR #55 only does the extension and magic-byte check and still writes under public/. Not sufficient.",
+      "verification_method": "On staging, a file named with .php whose body is the text FIXTURE and contains no PHP tags must return 403. Confirm the November shell filenames are gone from public_html.",
+      "pr55": "Partial. Rejects non-images. Does not re-encode, move storage, or disable PHP. Does not clean the host.",
+      "found_by": "static-review-20261125",
+      "retest_count": 2,
+      "duplicates": [],
+      "status": "remediated_pending_deploy",
+      "phase5": "Uploads use magic bytes and a random name. Copy deploy/cpanel .htaccess files by hand. PR #55 type check alone was not enough."
+    },
+    {
+      "id": "SEC-008",
+      "title": "Client user_id overrides the session on answers and activity",
+      "category": "ASVS 5.0 V8 Authorization / API1 BOLA / CWE-639",
+      "severity": "HIGH",
+      "severity_justification": "The body user id is preferred over the authenticated user when recording answers and study time.",
+      "cvss": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:L/I:H/A:N",
+      "confidence": "CONFIRMED",
+      "files": [
+        {
+          "path": "metatest/src/backend/controllers/quizController.js",
+          "lines": "483,672,929"
+        },
+        {
+          "path": "metatest/src/backend/controllers/rewardController.js",
+          "lines": "345,397,584"
+        },
+        {
+          "path": "metatest/src/backend/controllers/userController.js",
+          "lines": "860-877"
+        }
+      ],
+      "explanation": "Number(req.body.user_id) || req.user.id is used for practice answers, rewards, and finish stats. saveUserActivity writes tam24_user_activities for the body id.",
+      "impact": "A student can attach scores and study time to another minor's account.",
+      "evidence": "Assignments cited. The UI sends the signed-in id, so honest traffic still works if the server ignores the body.",
+      "remediation": "Use req.user.id only. PR #55 does this on these handlers.",
+      "verification_method": "Staging: call checkAnswer with a different user_id and read the row. It must be the session user.",
+      "pr55": "Session id only on these handlers.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": [],
+      "status": "remediated",
+      "phase5": "Addressed on cursor/phase5-critical-high-a3a9 or its parent."
+    },
+    {
+      "id": "SEC-009",
+      "title": "Quiz result can be read without being a member",
+      "category": "ASVS 5.0 V8 Authorization / API1 BOLA / CWE-639",
+      "severity": "HIGH",
+      "severity_justification": "The result handler trusts a user id from the body and does not check membership.",
+      "cvss": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
+      "confidence": "CONFIRMED",
+      "files": [
+        {
+          "path": "metatest/src/backend/controllers/quizWorldController.js",
+          "lines": "2493-2530"
+        }
+      ],
+      "explanation": "handleGetQuizResultByUserAndQuiz loads quiz_results for body userId and quizId. The UI uses this so a member can open another member's result. Non-members can use the same call. check_user_member also trusts body userId.",
+      "impact": "Exam results of other students are readable to any session.",
+      "evidence": "Query uses the decoded body ids with no membership predicate.",
+      "remediation": "Require the caller and the target to both be in quiz_members. PR #55 does this and keeps member-to-member viewing.",
+      "verification_method": "Staging: non-member receives 403. A member opening another member still receives 200.",
+      "pr55": "Membership check added.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": [],
+      "status": "remediated",
+      "phase5": "Addressed on cursor/phase5-critical-high-a3a9 or its parent."
+    },
+    {
+      "id": "SEC-010",
+      "title": "Four-digit OTP with no rate limit",
+      "category": "ASVS 5.0 V6 Authentication / API2 / CWE-307",
+      "severity": "HIGH",
+      "severity_justification": "A 1000-code space and unlimited SMS sends are enough to take over a phone account and to drain the SMS panel.",
+      "cvss": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N",
+      "confidence": "CONFIRMED",
+      "files": [
+        {
+          "path": "metatest/src/backend/controllers/userController.js",
+          "lines": "42,284-359"
+        },
+        {
+          "path": "metatest/src/backend/middleware/auth.js",
+          "lines": "35"
+        }
+      ],
+      "explanation": "generateOtp returns four digits. send_otp and verify_otp are public. No counter, no lockout. The SMS password is in git (SEC-001).",
+      "impact": "Account takeover of a student's phone login, and SMS cost. The UI is four boxes, so a longer code is a product change.",
+      "evidence": "Function bodies. No SMS was sent.",
+      "remediation": "Rate limit now. Move to six digits with the UI in a later change. PR #55 adds a limit and still uses four digits.",
+      "verification_method": "Staging: sixth send in the window returns success:false and does not call the SMS provider.",
+      "pr55": "Partial. Rate limit only.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": [],
+      "status": "remediated_partial",
+      "phase5": "Send and verify are rate limited. Six-digit codes are a follow-up because the login screen is four boxes."
+    },
+    {
+      "id": "SEC-011",
+      "title": "Live document response has no security headers",
+      "category": "ASVS 5.0 V3 Web Frontend / V13 Configuration / CWE-693",
+      "severity": "HIGH",
+      "severity_justification": "The public HTML response has no HSTS, CSP, frame control, nosniff, referrer policy, or permissions policy.",
+      "cvss": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:L/A:N",
+      "confidence": "CONFIRMED",
+      "files": [
+        {
+          "path": "metatest/index.html",
+          "lines": "1-29"
+        },
+        {
+          "path": "metatest/vite.config.ts",
+          "lines": "19-27"
+        }
+      ],
+      "explanation": "Vite does not set response headers. There is no .htaccess in the repo. A previous observation of https://metatest.app, not repeated in this program, saw none of the headers. The SPA is static files on cPanel, so Express headers do not cover index.html.",
+      "impact": "Clickjacking, MIME sniffing, and no HSTS while HTTP is also broken (SEC-012). XSS impact (SEC-013) is worse without CSP.",
+      "evidence": "evidence/hosting.md. No new request in this program.",
+      "remediation": "Document-root .htaccess in infrastructure-audit.md. PR #55 sets headers only on responses Express generates.",
+      "verification_method": "After the owner edits cPanel, curl -sI https://metatest.app shows the headers. Not run here.",
+      "pr55": "Partial. Express only.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": [],
+      "status": "remediated_pending_deploy",
+      "phase5": "Template deploy/cpanel/public_html.htaccess. Not installed on the server by this branch."
+    },
+    {
+      "id": "SEC-012",
+      "title": "HTTP returns 500 instead of redirecting to HTTPS",
+      "category": "ASVS 5.0 V12 Secure Communication / CWE-319",
+      "severity": "HIGH",
+      "severity_justification": "Port 80 answers with an error, so browsers are not sent to TLS.",
+      "confidence": "CONFIRMED",
+      "files": [],
+      "explanation": "Prior observation: http://metatest.app returned 500. No redirect rule exists in the repo. On cPanel this is the HTTP vhost, often a broken rewrite or a Node app that is not bound to port 80.",
+      "impact": "Users who hit HTTP get an error. Sessions are not forced onto TLS.",
+      "evidence": "evidence/hosting.md. Not re-requested.",
+      "remediation": "Read the cPanel error log, then one redirect: Force HTTPS in the panel or the rewrite in infrastructure-audit.md, not both.",
+      "verification_method": "curl -sI http://metatest.app shows 301 to https. Not run here.",
+      "pr55": "None.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": [],
+      "status": "remediated_pending_deploy",
+      "phase5": "HTTPS redirect is in that same template. Port 80 still 500s until it is copied and the vhost error is fixed."
+    },
+    {
+      "id": "SEC-013",
+      "title": "Question and note HTML is inserted as HTML",
+      "category": "ASVS 5.0 V1 Encoding / CWE-79",
+      "severity": "HIGH",
+      "severity_justification": "Question text from the database is passed to dangerouslySetInnerHTML and innerHTML with no sanitizer.",
+      "cvss": "CVSS:3.1/AV:N/AC:L/PR:L/UI:R/S:C/C:H/I:H/A:N",
+      "confidence": "CONFIRMED",
+      "files": [
+        {
+          "path": "metatest/src/views/NotesView.tsx",
+          "lines": "204,290,330,357"
+        },
+        {
+          "path": "metatest/src/views/ReportsView.tsx",
+          "lines": "217"
+        },
+        {
+          "path": "metatest/src/views/QuizView.tsx",
+          "lines": "100"
+        },
+        {
+          "path": "metatest/src/views/testworld/QuizPage.tsx",
+          "lines": "172"
+        }
+      ],
+      "explanation": "The text is stored HTML for math. There is no allow-list. Who can write it is SEC-005 and SEC-006. A script in a question runs for every student and can read the session cookie (SEC-014).",
+      "impact": "Account takeover of every student who opens that question, including minors.",
+      "evidence": "Sinks cited. No payload was stored.",
+      "remediation": "DOMPurify allow-list that keeps the math tags you need, plus the CSP in the cPanel header file. Not in PR #55, because a wrong sanitizer changes how questions render.",
+      "verification_method": "Staging: a question containing a script tag does not run. A legitimate math fragment still renders.",
+      "pr55": "None.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": [],
+      "status": "remediated",
+      "phase5": "Addressed on cursor/phase5-critical-high-a3a9 or its parent."
+    },
+    {
+      "id": "SEC-014",
+      "title": "Student session cookie is readable by script",
+      "category": "ASVS 5.0 V7 Session Management / CWE-1004",
+      "severity": "HIGH",
+      "severity_justification": "The 30-day JWT is copied from document.cookie into a header, so any XSS takes the session.",
+      "confidence": "CONFIRMED",
+      "files": [
+        {
+          "path": "metatest/src/lib/authApi.ts",
+          "lines": "58-86"
+        },
+        {
+          "path": "metatest/src/views/AuthView.tsx",
+          "lines": "66"
+        },
+        {
+          "path": "metatest/src/lib/cookies.ts",
+          "lines": "5"
+        }
+      ],
+      "explanation": "requireToken reads x-app-token, not the cookie. The client must read the cookie, so HttpOnly cannot be set without a server change. auth_token is Secure and SameSite=Strict. The token cookie and cookies.ts set neither.",
+      "impact": "SEC-013 or an HTML avatar becomes a full account takeover.",
+      "evidence": "setAuthCookie and the request wrapper. JWT lifetime is 30d in issueSessionToken.",
+      "remediation": "Later: server reads the cookie and the client stops copying it. PR #55 only adds SameSite and Secure on the writers that lacked them.",
+      "verification_method": "After a coordinated change, document.cookie does not contain the JWT and API calls still succeed.",
+      "pr55": "Partial. Flags only.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": [],
+      "status": "remediated",
+      "phase5": "Addressed on cursor/phase5-critical-high-a3a9 or its parent."
+    },
+    {
+      "id": "SEC-015",
+      "title": "Internal quiz routes fail open and accept the key on the user header",
+      "category": "ASVS 5.0 V8 Authorization / CWE-306",
+      "severity": "HIGH",
+      "severity_justification": "Grade and result endpoints skip the key when it is unset outside production, and the committed env is development.",
+      "cvss": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N",
+      "confidence": "CONFIRMED",
+      "files": [
+        {
+          "path": "metatest/src/backend/server.js",
+          "lines": "23-49,114-142"
+        }
+      ],
+      "explanation": "If INTERNAL_SERVICE_KEY is empty and NODE_ENV is not production, requireInternalService calls next(). It also treats x-app-token as the key. The committed env sets both NODE_ENV=development and a key, so the empty-key path is armed only if the key is dropped. The key itself is public via SEC-001, so the endpoints are reachable today with that key.",
+      "impact": "Forged quiz grades and saved results for students.",
+      "evidence": "Middleware source. The lobby already sends x-internal-service-key.",
+      "remediation": "Always require the key, compare in constant time, read only the internal header. Rotate the key. PR #55 does the code half.",
+      "verification_method": "Staging: no header and a wrong header are 401. The lobby key still grades.",
+      "pr55": "Requires the key on the internal header only.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": [],
+      "status": "remediated",
+      "phase5": "Addressed on cursor/phase5-critical-high-a3a9 or its parent."
+    },
+    {
+      "id": "SEC-016",
+      "title": "Replaced sessions stay valid when the database check errors",
+      "category": "ASVS 5.0 V7 Session Management / CWE-636",
+      "severity": "MEDIUM",
+      "severity_justification": "A database error during the single-device check accepts the token.",
+      "confidence": "CONFIRMED",
+      "files": [
+        {
+          "path": "metatest/src/backend/middleware/auth.js",
+          "lines": "24-28"
+        }
+      ],
+      "explanation": "isSessionReplaced returns false in the catch. The comment says this is so an outage does not lock everyone out.",
+      "impact": "A stolen token keeps working through the window where the check cannot run.",
+      "evidence": "catch block. Not changed, because failing closed signs everyone out during an outage.",
+      "remediation": "Fail closed for admin roles. Alert on the error for students.",
+      "verification_method": "Unit test: a thrown query accepts a student token and rejects an admin token, once that split exists.",
+      "pr55": "None.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": [],
+      "status": "open"
+    },
+    {
+      "id": "SEC-017",
+      "title": "JWTs last 30 days",
+      "category": "ASVS 5.0 V9 Self-contained Tokens / CWE-613",
+      "severity": "MEDIUM",
+      "severity_justification": "A stolen token is a month of access, and the cookie that holds it is readable by script.",
+      "confidence": "CONFIRMED",
+      "files": [
+        {
+          "path": "metatest/src/backend/controllers/userController.js",
+          "lines": "57-61"
+        }
+      ],
+      "explanation": "issueSessionToken signs expiresIn 30d. There is no refresh rotation. loginAt limits a token after a newer login if the database check works.",
+      "impact": "SEC-014 theft lasts until expiry or the next login.",
+      "evidence": "jwt.sign options.",
+      "remediation": "Shorten lifetime when the cookie becomes HttpOnly.",
+      "verification_method": "Decode a new token on staging and check exp.",
+      "pr55": "None.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": [],
+      "status": "open"
+    },
+    {
+      "id": "SEC-018",
+      "title": "50 MB JSON body and no global rate limit",
+      "category": "ASVS 5.0 V4 API / API4 / CWE-770",
+      "severity": "MEDIUM",
+      "severity_justification": "Every route, including public OTP, accepts a 50 MB JSON body.",
+      "confidence": "CONFIRMED",
+      "files": [
+        {
+          "path": "metatest/src/backend/server.js",
+          "lines": "90-91"
+        }
+      ],
+      "explanation": "The limit exists so admin PDF base64 fits. The AI router has its own limiter. The main router does not. The lobby service uses express-rate-limit.",
+      "impact": "Memory pressure on a shared cPanel account, which can take the site down for every student.",
+      "evidence": "express.json limit. Do not lower it until PDF upload is multipart or the feature breaks.",
+      "remediation": "Limiter in front of /api/flow that still allows normal quiz use. Keep the large limit only on the PDF action.",
+      "verification_method": "Staging: a burst of public POSTs receives 429. One real PDF save still works.",
+      "pr55": "None.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": [],
+      "status": "open"
+    },
+    {
+      "id": "SEC-019",
+      "title": "AI uploads are stored on the public web root",
+      "category": "ASVS 5.0 V5 File Handling / CWE-552",
+      "severity": "MEDIUM",
+      "severity_justification": "Student PDFs and chat images are written under public/uploads, which this host may execute or list.",
+      "confidence": "CONFIRMED",
+      "files": [
+        {
+          "path": "metatest/src/backend/ai-teacher/services/fileStorage.js",
+          "lines": "22-27,99-104"
+        }
+      ],
+      "explanation": "Images and PDFs are magic-checked and randomly named. Audio trusts the declared MIME. The directory is still public/uploads/ai. On cPanel that is the same PHP-capable tree as SEC-007, even though these names are not .php.",
+      "impact": "Whoever learns the URL reads another student's document. A future bug in the extension map becomes code execution.",
+      "evidence": "WEB_ROOT resolution and PUBLIC_PREFIX.",
+      "remediation": "Store outside the web root and serve through an authorized handler. Add the upload .htaccess regardless.",
+      "verification_method": "Staging: an unauthenticated GET of an upload URL is 403. The owning session still receives the file from the API.",
+      "pr55": "None.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": [],
+      "status": "open"
+    },
+    {
+      "id": "SEC-020",
+      "title": "Payment callback does not bind the stored authority",
+      "category": "ASVS 5.0 V8 Authorization / CWE-345",
+      "severity": "MEDIUM",
+      "severity_justification": "The return URL will verify whatever Authority is in the query, not the one saved for that payment.",
+      "confidence": "CONFIRMED",
+      "files": [
+        {
+          "path": "metatest/src/backend/controllers/paymentController.js",
+          "lines": "62-64,568-572"
+        }
+      ],
+      "explanation": "Amount is sent to Zarinpal verify, which is correct. authorityFromCb is used when present, with the payment row's amount. A mismatched authority is not rejected before that call. The result token falls back to the literal change-me-payment-result-secret if both env vars are missing. Paid rows and FOR UPDATE make a simple replay idempotent.",
+      "impact": "A crafted callback can drive verify against the wrong authority. A missing secret makes result links forgeable.",
+      "evidence": "handleZarinpalCallback and getPaymentResultSecret. No payment was created.",
+      "remediation": "Reject when both authorities are present and differ. Require the secret. PR #55 does both.",
+      "verification_method": "Staging: callback with a different Authority does not mark the row paid.",
+      "pr55": "Binds authority and removes the hardcoded fallback.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": [],
+      "status": "open"
+    },
+    {
+      "id": "SEC-021",
+      "title": "Coupon use count can pass its maximum under concurrency",
+      "category": "ASVS 5.0 V2 Validation and Business Logic / CWE-362",
+      "severity": "MEDIUM",
+      "severity_justification": "used_count is incremented without a conditional cap after a non-locking read.",
+      "confidence": "CONFIRMED",
+      "files": [
+        {
+          "path": "metatest/src/backend/controllers/paymentController.js",
+          "lines": "176-179,406-410,638-643"
+        }
+      ],
+      "explanation": "validateCouponForPlan compares used_count to max_uses. The later UPDATE is used_count = used_count + 1 with no AND used_count < max_uses. The row locked is the user, not the coupon.",
+      "impact": "A discount can be redeemed more times than its cap, including a 100 percent code that activates a plan for free.",
+      "evidence": "The two UPDATE statements. Not load-tested.",
+      "remediation": "UPDATE ... WHERE id=? AND (max_uses IS NULL OR used_count < max_uses) and roll back if affectedRows is 0.",
+      "verification_method": "Staging: two parallel checkouts at the last remaining use. One succeeds.",
+      "pr55": "None.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": [],
+      "status": "open"
+    },
+    {
+      "id": "SEC-022",
+      "title": "Expired plans still receive paid AI coins",
+      "category": "ASVS 5.0 V8 Authorization / CWE-285",
+      "severity": "MEDIUM",
+      "severity_justification": "Daily coin grants use current_plan and never read plan_expires_at.",
+      "confidence": "CONFIRMED",
+      "files": [
+        {
+          "path": "metatest/src/backend/ai-teacher/controller.js",
+          "lines": "36,95,184"
+        },
+        {
+          "path": "metatest/src/backend/ai-teacher/shared.js",
+          "lines": "80-102"
+        }
+      ],
+      "explanation": "loadUserRow selects plan_expires_at. walletSnapshot is called with user.current_plan only. Quiz routes do not check the plan at all. Whether questions are meant to be paid is a product rule the code does not enforce.",
+      "impact": "A lapsed subscription keeps the paid tutor quota.",
+      "evidence": "Call sites of walletSnapshot. getMySubscriptionStatus does compute isActive, and the wallet does not use it.",
+      "remediation": "Pass a plan key of free when the expiry is in the past.",
+      "verification_method": "Staging user with current_plan premium and plan_expires_at yesterday receives the free daily grant.",
+      "pr55": "None.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": [],
+      "status": "open"
+    },
+    {
+      "id": "SEC-023",
+      "title": "Manual task progress has no upper bound",
+      "category": "ASVS 5.0 V2 Business Logic / CWE-840",
+      "severity": "MEDIUM",
+      "severity_justification": "progressIncrement is added as sent, so one request can complete a reward task.",
+      "confidence": "CONFIRMED",
+      "files": [
+        {
+          "path": "metatest/src/backend/handlers/dashboardHandler.js",
+          "lines": "563-576"
+        }
+      ],
+      "explanation": "Tasks are limited to ids 8, 9, and 10. The increment is Math.max(1, Number(progressIncrement)||1) with no ceiling. Claim then pays the server-side XP amount.",
+      "impact": "A student grants themselves the task reward without doing the task.",
+      "evidence": "handleUpdateTaskProgress.",
+      "remediation": "Cap the increment at 1 per call and per day.",
+      "verification_method": "Staging: progressIncrement 100000 does not jump current_progress by that amount.",
+      "pr55": "None.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": [],
+      "status": "open"
+    },
+    {
+      "id": "SEC-024",
+      "title": "Practice finish stats are taken from the client",
+      "category": "ASVS 5.0 V2 Business Logic / CWE-807",
+      "severity": "MEDIUM",
+      "severity_justification": "correct_answers and practice time are inserted from the request body.",
+      "confidence": "CONFIRMED",
+      "files": [
+        {
+          "path": "metatest/src/backend/controllers/quizController.js",
+          "lines": "927-943"
+        }
+      ],
+      "explanation": "handleFinishQuiz writes tam24_user_activity from practice_seconds, questions_answered, and correct_answers. The user id bug is SEC-008. Shared quizzes are graded on the server and are not this bug.",
+      "impact": "Forged study statistics and scores on a student's record.",
+      "evidence": "INSERT column list.",
+      "remediation": "Compute the counts from tam24_user_answers for that session.",
+      "verification_method": "Staging: a body that claims 100 correct stores the count of real answer rows.",
+      "pr55": "None. PR #55 only fixes which user id is written.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": [],
+      "status": "open"
+    },
+    {
+      "id": "SEC-025",
+      "title": "npm audit reports critical and high advisories on main",
+      "category": "ASVS 5.0 V15 Secure Coding / CWE-1395",
+      "severity": "HIGH",
+      "severity_justification": "The lockfile on main has 3 critical and 32 high advisories in the app, and 1 critical and 11 high in the lobby service.",
+      "confidence": "CONFIRMED",
+      "files": [
+        {
+          "path": "metatest/package-lock.json",
+          "lines": "1"
+        },
+        {
+          "path": "metatest/realtime-lobby-service/package-lock.json",
+          "lines": "1"
+        },
+        {
+          "path": "metatest/package.json",
+          "lines": "47"
+        }
+      ],
+      "explanation": "npm audit --package-lock-only on 2026-11-25. App: 3 critical, 32 high, 12 moderate, 3 low. Lobby: 1 critical, 11 high, 6 moderate. sharp ^0.34.5 is in the high set and is the library the upload re-encode should use. Firebase's grpc-js fix is a breaking downgrade. osv-scanner and trivy were not installed.",
+      "impact": "Depends on the advisory. sharp issues matter once uploads are re-encoded. Many highs are build tools.",
+      "evidence": "evidence/scanners.md. No exploit was run.",
+      "remediation": "PR #55 applies npm audit fix without --force. Do not --force Firebase, sharp, or shadcn until staging exists.",
+      "verification_method": "Re-run npm audit --package-lock-only on the merged lockfile.",
+      "pr55": "Partial. Non-breaking fixes only.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": [],
+      "status": "remediated_partial",
+      "phase5": "Non-breaking npm audit fix is on the parent branch. Breaking upgrades were not applied."
+    },
+    {
+      "id": "SEC-026",
+      "title": "node_modules is tracked and the backend package is incomplete",
+      "category": "ASVS 5.0 V13 Configuration / CWE-1104",
+      "severity": "MEDIUM",
+      "severity_justification": "A second copy of dependencies is committed, and the backend manifest does not list the modules server.js loads.",
+      "confidence": "CONFIRMED",
+      "files": [
+        {
+          "path": "metatest/src/backend/package.json",
+          "lines": "1-8"
+        },
+        {
+          "path": "metatest/src/backend/server.js",
+          "lines": "1-9"
+        }
+      ],
+      "explanation": "git ls-files shows 543 files under metatest/src/backend/node_modules. server.js requires express, multer, mysql2, dotenv, and cookie-parser, which that package.json does not declare. They live on the Vite package.",
+      "impact": "Passenger may load a stale axios or miss a module. Not by itself RCE.",
+      "evidence": "git ls-files count from the review. PR #55 untracks the directory.",
+      "remediation": "Stop tracking node_modules. Install from the lockfile in the Node.js App screen.",
+      "verification_method": "git ls-files node_modules is empty after merge.",
+      "pr55": "Untracks node_modules and gitignores it.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": [],
+      "status": "open"
+    },
+    {
+      "id": "SEC-027",
+      "title": "SQL error text is returned to the client",
+      "category": "ASVS 5.0 V16 Logging and Errors / CWE-209",
+      "severity": "LOW",
+      "severity_justification": "Admin list handlers send error.message, which can be a SQL exception, back in JSON.",
+      "confidence": "CONFIRMED",
+      "files": [
+        {
+          "path": "metatest/src/backend/controllers/adminController.js",
+          "lines": "199,216"
+        }
+      ],
+      "explanation": "handleAdminGetSubjects and the grade and chapter list handlers return error.message. The statement is logged as well.",
+      "impact": "Schema details to anyone who can call the action (SEC-005).",
+      "evidence": "res.json message: error.message.",
+      "remediation": "Generic message. PR #55 does this.",
+      "verification_method": "Force a bad query on staging and confirm the client string is generic.",
+      "pr55": "Generic messages.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": [],
+      "status": "open"
+    },
+    {
+      "id": "SEC-028",
+      "title": "Lobby JWT secret defaults to a public string",
+      "category": "ASVS 5.0 V9 Tokens / CWE-798",
+      "severity": "MEDIUM",
+      "severity_justification": "If JWT_SECRET is unset, the lobby trusts super-secret-change-me.",
+      "confidence": "CONFIRMED",
+      "files": [
+        {
+          "path": "metatest/realtime-lobby-service/src/config/env.ts",
+          "lines": "12"
+        }
+      ],
+      "explanation": "zod default is that string. The committed .env overrides it with the real student secret (SEC-001). A cPanel app created without the variable falls back to the default.",
+      "impact": "Forged lobby sockets if the env var is missing.",
+      "evidence": "env.ts default. The live process's env is UNKNOWN.",
+      "remediation": "Require the variable, minimum 32 characters. PR #55 does this. The lobby will not boot until it is set.",
+      "verification_method": "Start the lobby on staging with the variable unset. It must exit.",
+      "pr55": "Removes the default.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": [],
+      "status": "open"
+    },
+    {
+      "id": "SEC-029",
+      "title": "Password comparison is not constant-time",
+      "category": "ASVS 5.0 V11 Cryptography / CWE-208",
+      "severity": "LOW",
+      "severity_justification": "The scrypt hash is compared with ===.",
+      "confidence": "CONFIRMED",
+      "files": [
+        {
+          "path": "metatest/src/backend/controllers/userController.js",
+          "lines": "23-30"
+        }
+      ],
+      "explanation": "comparePassword splits salt and hash and uses ===. Practical exploitation over the network is unlikely next to SEC-010. Still wrong.",
+      "impact": "Tiny timing signal on the password hash. Not the main account-takeover path.",
+      "evidence": "return key === derivedKey.toString('hex').",
+      "remediation": "timingSafeEqual. PR #55 does this for students and for the admin password.",
+      "verification_method": "Unit test: match and mismatch both return booleans and do not throw on equal lengths.",
+      "pr55": "timingSafeEqual.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": [],
+      "status": "open"
+    },
+    {
+      "id": "SEC-030",
+      "title": "Some session cookies are set without Secure or SameSite",
+      "category": "ASVS 5.0 V7 Session Management / CWE-614",
+      "severity": "LOW",
+      "severity_justification": "AuthView and cookies.ts write the token with path=/ only.",
+      "confidence": "CONFIRMED",
+      "files": [
+        {
+          "path": "metatest/src/views/AuthView.tsx",
+          "lines": "66"
+        },
+        {
+          "path": "metatest/src/lib/cookies.ts",
+          "lines": "5"
+        },
+        {
+          "path": "views/AuthView.tsx",
+          "lines": "66"
+        }
+      ],
+      "explanation": "authApi setAuthCookie already sets Secure and SameSite=Strict. The other writers do not. There are two cookie names, token and auth_token.",
+      "impact": "The weaker cookie is sent on non-TLS requests if the browser stored it. HTTP is already broken (SEC-012).",
+      "evidence": "document.cookie assignments.",
+      "remediation": "SameSite=Lax and Secure when the page is HTTPS. PR #55 does this without making the cookie HttpOnly.",
+      "verification_method": "On https staging, the Set-Cookie equivalent string in document.cookie includes Secure.",
+      "pr55": "Adds the flags.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": [],
+      "status": "open"
+    },
+    {
+      "id": "SEC-031",
+      "title": "CORS allow-list is localhost only",
+      "category": "ASVS 5.0 V13 Configuration",
+      "severity": "INFORMATIONAL",
+      "severity_justification": "The API allows credentialed browser calls only from http://localhost:5173, which is restrictive, not an open origin.",
+      "confidence": "CONFIRMED",
+      "files": [
+        {
+          "path": "metatest/src/backend/server.js",
+          "lines": "81-86"
+        }
+      ],
+      "explanation": "Same-origin calls from metatest.app do not need CORS. A split API host would break until CORS_ORIGINS is set. Do not switch this to a star.",
+      "impact": "None while the API is same-origin. Misconfiguration risk if someone 'fixes' it by reflecting the request origin.",
+      "evidence": "cors({ origin: 'http://localhost:5173', credentials: true }).",
+      "remediation": "Keep a list. PR #55 reads CORS_ORIGINS and defaults to the same localhost origin.",
+      "verification_method": "A browser on https://metatest.app calling the same host still works. A random origin does not receive Access-Control-Allow-Origin.",
+      "pr55": "Env override, same default.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": [],
+      "status": "open"
+    },
+    {
+      "id": "SEC-033",
+      "title": "guest_login is not a public action",
+      "category": "ASVS 5.0 V6 Authentication",
+      "severity": "INFORMATIONAL",
+      "severity_justification": "The client calls guest_login with no token, and the server requires one, so the call fails closed.",
+      "confidence": "CONFIRMED",
+      "files": [
+        {
+          "path": "metatest/src/backend/middleware/auth.js",
+          "lines": "35"
+        },
+        {
+          "path": "metatest/src/lib/authApi.ts",
+          "lines": "161"
+        }
+      ],
+      "explanation": "publicActions does not include guest_login. This was not added to the public list, because that would open unlimited account creation. Not a vulnerability.",
+      "impact": "Guest entry may be broken. It does not grant access.",
+      "evidence": "The two citations.",
+      "remediation": "Decide the product rule at Gate 1. If guests are required, issue a JWT from a rate-limited public action.",
+      "verification_method": "Anonymous guest_login returns 401 on main.",
+      "pr55": "None. New guest tokens, if the action is reached, would be JWTs.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": [],
+      "status": "open"
+    },
+    {
+      "id": "SEC-034",
+      "title": "DEV_MODE skips authentication",
+      "category": "ASVS 5.0 V13 Configuration / CWE-489",
+      "severity": "MEDIUM",
+      "severity_justification": "One environment flag sets user 999 as developer on every request, and the committed file is NODE_ENV=development.",
+      "confidence": "CONFIRMED",
+      "files": [
+        {
+          "path": "metatest/src/backend/middleware/auth.js",
+          "lines": "40-43"
+        }
+      ],
+      "explanation": "The committed env has DEV_MODE=false, so this is off if that file is what Passenger loaded. The flag is not limited to localhost.",
+      "impact": "If someone turns the flag on to debug the live site, authentication disappears.",
+      "evidence": "The if statement. The env value false was read and is not reproduced.",
+      "remediation": "Honor the flag only on loopback, and never in production. PR #55 does the loopback check.",
+      "verification_method": "With DEV_MODE=true, a non-local socket still gets 401.",
+      "pr55": "Loopback only.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": [],
+      "status": "open"
+    },
+    {
+      "id": "SEC-035",
+      "title": "ORDER BY FIELD interpolates stored question ids",
+      "category": "ASVS 5.0 V1 / CWE-89",
+      "severity": "LOW",
+      "severity_justification": "Ids are concatenated into SQL. The only writer found stores server-selected numbers, so attacker control was not shown.",
+      "confidence": "SUSPECTED",
+      "files": [
+        {
+          "path": "metatest/src/backend/controllers/quizWorldController.js",
+          "lines": "1101,476-505"
+        }
+      ],
+      "explanation": "handleCreateQuiz JSON.stringifies ids the server selected. The read path joins them into ORDER BY FIELD. No client-string writer was found. If the column is edited, it is SQL injection.",
+      "impact": "Not demonstrated. A later write bug becomes injection.",
+      "evidence": "Both sites. Not executed.",
+      "remediation": "Coerce to positive integers before concatenation. PR #55 does this.",
+      "verification_method": "A quiz whose question_ids JSON contains a non-number does not change the query text.",
+      "pr55": "Integer coercion.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": [],
+      "status": "open"
+    },
+    {
+      "id": "SEC-036",
+      "title": "PDF library does not check that the bytes are a PDF",
+      "category": "ASVS 5.0 V5 File Handling / CWE-434",
+      "severity": "MEDIUM",
+      "severity_justification": "Any base64 payload is stored with a .pdf name in the public files directory, and the handler is missing an admin check.",
+      "confidence": "CONFIRMED",
+      "files": [
+        {
+          "path": "metatest/src/backend/controllers/adminController.js",
+          "lines": "671-682"
+        }
+      ],
+      "explanation": "The extension is forced to .pdf and slashes are stripped, so this is not PHP-by-extension (see SEC-904). There is no %PDF- check. Content-Type will be application/pdf if the static server trusts the name. Without nosniff, browsers may sniff.",
+      "impact": "Content stored on the origin. Combined with SEC-005, any session can write it.",
+      "evidence": "savePdfFile. No file was written.",
+      "remediation": "Require %PDF- and the admin cookie. PR #55 does the magic check and the admin cookie (via SEC-005).",
+      "verification_method": "Staging: base64 of the text FIXTURE is rejected. A small real PDF is stored.",
+      "pr55": "Magic-byte check, plus the admin gate from SEC-005.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": [],
+      "status": "open"
+    },
+    {
+      "id": "SEC-037",
+      "title": "public_html/.htaccess proxies /api/internal/ to the local Node port",
+      "category": "ASVS 5.0 V13 Configuration / CWE-441",
+      "severity": "CRITICAL",
+      "severity_justification": "The public web server forwards /api/internal/ to 127.0.0.1:3000, so the internet can reach the API that was meant to be local, including routes that grade quizzes.",
+      "cvss": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N",
+      "confidence": "CONFIRMED",
+      "files": [
+        {
+          "path": "public_html/.htaccess",
+          "lines": "on the server, not in git"
+        }
+      ],
+      "explanation": "The owner reports that public_html/.htaccess on the cPanel account reverse-proxies /api/internal/ to 127.0.0.1:3000. That file is not in this repository. The Node process listens on port 3000 (server.js). Its /internal/quizzes and /internal/results routes grade and store exam results and, on main, accept a key that the webshell read from backend/.env (SEC-001, SEC-015). Publishing the proxy makes that port reachable on the site hostname. The November webshell is tracked as exploited SEC-007; this finding is the separate configuration that exposes the API.",
+      "impact": "Anyone who can call https://metatest.app/api/internal/ is talking to the Node app. With the stolen internal key they can grade quizzes and write results. The proxy also tells an attacker exactly where the app listens.",
+      "evidence": "Owner description of public_html/.htaccess. The rule text is not pasted here. Incident timeline: security/incident-2026-11.md.",
+      "remediation": "Remove the proxy, or restrict it to localhost and require the internal header at the web server. Do not leave /internal reachable on the public hostname. Rotate INTERNAL_SERVICE_KEY. This is a cPanel edit, not a change in PR #55.",
+      "verification_method": "From outside the server, GET https://metatest.app/api/internal/ returns 404 or 403 and does not hit port 3000. A request from the lobby host with the new key still works.",
+      "pr55": "None. PR #55 tightens the Node check (SEC-015) and does not edit the server .htaccess.",
+      "found_by": "owner-apache-ssl-logs-20261125",
+      "retest_count": 1,
+      "duplicates": [],
+      "status": "remediated_pending_owner",
+      "phase5": "Node requires a loopback peer and INTERNAL_SERVICE_KEY of at least 16 characters on /internal and /api/internal. Remove or lock the public proxy in cPanel."
+    },
+    {
+      "id": "SEC-901",
+      "title": "False positive: Next.js framework advisories",
+      "category": "ASVS 5.0 V15",
+      "severity": "INFORMATIONAL",
+      "severity_justification": "The application is Vite and React Router. next-themes is not the Next.js server.",
+      "confidence": "CONFIRMED",
+      "status": "false_positive",
+      "files": [
+        {
+          "path": "metatest/package.json",
+          "lines": "6-10"
+        },
+        {
+          "path": "metatest/src/components/ui/sonner.tsx",
+          "lines": "8"
+        }
+      ],
+      "explanation": "No next dependency, no next.config, no Server Actions. Middleware-bypass and RSC advisories do not apply.",
+      "impact": "None.",
+      "evidence": "nextjs-security-audit.md.",
+      "remediation": "Do not migrate to Next.js in order to collect patches.",
+      "verification_method": "package.json has no next dependency.",
+      "pr55": "None.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": []
+    },
+    {
+      "id": "SEC-902",
+      "title": "False positive: Redis pipeline.exec is a shell",
+      "category": "CWE-78",
+      "severity": "INFORMATIONAL",
+      "severity_justification": "exec here is the Redis pipeline method, not child_process.",
+      "confidence": "CONFIRMED",
+      "status": "false_positive",
+      "files": [
+        {
+          "path": "metatest/realtime-lobby-service/src/storage/redis/redis.store.ts",
+          "lines": "82"
+        }
+      ],
+      "explanation": "No child_process import exists in application code.",
+      "impact": "None.",
+      "evidence": "nodejs-security-audit.md.",
+      "remediation": "None.",
+      "verification_method": "Search for child_process returns no application hits.",
+      "pr55": "None.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": []
+    },
+    {
+      "id": "SEC-903",
+      "title": "False positive: PDF upload is PHP remote code execution",
+      "category": "CWE-434",
+      "severity": "INFORMATIONAL",
+      "severity_justification": "The stored name always ends in .pdf, so the PHP handler will not claim it.",
+      "confidence": "CONFIRMED",
+      "status": "false_positive",
+      "files": [
+        {
+          "path": "metatest/src/backend/controllers/adminController.js",
+          "lines": "676-679"
+        }
+      ],
+      "explanation": "This does not clear SEC-036 or SEC-007. It only rejects the claim that this particular sink runs PHP.",
+      "impact": "None as code execution. Content sniffing remains SEC-036.",
+      "evidence": "fileName template ends in .pdf.",
+      "remediation": "None for RCE. Keep the magic-byte check.",
+      "verification_method": "The written basename ends with .pdf.",
+      "pr55": "Also adds a %PDF- check.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": []
+    },
+    {
+      "id": "SEC-904",
+      "title": "False positive: curriculum table name is SQL injection",
+      "category": "CWE-89",
+      "severity": "INFORMATIONAL",
+      "severity_justification": "The table is chosen from a fixed object, not from the raw type string.",
+      "confidence": "CONFIRMED",
+      "status": "false_positive",
+      "files": [
+        {
+          "path": "metatest/src/backend/controllers/adminController.js",
+          "lines": "542-547,569"
+        }
+      ],
+      "explanation": "Unknown type values return an error before the query. The missing admin check is SEC-005, which stays confirmed.",
+      "impact": "None as injection.",
+      "evidence": "CURRICULUM_TABLES lookup.",
+      "remediation": "Keep the whitelist. Fix authorization under SEC-005.",
+      "verification_method": "A type of 'users; DROP' returns the invalid-type JSON and does not build SQL.",
+      "pr55": "None for injection. Admin check added under SEC-005.",
+      "found_by": "static-review-20261125",
+      "retest_count": 1,
+      "duplicates": []
+    }
+  ]
+}

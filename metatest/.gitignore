@@ -18,6 +18,12 @@ dist-ssr
 src/backend/data/vapid.json
 public/blog-media/
 
+# Secrets
+.env
+.env.*
+!.env.example
+
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

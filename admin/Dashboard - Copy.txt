@@ -1,0 +1,149 @@
+import React from 'react';
+import {
+    Users,
+    BookOpen,
+    Activity,
+    ArrowUpRight,
+    Plus,
+    MoreVertical,
+    Clock,
+    ChevronRight
+} from 'lucide-react';
+
+const stats = [
+    { label: 'Total Users', value: '12,482', trend: '+14%', icon: Users, color: 'text-blue-600' },
+    { label: 'Active Questions', value: '3,842', trend: '+5%', icon: BookOpen, color: 'text-green-600' },
+    { label: 'Platform Activity', value: '89%', trend: '+2%', icon: Activity, color: 'text-purple-600' },
+];
+
+const recentActivities = [
+    { title: 'Question database updated', type: 'System', time: '2 hours ago' },
+    { title: 'New user registered', type: 'User', time: '4 hours ago' },
+    { title: 'Bug fix deployed', type: 'DevOps', time: 'Yesterday' },
+    { title: 'System maintenance completed', type: 'System', time: '2 days ago' },
+];
+
+const Dashboard: React.FC = () => {
+    return (
+        <div className="min-h-screen bg-[#f8f9fa] dark:bg-[#131314] p-6 lg:p-10 font-sans">
+            <div className="max-w-7xl mx-auto space-y-8">
+
+                {/* Header Section */}
+                <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <h1 className="text-[28px] font-normal text-[#1f1f1f] dark:text-[#e3e3e3]">
+                            Dashboard
+                        </h1>
+                        <p className="text-sm text-[#444746] dark:text-[#c4c7c5] mt-1">
+                            Monitor your platform performance and recent updates.
+                        </p>
+                    </div>
+                    <button className="inline-flex items-center gap-2 bg-[#1a73e8] hover:bg-[#1b66c9] text-white px-4 py-2 rounded-full text-sm font-medium transition-all shadow-sm">
+                        <Plus size={18} />
+                        Create New Project
+                    </button>
+                </header>
+
+                {/* Stats Grid */}
+                <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {stats.map(({ label, value, trend, icon: Icon, color }, idx) => (
+                        <div
+                            key={idx}
+                            className="bg-white dark:bg-[#1e1f20] border border-[#e3e3e3] dark:border-[#444746] rounded-2xl p-6 hover:shadow-md transition-shadow cursor-default"
+                        >
+                            <div className="flex items-center justify-between mb-4">
+                                <div className={`p-2 rounded-lg bg-gray-50 dark:bg-[#2b2d2f] ${color}`}>
+                                    <Icon size={20} />
+                                </div>
+                                <button className="text-[#444746] dark:text-[#c4c7c5] hover:bg-gray-100 dark:hover:bg-[#2b2d2f] p-1 rounded-full">
+                                    <MoreVertical size={16} />
+                                </button>
+                            </div>
+                            <div>
+                                <p className="text-sm font-medium text-[#444746] dark:text-[#c4c7c5] mb-1">
+                                    {label}
+                                </p>
+                                <div className="flex items-baseline gap-3">
+                                    <span className="text-3xl font-semibold text-[#1f1f1f] dark:text-[#e3e3e3]">
+                                        {value}
+                                    </span>
+                                    <span className="flex items-center text-xs font-medium text-green-600 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded-full">
+                                        {trend}
+                                        <ArrowUpRight size={12} className="ml-0.5" />
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </section>
+
+                {/* Main Content Area */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+                    {/* Recent Activity List */}
+                    <section className="lg:col-span-2 bg-white dark:bg-[#1e1f20] border border-[#e3e3e3] dark:border-[#444746] rounded-2xl overflow-hidden shadow-sm">
+                        <div className="px-6 py-4 border-b border-[#e3e3e3] dark:border-[#444746] flex items-center justify-between">
+                            <h2 className="text-sm font-semibold text-[#1f1f1f] dark:text-[#e3e3e3] uppercase tracking-wider">
+                                Recent Activity
+                            </h2>
+                            <button className="text-sm text-blue-600 hover:underline font-medium">
+                                View all
+                            </button>
+                        </div>
+                        <div className="divide-y divide-[#e3e3e3] dark:divide-[#444746]">
+                            {recentActivities.map((activity, idx) => (
+                                <div
+                                    key={idx}
+                                    className="flex items-center justify-between p-4 hover:bg-[#f8f9fa] dark:hover:bg-[#2b2d2f] transition-colors group cursor-pointer"
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <div className="flex-shrink-0 w-10 h-10 bg-gray-100 dark:bg-[#333537] rounded-full flex items-center justify-center">
+                                            <Clock size={18} className="text-[#444746] dark:text-[#c4c7c5]" />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-medium text-[#1f1f1f] dark:text-[#e3e3e3]">
+                                                {activity.title}
+                                            </p>
+                                            <p className="text-xs text-[#444746] dark:text-[#c4c7c5]">
+                                                {activity.type} • {activity.time}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <ChevronRight size={18} className="text-[#c4c7c5] opacity-0 group-hover:opacity-100 transition-opacity" />
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+
+                    {/* Right Sidebar - Helpful Links Style */}
+                    <section className="space-y-4">
+                        <div className="bg-[#f0f4f9] dark:bg-[#1a1b1e] rounded-2xl p-6 border border-transparent hover:border-[#d2e3fc] transition-all">
+                            <h3 className="text-sm font-semibold text-[#1f1f1f] dark:text-[#e3e3e3] mb-2">
+                                Getting Started
+                            </h3>
+                            <p className="text-sm text-[#444746] dark:text-[#c4c7c5] mb-4">
+                                Learn how to optimize your question database with our new AI tools.
+                            </p>
+                            <button className="text-sm font-medium text-[#1a73e8] flex items-center gap-1 group">
+                                Read documentation
+                                <ArrowUpRight size={14} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                            </button>
+                        </div>
+
+                        <div className="bg-white dark:bg-[#1e1f20] border border-[#e3e3e3] dark:border-[#444746] rounded-2xl p-6">
+                            <h3 className="text-sm font-semibold text-[#1f1f1f] dark:text-[#e3e3e3] mb-4">
+                                System Status
+                            </h3>
+                            <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" />
+                                <span className="text-sm text-[#1f1f1f] dark:text-[#e3e3e3]">All systems operational</span>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default Dashboard;

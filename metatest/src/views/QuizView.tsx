@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { flowApi } from '../lib/authApi';
+import { decodeHtmlEntities } from '../lib/sanitizeQuestionHtml';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Heart, Archive, AlertTriangle, Timer, Power, LogOut, Bookmark, ArrowRight, ArrowLeft,
@@ -110,18 +111,6 @@ type HistoryEntry = {
 };
 
 // --- Helpers ---
-const decodeHtmlEntities = (text: string) => {
-    if (!text) return '';
-    const txt = document.createElement('textarea');
-    txt.innerHTML = text;
-    let decoded = txt.value;
-    decoded = decoded
-        .replace(/\u200c|\u200d|\u200e|\u200f|\ufeff/g, '')
-        .replace(/&zwnj;|&zwj;|&lrm;|&rlm;|&nbsp;/gi, ' ')
-        .replace(/[ \t]+/g, ' ')
-        .trim();
-    return decoded;
-};
 
 // skeleton
 const QuizSkeleton = () => (
