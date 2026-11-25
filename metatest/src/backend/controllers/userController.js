@@ -92,7 +92,7 @@ const getClientIp = (req) => {
     return req.socket?.remoteAddress || null;
 };
 
-const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString();
+const generateOtp = () => Math.floor(1000 + Math.random() * 9000).toString();
 
 /**
  * Single-device session helper.
@@ -418,7 +418,7 @@ const handleSendOtp = async (req, res) => {
 const handleVerifyOtp = async (req, res) => {
     const { phone, code, password, referral_code } = req.body;
     const phoneKey = String(phone || '').trim();
-    if (!phoneKey || !/^\d{6}$/.test(String(code || ''))) {
+    if (!phoneKey || !/^\d{4}$/.test(String(code || ''))) {
         return res.json({ success: false, message: 'کد وارد شده اشتباه یا منقضی شده است.' });
     }
     if (!allowOtpAttempt(`verify:${phoneKey}`, 8, 15 * 60 * 1000)) {
