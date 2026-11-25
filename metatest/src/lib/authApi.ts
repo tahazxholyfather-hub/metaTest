@@ -172,6 +172,9 @@ export const authApi = {
             }
         ),
 
+    refreshSession: () =>
+        request<{ success: boolean }>(`${API_BASE}/refresh-session`, { method: 'POST' }),
+
     getUser: () =>
         request<{ success: boolean; data?: Json }>(
             `${API_BASE}/flow`,

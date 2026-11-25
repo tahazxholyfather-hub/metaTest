@@ -110,7 +110,7 @@ const issueSessionToken = async (userId, role, ip) => {
     return jwt.sign(
         { id: userId, role, loginAt },
         process.env.JWT_SECRET,
-        { expiresIn: '30d' }
+        { expiresIn: '12h' }
     );
 };
 
@@ -1350,6 +1350,19 @@ const handleGetMyInvites = async (req, res) => {
     }
 };
 
+const handleRefreshSession = (req, res) => {
+    if (!req.user?.id || !process.env.JWT_SECRET) {
+        return res.status(401).json({ success: false, message: 'Missing authentication token' });
+    }
+    const token = jwt.sign(
+        { id: req.user.id, role: req.user.role, loginAt: req.user.loginAt },
+        process.env.JWT_SECRET,
+        { expiresIn: '12h' }
+    );
+    setSessionCookie(req, res, token);
+    return res.json({ success: true });
+};
+
 const handleRealtimeToken = (req, res) => {
     if (!process.env.JWT_SECRET) {
         return res.status(500).json({ success: false, message: 'Server configuration error' });
@@ -1365,6 +1378,7 @@ const handleRealtimeToken = (req, res) => {
 module.exports = {
     handleGetUserInfo,
     handleRealtimeToken,
+    handleRefreshSession,
     handleGuestLogin,
     handleVerifyOtp,
     handleSendOtp,
