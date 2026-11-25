@@ -52,7 +52,7 @@ export default function AuthView({ onSuccess }: AuthViewProps) {
     const [phone, setPhone] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
-    const [otp, setOtp] = useState(['', '', '', '']); // 4 digits
+    const [otp, setOtp] = useState(['', '', '', '', '', '']);
 
     const [isLoading, setIsLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
@@ -180,7 +180,7 @@ export default function AuthView({ onSuccess }: AuthViewProps) {
     // Check full OTP
     useEffect(() => {
         const fullOtp = otp.join('');
-        if (step === 'otp' && fullOtp.length === 4) {
+        if (step === 'otp' && fullOtp.length === 6) {
             verifyOtp(fullOtp);
         }
     }, [otp, step]);
@@ -194,7 +194,7 @@ export default function AuthView({ onSuccess }: AuthViewProps) {
                 signal: ac.signal
             }).then((content: any) => {
                 if (content && content.code) {
-                    const codeArray = content.code.split('').slice(0, 4);
+                    const codeArray = content.code.split('').slice(0, 6);
                     const newOtp = [...otp];
                     for (let i = 0; i < codeArray.length; i++) {
                         newOtp[i] = codeArray[i];
