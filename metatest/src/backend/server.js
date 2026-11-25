@@ -151,7 +151,6 @@ function avatarUpload(req, res, next) {
 }
 
 app.get('/api/realtime-token', requireToken, userController.handleRealtimeToken);
-app.post('/api/refresh-session', requireToken, userController.handleRefreshSession);
 
 app.post(
     '/api/upload_avatar',
