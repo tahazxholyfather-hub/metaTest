@@ -345,7 +345,7 @@ Branch `cursor/phase5-critical-high-a3a9`. Not deployed. Production was already 
 | SEC-007 | Remediated in code, host file still to copy | Avatar, PDF, and AI audio names come from magic bytes and `crypto.randomBytes`. Client filename and MIME are ignored. Templates in `deploy/cpanel/` are not installed automatically. |
 | SEC-008 | Remediated | Answers and activity use the session id. |
 | SEC-009 | Remediated | Quiz results require membership. |
-| SEC-010 | Partial | OTP sends and checks are rate limited. Codes are still four digits because the login screen has four boxes. |
+| SEC-010 | RISK ACCEPTED for the four-digit length | OTP sends and checks stay rate limited. The owner declined the six-digit change. |
 | SEC-011 | Template only | `deploy/cpanel/public_html.htaccess` sets the security headers. |
 | SEC-012 | Template only | The same file redirects HTTP to HTTPS. |
 | SEC-013 | Remediated | Question HTML is stripped of scripts and event handlers before display. |
@@ -356,7 +356,7 @@ Branch `cursor/phase5-critical-high-a3a9`. Not deployed. Production was already 
 
 ### Follow-ups (medium and low, not in this pass)
 
-SEC-016 fail-open session check, SEC-017 30-day JWT, SEC-018 50 MB body, SEC-019 AI files on the public disk, SEC-020 payment authority binding is already on the parent branch, SEC-021 coupon race, SEC-022 plan expiry ignored for AI coins, SEC-023 unbounded task progress, SEC-024 client-supplied practice stats, SEC-026 tracked `node_modules` is already removed on the parent, SEC-027 generic SQL errors are already on the parent, SEC-028 lobby JWT default is already removed on the parent, SEC-029 constant-time compare is already on the parent, SEC-030 cookie flags, SEC-031 CORS list, SEC-033 guest login not public, SEC-034 DEV_MODE localhost-only is already on the parent, SEC-035 integer `ORDER BY` is already on the parent, SEC-036 PDF magic check is already on the parent. Six-digit OTP remains with SEC-010.
+SEC-016 fail-open session check, SEC-017 30-day JWT (owner later accepted this risk), SEC-018 50 MB body, SEC-019 AI files on the public disk, SEC-020 payment authority binding is already on the parent branch, SEC-021 coupon race, SEC-022 plan expiry ignored for AI coins, SEC-023 unbounded task progress, SEC-024 client-supplied practice stats, SEC-026 tracked `node_modules` is already removed on the parent, SEC-027 generic SQL errors are already on the parent, SEC-028 lobby JWT default is already removed on the parent, SEC-029 constant-time compare is already on the parent, SEC-030 cookie flags, SEC-031 CORS list, SEC-033 guest login not public, SEC-034 DEV_MODE localhost-only is already on the parent, SEC-035 integer `ORDER BY` is already on the parent, SEC-036 PDF magic check is already on the parent. The owner accepted keeping four-digit OTP codes; the rate limits stay.
 
 ### Environment variables to set in cPanel → Setup Node.js App
 
@@ -381,4 +381,29 @@ Placeholders only. Generate new values. Do not reuse anything read by the webshe
 1. In File Manager, delete `public_html/avatars/avatar-1793964090912-103811333.php`, `public_html/shell.php`, and `public_html/favicon-1024x1024.php` if they are still there. Keep the PHP-deny `.htaccess` you already put in `avatars/`.
 2. Copy the files from `deploy/cpanel/public_html/` into the matching folders. Copy `deploy/cpanel/public_html.htaccess` onto `public_html/.htaccess` only after you read the current file. Remove the `/api/internal/` proxy to `127.0.0.1:3000`, or leave it only if you accept that the env key is the lock. If "Force HTTPS" is already enabled, delete the rewrite block in the template so the site does not loop. If port 80 still returns 500, open the error log before expecting the redirect to run.
 3. Paste the new secrets into Setup Node.js App. Restart the app from that screen.
-4. Do not test a `.php` upload on the live site. Use a staging subdomain when you have one.
+4. Do not test a `.php` upload on the live site. Use a staging subdomain when you have one. The steps are in `security/staging-setup.md`.
+
+## Phase 5b and Phase 6
+
+Branch `cursor/phase5b-medium-low-a3a9`, pull request targeting `beforMain`. The owner declined the six-digit OTP and the 12-hour session. Those two commits were reverted. The refresh route was removed. The other fixes stay.
+
+| ID | Phase 6 | What was checked |
+| --- | --- | --- |
+| SEC-010 | RISK ACCEPTED for code length | Codes stay four digits, matching the four-box login screen. Send and verify rate limits stay. |
+| SEC-016 | VERIFIED | A database error in the single-device check now rejects the token. |
+| SEC-017 | RISK ACCEPTED | Sessions stay at 30 days. The 12-hour lifetime and `POST /api/refresh-session` were removed. |
+| SEC-018 | VERIFIED | JSON is 1 MB except `POST /api/flow` and `/api/admin`, which stay at 50 MB so PDF import still works. |
+| SEC-019 | PARTIAL | New AI files are written beside the web root in `private-ai` and are served only to the owning user at `/api/ai-teacher/files/...`. Files already in `public/uploads/ai` are still on disk until you move or delete them. |
+| SEC-021 | VERIFIED | A coupon update that changes no row rolls the payment back. |
+| SEC-022 | VERIFIED | `isPaidPlan` already treats an expired date as free, and the coin snapshot uses that helper. The existing unit test covers it. |
+| SEC-023 | VERIFIED | Manual task progress increases by 1 per request. |
+| SEC-024 | VERIFIED | Correct and answered counts are read from `tam24_user_answers` for the current day. Client time is capped at eight hours. |
+| SEC-007, SEC-013, SEC-014, SEC-037 | VERIFIED against the code now on `beforMain` | Re-read with the medium fixes. Upload sniff tests, internal-auth tests, and the HTML sanitizer test passed. |
+
+No database migration was required. No new npm package was added.
+
+### Needs your approval before anyone changes it
+
+- `firebase` / `@grpc/grpc-js`: the audit fix npm offers is a breaking move to Firebase 9.
+- `sharp`: the audit fix npm offers is a breaking major. The app already depends on it for AI image processing.
+- `zod` inside `shadcn`: the audit fix npm offers is shadcn 4, which is a dev-tool upgrade, not the student app.

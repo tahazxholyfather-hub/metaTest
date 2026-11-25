@@ -50,6 +50,17 @@ function gatewayErrorMessage(error, fallback) {
     return fallback;
 }
 
+async function consumeCoupon(connection, couponId) {
+    if (!couponId) return true;
+    const [result] = await connection.execute(
+        `UPDATE discount_codes
+         SET used_count = used_count + 1, updated_at = NOW()
+         WHERE id = ? AND (max_uses IS NULL OR used_count < max_uses)`,
+        [couponId]
+    );
+    return Number(result?.affectedRows) === 1;
+}
+
 function getClientIp(req) {
     return (
         req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
@@ -523,11 +534,9 @@ exports.createSubscriptionPayment = async (req, res) => {
                 paymentId: walletPaymentId,
             });
 
-            if (coupon) {
-                await connection.execute(
-                    `UPDATE discount_codes SET used_count = used_count + 1, updated_at = NOW() WHERE id = ? AND (max_uses IS NULL OR used_count < max_uses)`,
-                    [coupon.id]
-                );
+            if (coupon && !(await consumeCoupon(connection, coupon.id))) {
+                await connection.rollback();
+                return res.status(409).json({ success: false, message: 'ظرفیت استفاده از این کد تکمیل شده است' });
             }
 
             await connection.execute(
@@ -855,13 +864,9 @@ exports.handleZarinpalCallback = async (req, res) => {
             paymentId,
         });
 
-        if (lockedPayment.discount_code_id) {
-            await connection.execute(
-                `UPDATE discount_codes
-                 SET used_count = used_count + 1, updated_at = NOW()
-                 WHERE id = ? AND (max_uses IS NULL OR used_count < max_uses)`,
-                [lockedPayment.discount_code_id]
-            );
+        if (lockedPayment.discount_code_id && !(await consumeCoupon(connection, lockedPayment.discount_code_id))) {
+            await connection.rollback();
+            return res.status(409).send('Coupon is no longer available');
         }
 
         await connection.execute(

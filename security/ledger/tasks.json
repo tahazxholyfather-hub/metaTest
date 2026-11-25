@@ -87,7 +87,7 @@
       "finding_id": "SEC-010",
       "title": "Gate 1 decision: Four-digit OTP with no rate limit",
       "phase": "gate-1",
-      "status": "remediated_partial",
+      "status": "risk_accepted",
       "pr55": "Partial. Rate limit only.",
       "blocks_phase_7": false
     },
@@ -150,7 +150,7 @@
       "finding_id": "SEC-017",
       "title": "Gate 1 decision: JWTs last 30 days",
       "phase": "gate-1",
-      "status": "awaiting_owner",
+      "status": "risk_accepted",
       "pr55": "None.",
       "blocks_phase_7": false
     },

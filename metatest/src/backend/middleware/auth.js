@@ -23,9 +23,9 @@ const isSessionReplaced = async (decoded) => {
         if (rows.length === 0 || !rows[0].lastLogin) return false;
         return Number(rows[0].lastLogin) > Number(decoded.loginAt) + SESSION_GRACE_SECONDS;
     } catch (err) {
-        // Fail open on DB errors so a transient outage doesn't lock everyone out
+        // Fail closed: a database outage must not keep a replaced session alive.
         console.error('Single-session check failed:', err.message);
-        return false;
+        return true;
     }
 };
 

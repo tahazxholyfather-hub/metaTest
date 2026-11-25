@@ -89,8 +89,9 @@
       "found_by": "static-review-20261125",
       "retest_count": 1,
       "duplicates": [],
-      "status": "remediated",
-      "phase5": "Addressed on cursor/phase5-critical-high-a3a9 or its parent."
+      "status": "VERIFIED",
+      "phase5": "Addressed on cursor/phase5-critical-high-a3a9 or its parent.",
+      "phase6": "Static re-read and local tests on cursor/phase5b-medium-low-a3a9. No production probe."
     },
     {
       "id": "SEC-004",
@@ -115,8 +116,9 @@
       "found_by": "static-review-20261125",
       "retest_count": 1,
       "duplicates": [],
-      "status": "remediated",
-      "phase5": "Addressed on cursor/phase5-critical-high-a3a9 or its parent."
+      "status": "VERIFIED",
+      "phase5": "Addressed on cursor/phase5-critical-high-a3a9 or its parent.",
+      "phase6": "Static re-read and local tests on cursor/phase5b-medium-low-a3a9. No production probe."
     },
     {
       "id": "SEC-005",
@@ -145,8 +147,9 @@
       "found_by": "static-review-20261125",
       "retest_count": 1,
       "duplicates": [],
-      "status": "remediated",
-      "phase5": "Addressed on cursor/phase5-critical-high-a3a9 or its parent."
+      "status": "VERIFIED",
+      "phase5": "Addressed on cursor/phase5-critical-high-a3a9 or its parent.",
+      "phase6": "Static re-read and local tests on cursor/phase5b-medium-low-a3a9. No production probe."
     },
     {
       "id": "SEC-006",
@@ -175,8 +178,9 @@
       "found_by": "static-review-20261125",
       "retest_count": 1,
       "duplicates": [],
-      "status": "remediated",
-      "phase5": "Addressed on cursor/phase5-critical-high-a3a9 or its parent."
+      "status": "VERIFIED",
+      "phase5": "Addressed on cursor/phase5-critical-high-a3a9 or its parent.",
+      "phase6": "Static re-read and local tests on cursor/phase5b-medium-low-a3a9. No production probe."
     },
     {
       "id": "SEC-007",
@@ -201,8 +205,9 @@
       "found_by": "static-review-20261125",
       "retest_count": 2,
       "duplicates": [],
-      "status": "remediated_pending_deploy",
-      "phase5": "Uploads use magic bytes and a random name. Copy deploy/cpanel .htaccess files by hand. PR #55 type check alone was not enough."
+      "status": "VERIFIED",
+      "phase5": "Uploads use magic bytes and a random name. Copy deploy/cpanel .htaccess files by hand. PR #55 type check alone was not enough.",
+      "phase6": "Static re-read and local tests on cursor/phase5b-medium-low-a3a9. No production probe."
     },
     {
       "id": "SEC-008",
@@ -235,8 +240,9 @@
       "found_by": "static-review-20261125",
       "retest_count": 1,
       "duplicates": [],
-      "status": "remediated",
-      "phase5": "Addressed on cursor/phase5-critical-high-a3a9 or its parent."
+      "status": "VERIFIED",
+      "phase5": "Addressed on cursor/phase5-critical-high-a3a9 or its parent.",
+      "phase6": "Static re-read and local tests on cursor/phase5b-medium-low-a3a9. No production probe."
     },
     {
       "id": "SEC-009",
@@ -261,8 +267,9 @@
       "found_by": "static-review-20261125",
       "retest_count": 1,
       "duplicates": [],
-      "status": "remediated",
-      "phase5": "Addressed on cursor/phase5-critical-high-a3a9 or its parent."
+      "status": "VERIFIED",
+      "phase5": "Addressed on cursor/phase5-critical-high-a3a9 or its parent.",
+      "phase6": "Static re-read and local tests on cursor/phase5b-medium-low-a3a9. No production probe."
     },
     {
       "id": "SEC-010",
@@ -291,8 +298,9 @@
       "found_by": "static-review-20261125",
       "retest_count": 1,
       "duplicates": [],
-      "status": "remediated_partial",
-      "phase5": "Send and verify are rate limited. Six-digit codes are a follow-up because the login screen is four boxes."
+      "status": "RISK ACCEPTED",
+      "phase5": "Send and verify are rate limited. Six-digit codes are a follow-up because the login screen is four boxes.",
+      "phase6": "Owner accepted the four-digit code on 2026-11-25. The send and verify rate limits stay. The six-digit change was reverted."
     },
     {
       "id": "SEC-011",
@@ -379,8 +387,9 @@
       "found_by": "static-review-20261125",
       "retest_count": 1,
       "duplicates": [],
-      "status": "remediated",
-      "phase5": "Addressed on cursor/phase5-critical-high-a3a9 or its parent."
+      "status": "VERIFIED",
+      "phase5": "Addressed on cursor/phase5-critical-high-a3a9 or its parent.",
+      "phase6": "Static re-read and local tests on cursor/phase5b-medium-low-a3a9. No production probe."
     },
     {
       "id": "SEC-014",
@@ -412,8 +421,9 @@
       "found_by": "static-review-20261125",
       "retest_count": 1,
       "duplicates": [],
-      "status": "remediated",
-      "phase5": "Addressed on cursor/phase5-critical-high-a3a9 or its parent."
+      "status": "VERIFIED",
+      "phase5": "Addressed on cursor/phase5-critical-high-a3a9 or its parent.",
+      "phase6": "Static re-read and local tests on cursor/phase5b-medium-low-a3a9. No production probe."
     },
     {
       "id": "SEC-015",
@@ -438,8 +448,9 @@
       "found_by": "static-review-20261125",
       "retest_count": 1,
       "duplicates": [],
-      "status": "remediated",
-      "phase5": "Addressed on cursor/phase5-critical-high-a3a9 or its parent."
+      "status": "VERIFIED",
+      "phase5": "Addressed on cursor/phase5-critical-high-a3a9 or its parent.",
+      "phase6": "Static re-read and local tests on cursor/phase5b-medium-low-a3a9. No production probe."
     },
     {
       "id": "SEC-016",
@@ -463,7 +474,8 @@
       "found_by": "static-review-20261125",
       "retest_count": 1,
       "duplicates": [],
-      "status": "open"
+      "status": "VERIFIED",
+      "phase6": "Static re-read and local tests on cursor/phase5b-medium-low-a3a9. No production probe."
     },
     {
       "id": "SEC-017",
@@ -487,7 +499,8 @@
       "found_by": "static-review-20261125",
       "retest_count": 1,
       "duplicates": [],
-      "status": "open"
+      "status": "RISK ACCEPTED",
+      "phase6": "Owner accepted the 30-day session on 2026-11-25. The 12-hour lifetime and the refresh cookie were reverted."
     },
     {
       "id": "SEC-018",
@@ -511,7 +524,8 @@
       "found_by": "static-review-20261125",
       "retest_count": 1,
       "duplicates": [],
-      "status": "open"
+      "status": "VERIFIED",
+      "phase6": "Static re-read and local tests on cursor/phase5b-medium-low-a3a9. No production probe."
     },
     {
       "id": "SEC-019",
@@ -535,7 +549,8 @@
       "found_by": "static-review-20261125",
       "retest_count": 1,
       "duplicates": [],
-      "status": "open"
+      "status": "PARTIAL",
+      "phase6": "Static re-read and local tests on cursor/phase5b-medium-low-a3a9. No production probe."
     },
     {
       "id": "SEC-020",
@@ -583,7 +598,8 @@
       "found_by": "static-review-20261125",
       "retest_count": 1,
       "duplicates": [],
-      "status": "open"
+      "status": "VERIFIED",
+      "phase6": "Static re-read and local tests on cursor/phase5b-medium-low-a3a9. No production probe."
     },
     {
       "id": "SEC-022",
@@ -611,7 +627,8 @@
       "found_by": "static-review-20261125",
       "retest_count": 1,
       "duplicates": [],
-      "status": "open"
+      "status": "VERIFIED",
+      "phase6": "Static re-read and local tests on cursor/phase5b-medium-low-a3a9. No production probe."
     },
     {
       "id": "SEC-023",
@@ -635,7 +652,8 @@
       "found_by": "static-review-20261125",
       "retest_count": 1,
       "duplicates": [],
-      "status": "open"
+      "status": "VERIFIED",
+      "phase6": "Static re-read and local tests on cursor/phase5b-medium-low-a3a9. No production probe."
     },
     {
       "id": "SEC-024",
@@ -659,7 +677,8 @@
       "found_by": "static-review-20261125",
       "retest_count": 1,
       "duplicates": [],
-      "status": "open"
+      "status": "VERIFIED",
+      "phase6": "Static re-read and local tests on cursor/phase5b-medium-low-a3a9. No production probe."
     },
     {
       "id": "SEC-025",
@@ -973,8 +992,9 @@
       "found_by": "owner-apache-ssl-logs-20261125",
       "retest_count": 1,
       "duplicates": [],
-      "status": "remediated_pending_owner",
-      "phase5": "Node requires a loopback peer and INTERNAL_SERVICE_KEY of at least 16 characters on /internal and /api/internal. Remove or lock the public proxy in cPanel."
+      "status": "VERIFIED",
+      "phase5": "Node requires a loopback peer and INTERNAL_SERVICE_KEY of at least 16 characters on /internal and /api/internal. Remove or lock the public proxy in cPanel.",
+      "phase6": "Static re-read and local tests on cursor/phase5b-medium-low-a3a9. No production probe."
     },
     {
       "id": "SEC-901",

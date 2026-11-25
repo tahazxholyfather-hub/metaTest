@@ -589,12 +589,12 @@ const handleMarkTourAsViewed = async (req, res) => {
 
 const handleUpdateTaskProgress = async (req, res) => {
     const userId = req.user.id;
-    const { taskId, progressIncrement } = req.body;
+    const { taskId } = req.body;
     if (!taskId) return res.status(400).json({ success: false, message: 'taskId is required' });
     if (!MANUAL_TASK_IDS.includes(Number(taskId))) return res.status(403).json({ success: false, message: 'Only manual task updates allowed' });
     try {
         const [existingTask] = await db.query('SELECT current_progress FROM tam24_user_tasks WHERE user_id = ? AND task_id = ?', [userId, taskId]);
-        const increment = Math.max(1, Number(progressIncrement) || 1);
+        const increment = 1;
         const newProgress = (existingTask.length > 0 ? Number(existingTask[0].current_progress) : 0) + increment;
         if (existingTask.length > 0) {
             await db.query('UPDATE tam24_user_tasks SET current_progress = ? WHERE user_id = ? AND task_id = ?', [newProgress, userId, taskId]);
