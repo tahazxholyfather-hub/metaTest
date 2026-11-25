@@ -90,8 +90,13 @@ app.use(cors({
 
 
 // 50mb allows base64-encoded PDF uploads for the admin PDF library (UI caps files at 30MB)
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+// Large JSON is only for admin PDF/question payloads. Everything else stays small.
+const jsonLimit = (req, res, next) => {
+    const big = req.path === '/api/flow' || req.path.startsWith('/api/admin');
+    return express.json({ limit: big ? '50mb' : '1mb' })(req, res, next);
+};
+app.use(jsonLimit);
+app.use(express.urlencoded({ limit: '1mb', extended: true }));
 
 app.use('/avatars', express.static(uploadDir));
 app.use(express.static(profile.webRoot));
@@ -146,6 +151,7 @@ function avatarUpload(req, res, next) {
 }
 
 app.get('/api/realtime-token', requireToken, userController.handleRealtimeToken);
+app.post('/api/refresh-session', requireToken, userController.handleRefreshSession);
 
 app.post(
     '/api/upload_avatar',
